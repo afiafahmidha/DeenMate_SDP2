@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'registration_page.dart'; // To access AppColors
+import '../widgets/auth_header.dart'; // To access AppColors
 
 class SplashScreen extends StatefulWidget {
   final VoidCallback onFinished;

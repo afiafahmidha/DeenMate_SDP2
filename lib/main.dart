@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/registration_page.dart';
+import 'screens/auth_screen.dart';
 import 'widgets/app_lifecycle_splash_wrapper.dart';
 
 void main() {
@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
             width: 430,
             constraints: const BoxConstraints(maxWidth: 430),
             child: const AppLifecycleSplashWrapper(
-              child: RegistrationPage(),
+              child: AuthScreen(),
             ),
           ),
         ),
