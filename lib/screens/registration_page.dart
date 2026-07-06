@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 // ===== DeenMate Color Palette =====
 class AppColors {
@@ -57,84 +58,124 @@ class _RegistrationPageState extends State<RegistrationPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildTextField(
-                      controller: nameController,
-                      icon: Icons.person_outline,
-                      hint: 'Enter your full name',
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      controller: emailController,
-                      icon: Icons.mail_outline,
-                      hint: 'Enter your email address',
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      controller: phoneController,
-                      icon: Icons.phone_outlined,
-                      hint: 'Enter your phone number',
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      controller: passwordController,
-                      icon: Icons.lock_outline,
-                      hint: 'Create a strong password',
-                      obscureText: obscurePassword,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          obscurePassword
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          color: AppColors.placeholder,
+            Transform.translate(
+              offset: const Offset(0, -28),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.cream,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(28),
+                    topRight: Radius.circular(28),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Text(
+                          'Create Your Account',
+                          style: GoogleFonts.poppins(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.navy,
+                          ),
                         ),
-                        onPressed: () {
-                          setState(() => obscurePassword = !obscurePassword);
-                        },
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      controller: confirmPasswordController,
-                      icon: Icons.lock_outline,
-                      hint: 'Confirm your password',
-                      obscureText: obscureConfirmPassword,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          obscureConfirmPassword
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          color: AppColors.placeholder,
+                      const SizedBox(height: 8),
+                      Center(
+                        child: Text(
+                          'Join DeenMate to manage your worship, Islamic\nwealth, and daily spiritual journey.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 12.5,
+                            color: AppColors.tealGray,
+                            height: 1.4,
+                          ),
                         ),
-                        onPressed: () {
-                          setState(() =>
-                              obscureConfirmPassword = !obscureConfirmPassword);
-                        },
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    _buildFiqhDropdown(),
-                    const SizedBox(height: 20),
-                    _buildLanguageSelector(),
-                    const SizedBox(height: 20),
-                    _buildTermsCheckbox(),
-                    const SizedBox(height: 24),
-                    _buildCreateAccountButton(),
-                    const SizedBox(height: 20),
-                    _buildDivider(),
-                    const SizedBox(height: 20),
-                    _buildGoogleButton(),
-                    const SizedBox(height: 24),
-                    _buildLoginText(),
-                  ],
+                      const SizedBox(height: 24),
+                      _buildLabeledField(
+                        label: 'Full Name',
+                        controller: nameController,
+                        icon: Icons.person_outline,
+                        hint: 'Enter your full name',
+                      ),
+                      const SizedBox(height: 16),
+                      _buildLabeledField(
+                        label: 'Email Address',
+                        controller: emailController,
+                        icon: Icons.mail_outline,
+                        hint: 'Enter your email address',
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildLabeledField(
+                        label: 'Phone Number',
+                        controller: phoneController,
+                        icon: Icons.phone_outlined,
+                        hint: 'Enter your phone number',
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildLabeledField(
+                        label: 'Password',
+                        controller: passwordController,
+                        icon: Icons.lock_outline,
+                        hint: 'Create a strong password',
+                        obscureText: obscurePassword,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscurePassword
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: AppColors.placeholder,
+                            size: 20,
+                          ),
+                          onPressed: () {
+                            setState(() => obscurePassword = !obscurePassword);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildLabeledField(
+                        label: 'Confirm Password',
+                        controller: confirmPasswordController,
+                        icon: Icons.lock_outline,
+                        hint: 'Confirm your password',
+                        obscureText: obscureConfirmPassword,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureConfirmPassword
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: AppColors.placeholder,
+                            size: 20,
+                          ),
+                          onPressed: () {
+                            setState(() =>
+                                obscureConfirmPassword = !obscureConfirmPassword);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _buildFiqhDropdown(),
+                      const SizedBox(height: 20),
+                      _buildLanguageSelector(),
+                      const SizedBox(height: 16),
+                      _buildTermsCheckbox(),
+                      const SizedBox(height: 20),
+                      _buildCreateAccountButton(),
+                      const SizedBox(height: 20),
+                      _buildDivider(),
+                      const SizedBox(height: 20),
+                      _buildGoogleButton(),
+                      const SizedBox(height: 20),
+                      _buildLoginText(),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -144,93 +185,42 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== HEADER WITH GRADIENT + ISLAMIC DECOR =====
+  // ===== HEADER =====
   Widget _buildHeader() {
-    return Container(
-      height: 220,
+    return SizedBox(
+      height: 300,
       width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [AppColors.teal, AppColors.lightTeal.withOpacity(0.6)],
-        ),
-      ),
       child: Stack(
-        alignment: Alignment.center,
+        alignment: Alignment.topCenter,
         children: [
           Positioned.fill(
-            child: Opacity(
-              opacity: 0.08,
-              child: GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 6,
-                ),
-                itemCount: 30,
-                itemBuilder: (context, index) => const Icon(
-                  Icons.star,
-                  color: Colors.white,
-                  size: 14,
-                ),
-              ),
+            child: SvgPicture.asset(
+              'assets/images/header_art.svg',
+              fit: BoxFit.cover,
             ),
           ),
-          const Positioned(
-              top: 20, left: 30, child: Icon(Icons.star, color: Colors.white, size: 14)),
-          const Positioned(
-              top: 40, right: 40, child: Icon(Icons.star, color: Colors.white, size: 10)),
-          const Positioned(
-              top: 70, left: 80, child: Icon(Icons.star, color: Colors.white, size: 8)),
-          const Positioned(
-            top: 24,
-            right: 90,
-            child: Icon(Icons.nightlight_round, color: Colors.white, size: 26),
-          ),
-          Positioned(
-            top: 0,
-            left: 50,
-            child: Icon(Icons.emoji_objects_outlined,
-                color: Colors.white.withOpacity(0.85), size: 22),
-          ),
-          Positioned(
-            top: 0,
-            right: 60,
-            child: Icon(Icons.emoji_objects_outlined,
-                color: Colors.white.withOpacity(0.85), size: 22),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'DeenMate',
-                style: GoogleFonts.playfairDisplay(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Create Your Account',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.white.withOpacity(0.9),
-                ),
-              ),
-            ],
-          ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Padding(
+            padding: const EdgeInsets.only(top: 95),
+            child: Column(
               children: [
-                Icon(Icons.park, color: AppColors.teal.withOpacity(0.5), size: 34),
-                Icon(Icons.mosque, color: AppColors.teal.withOpacity(0.6), size: 46),
-                Icon(Icons.park, color: AppColors.teal.withOpacity(0.5), size: 34),
+                Text(
+                  'DeenMate',
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.navy,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Your AI-Powered Islamic\nLifestyle Companion',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    color: AppColors.navy.withOpacity(0.75),
+                    height: 1.3,
+                  ),
+                ),
               ],
             ),
           ),
@@ -239,8 +229,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== REUSABLE TEXT FIELD =====
-  Widget _buildTextField({
+  // ===== LABELED FIELD (label above input, like reference) =====
+  Widget _buildLabeledField({
+    required String label,
     required TextEditingController controller,
     required IconData icon,
     required String hint,
@@ -248,32 +239,46 @@ class _RegistrationPageState extends State<RegistrationPage> {
     Widget? suffixIcon,
     TextInputType keyboardType = TextInputType.text,
   }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      style: GoogleFonts.inter(color: AppColors.navy, fontSize: 14),
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: AppColors.tealGray),
-        suffixIcon: suffixIcon,
-        hintText: hint,
-        hintStyle: GoogleFonts.inter(color: AppColors.placeholder, fontSize: 13),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.lightTeal),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.navy,
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.lightTeal),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          obscureText: obscureText,
+          keyboardType: keyboardType,
+          style: GoogleFonts.inter(color: AppColors.navy, fontSize: 14),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, color: AppColors.tealGray, size: 20),
+            suffixIcon: suffixIcon,
+            hintText: hint,
+            hintStyle: GoogleFonts.inter(color: AppColors.placeholder, fontSize: 13),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.lightTeal),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.lightTeal),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.teal, width: 1.5),
+            ),
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.teal, width: 1.5),
-        ),
-      ),
+      ],
     );
   }
 
@@ -282,17 +287,23 @@ class _RegistrationPageState extends State<RegistrationPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Select Fiqh (Madhhab)',
-          style: GoogleFonts.poppins(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.navy,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Select Fiqh (Madhhab)',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.navy,
+              ),
+            ),
+            const Icon(Icons.info_outline, color: AppColors.placeholder, size: 16),
+          ],
         ),
         const SizedBox(height: 8),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -300,16 +311,26 @@ class _RegistrationPageState extends State<RegistrationPage> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.balance, color: AppColors.tealGray, size: 20),
-              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: AppColors.teal,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.balance, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: selectedFiqh,
                     isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down,
-                        color: AppColors.tealGray),
-                    style: GoogleFonts.inter(color: AppColors.navy, fontSize: 14),
+                    icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.tealGray),
+                    style: GoogleFonts.poppins(
+                      color: AppColors.navy,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                     items: fiqhOptions.map((fiqh) {
                       return DropdownMenuItem(value: fiqh, child: Text(fiqh));
                     }).toList(),
@@ -331,14 +352,14 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== LANGUAGE RADIO BUTTONS =====
+  // ===== LANGUAGE RADIO =====
   Widget _buildLanguageSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Icon(Icons.language, color: AppColors.tealGray, size: 20),
+            const Icon(Icons.language, color: AppColors.tealGray, size: 18),
             const SizedBox(width: 8),
             Text(
               'Preferred Language',
@@ -350,10 +371,16 @@ class _RegistrationPageState extends State<RegistrationPage> {
             ),
           ],
         ),
+        const SizedBox(height: 10),
         Row(
           children: [
+            const SizedBox(width: 26),
             _buildLanguageOption('English'),
-            const SizedBox(width: 20),
+          ],
+        ),
+        Row(
+          children: [
+            const SizedBox(width: 26),
             _buildLanguageOption('বাংলা'),
           ],
         ),
@@ -363,25 +390,36 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   Widget _buildLanguageOption(String lang) {
     final bool isSelected = selectedLanguage == lang;
-    return GestureDetector(
-      onTap: () => setState(() => selectedLanguage = lang),
-      child: Row(
-        children: [
-          Container(
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.teal, width: 1.5),
-              color: isSelected ? AppColors.teal : Colors.transparent,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: GestureDetector(
+        onTap: () => setState(() => selectedLanguage = lang),
+        child: Row(
+          children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.teal, width: 1.5),
+              ),
+              child: isSelected
+                  ? Center(
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: const BoxDecoration(
+                          color: AppColors.teal,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    )
+                  : null,
             ),
-            child: isSelected
-                ? const Icon(Icons.circle, color: Colors.white, size: 8)
-                : null,
-          ),
-          const SizedBox(width: 6),
-          Text(lang, style: GoogleFonts.inter(color: AppColors.navy, fontSize: 13)),
-        ],
+            const SizedBox(width: 8),
+            Text(lang, style: GoogleFonts.inter(color: AppColors.navy, fontSize: 13)),
+          ],
+        ),
       ),
     );
   }
@@ -390,11 +428,16 @@ class _RegistrationPageState extends State<RegistrationPage> {
   Widget _buildTermsCheckbox() {
     return Row(
       children: [
-        Checkbox(
-          value: agreedToTerms,
-          activeColor: AppColors.teal,
-          onChanged: (value) => setState(() => agreedToTerms = value!),
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: Checkbox(
+            value: agreedToTerms,
+            activeColor: AppColors.teal,
+            onChanged: (value) => setState(() => agreedToTerms = value!),
+          ),
         ),
+        const SizedBox(width: 8),
         Expanded(
           child: RichText(
             text: TextSpan(
@@ -406,7 +449,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   style: GoogleFonts.inter(
                     color: AppColors.teal,
                     fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline,
                   ),
                   recognizer: TapGestureRecognizer()
                     ..onTap = () {
@@ -423,33 +465,35 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   // ===== CREATE ACCOUNT BUTTON =====
   Widget _buildCreateAccountButton() {
-    return ElevatedButton(
-      onPressed: () {
-        if (_formKey.currentState!.validate() && agreedToTerms) {
-          // TODO: handle registration logic
-        }
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.teal,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Create Account',
-            style: GoogleFonts.poppins(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
+    return SizedBox(
+      height: 52,
+      child: ElevatedButton(
+        onPressed: () {
+          if (_formKey.currentState!.validate() && agreedToTerms) {
+            // TODO: handle registration logic
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.teal,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
           ),
-          const SizedBox(width: 8),
-          const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
-        ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Create Account',
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+          ],
+        ),
       ),
     );
   }
@@ -471,35 +515,37 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   // ===== GOOGLE BUTTON =====
   Widget _buildGoogleButton() {
-    return OutlinedButton(
-      onPressed: () {
-        // TODO: handle Google sign-in
-      },
-      style: OutlinedButton.styleFrom(
-        backgroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        side: BorderSide(color: AppColors.lightTeal),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+    return SizedBox(
+      height: 50,
+      child: OutlinedButton(
+        onPressed: () {
+          // TODO: handle Google sign-in
+        },
+        style: OutlinedButton.styleFrom(
+          backgroundColor: Colors.white,
+          side: BorderSide(color: AppColors.lightTeal),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
         ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'G',
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.navy,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'G',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.navy,
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'Continue with Google',
-            style: GoogleFonts.inter(color: AppColors.navy, fontSize: 14),
-          ),
-        ],
+            const SizedBox(width: 10),
+            Text(
+              'Continue with Google',
+              style: GoogleFonts.inter(color: AppColors.navy, fontSize: 14),
+            ),
+          ],
+        ),
       ),
     );
   }

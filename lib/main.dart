@@ -13,7 +13,16 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'DeenMate',
       debugShowCheckedModeBanner: false,
-      home: const RegistrationPage(),
+      home: Scaffold(
+        backgroundColor: Colors.black12,
+        body: Center(
+          child: Container(
+            width: 430,
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: const RegistrationPage(),
+          ),
+        ),
+      ),
     );
   }
 }
