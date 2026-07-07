@@ -6,8 +6,13 @@ import '../widgets/auth_header.dart';
 
 class RegistrationPage extends StatefulWidget {
   final VoidCallback onShowLogin;
+  final VoidCallback onRegisterSuccess;
 
-  const RegistrationPage({super.key, required this.onShowLogin});
+  const RegistrationPage({
+    super.key,
+    required this.onShowLogin,
+    required this.onRegisterSuccess,
+  });
 
   @override
   State<RegistrationPage> createState() => _RegistrationPageState();
@@ -54,21 +59,28 @@ class _RegistrationPageState extends State<RegistrationPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeader(context),
-            Transform.translate(
-              offset: const Offset(0, -28),
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(28),
-                    topRight: Radius.circular(28),
-                  ),
+      body: Stack(
+        children: [
+          // Pinned still header image/vector
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 275,
+            child: _buildHeader(context),
+          ),
+          // Scrollable form container
+          Positioned.fill(
+            top: 247, // 275 header height - 28 overlap offset
+            child: Container(
+              decoration: const BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(36),
+                  topRight: Radius.circular(36),
                 ),
+              ),
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
                 child: Form(
                   key: _formKey,
@@ -175,8 +187,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -321,11 +333,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
         ),
         const SizedBox(height: 8),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.3), width: 1.0),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.35), width: 1.0),
           ),
           child: Row(
             children: [
@@ -343,14 +355,27 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   child: DropdownButton<String>(
                     value: selectedFiqh,
                     isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.placeholder),
+                    borderRadius: BorderRadius.circular(16),
+                    dropdownColor: Colors.white,
+                    elevation: 4,
+                    icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.placeholder, size: 20),
                     style: GoogleFonts.poppins(
                       color: AppColors.navyBlue,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
                     items: fiqhOptions.map((fiqh) {
-                      return DropdownMenuItem(value: fiqh, child: Text(fiqh));
+                      return DropdownMenuItem(
+                        value: fiqh,
+                        child: Text(
+                          fiqh,
+                          style: GoogleFonts.poppins(
+                            color: AppColors.navyBlue,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
                     }).toList(),
                     onChanged: (value) {
                       setState(() => selectedFiqh = value!);
@@ -490,7 +515,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       child: ElevatedButton(
         onPressed: () {
           if (_formKey.currentState!.validate() && agreedToTerms) {
-            // TODO: handle registration logic
+            widget.onRegisterSuccess();
           }
         },
         style: ElevatedButton.styleFrom(
