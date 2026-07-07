@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -49,7 +50,7 @@ class AppLogo extends StatelessWidget {
   }
 }
 
-// ===== STATEFUL ANIMATED HEADER TO KEEP LANTERNS SWINGING =====
+// ===== STATEFUL ANIMATED HEADER (SWINGING LANTERNS) =====
 class RegistrationHeader extends StatefulWidget {
   const RegistrationHeader({super.key});
 
@@ -267,7 +268,7 @@ class StarConfig {
   });
 }
 
-// Sparkling Star Widget (animates both scale and opacity for a true twinkle effect)
+// Sparkling Star Widget — animated pulsing/twinkling star
 class TwinklingStar extends StatefulWidget {
   final double top;
   final double left;
@@ -286,10 +287,11 @@ class TwinklingStar extends StatefulWidget {
   State<TwinklingStar> createState() => _TwinklingStarState();
 }
 
-class _TwinklingStarState extends State<TwinklingStar> with SingleTickerProviderStateMixin {
+class _TwinklingStarState extends State<TwinklingStar>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _opacity;
-  late Animation<double> _scale;
+  Timer? _startTimer;
 
   @override
   void initState() {
@@ -298,22 +300,18 @@ class _TwinklingStarState extends State<TwinklingStar> with SingleTickerProvider
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
-    _opacity = Tween<double>(begin: 0.15, end: 1.0).animate(
+    _opacity = Tween<double>(begin: 0.1, end: 0.9).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
-    _scale = Tween<double>(begin: 0.4, end: 1.1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-
-    Future.delayed(Duration(milliseconds: widget.delayMs), () {
-      if (mounted) {
-        _controller.repeat(reverse: true);
-      }
+    // Staggered start so each star pulses at a different phase
+    _startTimer = Timer(Duration(milliseconds: widget.delayMs), () {
+      if (mounted) _controller.repeat(reverse: true);
     });
   }
 
   @override
   void dispose() {
+    _startTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -324,16 +322,13 @@ class _TwinklingStarState extends State<TwinklingStar> with SingleTickerProvider
       top: widget.top,
       left: widget.left,
       child: AnimatedBuilder(
-        animation: _controller,
+        animation: _opacity,
         builder: (context, child) {
-          return Transform.scale(
-            scale: _scale.value,
-            child: Opacity(
-              opacity: _opacity.value,
-              child: CustomPaint(
-                size: Size(widget.size, widget.size),
-                painter: FourPointStarPainter(),
-              ),
+          return Opacity(
+            opacity: _opacity.value,
+            child: CustomPaint(
+              size: Size(widget.size, widget.size),
+              painter: FourPointStarPainter(),
             ),
           );
         },

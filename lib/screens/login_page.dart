@@ -6,8 +6,13 @@ import '../widgets/auth_header.dart';
 
 class LoginPage extends StatefulWidget {
   final VoidCallback onShowRegister;
+  final VoidCallback onLoginSuccess;
 
-  const LoginPage({super.key, required this.onShowRegister});
+  const LoginPage({
+    super.key,
+    required this.onShowRegister,
+    required this.onLoginSuccess,
+  });
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -41,21 +46,28 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeader(context),
-            Transform.translate(
-              offset: const Offset(0, -28),
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(28),
-                    topRight: Radius.circular(28),
-                  ),
+      body: Stack(
+        children: [
+          // Pinned still header image/vector
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 275,
+            child: _buildHeader(context),
+          ),
+          // Scrollable form container
+          Positioned.fill(
+            top: 247, // 275 header height - 28 overlap offset
+            child: Container(
+              decoration: const BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(36),
+                  topRight: Radius.circular(36),
                 ),
+              ),
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
                 child: Form(
                   key: _formKey,
@@ -64,9 +76,21 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       Center(
                         child: Text(
+                          'Assalamu Alaikum',
+                          style: GoogleFonts.amiri(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.midTeal,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Center(
+                        child: Text(
                           'Welcome Back',
                           style: GoogleFonts.poppins(
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
                             color: AppColors.navyBlue,
                           ),
@@ -161,8 +185,8 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -293,7 +317,7 @@ class _LoginPageState extends State<LoginPage> {
       child: ElevatedButton(
         onPressed: () {
           if (_formKey.currentState!.validate()) {
-            // TODO: handle login logic
+            widget.onLoginSuccess();
           }
         },
         style: ElevatedButton.styleFrom(

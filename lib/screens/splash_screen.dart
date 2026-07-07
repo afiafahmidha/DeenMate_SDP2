@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -263,7 +264,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         Opacity(
                           opacity: _subtitleFadeIn.value,
                           child: Text(
-                            'YOUR AI-POWERED LIFESTYLE COMPANION',
+                            'YOUR AI-POWERED ISLAMIC LIFESTYLE COMPANION',
                             style: GoogleFonts.inter(
                               fontSize: 10.5,
                               fontWeight: FontWeight.bold,
@@ -322,6 +323,7 @@ class TwinklingStar extends StatefulWidget {
 class _TwinklingStarState extends State<TwinklingStar> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _opacity;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -334,7 +336,7 @@ class _TwinklingStarState extends State<TwinklingStar> with SingleTickerProvider
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
 
-    Future.delayed(Duration(milliseconds: widget.delayMs), () {
+    _timer = Timer(Duration(milliseconds: widget.delayMs), () {
       if (mounted) {
         _controller.repeat(reverse: true);
       }
@@ -343,6 +345,7 @@ class _TwinklingStarState extends State<TwinklingStar> with SingleTickerProvider
 
   @override
   void dispose() {
+    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }
