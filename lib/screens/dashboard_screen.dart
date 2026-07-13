@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
+import 'calendar_tab.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -23,6 +24,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   int _currentIndex = 0; // Bottom navigation tab
+  VoidCallback? _onZakatChangedCallback;
 
   // Animation controllers
   late AnimationController _staggerController;
@@ -172,10 +174,18 @@ class _DashboardScreenState extends State<DashboardScreen>
     final liabilities = double.tryParse(_zakatLiabilitiesCtrl.text.replaceAll(',', '')) ?? 0;
     final gross = cash + goldValue + silverValue + stocks + business + receivable;
     final net = (gross - liabilities).clamp(0.0, double.infinity);
-    setState(() {
+    if (mounted) {
+      setState(() {
+        _totalZakatableWealth = net;
+        _zakatDue = (_goldPricePerGramBDT > 0 && net >= _nisabBDT) ? net * 0.025 : 0.0;
+      });
+    } else {
       _totalZakatableWealth = net;
       _zakatDue = (_goldPricePerGramBDT > 0 && net >= _nisabBDT) ? net * 0.025 : 0.0;
-    });
+    }
+    if (_onZakatChangedCallback != null) {
+      _onZakatChangedCallback!();
+    }
   }
 
   // Stars configuration for dashboard background
@@ -735,7 +745,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         children: [
           _buildNavItem(0, Icons.home_rounded, 'Home'),
           _buildNavItem(1, Icons.access_time_rounded, 'Prayer'),
-          _buildNavItem(2, Icons.volunteer_activism_rounded, 'Zakat'),
+          _buildNavItem(2, Icons.calendar_month_rounded, 'Calendar'),
           _buildNavItem(3, Icons.auto_awesome_rounded, 'Assistant'),
           _buildNavItem(4, Icons.person_outline_rounded, 'Profile'),
         ],
@@ -800,7 +810,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       case 1:
         return _buildPrayerTab();
       case 2:
-        return _buildZakatTab();
+        return CalendarTab(
+          onOpenZakatCalculator: _showZakatCalculatorSheet,
+        );
       default:
         return _buildPlaceholderTab();
     }
@@ -1883,6 +1895,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.calculate_rounded,
                   label: 'Zakat Calculator',
                   iconPainter: _ZakatIconPainter(),
+                  onTap: _showZakatCalculatorSheet,
                 ),
               ),
               const SizedBox(width: 14),
@@ -1975,11 +1988,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     required IconData icon,
     required String label,
     CustomPainter? iconPainter,
+    VoidCallback? onTap,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: onTap ?? () {},
         borderRadius: BorderRadius.circular(18),
         splashColor: AppColors.dustyBlueTeal.withValues(alpha: 0.15),
         highlightColor: AppColors.dustyBlueTeal.withValues(alpha: 0.08),
@@ -2092,7 +2106,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ===== PLACEHOLDER TAB =====
   Widget _buildPlaceholderTab() {
-    final List<String> tabNames = ['Home', 'Prayer', 'Zakat', 'Assistant', 'Profile'];
+    final List<String> tabNames = ['Home', 'Prayer', 'Calendar', 'Assistant', 'Profile'];
     return Center(
       key: ValueKey('PlaceholderTab_$_currentIndex'),
       child: Column(
@@ -2147,7 +2161,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ===== ZAKAT WEALTH MANAGEMENT TAB =====
-  Widget _buildZakatTab() {
+  Widget _buildZakatTab({bool isBottomSheet = false, ScrollController? scrollController}) {
     final bool isEligible = _totalZakatableWealth >= _nisabBDT;
     String formatBDT(double v) {
       if (v >= 1000000) return '৳${(v / 1000000).toStringAsFixed(2)}M';
@@ -2163,8 +2177,11 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     return SingleChildScrollView(
       key: const ValueKey('ZakatTab'),
+      controller: scrollController,
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.only(top: 52, bottom: 90),
+      padding: isBottomSheet
+          ? const EdgeInsets.only(top: 16, bottom: 24)
+          : const EdgeInsets.only(top: 52, bottom: 90),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2183,22 +2200,29 @@ class _DashboardScreenState extends State<DashboardScreen>
                       color: Colors.white, size: 22),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Zakat Manager',
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.navyBlue,
-                        )),
-                    Text('Manage your wealth & obligations',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: AppColors.navyBlue.withValues(alpha: 0.55),
-                        )),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Zakat Manager',
+                          style: GoogleFonts.poppins(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.navyBlue,
+                          )),
+                      Text('Manage your wealth & obligations',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppColors.navyBlue.withValues(alpha: 0.55),
+                          )),
+                    ],
+                  ),
                 ),
+                if (isBottomSheet)
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: AppColors.navyBlue),
+                    onPressed: () => Navigator.pop(context),
+                  ),
               ],
             ),
           ),
@@ -2697,6 +2721,59 @@ class _DashboardScreenState extends State<DashboardScreen>
         ],
       ),
     );
+  }
+
+  void _showZakatCalculatorSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(28),
+          topRight: Radius.circular(28),
+        ),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            _onZakatChangedCallback = () {
+              setSheetState(() {});
+            };
+            return DraggableScrollableSheet(
+              initialChildSize: 0.9,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: _buildZakatTab(
+                        isBottomSheet: true,
+                        scrollController: scrollController,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    ).then((_) {
+      _onZakatChangedCallback = null;
+    });
   }
 
   Widget _buildZakatStatChip(String label, String value, IconData icon) {
