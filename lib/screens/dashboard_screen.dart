@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
 import 'calendar_tab.dart';
+import 'hajj_umrah_screen.dart';
 import 'qurbani_planner_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -206,6 +207,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     _DashboardStarConfig(topFraction: 0.70, leftFraction: 0.65, size: 5, delayMs: 350),
     _DashboardStarConfig(topFraction: 0.78, leftFraction: 0.40, size: 4, delayMs: 550),
   ];
+  
+  VoidCallback? get _showQurbaniPlannerSheet => null;
 
   @override
   void initState() {
@@ -880,11 +883,6 @@ _buildAnimatedEntry(
           ),
           const SizedBox(height: 28),
 
-          // Today's Guidance Section
-          _buildAnimatedEntry(
-            delay: 0.55,
-            child: _buildTodaysGuidance(),
-          ),
           const SizedBox(height: 20),
         ],
       ),
@@ -1952,6 +1950,7 @@ _buildAnimatedEntry(
                   icon: Icons.pets_rounded,
                   label: 'Qurbani Planner',
                   iconPainter: _QurbaniIconPainter(),
+                  onTap: _showQurbaniPlannerSheet,
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1971,6 +1970,13 @@ _buildAnimatedEntry(
                   icon: Icons.flight_takeoff_rounded,
                   label: 'Hajj & Umrah',
                   iconPainter: _HajjIconPainter(),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const HajjUmrahPlannerScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 14),
@@ -1987,7 +1993,6 @@ _buildAnimatedEntry(
       ),
     );
   }
-
   // ===== WORSHIP GRID =====
   Widget _buildWorshipGrid() {
     return Padding(
