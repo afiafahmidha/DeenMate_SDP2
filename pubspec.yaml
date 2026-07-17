@@ -44,6 +44,7 @@ dependencies:
   intl: ^0.20.3
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
+  shared_preferences: ^2.2.3
 
 dev_dependencies:
   flutter_test:
