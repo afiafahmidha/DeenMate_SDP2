@@ -3,11 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart'; // AppColors
 
-/// ===== HAJJ & UMRAH PLANNER SCREEN =====
-/// Push this like the Zakat Calculator page:
-///   Navigator.of(context).push(
-///     MaterialPageRoute(builder: (_) => const HajjUmrahPlannerScreen()),
-///   );
+
 class HajjUmrahPlannerScreen extends StatefulWidget {
   const HajjUmrahPlannerScreen({super.key});
 
