@@ -845,9 +845,17 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           const SizedBox(height: 28),
 
-          // Islamic Wealth Section
-          _buildAnimatedEntry(
-            delay: 0.2,
+// Today's Guidance Section
+_buildAnimatedEntry(
+  delay: 0.15,
+  child: _buildTodaysGuidance(),
+),
+const SizedBox(height: 28),
+
+
+// Islamic Wealth Section
+_buildAnimatedEntry(
+  delay: 0.3,
             child: _buildSectionTitle('Islamic Wealth'),
           ),
           const SizedBox(height: 14),
@@ -3979,7 +3987,7 @@ class _SparklinePainter extends CustomPainter {
 class _ZakatCalculatorPage extends StatefulWidget {
   final _DashboardScreenState dashboardState;
 
-  const _ZakatCalculatorPage({super.key, required this.dashboardState});
+  const _ZakatCalculatorPage({required this.dashboardState});
 
   @override
   State<_ZakatCalculatorPage> createState() => _ZakatCalculatorPageState();
