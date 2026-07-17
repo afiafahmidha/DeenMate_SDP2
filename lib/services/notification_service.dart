@@ -148,4 +148,55 @@ class NotificationService {
     };
     return map[prayerName] ?? prayerName;
   }
+
+  // ---- Schedule a custom/local notification ----
+  Future<void> scheduleCustomNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+  }) async {
+    if (!_initialized) await init();
+
+    // Do not schedule past times
+    if (scheduledTime.isBefore(DateTime.now())) return;
+
+    final tz.TZDateTime tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
+
+    const androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDesc,
+      importance: Importance.max,
+      priority: Priority.max,
+      playSound: true,
+      enableVibration: true,
+      visibility: NotificationVisibility.public,
+      ongoing: false,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentSound: true,
+      presentBadge: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _plugin.zonedSchedule(
+      id,
+      title,
+      body,
+      tzTime,
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+
+    debugPrint('[NotificationService] Scheduled custom notification: $title at $tzTime (id=$id)');
+  }
 }
