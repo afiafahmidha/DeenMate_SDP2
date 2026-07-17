@@ -12,6 +12,7 @@ import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
 import 'calendar_tab.dart';
 import 'hajj_umrah_screen.dart';
+import 'inheritance_screen.dart';
 import 'qurbani_planner_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -1928,7 +1929,7 @@ _buildAnimatedEntry(
     );
   }
 
-  // ===== ISLAMIC WEALTH GRID =====
+ // ===== ISLAMIC WEALTH GRID =====
   Widget _buildIslamicWealthGrid() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -1985,6 +1986,13 @@ _buildAnimatedEntry(
                   icon: Icons.account_balance_rounded,
                   label: 'Inheritance',
                   iconPainter: _InheritanceIconPainter(),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const InheritanceGuideScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
