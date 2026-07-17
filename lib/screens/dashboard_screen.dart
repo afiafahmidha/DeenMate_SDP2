@@ -918,12 +918,19 @@ class _DashboardScreenState extends State<DashboardScreen>
           // Islamic Wealth Section
           _buildAnimatedEntry(
             delay: 0.2,
+            child: _buildTodaysGuidance(),
+          ),
+          const SizedBox(height: 28),
+
+          // Islamic Wealth Section
+          _buildAnimatedEntry(
+            delay: 0.3,
             child: _buildSectionTitle('Islamic Wealth'),
           ),
           const SizedBox(height: 14),
 
           _buildAnimatedEntry(
-            delay: 0.25,
+            delay: 0.35,
             child: _buildIslamicWealthGrid(),
           ),
           const SizedBox(height: 28),
