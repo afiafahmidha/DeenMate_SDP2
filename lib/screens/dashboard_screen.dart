@@ -209,7 +209,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _DashboardStarConfig(topFraction: 0.78, leftFraction: 0.40, size: 4, delayMs: 550),
   ];
   
-  VoidCallback? get _showQurbaniPlannerSheet => null;
+  
 
   @override
   void initState() {
@@ -1947,20 +1947,19 @@ _buildAnimatedEntry(
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: _buildFeatureCard(
-                  icon: Icons.pets_rounded,
-                  label: 'Qurbani Planner',
-                  iconPainter: _QurbaniIconPainter(),
-                  onTap: _showQurbaniPlannerSheet,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const QurbaniPlannerPage(),
-                      ),
-                    );
-                  },
-                ),
-              ),
+  child: _buildFeatureCard(
+    icon: Icons.pets_rounded,
+    label: 'Qurbani Planner',
+    iconPainter: _QurbaniIconPainter(),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const QurbaniPlannerPage(),
+        ),
+      );
+    },
+  ),
+),
             ],
           ),
           const SizedBox(height: 14),
@@ -2052,6 +2051,7 @@ _buildAnimatedEntry(
   }
 
   // ===== FEATURE CARD (Reusable) =====
+ // ===== FEATURE CARD (Reusable) =====
   Widget _buildFeatureCard({
     required IconData icon,
     required String label,
@@ -2063,8 +2063,8 @@ _buildAnimatedEntry(
       child: InkWell(
         onTap: onTap ?? () {},
         borderRadius: BorderRadius.circular(18),
-        splashColor: AppColors.dustyBlueTeal.withValues(alpha: 0.15),
-        highlightColor: AppColors.dustyBlueTeal.withValues(alpha: 0.08),
+        splashColor: AppColors.midTeal.withValues(alpha: 0.15),
+        highlightColor: AppColors.midTeal.withValues(alpha: 0.08),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -2072,14 +2072,14 @@ _buildAnimatedEntry(
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: AppColors.navyBlue.withValues(alpha: 0.05),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: AppColors.navyBlue.withValues(alpha: 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
               ),
             ],
             border: Border.all(
-              color: AppColors.dustyBlueTeal,
-              width: 1.8,
+              color: AppColors.navyBlue.withValues(alpha: 0.22),
+              width: 1.6,
             ),
           ),
           child: Column(
@@ -2090,8 +2090,12 @@ _buildAnimatedEntry(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE8F4F0),
+                  color: AppColors.midTeal.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.midTeal.withValues(alpha: 0.25),
+                    width: 1,
+                  ),
                 ),
                 child: iconPainter != null
                     ? CustomPaint(painter: iconPainter)
@@ -2113,7 +2117,6 @@ _buildAnimatedEntry(
       ),
     );
   }
-
   // ===== TODAY'S GUIDANCE =====
   Widget _buildTodaysGuidance() {
     return Padding(
