@@ -69,6 +69,16 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/header_art.svg
+    - assets/images/islamic_events/islamic_new_year/
+    - assets/images/islamic_events/ashura/
+    - assets/images/islamic_events/mawlid/
+    - assets/images/islamic_events/isra_miraj/
+    - assets/images/islamic_events/shab_e_barat/
+    - assets/images/islamic_events/ramadan_start/
+    - assets/images/islamic_events/laylat_al_qadr/
+    - assets/images/islamic_events/eid_al_fitr/
+    - assets/images/islamic_events/eid_al_adha/
+    - assets/images/islamic_events/arafah/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
