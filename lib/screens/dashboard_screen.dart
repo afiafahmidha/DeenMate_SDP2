@@ -8,11 +8,9 @@ import 'package:geocoding/geocoding.dart';
 import 'package:adhan/adhan.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
 import 'calendar_tab.dart';
-import 'qurbani_planner_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -26,7 +24,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   int _currentIndex = 0; // Bottom navigation tab
-  DateTime _calendarViewDate = DateTime.now();
   VoidCallback? _onZakatChangedCallback;
 
   // Animation controllers
@@ -58,23 +55,13 @@ class _DashboardScreenState extends State<DashboardScreen>
     'Isha': true,
   };
 
+  // Daily salat completion checklist states
   final Map<String, bool> _salatCompleted = {
     'Fajr': true,
     'Dhuhr': false,
     'Asr': false,
     'Maghrib': false,
     'Isha': false,
-  };
-
-  // Kaza tracking state (persisted via SharedPreferences)
-  String _lastDateToday = '';
-  final Set<String> _prayersProcessedToday = {};
-  final Map<String, int> _kazaCounts = {
-    'Fajr': 0,
-    'Dhuhr': 0,
-    'Asr': 0,
-    'Maghrib': 0,
-    'Isha': 0,
   };
 
   // ===== ZAKAT WEALTH STATE =====
@@ -222,7 +209,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void initState() {
     super.initState();
-    _loadPersistedKazaState();
 
     _staggerController = AnimationController(
       vsync: this,
@@ -274,59 +260,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _zakatReceivableCtrl.dispose();
     _zakatLiabilitiesCtrl.dispose();
     super.dispose();
-  }
-
-  // ===== PERSISTENCE METHODS =====
-  Future<void> _loadPersistedKazaState() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      setState(() {
-        _lastDateToday = prefs.getString('kaza_last_date') ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
-        
-        for (final key in _kazaCounts.keys) {
-          _kazaCounts[key] = prefs.getInt('kaza_count_$key') ?? 0;
-        }
-
-        final processedList = prefs.getStringList('kaza_processed_today') ?? [];
-        _prayersProcessedToday.clear();
-        _prayersProcessedToday.addAll(processedList);
-
-        final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-        if (_lastDateToday != todayStr) {
-          _lastDateToday = todayStr;
-          _prayersProcessedToday.clear();
-          for (final key in _salatCompleted.keys) {
-            _salatCompleted[key] = false;
-          }
-          _savePersistedKazaState();
-        } else {
-          for (final key in _salatCompleted.keys) {
-            _salatCompleted[key] = prefs.getBool('salat_completed_$key') ?? false;
-          }
-        }
-      });
-    } catch (e) {
-      debugPrint("Failed to load persisted Kaza state: $e");
-    }
-  }
-
-  Future<void> _savePersistedKazaState() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('kaza_last_date', _lastDateToday);
-
-      for (final entry in _kazaCounts.entries) {
-        await prefs.setInt('kaza_count_${entry.key}', entry.value);
-      }
-
-      await prefs.setStringList('kaza_processed_today', _prayersProcessedToday.toList());
-
-      for (final entry in _salatCompleted.entries) {
-        await prefs.setBool('salat_completed_${entry.key}', entry.value);
-      }
-    } catch (e) {
-      debugPrint("Failed to save persisted Kaza state: $e");
-    }
   }
 
   // ===== LOCATION & TRACKING INITIALIZATION =====
@@ -881,7 +814,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       case 1:
         return _buildPrayerTab();
       case 2:
-        return _buildCalendarTab();
         return CalendarTab(
           onOpenZakatCalculator: _showZakatCalculatorSheet,
         );
@@ -913,37 +845,44 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           const SizedBox(height: 28),
 
-          // Today's Guidance Section
-          _buildAnimatedEntry(
-            delay: 0.15,
-            child: _buildTodaysGuidance(),
-          ),
-          const SizedBox(height: 28),
+// Today's Guidance Section
+_buildAnimatedEntry(
+  delay: 0.15,
+  child: _buildTodaysGuidance(),
+),
+const SizedBox(height: 28),
 
 
-          // Islamic Wealth Section
-          _buildAnimatedEntry(
-            delay: 0.3,
+// Islamic Wealth Section
+_buildAnimatedEntry(
+  delay: 0.3,
             child: _buildSectionTitle('Islamic Wealth'),
           ),
           const SizedBox(height: 14),
 
           _buildAnimatedEntry(
-            delay: 0.35,
+            delay: 0.25,
             child: _buildIslamicWealthGrid(),
           ),
           const SizedBox(height: 28),
 
           // Worship Section
           _buildAnimatedEntry(
-            delay: 0.3,
+            delay: 0.35,
             child: _buildSectionTitle('Worship'),
           ),
           const SizedBox(height: 14),
 
           _buildAnimatedEntry(
-            delay: 0.35,
+            delay: 0.4,
             child: _buildWorshipGrid(),
+          ),
+          const SizedBox(height: 28),
+
+          // Today's Guidance Section
+          _buildAnimatedEntry(
+            delay: 0.55,
+            child: _buildTodaysGuidance(),
           ),
           const SizedBox(height: 20),
         ],
@@ -1977,7 +1916,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.pets_rounded,
                   label: 'Qurbani Planner',
                   iconPainter: _QurbaniIconPainter(),
-                  onTap: _showQurbaniPlannerSheet,
                 ),
               ),
             ],
@@ -2075,11 +2013,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.dustyBlueTeal.withValues(alpha: 0.55),
-              width: 1.5,
-            ),
+            borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
                 color: AppColors.navyBlue.withValues(alpha: 0.05),
@@ -2087,6 +2021,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                 offset: const Offset(0, 4),
               ),
             ],
+            border: Border.all(
+              color: AppColors.dustyBlueTeal.withValues(alpha: 0.12),
+              width: 1,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2116,580 +2054,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  // ===== PRAYER TIME LIMITS & KAZA HELPERS =====
-  DateTime? _getPrayerEndTime(String prayerName) {
-    switch (prayerName) {
-      case 'Fajr':
-        return _sunriseTime;
-      case 'Dhuhr':
-        return _asrTime;
-      case 'Asr':
-        return _maghribTime;
-      case 'Maghrib':
-        return _ishaTime;
-      case 'Isha':
-        if (_fajrTime == null) return null;
-        final coordinates = Coordinates(_latitude, _longitude);
-        final params = CalculationMethod.karachi.getParameters();
-        params.madhab = Madhab.hanafi;
-        final tomorrow = DateTime.now().add(const Duration(days: 1));
-        final tomorrowPrayerTimes = PrayerTimes(
-          coordinates,
-          DateComponents.from(tomorrow),
-          params,
-        );
-        return tomorrowPrayerTimes.fajr;
-      default:
-        return null;
-    }
-  }
-
-  bool _isPrayerTimeOver(String prayerName) {
-    final endTime = _getPrayerEndTime(prayerName);
-    if (endTime == null) return false;
-    return DateTime.now().isAfter(endTime);
-  }
-
-  // ===== ISLAMIC CALENDAR TAB =====
-  String _getHijriDateStringFor(DateTime date) {
-    final hijriMonths = [
-      "Muharram", "Safar", "Rabi' al-Awwal", "Rabi' ath-Thani",
-      "Jumada al-Ula", "Jumada al-Akhirah", "Rajab", "Sha'ban",
-      "Ramadan", "Shawwal", "Dhu al-Qa'dah", "Dhu al-Hijjah"
-    ];
-    int monthIndex = (date.month + 3) % 12;
-    int day = (date.day + 12) % 29 + 1;
-    int year = date.year - 578;
-    return "$day ${hijriMonths[monthIndex]}";
-  }
-
-  int _daysInMonth(DateTime date) {
-    final firstDayOfNextMonth = (date.month < 12)
-        ? DateTime(date.year, date.month + 1, 1)
-        : DateTime(date.year + 1, 1, 1);
-    return firstDayOfNextMonth.difference(DateTime(date.year, date.month, 1)).inDays;
-  }
-
-  int _firstWeekdayOfMonth(DateTime date) {
-    return DateTime(date.year, date.month, 1).weekday % 7; // Sunday = 0
-  }
-
-  Widget _buildCalendarTab() {
-    final now = DateTime.now();
-    final year = _calendarViewDate.year;
-    final month = _calendarViewDate.month;
-
-    final firstWeekday = _firstWeekdayOfMonth(_calendarViewDate);
-    final daysInM = _daysInMonth(_calendarViewDate);
-
-    final monthName = DateFormat('MMMM yyyy').format(_calendarViewDate);
-    
-    final startHijri = _getHijriDateStringFor(DateTime(year, month, 1));
-    final endHijri = _getHijriDateStringFor(DateTime(year, month, daysInM));
-    final hijriYear = year - 578;
-    final hijriRangeStr = "$startHijri - $endHijri, $hijriYear AH";
-
-    final List<Map<String, dynamic>> allEvents = [
-      {'name': 'Ramadan Starts', 'hijri': '1 Ramadan', 'gregorian': '2026-02-18', 'icon': Icons.brightness_3_rounded, 'desc': 'Holy month of fasting begins'},
-      {'name': 'Laylat al-Qadr', 'hijri': '27 Ramadan', 'gregorian': '2026-03-16', 'icon': Icons.auto_awesome_rounded, 'desc': 'The Night of Power'},
-      {'name': 'Eid al-Fitr', 'hijri': '1 Shawwal', 'gregorian': '2026-03-20', 'icon': Icons.celebration_rounded, 'desc': 'Festival of breaking the fast'},
-      {'name': 'Day of Arafah', 'hijri': '9 Dhu al-Hijjah', 'gregorian': '2026-05-26', 'icon': Icons.landscape_rounded, 'desc': 'Hajj climax day'},
-      {'name': 'Eid al-Adha', 'hijri': '10 Dhu al-Hijjah', 'gregorian': '2026-05-27', 'icon': Icons.sports_kabaddi_rounded, 'desc': 'Festival of Sacrifice'},
-      {'name': 'Islamic New Year', 'hijri': '1 Muharram', 'gregorian': '2026-06-16', 'icon': Icons.star_rounded, 'desc': 'Start of 1448 Hijri Year'},
-      {'name': 'Ashura', 'hijri': '10 Muharram', 'gregorian': '2026-06-25', 'icon': Icons.menu_book_rounded, 'desc': 'Day of fasting and remembrance'},
-      {'name': 'Mawlid al-Nabi', 'hijri': '12 Rabi\' al-Awwal', 'gregorian': '2026-08-25', 'icon': Icons.church_rounded, 'desc': 'Birth of the Prophet (PBUH)'},
-    ];
-
-    final monthEvents = allEvents.where((e) {
-      final date = DateTime.parse(e['gregorian']);
-      return date.year == year && date.month == month;
-    }).toList();
-
-    return SingleChildScrollView(
-      key: const ValueKey('CalendarTab'),
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.only(top: 52, bottom: 90),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Page Title
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.navyBlue,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Islamic Calendar',
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.navyBlue,
-                        )),
-                    Text('Hijri & Gregorian dates alignment',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: AppColors.navyBlue.withValues(alpha: 0.55),
-                        )),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Calendar Card
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.navyBlue.withValues(alpha: 0.05),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  // Calendar Navigation Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.chevron_left_rounded, color: AppColors.navyBlue),
-                        onPressed: () {
-                          setState(() {
-                            _calendarViewDate = DateTime(year, month - 1, 1);
-                          });
-                        },
-                      ),
-                      Column(
-                        children: [
-                          Text(
-                            monthName,
-                            style: GoogleFonts.poppins(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.navyBlue,
-                            ),
-                          ),
-                          Text(
-                            hijriRangeStr,
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.placeholder,
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right_rounded, color: AppColors.navyBlue),
-                        onPressed: () {
-                          setState(() {
-                            _calendarViewDate = DateTime(year, month + 1, 1);
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Weekdays header Row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) {
-                      final isFriday = (d == 'Fri');
-                      return SizedBox(
-                        width: 38,
-                        child: Text(
-                          d,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.poppins(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.bold,
-                            color: isFriday ? AppColors.midTeal : AppColors.placeholder,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Days Grid
-                  GridView.builder(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 7,
-                      mainAxisSpacing: 6,
-                      crossAxisSpacing: 6,
-                    ),
-                    itemCount: 42, // max 6 weeks
-                    itemBuilder: (context, idx) {
-                      final dayIndex = idx - firstWeekday + 1;
-                      if (dayIndex <= 0 || dayIndex > daysInM) {
-                        return const SizedBox.shrink(); // empty cell
-                      }
-
-                      final cellDate = DateTime(year, month, dayIndex);
-                      final isToday = (cellDate.year == now.year &&
-                          cellDate.month == now.month &&
-                          cellDate.day == now.day);
-                      final isFriday = (cellDate.weekday == DateTime.friday);
-
-                      // Check if there is an event on this day
-                      final hasEvent = allEvents.any((e) {
-                        final date = DateTime.parse(e['gregorian']);
-                        return date.year == year && date.month == month && date.day == dayIndex;
-                      });
-
-                      final hijriDay = (dayIndex + 12) % 29 + 1;
-
-                      return GestureDetector(
-                        onTap: () {
-                          _showDayDetailsDialog(cellDate, hijriDay, allEvents);
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: isToday
-                                ? AppColors.navyBlue
-                                : (isFriday
-                                    ? AppColors.dustyBlueTeal.withValues(alpha: 0.15)
-                                    : Colors.transparent),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: hasEvent
-                                  ? AppColors.coralOrange
-                                  : Colors.transparent,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    '$dayIndex',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: isToday
-                                          ? Colors.white
-                                          : (isFriday ? AppColors.midTeal : AppColors.navyBlue),
-                                    ),
-                                  ),
-                                  Text(
-                                    '$hijriDay',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 8.5,
-                                      fontWeight: FontWeight.w500,
-                                      color: isToday
-                                          ? Colors.white60
-                                          : AppColors.placeholder,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (hasEvent)
-                                Positioned(
-                                  bottom: 4,
-                                  child: Container(
-                                    width: 4,
-                                    height: 4,
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.coralOrange,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Special Events Section
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Row(
-              children: [
-                Container(
-                  width: 4,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: AppColors.navyBlue,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  monthEvents.isNotEmpty ? 'Events This Month' : 'All Islamic Events (2026)',
-                  style: GoogleFonts.poppins(
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.navyBlue,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Column(
-              children: (monthEvents.isNotEmpty ? monthEvents : allEvents).map((e) {
-                final date = DateTime.parse(e['gregorian']);
-                final formattedGregorian = DateFormat('dd MMMM, yyyy').format(date);
-                final isCurrentMonthEvent = (date.year == year && date.month == month);
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: isCurrentMonthEvent
-                          ? AppColors.midTeal.withValues(alpha: 0.3)
-                          : Colors.transparent,
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.navyBlue.withValues(alpha: 0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: isCurrentMonthEvent
-                              ? AppColors.midTeal.withValues(alpha: 0.1)
-                              : AppColors.navyBlue.withValues(alpha: 0.05),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(e['icon'],
-                            color: isCurrentMonthEvent ? AppColors.midTeal : AppColors.navyBlue,
-                            size: 20),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              e['name'],
-                              style: GoogleFonts.poppins(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.navyBlue,
-                              ),
-                            ),
-                            Text(
-                              e['desc'],
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppColors.placeholder,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.navyBlue.withValues(alpha: 0.06),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              e['hijri'],
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.navyBlue,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            formattedGregorian,
-                            style: GoogleFonts.inter(
-                              fontSize: 10.5,
-                              color: AppColors.placeholder,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  void _showDayDetailsDialog(DateTime gregorianDate, int hijriDay, List<Map<String, dynamic>> events) {
-    final hijriMonths = [
-      "Muharram", "Safar", "Rabi' al-Awwal", "Rabi' ath-Thani",
-      "Jumada al-Ula", "Jumada al-Akhirah", "Rajab", "Sha'ban",
-      "Ramadan", "Shawwal", "Dhu al-Qa'dah", "Dhu al-Hijjah"
-    ];
-    int monthIndex = (gregorianDate.month + 3) % 12;
-    int hijriYear = gregorianDate.year - 578;
-    final fullHijriDate = "$hijriDay ${hijriMonths[monthIndex]}, $hijriYear AH";
-    final fullGregorianDate = DateFormat('EEEE, dd MMMM yyyy').format(gregorianDate);
-
-    final dayEvents = events.where((e) {
-      final date = DateTime.parse(e['gregorian']);
-      return date.year == gregorianDate.year &&
-          date.month == gregorianDate.month &&
-          date.day == gregorianDate.day;
-    }).toList();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(
-          'Date Details',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-          textAlign: TextAlign.center,
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.navyBlue.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  const Icon(Icons.calendar_month_rounded, color: AppColors.navyBlue, size: 28),
-                  const SizedBox(height: 8),
-                  Text(
-                    fullGregorianDate,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.navyBlue,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.midTeal.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  const Icon(Icons.brightness_3_rounded, color: AppColors.midTeal, size: 26),
-                  const SizedBox(height: 8),
-                  Text(
-                    fullHijriDate,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.midTeal,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-            if (dayEvents.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                'Events:',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: AppColors.navyBlue, fontSize: 13),
-              ),
-              const SizedBox(height: 6),
-              ...dayEvents.map((e) => Container(
-                padding: const EdgeInsets.all(10),
-                margin: const EdgeInsets.only(bottom: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.coralOrange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.star_rounded, color: AppColors.coralOrange, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        e['name'],
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.navyBlue,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            child: Text(
-              'Close',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
       ),
     );
   }
@@ -3379,31 +2743,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ],
       ),
-    );
-  }
-
-  void _showQurbaniPlannerSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(28),
-          topRight: Radius.circular(28),
-        ),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.9,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (context, scrollController) {
-            return QurbaniPlannerSheet(scrollController: scrollController);
-          },
-        );
-      },
     );
   }
 
