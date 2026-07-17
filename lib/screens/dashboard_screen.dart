@@ -841,36 +841,36 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           const SizedBox(height: 28),
 
-          // Islamic Wealth Section
+          // Today's Guidance Section
           _buildAnimatedEntry(
             delay: 0.2,
+            child: _buildTodaysGuidance(),
+          ),
+          const SizedBox(height: 28),
+
+          // Islamic Wealth Section
+          _buildAnimatedEntry(
+            delay: 0.3,
             child: _buildSectionTitle('Islamic Wealth'),
           ),
           const SizedBox(height: 14),
 
           _buildAnimatedEntry(
-            delay: 0.25,
+            delay: 0.35,
             child: _buildIslamicWealthGrid(),
           ),
           const SizedBox(height: 28),
 
           // Worship Section
           _buildAnimatedEntry(
-            delay: 0.35,
+            delay: 0.45,
             child: _buildSectionTitle('Worship'),
           ),
           const SizedBox(height: 14),
 
           _buildAnimatedEntry(
-            delay: 0.4,
+            delay: 0.5,
             child: _buildWorshipGrid(),
-          ),
-          const SizedBox(height: 28),
-
-          // Today's Guidance Section
-          _buildAnimatedEntry(
-            delay: 0.55,
-            child: _buildTodaysGuidance(),
           ),
           const SizedBox(height: 20),
         ],
