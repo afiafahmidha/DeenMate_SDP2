@@ -1138,22 +1138,26 @@ class _CalendarTabState extends State<CalendarTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: times.map((entry) {
-              return Column(
-                children: [
-                  Text(
-                    _isBengali ? entry.nameBengali : entry.name,
-                    style: GoogleFonts.poppins(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.navyBlue.withValues(alpha: 0.6),
+              return Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      _isBengali ? entry.nameBengali : entry.name,
+                      style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.navyBlue.withValues(alpha: 0.6),
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    DateFormat('h:mm a').format(entry.time),
-                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.midTeal),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      DateFormat('h:mm a').format(entry.time),
+                      style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               );
             }).toList(),
           ),
@@ -1795,22 +1799,26 @@ class EventDetailPage extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: times.map((entry) {
-              return Column(
-                children: [
-                  Text(
-                    isBengali ? entry.nameBengali : entry.name,
-                    style: GoogleFonts.poppins(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.navyBlue.withValues(alpha: 0.6),
+              return Expanded(
+                child: Column(
+                  children: [
+                    Text(
+                      isBengali ? entry.nameBengali : entry.name,
+                      style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.navyBlue.withValues(alpha: 0.6),
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    DateFormat('h:mm a').format(entry.time),
-                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.midTeal),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      DateFormat('h:mm a').format(entry.time),
+                      style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               );
             }).toList(),
           ),
