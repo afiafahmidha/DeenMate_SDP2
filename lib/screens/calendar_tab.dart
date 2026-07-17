@@ -1470,8 +1470,7 @@ class _HeroImageCarousel extends StatefulWidget {
   const _HeroImageCarousel({
     required this.images,
     required this.fallbackColor,
-    this.interval = const Duration(seconds: 4),
-  });
+  }) : interval = const Duration(seconds: 4);
 
   @override
   State<_HeroImageCarousel> createState() => _HeroImageCarouselState();
