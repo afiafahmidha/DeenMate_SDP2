@@ -645,7 +645,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               // Main content area with Smooth Slide and Fade Tab Transition
               Positioned.fill(
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 70),
+                  padding: EdgeInsets.only(bottom: 70 + MediaQuery.of(context).padding.bottom),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 400),
                     switchInCurve: Curves.easeInOutCubic,
@@ -672,7 +672,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                 bottom: 0,
                 left: 0,
                 right: 0,
-                height: 70,
                 child: _buildBottomNavigationBar(),
               ),
 
@@ -792,7 +791,9 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ===== BOTTOM NAVIGATION BAR =====
   Widget _buildBottomNavigationBar() {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
     return Container(
+      padding: EdgeInsets.only(bottom: bottomInset),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: const BorderRadius.only(
@@ -807,15 +808,18 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(0, Icons.home_rounded, 'Home'),
-          _buildNavItem(1, Icons.access_time_rounded, 'Prayer'),
-          _buildNavItem(2, Icons.calendar_month_rounded, 'Calendar'),
-          _buildNavItem(3, Icons.auto_awesome_rounded, 'Assistant'),
-          _buildNavItem(4, Icons.person_outline_rounded, 'Profile'),
-        ],
+      child: SizedBox(
+        height: 70,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildNavItem(0, Icons.home_rounded, 'Home'),
+            _buildNavItem(1, Icons.access_time_rounded, 'Prayer'),
+            _buildNavItem(2, Icons.calendar_month_rounded, 'Calendar'),
+            _buildNavItem(3, Icons.auto_awesome_rounded, 'Assistant'),
+            _buildNavItem(4, Icons.person_outline_rounded, 'Profile'),
+          ],
+        ),
       ),
     );
   }
@@ -1970,14 +1974,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.calculate_rounded,
                   label: 'Zakat Calculator',
                   iconPainter: _ZakatIconPainter(),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => _ZakatCalculatorPage(parentState: this),
-                      ),
-                    );
-                  },
                   onTap: _showZakatCalculatorSheet,
                 ),
               ),
@@ -2074,65 +2070,56 @@ class _DashboardScreenState extends State<DashboardScreen>
     CustomPainter? iconPainter,
     VoidCallback? onTap,
   }) {
-    return Container(
-      decoration: BoxDecoration(
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap ?? () {},
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AppColors.dustyBlueTeal.withValues(alpha: 0.55),
-          width: 1.5,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap ?? () {},
-          borderRadius: BorderRadius.circular(16),
-          splashColor: AppColors.dustyBlueTeal.withValues(alpha: 0.15),
-          highlightColor: AppColors.dustyBlueTeal.withValues(alpha: 0.08),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.navyBlue.withValues(alpha: 0.05),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        splashColor: AppColors.dustyBlueTeal.withValues(alpha: 0.15),
+        highlightColor: AppColors.dustyBlueTeal.withValues(alpha: 0.08),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.dustyBlueTeal.withValues(alpha: 0.55),
+              width: 1.5,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Icon container with custom vector art
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8F4F0),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: iconPainter != null
-                      ? CustomPaint(painter: iconPainter)
-                      : Icon(icon, color: AppColors.navyBlue, size: 22),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navyBlue.withValues(alpha: 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Icon container with custom vector art
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F4F0),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 14),
-                Text(
-                  label,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.navyBlue,
-                    letterSpacing: 0.1,
-                  ),
+                child: iconPainter != null
+                    ? CustomPaint(painter: iconPainter)
+                    : Icon(icon, color: AppColors.navyBlue, size: 22),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.navyBlue,
+                  letterSpacing: 0.1,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -2827,10 +2814,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ===== ZAKAT WEALTH MANAGEMENT BODY =====
-  Widget _buildZakatTabBody(BuildContext context) {
   // ===== ZAKAT WEALTH MANAGEMENT TAB =====
-  Widget _buildZakatTab({bool isBottomSheet = false, ScrollController? scrollController}) {
+  Widget _buildZakatTab({bool isBottomSheet = false, bool isPage = false, ScrollController? scrollController}) {
     final bool isEligible = _totalZakatableWealth >= _nisabBDT;
     String formatBDT(double v) {
       if (v >= 1000000) return '৳${(v / 1000000).toStringAsFixed(2)}M';
@@ -2848,9 +2833,11 @@ class _DashboardScreenState extends State<DashboardScreen>
       key: const ValueKey('ZakatTab'),
       controller: scrollController,
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.only(top: 16, bottom: 20),
-      padding: isBottomSheet
-          ? const EdgeInsets.only(top: 16, bottom: 24)
+      padding: (isBottomSheet || isPage)
+          ? EdgeInsets.only(
+              top: isPage ? MediaQuery.of(context).padding.top + 16 : 16,
+              bottom: 24 + (isPage ? MediaQuery.of(context).padding.bottom : 0),
+            )
           : const EdgeInsets.only(top: 52, bottom: 90),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2888,7 +2875,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ],
                   ),
                 ),
-                if (isBottomSheet)
+                if (isBottomSheet || isPage)
                   IconButton(
                     icon: const Icon(Icons.close_rounded, color: AppColors.navyBlue),
                     onPressed: () => Navigator.pop(context),
@@ -3015,19 +3002,27 @@ class _DashboardScreenState extends State<DashboardScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.analytics_rounded,
-                              color: AppColors.navyBlue, size: 20),
-                          const SizedBox(width: 8),
-                          Text('Metal Market Rates (BDT/g)',
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13.5,
-                                color: AppColors.navyBlue,
-                              )),
-                        ],
+                      Expanded(
+                        child: Row(
+                          children: [
+                            const Icon(Icons.analytics_rounded,
+                                color: AppColors.navyBlue, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Metal Market Rates (BDT/g)',
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: AppColors.navyBlue,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       if (_pricesLoading)
                         const SizedBox(
                           width: 12,
@@ -3154,7 +3149,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: Column(
               children: [
                 _buildWealthInputRow(
-                  icon: Icons.savings_outlined,
+                  icon: Icons.account_balance_wallet_outlined,
                   label: 'Cash & Bank Savings',
                   sublabel: 'Includes cash on hand and account balances',
                   controller: _zakatCashCtrl,
@@ -3419,56 +3414,11 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _showZakatCalculatorSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(28),
-          topRight: Radius.circular(28),
-        ),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _ZakatCalculatorPage(dashboardState: this),
       ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            _onZakatChangedCallback = () {
-              setSheetState(() {});
-            };
-            return DraggableScrollableSheet(
-              initialChildSize: 0.9,
-              minChildSize: 0.5,
-              maxChildSize: 0.95,
-              expand: false,
-              builder: (context, scrollController) {
-                return Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    Container(
-                      width: 40,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: _buildZakatTab(
-                        isBottomSheet: true,
-                        scrollController: scrollController,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      },
-    ).then((_) {
-      _onZakatChangedCallback = null;
-    });
+    );
   }
 
   Widget _buildZakatStatChip(String label, String value, IconData icon) {
@@ -3731,27 +3681,24 @@ class _DashboardTwinklingStarState extends State<_DashboardTwinklingStar>
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final parentWidth = constraints.maxWidth;
-        final parentHeight = constraints.maxHeight;
-        return Positioned(
-          top: widget.topFraction * parentHeight,
-          left: widget.leftFraction * parentWidth,
-          child: AnimatedBuilder(
-            animation: _opacity,
-            builder: (context, child) {
-              return Opacity(
-                opacity: _opacity.value,
-                child: CustomPaint(
-                  size: Size(widget.size, widget.size),
-                  painter: _DashboardStarPainter(),
-                ),
-              );
-            },
-          ),
-        );
-      },
+    // Use Align with FractionalOffset instead of LayoutBuilder + Positioned.
+    // Positioned must be a direct child of a Stack render object; wrapping it
+    // in a LayoutBuilder breaks that requirement and throws a ParentDataWidget
+    // assertion. FractionalOffset(x, y) maps [0,0]→top-left, [1,1]→bottom-right.
+    return Align(
+      alignment: FractionalOffset(widget.leftFraction, widget.topFraction),
+      child: AnimatedBuilder(
+        animation: _opacity,
+        builder: (context, child) {
+          return Opacity(
+            opacity: _opacity.value,
+            child: CustomPaint(
+              size: Size(widget.size, widget.size),
+              painter: _DashboardStarPainter(),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -4703,35 +4650,49 @@ class _SparklinePainter extends CustomPainter {
 
 }
 
-// ===== ZAKAT CALCULATOR PAGE (Sub-page) =====
-class _ZakatCalculatorPage extends StatelessWidget {
-  final _DashboardScreenState parentState;
+// ===== ZAKAT CALCULATOR FULL SCREEN PAGE =====
+class _ZakatCalculatorPage extends StatefulWidget {
+  final _DashboardScreenState dashboardState;
 
-  const _ZakatCalculatorPage({required this.parentState});
+  const _ZakatCalculatorPage({super.key, required this.dashboardState});
+
+  @override
+  State<_ZakatCalculatorPage> createState() => _ZakatCalculatorPageState();
+}
+
+class _ZakatCalculatorPageState extends State<_ZakatCalculatorPage> {
+  @override
+  void initState() {
+    super.initState();
+    widget.dashboardState._onZakatChangedCallback = () {
+      if (mounted) setState(() {});
+    };
+  }
+
+  @override
+  void dispose() {
+    widget.dashboardState._onZakatChangedCallback = null;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F7),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 18),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Zakat Calculator',
-          style: GoogleFonts.poppins(
-            color: AppColors.navyBlue,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+    return Container(
+      color: const Color(0xFFE8E8E8),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(
+              top: false,
+              child: widget.dashboardState._buildZakatTab(
+                isPage: true,
+              ),
+            ),
           ),
         ),
-        centerTitle: true,
       ),
-      body: parentState._buildZakatTabBody(context),
     );
   }
 }
-
