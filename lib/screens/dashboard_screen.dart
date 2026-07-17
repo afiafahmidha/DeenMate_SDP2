@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
 import 'calendar_tab.dart';
+import 'qurbani_planner_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -1754,25 +1755,59 @@ _buildAnimatedEntry(
   }
 
   // ===== NEXT PRAYER CARD (static — no float, but animated decoration) =====
+  // Returns the gradient for the Next Prayer Card based on the current prayer time
+  LinearGradient _getPrayerCardGradient() {
+    switch (_nextPrayerName) {
+      case 'Fajr':
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F1E36), Color(0xFF1D3557), Color(0xFF457B9D)],
+        );
+      case 'Dhuhr':
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1A6EA8), Color(0xFF2A8FCC), Color(0xFF52AEDE)],
+        );
+      case 'Asr':
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1B5C8A), Color(0xFF2E7BAD), Color(0xFFD4874A)],
+        );
+      case 'Maghrib':
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF6B3A7D), Color(0xFFB05C8A), Color(0xFFE8855A)],
+        );
+      case 'Isha':
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF060D1A), Color(0xFF0D1F35), Color(0xFF152942)],
+        );
+      default: // Fajr fallback
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F1E36), Color(0xFF1D3557), Color(0xFF457B9D)],
+        );
+    }
+  }
+
   Widget _buildNextPrayerCard() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 22),
       child: AnimatedBuilder(
-        // Only rebuild when cloud/pulse animation ticks — no float transform
         animation: Listenable.merge([_cloudsController, _pulseController]),
         builder: (context, _) {
-          return Container(
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 800),
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.navyBlue,
-                  Color(0xFF1D3550),
-                  Color(0xFF283F54),
-                ],
-              ),
+              gradient: _getPrayerCardGradient(),
               borderRadius: BorderRadius.circular(22),
               boxShadow: [
                 BoxShadow(
@@ -1790,10 +1825,11 @@ _buildAnimatedEntry(
                     painter: _NextPrayerCardDecorationPainter(
                       cloudAnimationVal: _cloudsController.value,
                       pulseVal: _pulseController.value,
+                      prayerName: _nextPrayerName,
                     ),
                   ),
                 ),
-                // Foreground Content — static text, no movement
+                // Foreground Content
                 Padding(
                   padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
                   child: Row(
@@ -1916,6 +1952,13 @@ _buildAnimatedEntry(
                   icon: Icons.pets_rounded,
                   label: 'Qurbani Planner',
                   iconPainter: _QurbaniIconPainter(),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const QurbaniPlannerPage(),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -2022,8 +2065,8 @@ _buildAnimatedEntry(
               ),
             ],
             border: Border.all(
-              color: AppColors.dustyBlueTeal.withValues(alpha: 0.12),
-              width: 1,
+              color: AppColors.dustyBlueTeal,
+              width: 1.8,
             ),
           ),
           child: Column(
@@ -3113,10 +3156,12 @@ class _DashboardTexturePainter extends CustomPainter {
 class _NextPrayerCardDecorationPainter extends CustomPainter {
   final double cloudAnimationVal;
   final double pulseVal;
+  final String prayerName;
 
   _NextPrayerCardDecorationPainter({
     required this.cloudAnimationVal,
     required this.pulseVal,
+    this.prayerName = 'Fajr',
   });
 
   @override
@@ -3124,36 +3169,64 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
     final double w = size.width;
     final double h = size.height;
 
-    // 1. Draw Twinkling Sparkling Stars in the Card Sky
-    final starPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.35 + (0.35 * math.sin(pulseVal * math.pi)))
-      ..style = PaintingStyle.fill;
+    final bool isNight = prayerName == 'Fajr' || prayerName == 'Isha';
+    final bool isDaytime = prayerName == 'Dhuhr' || prayerName == 'Asr';
 
-    final List<Offset> starLocations = [
-      Offset(w * 0.15, h * 0.22),
-      Offset(w * 0.35, h * 0.12),
-      Offset(w * 0.48, h * 0.28),
-      Offset(w * 0.72, h * 0.18),
-      Offset(w * 0.90, h * 0.32),
-      Offset(w * 0.25, h * 0.35),
-    ];
+    // 1. Draw Twinkling Stars — only for Fajr and Isha
+    if (isNight) {
+      final starPaint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.35 + (0.35 * math.sin(pulseVal * math.pi)))
+        ..style = PaintingStyle.fill;
 
-    for (var offset in starLocations) {
-      _drawSparklingStar(canvas, offset, 5.0, starPaint);
+      final List<Offset> starLocations = [
+        Offset(w * 0.15, h * 0.22),
+        Offset(w * 0.35, h * 0.12),
+        Offset(w * 0.48, h * 0.28),
+        Offset(w * 0.72, h * 0.18),
+        Offset(w * 0.90, h * 0.32),
+        Offset(w * 0.25, h * 0.35),
+      ];
+
+      for (var offset in starLocations) {
+        _drawSparklingStar(canvas, offset, 5.0, starPaint);
+      }
     }
 
-    // 2. Draw Translucent Floating Clouds
+    // 2. Draw a glowing sun for daytime prayers (Dhuhr, Asr)
+    if (isDaytime) {
+      final sunGlow = Paint()
+        ..color = Colors.white.withValues(alpha: 0.10 + 0.06 * math.sin(pulseVal * math.pi))
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18);
+      canvas.drawCircle(Offset(w * 0.82, h * 0.22), 32, sunGlow);
+      final sunCore = Paint()
+        ..color = Colors.white.withValues(alpha: 0.22)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(w * 0.82, h * 0.22), 16, sunCore);
+    }
+
+    // 3. Draw a warm glow orb for Maghrib
+    if (prayerName == 'Maghrib') {
+      final glowPaint = Paint()
+        ..color = const Color(0xFFFF9966).withValues(alpha: 0.18 + 0.07 * math.sin(pulseVal * math.pi))
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 22);
+      canvas.drawCircle(Offset(w * 0.80, h * 0.25), 38, glowPaint);
+    }
+
+    // 4. Draw Translucent Floating Clouds
+    final cloudAlpha = isDaytime ? 0.12 : 0.08;
     final cloudPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.08)
+      ..color = Colors.white.withValues(alpha: cloudAlpha)
       ..style = PaintingStyle.fill;
 
     // Cloud 1: Slow top drift
     double cx1 = (w * cloudAnimationVal + w * 0.2) % (w + 80) - 40;
     _drawCloud(canvas, Offset(cx1, h * 0.20), 22, cloudPaint);
 
-    // Cloud 2: Faster middle drift
-    double cx2 = (w * 1.5 * cloudAnimationVal + w * 0.6) % (w + 100) - 50;
-    _drawCloud(canvas, Offset(cx2, h * 0.38), 28, cloudPaint);
+    // Cloud 2: Faster middle drift (hidden at night)
+    if (!isNight) {
+      double cx2 = (w * 1.5 * cloudAnimationVal + w * 0.6) % (w + 100) - 50;
+      _drawCloud(canvas, Offset(cx2, h * 0.38), 28, cloudPaint);
+    }
 
     // 3. Draw Silhouette Mosque Vector at the Bottom Right
     final mosquePaint = Paint()
@@ -3255,7 +3328,8 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _NextPrayerCardDecorationPainter oldDelegate) {
     return oldDelegate.cloudAnimationVal != cloudAnimationVal ||
-        oldDelegate.pulseVal != pulseVal;
+        oldDelegate.pulseVal != pulseVal ||
+        oldDelegate.prayerName != prayerName;
   }
 }
 
