@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
 import 'calendar_tab.dart';
+import 'qurbani_planner_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -1986,6 +1987,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.pets_rounded,
                   label: 'Qurbani Planner',
                   iconPainter: _QurbaniIconPainter(),
+                  onTap: _showQurbaniPlannerSheet,
                 ),
               ),
             ],
@@ -3388,6 +3390,31 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ],
       ),
+    );
+  }
+
+  void _showQurbaniPlannerSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(28),
+          topRight: Radius.circular(28),
+        ),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.9,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return QurbaniPlannerSheet(scrollController: scrollController);
+          },
+        );
+      },
     );
   }
 
