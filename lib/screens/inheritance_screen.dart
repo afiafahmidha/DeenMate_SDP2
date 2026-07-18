@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../widgets/auth_header.dart'; // AppColors
@@ -17,6 +18,63 @@ class InheritanceGuideScreen extends StatefulWidget {
   @override
   State<InheritanceGuideScreen> createState() => _InheritanceGuideScreenState();
 }
+
+// ===== INHERITANCE-RELATED AYAH DATA =====
+// Each entry pairs one background image with one Faraid-related ayah so
+// the hero carousel and the ayah caption change together as it cycles.
+// Add your own images to assets/images/inheritance/1.jpg ... 5.jpg (and
+// register the folder in pubspec.yaml) — if an image is missing, that
+// slide gracefully falls back to a navy gradient instead of crashing.
+class _InheritanceAyahSlide {
+  final String imagePath;
+  final String reference;
+  final String quotedPhrase;
+  final String reflection;
+  const _InheritanceAyahSlide({
+    required this.imagePath,
+    required this.reference,
+    required this.quotedPhrase,
+    required this.reflection,
+  });
+}
+
+const List<_InheritanceAyahSlide> _inheritanceAyahs = [
+  _InheritanceAyahSlide(
+    imagePath: 'assets/images/inheritance/1.jpg',
+    reference: 'Surah An-Nisa 4:7',
+    quotedPhrase: 'men is a share of what parents and relatives leave',
+    reflection:
+        'The Quran establishes that both men and women have a rightful, defined share in inherited wealth — a principle unusual for its time.',
+  ),
+  _InheritanceAyahSlide(
+    imagePath: 'assets/images/inheritance/2.jpg',
+    reference: 'Surah An-Nisa 4:11',
+    quotedPhrase: 'for the male what is equal to the share of two females',
+    reflection:
+        'This verse lays out the foundation of how children inherit — the core ratio the Sons/Daughters calculation on this page is built on.',
+  ),
+  _InheritanceAyahSlide(
+    imagePath: 'assets/images/inheritance/3.jpg',
+    reference: 'Surah An-Nisa 4:11',
+    quotedPhrase: 'after any bequest is made or debt is paid',
+    reflection:
+        'Before any heir receives their share, the Quran requires settling debts and honoring a will (up to a third of the estate) first.',
+  ),
+  _InheritanceAyahSlide(
+    imagePath: 'assets/images/inheritance/4.jpg',
+    reference: 'Surah An-Nisa 4:12',
+    quotedPhrase: 'for you is half of what your wives leave',
+    reflection:
+        'This verse sets out the spouse\'s share — the basis for the Husband/Wife calculation used in this guide.',
+  ),
+  _InheritanceAyahSlide(
+    imagePath: 'assets/images/inheritance/5.jpg',
+    reference: 'Surah An-Nisa 4:11',
+    quotedPhrase: 'Allah is Knowing and Wise',
+    reflection:
+        'The Faraid shares close with a reminder that this precise, detailed system of division reflects divine wisdom, not arbitrary rule.',
+  ),
+];
 
 class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
   // ===== INPUT STATE =====
@@ -173,13 +231,30 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
           constraints: const BoxConstraints(maxWidth: 430),
           child: Scaffold(
             backgroundColor: const Color(0xFFF7F7F5),
-            body: SafeArea(
-              child: Column(
-                children: [
-                  _buildHeader(),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            body: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // ── HERO IMAGE + AYAH CAROUSEL (auto-scrolls while on this page) ──
+                SliverAppBar(
+                  expandedHeight: 260,
+                  pinned: true,
+                  backgroundColor: AppColors.navyBlue,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  flexibleSpace: FlexibleSpaceBar(
+                    collapseMode: CollapseMode.pin,
+                    background: const _InheritanceHeroCarousel(slides: _inheritanceAyahs),
+                  ),
+                ),
+                // ── REST OF THE PAGE (unchanged calculator) ──
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    child: Column(
                       children: [
                         _buildEstateInput(),
                         const SizedBox(height: 16),
@@ -199,8 +274,8 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -208,48 +283,16 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
     );
   }
 
-  // ===== HEADER =====
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
+  Widget _buildSectionLabel(String title) {
+    return Align(
+      alignment: Alignment.centerLeft,
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 20),
-            onPressed: () => Navigator.pop(context),
-          ),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.navyBlue,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Inheritance Guide',
-                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                Text('Common Faraid share scenarios',
-                    style: GoogleFonts.inter(fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.55))),
-              ],
-            ),
-          ),
+          Container(width: 4, height: 16, decoration: BoxDecoration(color: AppColors.navyBlue, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 8),
+          Text(title, style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
         ],
       ),
-    );
-  }
-
-  Widget _buildSectionLabel(String title) {
-    return Row(
-      children: [
-        Container(width: 4, height: 16, decoration: BoxDecoration(color: AppColors.navyBlue, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 8),
-        Text(title, style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-      ],
     );
   }
 
@@ -603,6 +646,157 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ===== HERO IMAGE + AYAH CAROUSEL =====
+// Auto-scrolls through the image+ayah pairs the whole time the user stays
+// on this page. Falls back to a navy gradient per-slide if the image
+// asset isn't found yet, so nothing crashes before real photos are added.
+class _InheritanceHeroCarousel extends StatefulWidget {
+  final List<_InheritanceAyahSlide> slides;
+  const _InheritanceHeroCarousel({required this.slides});
+
+  @override
+  State<_InheritanceHeroCarousel> createState() => _InheritanceHeroCarouselState();
+}
+
+class _InheritanceHeroCarouselState extends State<_InheritanceHeroCarousel> {
+  late final PageController _controller;
+  Timer? _timer;
+  int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController();
+    _startAutoScroll();
+  }
+
+  void _startAutoScroll() {
+    if (widget.slides.length <= 1) return;
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || !_controller.hasClients) return;
+      _page = (_page + 1) % widget.slides.length;
+      _controller.animateToPage(
+        _page,
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _gradientFallback() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.navyBlue, Color(0xFF1D3550)],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          controller: _controller,
+          itemCount: widget.slides.length,
+          onPageChanged: (i) => setState(() => _page = i),
+          itemBuilder: (context, index) {
+            return Image.asset(
+              widget.slides[index].imagePath,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => _gradientFallback(),
+            );
+          },
+        ),
+        // Gradient overlay so the ayah text stays legible over any photo
+        IgnorePointer(
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.black.withValues(alpha: 0.05),
+                  Colors.black.withValues(alpha: 0.80),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: const [0.3, 1.0],
+              ),
+            ),
+          ),
+        ),
+        // Ayah caption — changes together with the image
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: 20,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            child: Column(
+              key: ValueKey(_page),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.slides[_page].reference,
+                  style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.coralOrange),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '"${widget.slides[_page].quotedPhrase}"',
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 17,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.slides[_page].reflection,
+                  style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white.withValues(alpha: 0.85), height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Dot indicators
+        if (widget.slides.length > 1)
+          Positioned(
+            top: 100,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(widget.slides.length, (i) {
+                final isActive = i == _page;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: isActive ? 16 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: isActive ? 0.95 : 0.5),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                );
+              }),
+            ),
+          ),
+      ],
     );
   }
 }
