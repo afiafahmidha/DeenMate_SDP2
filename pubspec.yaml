@@ -69,6 +69,7 @@ flutter_launcher_icons:
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
+
 flutter:
 
   # The following line ensures that the Material Icons font is
@@ -87,6 +88,7 @@ flutter:
     - assets/images/islamic_events/eid_al_fitr/
     - assets/images/islamic_events/eid_al_adha/
     - assets/images/islamic_events/arafah/
+    - assets/images/inheritance/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
