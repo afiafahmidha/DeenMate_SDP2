@@ -84,12 +84,35 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ===== ZAKAT WEALTH STATE =====
   final TextEditingController _zakatCashCtrl = TextEditingController(text: '0');
-  final TextEditingController _zakatGoldGramsCtrl = TextEditingController(text: '0'); // grams of gold
-  final TextEditingController _zakatSilverGramsCtrl = TextEditingController(text: '0'); // grams of silver
+  final TextEditingController _zakatGoldGramsCtrl = TextEditingController(text: '0'); // investment gold
+  final TextEditingController _zakatGoldJewelryCtrl = TextEditingController(text: '0'); // personal jewelry gold
+  final TextEditingController _zakatSilverGramsCtrl = TextEditingController(text: '0'); // investment silver
+  final TextEditingController _zakatSilverJewelryCtrl = TextEditingController(text: '0'); // personal jewelry silver
   final TextEditingController _zakatStocksCtrl = TextEditingController(text: '0');
   final TextEditingController _zakatBusinessCtrl = TextEditingController(text: '0');
-  final TextEditingController _zakatReceivableCtrl = TextEditingController(text: '0');
-  final TextEditingController _zakatLiabilitiesCtrl = TextEditingController(text: '0');
+  final TextEditingController _zakatReceivableCtrl = TextEditingController(text: '0'); // good debt
+  final TextEditingController _zakatReceivableBadCtrl = TextEditingController(text: '0'); // bad debt
+  final TextEditingController _zakatLiabilitiesCtrl = TextEditingController(text: '0'); // immediate/short-term
+  final TextEditingController _zakatLongTermLiabilitiesCtrl = TextEditingController(text: '0'); // long-term mortgage/loans
+
+  // Zakat configuration settings (persisted)
+  String _nisabStandard = 'silver'; // 'gold' or 'silver'
+  String _zakatSchoolOfOpinion = 'hanafi'; // 'hanafi' (jewelry zakatable) or 'others' (jewelry exempt)
+  String _stockTradingIntent = 'holding'; // 'trading' (100%) or 'holding' (30%)
+  DateTime? _zakatStartCrossingDate; // When wealth first crossed Nisab
+
+  // Payment Logs (persisted as JSON strings)
+  List<Map<String, dynamic>> _zakatPayments = [];
+
+  // Zakat al-Fitr (persisted)
+  int _fitraFamilySize = 1;
+  String _fitraStaple = 'Flour'; // Flour, Dates, Raisins, Barley
+  double _fitraCustomRate = 115.0; // BDT
+  List<Map<String, dynamic>> _fitraPayments = [];
+
+  // What-if simulator values (percentage / amount)
+  double _whatIfDonation = 0.0;
+  double _whatIfInvestmentGrowth = 0.0; // 0 to 100 percentage
 
   // Live metal prices (fetched from API)
   double _goldSpotUSD = 3280.0;   // per troy oz  (fallback)
@@ -105,9 +128,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   final List<double> _goldHistory = [];
   final List<double> _silverHistory = [];
 
-  // Nisab = 85g gold at live price
-  static const double _nisabGrams = 85.0;
-  double get _nisabBDT => _nisabGrams * _goldPricePerGramBDT;
+  // Dynamic Nisab threshold based on gold vs silver standard
+  double get _nisabBDT => _nisabStandard == 'gold'
+      ? 85.0 * _goldPricePerGramBDT
+      : 595.0 * _silverPricePerGramBDT;
 
   double _totalZakatableWealth = 0.0;
   double _zakatDue = 0.0;
@@ -381,11 +405,15 @@ class _DashboardScreenState extends State<DashboardScreen>
     _priceRefreshTimer?.cancel();
     _zakatCashCtrl.dispose();
     _zakatGoldGramsCtrl.dispose();
+    _zakatGoldJewelryCtrl.dispose();
     _zakatSilverGramsCtrl.dispose();
+    _zakatSilverJewelryCtrl.dispose();
     _zakatStocksCtrl.dispose();
     _zakatBusinessCtrl.dispose();
     _zakatReceivableCtrl.dispose();
+    _zakatReceivableBadCtrl.dispose();
     _zakatLiabilitiesCtrl.dispose();
+    _zakatLongTermLiabilitiesCtrl.dispose();
     super.dispose();
   }
 
