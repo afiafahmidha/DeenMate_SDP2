@@ -14,6 +14,7 @@ import 'calendar_tab.dart';
 import 'hajj_umrah_screen.dart';
 import 'inheritance_screen.dart';
 import 'qurbani_planner_screen.dart';
+import 'assistant_tab.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -812,7 +813,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ===== ACTIVE TAB CONTENT DISPATCHER =====
-  Widget _buildActiveTabContent() {
+Widget _buildActiveTabContent() {
     switch (_currentIndex) {
       case 0:
         return _buildHomeTab();
@@ -822,11 +823,12 @@ class _DashboardScreenState extends State<DashboardScreen>
         return CalendarTab(
           onOpenZakatCalculator: _showZakatCalculatorSheet,
         );
+      case 3:
+        return const AssistantTab();
       default:
         return _buildPlaceholderTab();
     }
   }
-
   // ===== HOME TAB (Main Dashboard) =====
   Widget _buildHomeTab() {
     return SingleChildScrollView(
