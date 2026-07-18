@@ -15,6 +15,8 @@ import 'hajj_umrah_screen.dart';
 import 'inheritance_screen.dart';
 import 'qurbani_planner_screen.dart';
 import 'assistant_tab.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -49,19 +51,31 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Selected prayer scene for dynamic prayer tab header
   String _selectedPrayerScene = "Asr";
 
-  // Active alarms map for prayer list on Prayer page
+  // Qaza counter — incremented when a past prayer is missed (not ticked)
+  int _qazaCount = 0;
+
+  // Qaza prayer counter state (manually managed + saved via SharedPreferences)
+  final Map<String, int> _qazaCounts = {
+    'Fajr': 0,
+    'Dhuhr': 0,
+    'Asr': 0,
+    'Maghrib': 0,
+    'Isha': 0,
+  };
+
+  // Active alarms map for prayer list on Prayer page (all off by default; user toggles)
   final Map<String, bool> _prayerAlarms = {
-    'Fajr': true,
+    'Fajr': false,
     'Sunrise': false,
     'Dhuhr': false,
-    'Asr': true,
+    'Asr': false,
     'Maghrib': false,
-    'Isha': true,
+    'Isha': false,
   };
 
   // Daily salat completion checklist states
   final Map<String, bool> _salatCompleted = {
-    'Fajr': true,
+    'Fajr': false,
     'Dhuhr': false,
     'Asr': false,
     'Maghrib': false,
@@ -212,6 +226,106 @@ class _DashboardScreenState extends State<DashboardScreen>
   
   
 
+  // Load manual Qaza counts from SharedPreferences
+  Future<void> _loadQazaCounts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final prayer in _qazaCounts.keys) {
+        final val = prefs.getInt('qaza_$prayer') ?? 0;
+        setState(() {
+          _qazaCounts[prayer] = val;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading qaza counts: $e');
+    }
+  }
+
+  // Save manual Qaza count for a specific prayer
+  Future<void> _saveQazaCount(String prayer, int val) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('qaza_$prayer', val);
+    } catch (e) {
+      debugPrint('Error saving qaza count: $e');
+    }
+  }
+
+  // Automatically log a missed prayer as Qaza
+  Future<void> _autoLogQaza(String prayer, String logKey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!(prefs.getBool(logKey) ?? false)) {
+        await prefs.setBool(logKey, true);
+        final currentCount = _qazaCounts[prayer] ?? 0;
+        final newCount = currentCount + 1;
+        setState(() {
+          _qazaCounts[prayer] = newCount;
+        });
+        await _saveQazaCount(prayer, newCount);
+      }
+    } catch (e) {
+      debugPrint('Error auto-logging qaza count: $e');
+    }
+  }
+
+  // Load daily salat completion status from SharedPreferences
+  Future<void> _loadSalatCompleted() async {
+    try {
+      final now = DateTime.now();
+      final ymd = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+      final prefs = await SharedPreferences.getInstance();
+      for (final salat in _salatCompleted.keys) {
+        final val = prefs.getBool('completed_${ymd}_$salat') ?? false;
+        setState(() {
+          _salatCompleted[salat] = val;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading salat completion: $e');
+    }
+  }
+
+  // Save daily salat completion status to SharedPreferences
+  Future<void> _saveSalatCompleted(String salat, bool val) async {
+    try {
+      final now = DateTime.now();
+      final ymd = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('completed_${ymd}_$salat', val);
+    } catch (e) {
+      debugPrint('Error saving salat completion: $e');
+    }
+  }
+
+  // Load alarm toggle states from SharedPreferences
+  Future<void> _loadAlarmStates() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final prayer in _prayerAlarms.keys) {
+        // Default to false if never set (user picks their own alarms)
+        final val = prefs.getBool('alarm_$prayer') ?? false;
+        setState(() {
+          _prayerAlarms[prayer] = val;
+        });
+      }
+      // After loading states, sync actual scheduled notifications
+      _syncAlarms();
+    } catch (e) {
+      debugPrint('Error loading alarm states: $e');
+    }
+  }
+
+  // Save a single alarm toggle state to SharedPreferences
+  Future<void> _saveAlarmState(String prayer, bool val) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('alarm_$prayer', val);
+    } catch (e) {
+      debugPrint('Error saving alarm state: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -239,6 +353,13 @@ class _DashboardScreenState extends State<DashboardScreen>
     // Initialize gold & silver price in BDT per gram with instant fallback prices
     _goldPricePerGramBDT = (_goldSpotUSD / 31.1035) * _usdToBDT;
     _silverPricePerGramBDT = (_silverSpotUSD / 31.1035) * _usdToBDT;
+
+    // Load saved Qaza counts
+    _loadQazaCounts();
+    // Load daily checklist status
+    _loadSalatCompleted();
+    // Load user alarm preferences
+    _loadAlarmStates();
 
     // Start location services & prayer time updates
     _initLocationAndTracking();
@@ -397,6 +518,25 @@ class _DashboardScreenState extends State<DashboardScreen>
               setState(() => _showAlarmOverlay = false);
             }
           });
+        }
+      }
+    }
+
+    // === Auto Qaza Calculation ===
+    // If a fard prayer time has passed today, is unchecked, and hasn't been auto-logged yet for today,
+    // automatically increment its persistent Qaza count.
+    final ymd = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final List<String> fardPrayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+    for (final sName in fardPrayers) {
+      final sTime = allTimes[sName];
+      if (sTime == null) continue;
+      final bool isPast = now.isAfter(sTime);
+      final bool isDone = _salatCompleted[sName] ?? false;
+      if (isPast && !isDone) {
+        final logKey = 'auto_qaza_logged_${ymd}_$sName';
+        if (!_triggeredAlarms.contains(logKey)) {
+          _triggeredAlarms.add(logKey);
+          _autoLogQaza(sName, logKey);
         }
       }
     }
@@ -821,6 +961,7 @@ Widget _buildActiveTabContent() {
         return _buildPrayerTab();
       case 2:
         return CalendarTab(
+          key: const ValueKey('CalendarTab'),
           onOpenZakatCalculator: _showZakatCalculatorSheet,
         );
       case 3:
@@ -900,18 +1041,72 @@ _buildAnimatedEntry(
 
     final prayerTimes = PrayerTimes.today(coordinates, params);
     final formatter = DateFormat('hh:mm a');
+    final now = DateTime.now();
 
     final List<Map<String, dynamic>> prayerItems = [
-      {'name': 'Fajr', 'time': formatter.format(prayerTimes.fajr)},
-      {'name': 'Sunrise', 'time': formatter.format(prayerTimes.sunrise)},
-      {'name': 'Dhuhr', 'time': formatter.format(prayerTimes.dhuhr)},
-      {'name': 'Asr', 'time': formatter.format(prayerTimes.asr)},
-      {'name': 'Maghrib', 'time': formatter.format(prayerTimes.maghrib)},
-      {'name': 'Isha', 'time': formatter.format(prayerTimes.isha)},
+      {'name': 'Fajr',    'time': formatter.format(prayerTimes.fajr),    'dt': prayerTimes.fajr},
+      {'name': 'Sunrise', 'time': formatter.format(prayerTimes.sunrise), 'dt': prayerTimes.sunrise},
+      {'name': 'Dhuhr',   'time': formatter.format(prayerTimes.dhuhr),   'dt': prayerTimes.dhuhr},
+      {'name': 'Asr',     'time': formatter.format(prayerTimes.asr),     'dt': prayerTimes.asr},
+      {'name': 'Maghrib', 'time': formatter.format(prayerTimes.maghrib), 'dt': prayerTimes.maghrib},
+      {'name': 'Isha',    'time': formatter.format(prayerTimes.isha),    'dt': prayerTimes.isha},
     ];
 
     final currentPrayer = _getCurrentPrayerName();
     int completedCount = _salatCompleted.values.where((v) => v).length;
+
+    // Recalculate qaza count every build (prayers that have passed and aren't ticked)
+    // Sunrise is not a salat so excluded
+    final salatNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+    final Map<String, DateTime?> salatDts = {
+      'Fajr': prayerTimes.fajr,
+      'Dhuhr': prayerTimes.dhuhr,
+      'Asr': prayerTimes.asr,
+      'Maghrib': prayerTimes.maghrib,
+      'Isha': prayerTimes.isha,
+    };
+    // Calculate tomorrow's Fajr for Isha expiration check
+    final tomorrow = now.add(const Duration(days: 1));
+    final tomorrowPrayerTimes = PrayerTimes(
+      coordinates,
+      DateComponents.from(tomorrow),
+      params,
+    );
+    final tomorrowFajrTime = tomorrowPrayerTimes.fajr;
+
+    // Helper to calculate active Isha start time (handling midnight transition)
+    DateTime getIshaStartTime(DateTime todayIsha) {
+      final todayFajr = prayerTimes.fajr;
+      if (now.isBefore(todayFajr)) {
+        final yesterday = now.subtract(const Duration(days: 1));
+        final yesterdayPrayerTimes = PrayerTimes(
+          coordinates,
+          DateComponents.from(yesterday),
+          params,
+        );
+        return yesterdayPrayerTimes.isha;
+      }
+      return todayIsha;
+    }
+
+    int liveQaza = 0;
+    for (final s in salatNames) {
+      final isDone = _salatCompleted[s] ?? false;
+      final expireTime = s == 'Fajr' ? prayerTimes.sunrise
+          : s == 'Dhuhr' ? prayerTimes.asr
+          : s == 'Asr' ? prayerTimes.maghrib
+          : s == 'Maghrib' ? prayerTimes.isha
+          : tomorrowFajrTime;
+
+      if (now.isAfter(expireTime) && !isDone) {
+        liveQaza++;
+      }
+    }
+    if (liveQaza != _qazaCount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _qazaCount = liveQaza);
+      });
+    }
 
     // === Define sky gradient per prayer scene (matching user spec exactly) ===
     LinearGradient skyGradient;
@@ -1021,7 +1216,7 @@ _buildAnimatedEntry(
         // ── PINNED SKY SCENE CARD (does NOT scroll) ──────────────────
         // 1. DYNAMIC SUN/MOON/SKY HEADER CARD
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+            padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 10),
             child: Container(
               height: 240,
               width: double.infinity,
@@ -1106,75 +1301,111 @@ _buildAnimatedEntry(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     IconButton(
-                                      icon: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                                      icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white, size: 20),
                                       onPressed: () => setState(() => _currentIndex = 0),
                                     ),
-                                    Text(
-                                      _selectedPrayerScene,
-                                      style: GoogleFonts.poppins(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.5,
-                                      ),
+                                    Column(
+                                      children: [
+                                        Text(
+                                          'Prayer Times',
+                                          style: GoogleFonts.poppins(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.4,
+                                          ),
+                                        ),
+                                        Text(
+                                          _getHijriDateString(),
+                                          style: GoogleFonts.inter(
+                                            color: Colors.white.withValues(alpha: 0.75),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     IconButton(
-                                      icon: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 20),
-                                      onPressed: () {},
+                                      tooltip: 'Find nearby mosques',
+                                      icon: const Icon(Icons.location_on_rounded, color: Colors.white, size: 20),
+                                      onPressed: () async {
+                                        // Open Google Maps searching for mosques near current location
+                                        final lat = _latitude;
+                                        final lng = _longitude;
+                                        // Capture messenger before async gap
+                                        final messenger = ScaffoldMessenger.of(context);
+                                        // Try native Maps app first (geo: URI), fallback to browser
+                                        final geoUri = Uri.parse(
+                                          'geo:$lat,$lng?q=mosque+near+me&z=14',
+                                        );
+                                        final mapsWebUri = Uri.parse(
+                                          'https://www.google.com/maps/search/mosque+near+me/@$lat,$lng,14z',
+                                        );
+                                        if (await canLaunchUrl(geoUri)) {
+                                          await launchUrl(geoUri);
+                                        } else if (await canLaunchUrl(mapsWebUri)) {
+                                          await launchUrl(mapsWebUri, mode: LaunchMode.externalApplication);
+                                        } else {
+                                          messenger.showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'Could not open Maps. Please install Google Maps.',
+                                                style: GoogleFonts.inter(fontSize: 13),
+                                              ),
+                                              backgroundColor: AppColors.navyBlue,
+                                              behavior: SnackBarBehavior.floating,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            ),
+                                          );
+                                        }
+                                      },
                                     ),
                                   ],
                                 ),
                                 const Spacer(),
-                                Text(
-                                  'Next prayer time',
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white.withValues(alpha: 0.7),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  _liveCountdownStr,
-                                  style: GoogleFonts.poppins(
-                                    color: Colors.white,
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 1.0,
-                                  ),
-                                ),
-                                const Spacer(),
+                                // Next prayer name + countdown
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Location',
+                                          'Next: $_nextPrayerName',
                                           style: GoogleFonts.inter(
-                                            color: Colors.white.withValues(alpha: 0.6),
-                                            fontSize: 10,
+                                            color: Colors.white.withValues(alpha: 0.80),
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.3,
                                           ),
                                         ),
-                                        const SizedBox(height: 1),
+                                        const SizedBox(height: 2),
                                         Text(
-                                          _locationName.split(',').first,
-                                          style: GoogleFonts.inter(
+                                          _liveCountdownStr,
+                                          style: GoogleFonts.poppins(
                                             color: Colors.white,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
+                                            fontSize: 34,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 1.0,
+                                            height: 1.1,
                                           ),
                                         ),
                                       ],
                                     ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                // Location row
+                                Row(
+                                  children: [
+                                    const Icon(Icons.location_on_rounded, color: Colors.white54, size: 13),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      _getHijriDateString(),
+                                      _locationName.split(',').first,
                                       style: GoogleFonts.inter(
-                                        color: Colors.white.withValues(alpha: 0.8),
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white.withValues(alpha: 0.75),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
@@ -1269,11 +1500,29 @@ _buildAnimatedEntry(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: _salatCompleted.keys.map((salat) {
                       final isDone = _salatCompleted[salat] ?? false;
+
+                      final sTime = salat == 'Isha' 
+                          ? getIshaStartTime(salatDts['Isha'] ?? now)
+                          : salatDts[salat];
+                      
+                      final expireTime = salat == 'Fajr' ? prayerTimes.sunrise
+                          : salat == 'Dhuhr' ? salatDts['Asr']
+                          : salat == 'Asr' ? salatDts['Maghrib']
+                          : salat == 'Maghrib' ? salatDts['Isha']
+                          : tomorrowFajrTime;
+
+                      final bool isFuture = sTime != null && now.isBefore(sTime);
+                      final bool isExpired = expireTime != null && now.isAfter(expireTime);
+                      final bool isSalatMissed = isExpired && !isDone;
+
                       return GestureDetector(
                         onTap: () {
+                          if (isSalatMissed || isFuture) return;
+                          final newDone = !isDone;
                           setState(() {
-                            _salatCompleted[salat] = !isDone;
+                            _salatCompleted[salat] = newDone;
                           });
+                          _saveSalatCompleted(salat, newDone);
                         },
                         child: Column(
                           children: [
@@ -1283,12 +1532,22 @@ _buildAnimatedEntry(
                               width: 44,
                               height: 44,
                               decoration: BoxDecoration(
-                                color: isDone
-                                    ? AppColors.navyBlue
-                                    : Colors.white.withValues(alpha: 0.25),
+                                color: isSalatMissed
+                                    ? const Color(0xFFFFEBEE)
+                                    : isFuture
+                                        ? Colors.black.withValues(alpha: 0.04)
+                                        : isDone
+                                            ? AppColors.navyBlue
+                                            : Colors.white.withValues(alpha: 0.25),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: isDone ? AppColors.navyBlue : Colors.white.withValues(alpha: 0.4),
+                                  color: isSalatMissed
+                                      ? const Color(0xFFE57373)
+                                      : isFuture
+                                          ? Colors.black.withValues(alpha: 0.12)
+                                          : isDone
+                                              ? AppColors.navyBlue
+                                              : Colors.white.withValues(alpha: 0.4),
                                   width: 1.8,
                                 ),
                                 boxShadow: isDone
@@ -1302,16 +1561,26 @@ _buildAnimatedEntry(
                                     : [],
                               ),
                               child: Center(
-                                child: isDone
-                                    ? const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24)
-                                    : Icon(Icons.circle_outlined, color: AppColors.navyBlue.withValues(alpha: 0.3), size: 20),
+                                child: isSalatMissed
+                                    ? const Icon(Icons.close_rounded, color: Color(0xFFE57373), size: 22)
+                                    : isFuture
+                                        ? Icon(Icons.lock_outline_rounded, color: Colors.black.withValues(alpha: 0.22), size: 18)
+                                        : isDone
+                                            ? const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24)
+                                            : Icon(Icons.circle_outlined, color: AppColors.navyBlue.withValues(alpha: 0.3), size: 20),
                               ),
                             ),
                             const SizedBox(height: 6),
                             Text(
                               salat,
                               style: GoogleFonts.poppins(
-                                color: isDone ? AppColors.navyBlue : AppColors.navyBlue.withValues(alpha: 0.6),
+                                color: isSalatMissed
+                                    ? const Color(0xFFE57373)
+                                    : isFuture
+                                        ? Colors.black.withValues(alpha: 0.3)
+                                        : isDone
+                                            ? AppColors.navyBlue
+                                            : AppColors.navyBlue.withValues(alpha: 0.6),
                                 fontSize: 11,
                                 fontWeight: isDone ? FontWeight.bold : FontWeight.w500,
                               ),
@@ -1338,7 +1607,20 @@ _buildAnimatedEntry(
                 final item = prayerItems[index];
                 final String pName = item['name'];
                 final String pTime = item['time'];
-                
+
+                // Salat names (Sunrise is not a fard salat)
+                final bool isSalat = (pName != 'Sunrise');
+                bool isMissed = false;
+                if (isSalat) {
+                  final expireTime = pName == 'Fajr' ? prayerTimes.sunrise
+                      : pName == 'Dhuhr' ? salatDts['Asr']
+                      : pName == 'Asr' ? salatDts['Maghrib']
+                      : pName == 'Maghrib' ? salatDts['Isha']
+                      : tomorrowFajrTime;
+
+                  isMissed = expireTime != null && now.isAfter(expireTime) && !(_salatCompleted[pName] ?? false);
+                }
+
                 // Highlight when card is either the active next prayer OR selected by the user scene
                 final bool isSceneSelected = (pName == _selectedPrayerScene);
                 final bool isActive = (pName == currentPrayer);
@@ -1391,14 +1673,18 @@ _buildAnimatedEntry(
                         curve: Curves.easeInOutCubic,
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
                         decoration: BoxDecoration(
-                          color: isSceneSelected
-                              ? cardBg
-                              : Colors.white.withValues(alpha: 0.55),
+                          color: isMissed
+                              ? const Color(0xFFFFF0F0)   // very light red for missed
+                              : isSceneSelected
+                                  ? cardBg
+                                  : Colors.white.withValues(alpha: 0.55),
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
-                            color: isSceneSelected
-                                ? cardAccent
-                                : Colors.white.withValues(alpha: 0.4),
+                            color: isMissed
+                                ? const Color(0xFFE57373).withValues(alpha: 0.55)
+                                : isSceneSelected
+                                    ? cardAccent
+                                    : Colors.white.withValues(alpha: 0.4),
                             width: isSceneSelected ? 2.0 : 1.0,
                           ),
                           boxShadow: isSceneSelected ? [
@@ -1431,10 +1717,22 @@ _buildAnimatedEntry(
                                     shape: BoxShape.circle,
                                   ),
                                 ),
+                                Text(
+                                  pName,
+                                  style: GoogleFonts.poppins(
+                                    color: isMissed
+                                        ? const Color(0xFFD32F2F)
+                                        : isSceneSelected ? cardAccent : AppColors.navyBlue,
+                                    fontSize: 15,
+                                    fontWeight: isSceneSelected ? FontWeight.bold : FontWeight.w600,
+                                    decoration: isMissed ? TextDecoration.lineThrough : null,
+                                    decorationColor: const Color(0xFFD32F2F),
+                                  ),
+                                ),
                                 if (isActive) ...[
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                    margin: const EdgeInsets.only(right: 8),
+                                    margin: const EdgeInsets.only(left: 8),
                                     decoration: BoxDecoration(
                                       color: AppColors.coralOrange.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(8),
@@ -1449,14 +1747,24 @@ _buildAnimatedEntry(
                                     ),
                                   ),
                                 ],
-                                Text(
-                                  pName,
-                                  style: GoogleFonts.poppins(
-                                    color: isSceneSelected ? cardAccent : AppColors.navyBlue,
-                                    fontSize: 15,
-                                    fontWeight: isSceneSelected ? FontWeight.bold : FontWeight.w600,
+                                if (isMissed) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    margin: const EdgeInsets.only(left: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE57373).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(7),
+                                    ),
+                                    child: Text(
+                                      'Missed',
+                                      style: GoogleFonts.inter(
+                                        color: const Color(0xFFD32F2F),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                             Row(
@@ -1477,6 +1785,8 @@ _buildAnimatedEntry(
                                     setState(() {
                                       _prayerAlarms[pName] = newState;
                                     });
+                                    // Persist user preference
+                                    _saveAlarmState(pName, newState);
                                     // Schedule or cancel system notification for this prayer
                                     _syncAlarms();
                                     // Show snackbar feedback
@@ -1529,6 +1839,296 @@ _buildAnimatedEntry(
                   ),
                 );
               },
+            ),
+          ),
+          // ===== TODAY'S MISSED PRAYER STATUS CARD (Always Visible) =====
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: _qazaCount > 0
+                  ? Container(
+                      key: const ValueKey('MissedWarning'),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFFFFF5F5), Color(0xFFFFEBEB)],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: const Color(0xFFE57373).withValues(alpha: 0.45),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFE57373).withValues(alpha: 0.10),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE57373).withValues(alpha: 0.14),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.warning_amber_rounded, color: Color(0xFFD32F2F), size: 24),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Today\'s Missed Prayers',
+                                  style: GoogleFonts.poppins(
+                                    color: const Color(0xFFB71C1C),
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'You missed $_qazaCount prayer${_qazaCount > 1 ? 's' : ''} today.',
+                                  style: GoogleFonts.inter(
+                                    color: const Color(0xFFD32F2F).withValues(alpha: 0.80),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE57373).withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '$_qazaCount',
+                              style: GoogleFonts.poppins(
+                                color: const Color(0xFFB71C1C),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Container(
+                      key: const ValueKey('AllCompleted'),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFFF4FBF7), Color(0xFFEBF7F0)],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: const Color(0xFF81C784).withValues(alpha: 0.45),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF81C784).withValues(alpha: 0.10),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF81C784).withValues(alpha: 0.14),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.check_circle_outline_rounded, color: Color(0xFF2E7D32), size: 24),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'All Caught Up!',
+                                  style: GoogleFonts.poppins(
+                                    color: const Color(0xFF1B5E20),
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'No missed prayers detected today.',
+                                  style: GoogleFonts.inter(
+                                    color: const Color(0xFF2E7D32).withValues(alpha: 0.80),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
+          ),
+
+          // ===== INTERACTIVE QAZA COUNTER SECTION (Always Visible) =====
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.4),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.navyBlue.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.history_toggle_off_rounded, color: AppColors.navyBlue, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Qaza Prayer Counter',
+                        style: GoogleFonts.poppins(
+                          color: AppColors.navyBlue,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Manually track and log your missed prayers to make them up over time.',
+                    style: GoogleFonts.inter(
+                      color: AppColors.navyBlue.withValues(alpha: 0.6),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // List of 5 salats with increment / decrement buttons
+                  ...['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((salat) {
+                    final count = _qazaCounts[salat] ?? 0;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.coralOrange,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                salat,
+                                style: GoogleFonts.poppins(
+                                  color: AppColors.navyBlue,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              // Decrement Button
+                              GestureDetector(
+                                onTap: () {
+                                  if (count > 0) {
+                                    setState(() {
+                                      _qazaCounts[salat] = count - 1;
+                                    });
+                                    _saveQazaCount(salat, count - 1);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.15)),
+                                  ),
+                                  child: const Icon(Icons.remove, size: 14, color: AppColors.navyBlue),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Counter Text
+                              SizedBox(
+                                width: 28,
+                                child: Text(
+                                  '$count',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(
+                                    color: AppColors.navyBlue,
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Increment Button
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _qazaCounts[salat] = count + 1;
+                                  });
+                                  _saveQazaCount(salat, count + 1);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.15)),
+                                  ),
+                                  child: const Icon(Icons.add, size: 14, color: AppColors.navyBlue),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 80), // space above bottom nav
@@ -3494,6 +4094,7 @@ class _CrescentMoonPainter extends CustomPainter {
 }
 
 // ===== MOSQUE SILHOUETTE PAINTER (Renders splash screen mosque silhouette in header) =====
+// ===== FULL RICH MOSQUE SILHOUETTE (matching splash screen style) =====
 class _MosqueSilhouettePainter extends CustomPainter {
   final String selectedScene;
 
@@ -3504,131 +4105,138 @@ class _MosqueSilhouettePainter extends CustomPainter {
     final double w = size.width;
     final double h = size.height;
 
-    // Determine colored mosque palette based on scene
-    Color baseColor;
-    Color highlightColor;
+    // Pick palette per scene — same logic as before but with richer fill details
+    Color navyC, tealC, whiteC;
     switch (selectedScene) {
       case 'Fajr':
-        baseColor = const Color(0xFF1D2D44);
-        highlightColor = const Color(0xFF8FA89B); // Early dawn mint-teal highlight
+        navyC  = const Color(0xFF1D2D44);
+        tealC  = const Color(0xFF4A7C74);
+        whiteC = const Color(0xFFB8CEDE);
         break;
       case 'Sunrise':
-        baseColor = const Color(0xFF4E342E); // Warm wood brown
-        highlightColor = const Color(0xFFFFD3B6); // Peach/rose highlight
+        navyC  = const Color(0xFF5D3A1A);
+        tealC  = const Color(0xFFD4854A);
+        whiteC = const Color(0xFFFFE9D6);
         break;
       case 'Dhuhr':
-        baseColor = const Color(0xFF0D47A1); // Deep pure sky blue
-        highlightColor = Colors.white.withValues(alpha: 0.95);
+        navyC  = const Color(0xFF0D47A1);
+        tealC  = const Color(0xFF1976D2);
+        whiteC = Colors.white;
         break;
       case 'Asr':
-        baseColor = const Color(0xFF4FA8D2); // Beautiful soft blue type
-        highlightColor = const Color(0xFFE0F7FA); // Soft cyan/blue highlight
+        navyC  = const Color(0xFF1B5E8A);
+        tealC  = const Color(0xFF4FA8D2);
+        whiteC = const Color(0xFFE0F7FA);
         break;
       case 'Maghrib':
-        baseColor = const Color(0xFF3F1D38); // Soft plum twilight base
-        highlightColor = const Color(0xFFFFCCD5); // Soft sunset pink highlight
+        navyC  = const Color(0xFF4A1942);
+        tealC  = const Color(0xFFB05C8A);
+        whiteC = const Color(0xFFFFD4E8);
         break;
       case 'Isha':
       default:
-        baseColor = const Color(0xFF0F172A); // Midnight navy black base
-        highlightColor = const Color(0xFF64748B); // Silver-blue twilight highlight
+        navyC  = const Color(0xFF0A1628);
+        tealC  = const Color(0xFF1A3050);
+        whiteC = const Color(0xFF7B93B0);
         break;
     }
 
-    final paintBase = Paint()
-      ..color = baseColor
-      ..style = PaintingStyle.fill;
+    final paintNavy  = Paint()..color = navyC ..style = PaintingStyle.fill;
+    final paintTeal  = Paint()..color = tealC ..style = PaintingStyle.fill;
+    final paintWhite = Paint()..color = whiteC..style = PaintingStyle.fill;
 
-    final paintHighlight = Paint()
-      ..color = highlightColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
+    // ── 1. Side domes (teal, background) ────────────────────────────
+    _drawOnionDome(canvas, w * 0.28, h * 0.68, w * 0.16, h * 0.26, paintTeal);
+    _drawOnionDome(canvas, w * 0.72, h * 0.68, w * 0.16, h * 0.26, paintTeal);
 
-    final double cx = size.width * 0.5;
-    final double domeW = size.width * 0.38;
-    final double domeH = h * 0.50;
-    final double domeY = h * 0.62;
+    // ── 2. Central building walls (white) ───────────────────────────
+    final wallPath = Path()
+      ..moveTo(w * 0.12, h)
+      ..lineTo(w * 0.12, h * 0.70)
+      ..lineTo(w * 0.88, h * 0.70)
+      ..lineTo(w * 0.88, h)
+      ..close();
+    canvas.drawPath(wallPath, paintWhite);
 
-    // 1. Draw central building body under the dome
-    final double bodyLeft = cx - domeW * 0.5;
-    final double bodyRight = cx + domeW * 0.5;
-    final double bodyTop = domeY;
-    final double bodyBottom = h;
-    final Rect bodyRect = Rect.fromLTRB(bodyLeft, bodyTop, bodyRight, bodyBottom);
-    canvas.drawRect(bodyRect, paintBase);
-    canvas.drawRect(bodyRect, paintHighlight);
+    // ── 3. Central dome (navy) ───────────────────────────────────────
+    _drawOnionDome(canvas, w * 0.50, h * 0.65, w * 0.32, h * 0.42, paintNavy);
 
-    // 2. Draw central dome
-    final path = Path();
-    final double bulge = domeW * 0.08;
-    path.moveTo(cx - domeW / 2, domeY);
-    path.cubicTo(
-      cx - domeW / 2 - bulge, domeY - domeH * 0.35,
-      cx - domeW / 2 + bulge * 0.2, domeY - domeH * 0.75,
-      cx, domeY - domeH,
-    );
-    path.cubicTo(
-      cx + domeW / 2 - bulge * 0.2, domeY - domeH * 0.75,
-      cx + domeW / 2 + bulge, domeY - domeH * 0.35,
-      cx + domeW / 2, domeY,
-    );
-    path.close();
-    canvas.drawPath(path, paintBase);
-    canvas.drawPath(path, paintHighlight);
-
-    // Spire
+    // Crescent + spire on center dome
+    final double spireTop = h * 0.65 - h * 0.42 - 8;
     final spirePaint = Paint()
-      ..color = paintBase.color
+      ..color = whiteC
       ..strokeWidth = 1.6
       ..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(cx, domeY - domeH), Offset(cx, domeY - domeH - 12), spirePaint);
-    canvas.drawCircle(Offset(cx, domeY - domeH - 12), 1.5, paintBase);
+    canvas.drawLine(Offset(w * 0.50, h * 0.65 - h * 0.42), Offset(w * 0.50, spireTop), spirePaint);
+    canvas.drawCircle(Offset(w * 0.50, spireTop), 2.2, paintWhite);
 
-    // 3. Draw Arched Entrance Doorway
-    final double doorW = domeW * 0.32;
-    final double doorH = h * 0.28;
-    final double doorY = h - doorH;
-    
+    // ── 4. Arched entrance door (navy) ──────────────────────────────
+    final double doorCx = w * 0.50;
+    final double doorW  = w * 0.12;
+    final double doorH  = h * 0.30;
+    final double doorTop = h - doorH;
     final doorPath = Path()
-      ..moveTo(cx - doorW / 2, h)
-      ..lineTo(cx - doorW / 2, doorY + doorW * 0.4)
-      ..quadraticBezierTo(cx, doorY - doorW * 0.25, cx + doorW / 2, doorY + doorW * 0.4)
-      ..lineTo(cx + doorW / 2, h)
+      ..moveTo(doorCx - doorW / 2, h)
+      ..lineTo(doorCx - doorW / 2, doorTop + doorW * 0.5)
+      ..quadraticBezierTo(doorCx, doorTop - doorW * 0.3, doorCx + doorW / 2, doorTop + doorW * 0.5)
+      ..lineTo(doorCx + doorW / 2, h)
       ..close();
-      
-    final doorPaint = Paint()
-      ..color = highlightColor.withValues(alpha: 0.35)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(doorPath, doorPaint);
-    canvas.drawPath(doorPath, paintHighlight);
+    canvas.drawPath(doorPath, paintNavy);
 
-    // 4. Draw Left Minaret
-    final double minW = w * 0.09;
-    final double minH = h * 0.88;
-    final double minX = w * 0.20;
-    canvas.drawRect(Rect.fromLTRB(minX - minW / 2, h - minH, minX + minW / 2, h), paintBase);
+    // Side windows (two small arched windows)
+    for (final wx in [w * 0.35, w * 0.65]) {
+      final winW = w * 0.07;
+      final winH = h * 0.16;
+      final winTop = h - winH - h * 0.06;
+      final winPath = Path()
+        ..moveTo(wx - winW / 2, h - h * 0.06)
+        ..lineTo(wx - winW / 2, winTop + winW * 0.5)
+        ..quadraticBezierTo(wx, winTop - winW * 0.2, wx + winW / 2, winTop + winW * 0.5)
+        ..lineTo(wx + winW / 2, h - h * 0.06)
+        ..close();
+      canvas.drawPath(winPath, paintNavy);
+    }
 
-    final capW = minW * 1.3;
-    final capH = minH * 0.16;
-    final capY = h - minH;
-    final capPath = Path()
-      ..moveTo(minX - capW / 2, capY)
-      ..lineTo(minX + capW / 2, capY)
-      ..lineTo(minX, capY - capH)
-      ..close();
-    canvas.drawPath(capPath, paintBase);
-    canvas.drawPath(capPath, paintHighlight);
+    // Ground floor fill
+    canvas.drawRect(Rect.fromLTRB(0, h * 0.92, w, h), paintWhite);
 
-    // 5. Draw Right Minaret
-    final double minX2 = w * 0.80;
-    canvas.drawRect(Rect.fromLTRB(minX2 - minW / 2, h - minH, minX2 + minW / 2, h), paintBase);
-    final capPath2 = Path()
-      ..moveTo(minX2 - capW / 2, capY)
-      ..lineTo(minX2 + capW / 2, capY)
-      ..lineTo(minX2, capY - capH)
-      ..close();
-    canvas.drawPath(capPath2, paintBase);
-    canvas.drawPath(capPath2, paintHighlight);
+    // ── 5. Left minaret ──────────────────────────────────────────────
+    _drawMinaret(canvas, w * 0.14, h, w * 0.07, h * 0.90, paintWhite, paintTeal);
+
+    // ── 6. Right minaret ─────────────────────────────────────────────
+    _drawMinaret(canvas, w * 0.86, h, w * 0.07, h * 0.90, paintWhite, paintTeal);
+  }
+
+  void _drawOnionDome(Canvas canvas, double cx, double by, double width, double height, Paint paint) {
+    final path = Path();
+    final double w2    = width / 2;
+    final double bulge = width * 0.08;
+    path.moveTo(cx - w2, by);
+    path.cubicTo(
+      cx - w2 - bulge, by - height * 0.35,
+      cx - w2 + bulge * 0.2, by - height * 0.75,
+      cx, by - height,
+    );
+    path.cubicTo(
+      cx + w2 - bulge * 0.2, by - height * 0.75,
+      cx + w2 + bulge, by - height * 0.35,
+      cx + w2, by,
+    );
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawMinaret(Canvas canvas, double cx, double by, double width, double height,
+      Paint paintBody, Paint paintCap) {
+    final double colW     = width * 0.55;
+    final double balconyW = width * 1.15;
+    // Column
+    canvas.drawRect(Rect.fromLTRB(cx - colW / 2, by - height, cx + colW / 2, by), paintBody);
+    // Balconies
+    canvas.drawRect(Rect.fromLTRB(cx - balconyW / 2, by - height * 0.72, cx + balconyW / 2, by - height * 0.69), paintBody);
+    canvas.drawRect(Rect.fromLTRB(cx - balconyW / 2, by - height - 2,     cx + balconyW / 2, by - height),         paintBody);
+    // Onion dome cap
+    _drawOnionDome(canvas, cx, by - height - 2, width * 0.75, height * 0.13, paintCap);
   }
 
   @override
