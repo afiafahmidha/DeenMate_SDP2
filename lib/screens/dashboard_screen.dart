@@ -2559,6 +2559,7 @@ _buildAnimatedEntry(
     );
   }
 
+  
  // ===== ISLAMIC WEALTH GRID =====
   Widget _buildIslamicWealthGrid() {
     return Padding(
@@ -2680,7 +2681,7 @@ _buildAnimatedEntry(
     );
   }
 
-  // ===== FEATURE CARD (Reusable) =====
+
  // ===== FEATURE CARD (Reusable) =====
   Widget _buildFeatureCard({
     required IconData icon,
