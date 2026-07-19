@@ -12,6 +12,10 @@ import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
 import 'calendar_tab.dart';
 import 'qurbani_planner_screen.dart';
+import 'hajj_umrah_screen.dart';
+import 'inheritance_screen.dart';
+import 'assistant_tab.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -801,6 +805,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ===== ACTIVE TAB CONTENT DISPATCHER =====
+ // ===== ACTIVE TAB CONTENT DISPATCHER =====
   Widget _buildActiveTabContent() {
     switch (_currentIndex) {
       case 0:
@@ -811,6 +816,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         return CalendarTab(
           onOpenZakatCalculator: _showZakatCalculatorSheet,
         );
+      case 3:
+        return const AssistantTab();
       default:
         return _buildPlaceholderTab();
     }
@@ -1881,6 +1888,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ===== ISLAMIC WEALTH GRID =====
+  // ===== ISLAMIC WEALTH GRID =====
   Widget _buildIslamicWealthGrid() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -1915,6 +1923,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.flight_takeoff_rounded,
                   label: 'Hajj & Umrah',
                   iconPainter: _HajjIconPainter(),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const HajjUmrahPlannerScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 14),
@@ -1923,6 +1938,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.account_balance_rounded,
                   label: 'Inheritance',
                   iconPainter: _InheritanceIconPainter(),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const InheritanceGuideScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
