@@ -33,7 +33,9 @@ void main() {
       continue;
     }
     if (ch == '/' && i + 1 < text.length && text[i + 1] == '/') {
-      while (i < text.length && text[i] != '\n') i++;
+      while (i < text.length && text[i] != '\n') {
+        i++;
+      }
       if (i < text.length) line++;
       continue;
     }
