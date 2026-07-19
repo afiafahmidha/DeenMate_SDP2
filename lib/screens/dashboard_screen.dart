@@ -14,7 +14,9 @@ import 'calendar_tab.dart';
 import 'hajj_umrah_screen.dart';
 import 'inheritance_screen.dart';
 import 'qurbani_planner_screen.dart';
-import 'zakat_manager_screen.dart';
+import 'assistant_tab.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -2541,24 +2543,6 @@ _buildAnimatedEntry(
     );
   }
 
-  void _openHajjUmrahPlanner() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const HajjUmrahPlannerScreen()),
-    );
-  }
-
-  void _openInheritanceGuide() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const InheritanceGuideScreen()),
-    );
-  }
-
-  void _openZakatManager() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ZakatManagerScreen()),
-    );
-  }
-
   // ===== SECTION TITLE =====
   Widget _buildSectionTitle(String title) {
     return Padding(
@@ -2586,9 +2570,9 @@ _buildAnimatedEntry(
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.calculate_rounded,
-                  label: 'Zakat Manager',
+                  label: 'Zakat Calculator',
                   iconPainter: _ZakatIconPainter(),
-                  onTap: _openZakatManager,
+                  onTap: _showZakatCalculatorSheet,
                 ),
               ),
               const SizedBox(width: 14),
@@ -2616,7 +2600,13 @@ _buildAnimatedEntry(
                   icon: Icons.flight_takeoff_rounded,
                   label: 'Hajj & Umrah',
                   iconPainter: _HajjIconPainter(),
-                  onTap: _openHajjUmrahPlanner,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const HajjUmrahPlannerScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 14),
@@ -2625,7 +2615,13 @@ _buildAnimatedEntry(
                   icon: Icons.account_balance_rounded,
                   label: 'Inheritance',
                   iconPainter: _InheritanceIconPainter(),
-                  onTap: _openInheritanceGuide,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const InheritanceGuideScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
