@@ -15,7 +15,12 @@ import 'qurbani_planner_screen.dart';
 import 'hajj_umrah_screen.dart';
 import 'inheritance_screen.dart';
 import 'assistant_tab.dart';
+<<<<<<< HEAD
 
+=======
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+>>>>>>> parent of 4cd81b5 (zakatmanager)
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -75,8 +80,34 @@ class _DashboardScreenState extends State<DashboardScreen>
   final TextEditingController _zakatSilverGramsCtrl = TextEditingController(text: '0'); // grams of silver
   final TextEditingController _zakatStocksCtrl = TextEditingController(text: '0');
   final TextEditingController _zakatBusinessCtrl = TextEditingController(text: '0');
+<<<<<<< HEAD
   final TextEditingController _zakatReceivableCtrl = TextEditingController(text: '0');
   final TextEditingController _zakatLiabilitiesCtrl = TextEditingController(text: '0');
+=======
+  final TextEditingController _zakatReceivableCtrl = TextEditingController(text: '0'); // good debt
+  final TextEditingController _zakatReceivableBadCtrl = TextEditingController(text: '0'); // bad debt
+  final TextEditingController _zakatLiabilitiesCtrl = TextEditingController(text: '0'); // immediate/short-term
+  final TextEditingController _zakatLongTermLiabilitiesCtrl = TextEditingController(text: '0'); // long-term mortgage/loans
+
+  // Zakat configuration settings (persisted)
+  String _nisabStandard = 'silver'; // 'gold' or 'silver'
+  String _zakatSchoolOfOpinion = 'hanafi'; // 'hanafi' (jewelry zakatable) or 'others' (jewelry exempt)
+  String _stockTradingIntent = 'holding'; // 'trading' (100%) or 'holding' (30%)
+  DateTime? _zakatStartCrossingDate; // When wealth first crossed Nisab
+
+  // Payment Logs (persisted as JSON strings)
+  List<Map<String, dynamic>> _zakatPayments = [];
+
+  // Zakat al-Fitr (persisted)
+  int _fitraFamilySize = 1;
+  String _fitraStaple = 'Flour'; // Flour, Dates, Raisins, Barley
+  double _fitraCustomRate = 115.0; // BDT
+  List<Map<String, dynamic>> _fitraPayments = [];
+
+  // What-if simulator values (percentage / amount)
+  double _whatIfDonation = 0.0;
+  double _whatIfInvestmentGrowth = 0.0; // 0 to 100 percentage
+>>>>>>> parent of 4cd81b5 (zakatmanager)
 
   // Live metal prices (fetched from API)
   double _goldSpotUSD = 3280.0;   // per troy oz  (fallback)
@@ -2744,6 +2775,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+<<<<<<< HEAD
   void _showQurbaniPlannerSheet() {
     showModalBottomSheet(
       context: context,
@@ -2754,6 +2786,12 @@ class _DashboardScreenState extends State<DashboardScreen>
           topLeft: Radius.circular(28),
           topRight: Radius.circular(28),
         ),
+=======
+  void _showZakatCalculatorSheet() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _ZakatCalculatorPage(dashboardState: this),
+>>>>>>> parent of 4cd81b5 (zakatmanager)
       ),
       builder: (context) {
         return DraggableScrollableSheet(
