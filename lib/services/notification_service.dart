@@ -86,6 +86,7 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.max,
       playSound: true,
+      sound: UriAndroidNotificationSound("content://settings/system/alarm_alert"),
       enableVibration: true,
       fullScreenIntent: true,          // shows on locked screen
       category: AndroidNotificationCategory.alarm,
@@ -170,6 +171,7 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.max,
       playSound: true,
+      sound: UriAndroidNotificationSound("content://settings/system/alarm_alert"),
       enableVibration: true,
       visibility: NotificationVisibility.public,
       ongoing: false,
