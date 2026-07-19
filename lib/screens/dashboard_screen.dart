@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -402,6 +402,58 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.dispose();
   }
 
+  // ===== PERSISTENCE METHODS =====
+  Future<void> _loadPersistedKazaState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _lastDateToday = prefs.getString('kaza_last_date') ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+        for (final key in _kazaCounts.keys) {
+          _kazaCounts[key] = prefs.getInt('kaza_count_$key') ?? 0;
+        }
+
+        final processedList = prefs.getStringList('kaza_processed_today') ?? [];
+        _prayersProcessedToday.clear();
+        _prayersProcessedToday.addAll(processedList);
+
+        final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        if (_lastDateToday != todayStr) {
+          _lastDateToday = todayStr;
+          _prayersProcessedToday.clear();
+          for (final key in _salatCompleted.keys) {
+            _salatCompleted[key] = false;
+          }
+          _savePersistedKazaState();
+        } else {
+          for (final key in _salatCompleted.keys) {
+            _salatCompleted[key] = prefs.getBool('salat_completed_$key') ?? false;
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint("Failed to load persisted Kaza state: $e");
+    }
+  }
+
+  Future<void> _savePersistedKazaState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('kaza_last_date', _lastDateToday);
+
+      for (final entry in _kazaCounts.entries) {
+        await prefs.setInt('kaza_count_${entry.key}', entry.value);
+      }
+
+      await prefs.setStringList('kaza_processed_today', _prayersProcessedToday.toList());
+
+      for (final entry in _salatCompleted.entries) {
+        await prefs.setBool('salat_completed_${entry.key}', entry.value);
+      }
+    } catch (e) {
+      debugPrint("Failed to save persisted Kaza state: $e");
+    }
+  }
   // ===== LOCATION & TRACKING INITIALIZATION =====
   Future<void> _initLocationAndTracking() async {
     // 1. Initial calculation using default coordinates (Dhaka)
@@ -1013,10 +1065,9 @@ _buildAnimatedEntry(
 ),
 const SizedBox(height: 28),
 
-
-// Islamic Wealth Section
-_buildAnimatedEntry(
-  delay: 0.3,
+          // Islamic Wealth Section
+          _buildAnimatedEntry(
+            delay: 0.3,
             child: _buildSectionTitle('Islamic Wealth'),
           ),
           const SizedBox(height: 14),
@@ -1633,7 +1684,6 @@ _buildAnimatedEntry(
 
                   isMissed = expireTime != null && now.isAfter(expireTime) && !(_salatCompleted[pName] ?? false);
                 }
-
                 // Highlight when card is either the active next prayer OR selected by the user scene
                 final bool isSceneSelected = (pName == _selectedPrayerScene);
                 final bool isActive = (pName == currentPrayer);
@@ -1802,7 +1852,6 @@ _buildAnimatedEntry(
                                     _saveAlarmState(pName, newState);
                                     // Schedule or cancel system notification for this prayer
                                     _syncAlarms();
-                                    // Show snackbar feedback
                                     // Show snackbar feedback
                                     if (mounted) {
                                       ScaffoldMessenger.of(context).clearSnackBars();
@@ -3306,7 +3355,7 @@ _buildAnimatedEntry(
                   _buildStatementLine('Receivables & Loans', _zakatReceivableCtrl.text),
                   const Divider(height: 24, thickness: 1, color: Color(0xFFEEEEEE)),
                   _buildStatementLine('Total Gross Assets',
-                      (double.tryParse(_zakatCashCtrl.text.replaceAll(',', '')) ?? 0 +
+                      ((double.tryParse(_zakatCashCtrl.text.replaceAll(',', '')) ?? 0) +
                               goldVal +
                               silverVal +
                               (double.tryParse(_zakatStocksCtrl.text.replaceAll(',', '')) ?? 0) +
@@ -3902,13 +3951,13 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
   void _drawMosqueSilhouette(Canvas canvas, double cx, double by, double width, double height, Paint paint) {
     final path = Path();
     final double w2 = width / 2;
-    
+
     // Main Dome
     final domeH = height * 0.55;
     final domeW = width * 0.6;
     final domeX = cx;
     final domeY = by - height * 0.4;
-    
+
     final double bulge = domeW * 0.08;
     path.moveTo(domeX - domeW / 2, domeY);
     path.cubicTo(
@@ -3929,7 +3978,7 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
     final min1H = height * 0.85;
     final min1X = cx - w2 + min1W * 0.6;
     canvas.drawRect(Rect.fromLTRB(min1X - min1W / 2, by - min1H, min1X + min1W / 2, by), paint);
-    
+
     final capW = min1W * 1.2;
     final capH = min1H * 0.18;
     final capY = by - min1H;
@@ -4693,7 +4742,6 @@ class _SparklinePainter extends CustomPainter {
   bool shouldRepaint(covariant _SparklinePainter oldDelegate) {
     return oldDelegate.data != data || oldDelegate.lineColor != lineColor;
   }
-
 }
 
 // ===== ZAKAT CALCULATOR FULL SCREEN PAGE =====
