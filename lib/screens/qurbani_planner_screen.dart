@@ -5,7 +5,12 @@ import '../widgets/auth_header.dart';
 import '../services/notification_service.dart';
 class QurbaniPlannerSheet extends StatefulWidget {
   final ScrollController scrollController;
-  const QurbaniPlannerSheet({super.key, required this.scrollController});
+  final bool isPage;
+  const QurbaniPlannerSheet({
+    super.key,
+    required this.scrollController,
+    this.isPage = false,
+  });
   @override
   State<QurbaniPlannerSheet> createState() => _QurbaniPlannerSheetState();
 }
@@ -259,27 +264,33 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat('#,##,###');
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(28),
-          topRight: Radius.circular(28),
-        ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: widget.isPage
+            ? null
+            : const BorderRadius.only(
+                topLeft: Radius.circular(28),
+                topRight: Radius.circular(28),
+              ),
       ),
       child: Column(
         children: [
-       
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 5,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(10),
+          if (widget.isPage)
+            SizedBox(height: MediaQuery.of(context).padding.top + 16)
+          else ...[
+            // Header handle
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-         
+            const SizedBox(height: 12),
+          ],
+          // Sheet Title
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -1556,3 +1567,32 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
     );
   }
 }
+
+// ===== QURBANI PLANNER FULL SCREEN PAGE =====
+class QurbaniPlannerPage extends StatelessWidget {
+  const QurbaniPlannerPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFE8E8E8), // Desktop browser background simulator
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: Scaffold(
+            backgroundColor: const Color(0xFFF8F9FA),
+            body: SafeArea(
+              top: false,
+              bottom: false,
+              child: QurbaniPlannerSheet(
+                scrollController: ScrollController(),
+                isPage: true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

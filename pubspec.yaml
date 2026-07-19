@@ -45,10 +45,14 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
   shared_preferences: ^2.2.3
+  url_launcher: ^6.3.1
+  pdf: ^3.10.8
+  printing: ^5.11.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.13.1
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -57,10 +61,17 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  remove_alpha_ios: true
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
+
 flutter:
 
   # The following line ensures that the Material Icons font is
@@ -68,7 +79,19 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
+    - assets/images/
     - assets/images/header_art.svg
+    - assets/images/islamic_events/islamic_new_year/
+    - assets/images/islamic_events/ashura/
+    - assets/images/islamic_events/mawlid/
+    - assets/images/islamic_events/isra_miraj/
+    - assets/images/islamic_events/shab_e_barat/
+    - assets/images/islamic_events/ramadan_start/
+    - assets/images/islamic_events/laylat_al_qadr/
+    - assets/images/islamic_events/eid_al_fitr/
+    - assets/images/islamic_events/eid_al_adha/
+    - assets/images/islamic_events/arafah/
+    - assets/images/inheritance/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
