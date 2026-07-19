@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../widgets/auth_header.dart'; // To access AppColors
+import '../widgets/auth_header.dart'; 
 import '../services/notification_service.dart';
 class QurbaniPlannerSheet extends StatefulWidget {
   final ScrollController scrollController;
@@ -17,9 +17,9 @@ class QurbaniPlannerSheet extends StatefulWidget {
 class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  // --- Common Settings ---
-  String _selectedFiqh = 'Hanafi'; // 'Hanafi' or 'Shafi\'i'
-  // --- Eligibility Checker State ---
+
+  String _selectedFiqh = 'Hanafi'; 
+
   final TextEditingController _savingsCtrl = TextEditingController(text: '0');
   final TextEditingController _metalsCtrl = TextEditingController(text: '0');
   final TextEditingController _cashCtrl = TextEditingController(text: '0');
@@ -28,12 +28,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
   bool _isEligible = false;
   double _netAssets = 0.0;
   String _eligibilityReason = '';
-  // --- Cost Planner State ---
-  String _selectedAnimal = 'Cow'; // 'Cow', 'Goat', 'Camel'
-  String _selectedLocation = 'Dhaka'; // 'Dhaka', 'Chittagong', 'Other'
+
+  String _selectedAnimal = 'Cow'; 
+  String _selectedLocation = 'Dhaka'; 
   int _selectedShares = 1;
   double _estimatedCost = 0.0;
-  // --- Share Management State ---
+ 
   final int _totalShares = 7;
   final List<Map<String, dynamic>> _shareParticipants = [
     {'name': 'Self', 'shares': 1, 'paid': true},
@@ -42,32 +42,32 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
   ];
   final TextEditingController _participantNameCtrl = TextEditingController();
   int _newParticipantShares = 1;
-  // --- Checklist State ---
+
   final List<Map<String, dynamic>> _checklistItems = [
-    // Before Eid
+
     {'id': 'buy_animal', 'title': 'Buy Animal', 'isBefore': true, 'done': false},
     {'id': 'health_check', 'title': 'Verify animal requirements (Age, Health, Eyes, Teeth)', 'isBefore': true, 'done': false},
     {'id': 'prepare_knife', 'title': 'Prepare & sharpen knife', 'isBefore': true, 'done': false},
     {'id': 'contact_butcher', 'title': 'Arrange and contact butcher', 'isBefore': true, 'done': false},
     {'id': 'arrange_bags', 'title': 'Arrange meat distribution bags', 'isBefore': true, 'done': false},
     {'id': 'charity_list', 'title': 'Make list of poor families/needy', 'isBefore': true, 'done': false},
-    // After Qurbani
+ 
     {'id': 'divide_meat', 'title': 'Divide meat into 3 equal portions', 'isBefore': false, 'done': false},
     {'id': 'family_portion', 'title': 'Distribute family portion', 'isBefore': false, 'done': false},
     {'id': 'relatives_portion', 'title': 'Distribute relatives & friends portion', 'isBefore': false, 'done': false},
     {'id': 'poor_portion', 'title': 'Distribute poor & needy portion', 'isBefore': false, 'done': false},
   ];
-  // --- Reminder State ---
+
   final Map<String, bool> _activeReminders = {
     'Eid': false,
     'Payment': false,
     'Collection': false,
     'Distribution': false,
   };
-  // --- Meat Distribution State ---
+ 
   double _totalMeatKg = 30.0;
-  // --- Aqiqah Planner State ---
-  String _aqiqahBabyGender = 'Boy'; // 'Boy' or 'Girl'
+
+  String _aqiqahBabyGender = 'Boy'; 
   int _aqiqahQuantity = 2;
   double _aqiqahEstimatedCost = 0.0;
   final List<Map<String, dynamic>> _aqiqahChecklist = [
@@ -76,7 +76,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
     {'title': 'Purchase Aqiqah animals', 'done': false},
     {'title': 'Arrange food/distribution of meat', 'done': false},
   ];
-  // --- Expense Tracker State ---
+ 
   final List<Map<String, dynamic>> _expenses = [
     {'category': 'Animal Purchase', 'amount': 85000.0, 'notes': 'Shared Cow'},
     {'category': 'Transport / Haat entry fee', 'amount': 2500.0, 'notes': 'Pickup truck'},
@@ -105,7 +105,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
     _expNotesCtrl.dispose();
     super.dispose();
   }
-  // --- Calculations ---
+  
   void _calculateCosts() {
     double basePrice = 0.0;
     if (_selectedAnimal == 'Cow') {
@@ -175,7 +175,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
       }
     });
   }
-  // --- Share Manager ---
+  
   int get _filledShares {
     return _shareParticipants.fold(0, (sum, p) => sum + (p['shares'] as int));
   }
@@ -205,7 +205,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
       _newParticipantShares = 1;
     });
   }
-  // --- Expenses Tracker ---
+ 
   double get _totalExpenses {
     return _expenses.fold(0.0, (sum, exp) => sum + (exp['amount'] as double));
   }
@@ -225,14 +225,14 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
       _expNotesCtrl.clear();
     });
   }
-  // --- Reminder Services ---
+ 
   Future<void> _toggleReminder(String type, String title, String body, DateTime time) async {
     bool current = _activeReminders[type] ?? false;
     setState(() {
       _activeReminders[type] = !current;
     });
     if (!current) {
-      // Schedule reminder
+    
       int id = 2000 + type.hashCode % 1000;
       await NotificationService.instance.scheduleCustomNotification(
         id: id,
@@ -249,7 +249,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
         );
       }
     } else {
-      // Cancel reminder
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -338,7 +338,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
             ),
           ),
           const SizedBox(height: 16),
-          // Fiqh Selector Bar
+          
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Container(
@@ -412,7 +412,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
             ),
           ),
           const SizedBox(height: 16),
-          // Navigation Tab Bar
+        
           TabBar(
             controller: _tabController,
             isScrollable: true,
@@ -431,7 +431,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
               Tab(text: 'Tasks & Expenses'),
             ],
           ),
-          // Tab content
+        
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -448,13 +448,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
       ),
     );
   }
-  // ===== TAB 1: ELIGIBILITY & RULES =====
+  
   Widget _buildEligibilityAndRulesTab(NumberFormat fmt) {
     return ListView(
       controller: widget.scrollController,
       padding: const EdgeInsets.all(20),
       children: [
-        // Fiqh specific notice banner
+       
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -490,7 +490,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           ),
         ),
         const SizedBox(height: 20),
-        // Eligibility Input Cards
+        
         Text(
           'Check Your Eligibility',
           style: GoogleFonts.poppins(color: AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15),
@@ -542,7 +542,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
             ),
           ),
         ),
-        // Eligibility Result Screen
+        
         if (_hasCheckedEligibility) ...[
           const SizedBox(height: 16),
           Container(
@@ -665,7 +665,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
       ),
     );
   }
-  // ===== TAB 2: CALCULATORS & AQIQAH =====
+
   Widget _buildCalculatorsTab(NumberFormat fmt) {
     return ListView(
       controller: widget.scrollController,
@@ -724,7 +724,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
                   }).toList(),
                 ),
                 const SizedBox(height: 16),
-                // Location selector
+                
                 Text(
                   'Select Location',
                   style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey[700]),
@@ -750,7 +750,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Share count (Only if Cow or Camel)
+             
                 if (_selectedAnimal != 'Goat') ...[
                   Text(
                     'Number of Shares (1 to 7)',
@@ -817,7 +817,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           ),
         ),
         const SizedBox(height: 24),
-        // Aqiqah Planner Section
+    
         Text(
           '🍼 Aqiqah Planner',
           style: GoogleFonts.poppins(color: AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 16),
@@ -947,7 +947,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
       ],
     );
   }
-  // ===== TAB 3: SHARE MANAGER =====
+  
   Widget _buildShareManagerTab() {
     return ListView(
       controller: widget.scrollController,
@@ -963,7 +963,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 12),
         ),
         const SizedBox(height: 16),
-        // Progress bar for shares
+        
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -997,7 +997,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           ),
         ),
         const SizedBox(height: 20),
-        // List of participants
+      
         Text(
           'Participant List',
           style: GoogleFonts.poppins(color: AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 14),
@@ -1074,7 +1074,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           },
         ),
         const SizedBox(height: 16),
-        // Add new participant input
+   
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1138,7 +1138,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
       ],
     );
   }
-  // ===== TAB 4: MEAT DISTRIBUTION =====
+
   Widget _buildMeatDistributionTab() {
     double familyQty = _totalMeatKg / 3;
     double relativesQty = _totalMeatKg / 3;
@@ -1157,7 +1157,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 12),
         ),
         const SizedBox(height: 16),
-        // Total Meat Input
+        
         Card(
           color: Colors.white,
           elevation: 0,
@@ -1218,7 +1218,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           },
         ),
         const SizedBox(height: 16),
-        // Visual chart
+      
         Text(
           'Suggested Distribution Split',
           style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.navyBlue),
@@ -1262,7 +1262,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           ),
         ),
         const SizedBox(height: 16),
-        // Cards showing kg amounts
+      
         Row(
           children: [
             _buildDistributionCard('Family Portion', familyQty, AppColors.navyBlue),
@@ -1310,13 +1310,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
       ),
     );
   }
-  // ===== TAB 5: TASKS & EXPENSES =====
+ 
   Widget _buildTasksAndExpensesTab(NumberFormat fmt) {
     return ListView(
       controller: widget.scrollController,
       padding: const EdgeInsets.all(20),
       children: [
-        // Expenses section
+      
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -1383,7 +1383,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           },
         ),
         const SizedBox(height: 12),
-        // Add expense inputs
+       
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -1435,7 +1435,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           ),
         ),
         const SizedBox(height: 24),
-        // Task checklist section
+       
         Text(
           '☑ Qurbani Task Checklist',
           style: GoogleFonts.poppins(color: AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 16),
@@ -1481,7 +1481,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           }).toList(),
         ),
         const SizedBox(height: 24),
-        // Reminders triggers
+     
         Text(
           '🔔 Reminders & Notifications',
           style: GoogleFonts.poppins(color: AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 16),
