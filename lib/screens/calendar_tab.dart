@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:adhan/adhan.dart';
 import '../widgets/auth_header.dart'; // Import AppColors
 
 // ===== HIJRI DATE MODEL =====
@@ -602,16 +603,20 @@ class CalendarDatabase {
   }
 
   static List<PrayerTimeEntry> getPrayerTimesForDate(DateTime date) {
-    final dayOfYear = int.parse(DateFormat('D').format(date));
-    final drift = (dayOfYear % 30) - 15;
-    DateTime at(int hour, int minute) => DateTime(date.year, date.month, date.day, hour, minute)
-        .add(Duration(minutes: drift));
+    final coordinates = Coordinates(23.8103, 90.4125); // Dhaka, Bangladesh
+    final params = CalculationMethod.karachi.getParameters();
+    params.madhab = Madhab.hanafi;
+    final prayerTimes = PrayerTimes(
+      coordinates,
+      DateComponents.from(date),
+      params,
+    );
     return [
-      PrayerTimeEntry('Fajr', 'ফজর', at(4, 15)),
-      PrayerTimeEntry('Dhuhr', 'জোহর', at(12, 5)),
-      PrayerTimeEntry('Asr', 'আসর', at(16, 28)),
-      PrayerTimeEntry('Maghrib', 'মাগরিব', at(18, 40)),
-      PrayerTimeEntry('Isha', 'এশা', at(20, 0)),
+      PrayerTimeEntry('Fajr', 'ফজর', prayerTimes.fajr),
+      PrayerTimeEntry('Dhuhr', 'জোহর', prayerTimes.dhuhr),
+      PrayerTimeEntry('Asr', 'আসর', prayerTimes.asr),
+      PrayerTimeEntry('Maghrib', 'মাগরিব', prayerTimes.maghrib),
+      PrayerTimeEntry('Isha', 'এশা', prayerTimes.isha),
     ];
   }
 }
@@ -651,6 +656,7 @@ class _CalendarTabState extends State<CalendarTab> {
   DateTime _currentMonth = DateTime(2026, 7, 1);
   DateTime _selectedDate = DateTime(2026, 7, 13);
   bool _isBengali = false;
+  bool _showCalendarGridTab = true;
   final Map<String, bool> _activityStatus = {};
 
   @override
@@ -798,6 +804,99 @@ class _CalendarTabState extends State<CalendarTab> {
                   ),
                 ],
               ),
+              const SizedBox(height: 18),
+              // Tab bar selection: Calendar Grid vs Special Events
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _showCalendarGridTab = true),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _showCalendarGridTab
+                              ? AppColors.navyBlue
+                              : const Color(0xFFF3F7F9),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: _showCalendarGridTab
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.navyBlue.withValues(alpha: 0.15),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ]
+                              : [],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.calendar_view_month_rounded,
+                              size: 16,
+                              color: _showCalendarGridTab ? Colors.white : AppColors.navyBlue,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _isBengali ? 'ক্যালেন্ডার গ্রিড' : 'Calendar Grid',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: _showCalendarGridTab ? Colors.white : AppColors.navyBlue,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _showCalendarGridTab = false),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: !_showCalendarGridTab
+                              ? AppColors.navyBlue
+                              : const Color(0xFFF3F7F9),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: !_showCalendarGridTab
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.navyBlue.withValues(alpha: 0.15),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ]
+                              : [],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.event_note_rounded,
+                              size: 16,
+                              color: !_showCalendarGridTab ? Colors.white : AppColors.navyBlue,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _isBengali ? 'বিশেষ দিনসমূহ' : 'Special Events',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: !_showCalendarGridTab ? Colors.white : AppColors.navyBlue,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 15),
               Container(
                 decoration: BoxDecoration(
@@ -829,6 +928,7 @@ class _CalendarTabState extends State<CalendarTab> {
                         children: [
                           Text(
                             DateFormat('MMMM yyyy').format(_currentMonth),
+                            textAlign: TextAlign.center,
                             style: GoogleFonts.poppins(
                               color: Colors.white,
                               fontSize: 18,
@@ -838,6 +938,7 @@ class _CalendarTabState extends State<CalendarTab> {
                           const SizedBox(height: 4),
                           Text(
                             hijriRangeStr,
+                            textAlign: TextAlign.center,
                             style: GoogleFonts.poppins(
                               color: AppColors.dustyBlueTeal,
                               fontSize: 12.5,
@@ -854,126 +955,325 @@ class _CalendarTabState extends State<CalendarTab> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              // Legend — since the grid now relies on dot markers instead of
-              // full tinted cells, a one-line legend keeps the markers
-              // legible without needing a tap to decode them.
-              Row(
-                children: [
-                  _legendDot(AppColors.coralOrange, _isBengali ? 'ইসলামিক দিবস' : 'Islamic event'),
-                  const SizedBox(width: 16),
-                  _legendDot(AppColors.midTeal, _isBengali ? 'নফল রোজা' : 'Sunnah fast'),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) {
-                  return SizedBox(
-                    width: 40,
-                    child: Text(
-                      day,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.navyBlue.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 8),
-              // CALENDAR GRID — clean by design: no background imagery, no
-              // heavy per-cell tinting. Every cell always shows both the
-              // Gregorian day number (primary) and the Hijri day number
-              // (secondary, bottom-right) at full contrast against a plain
-              // white/navy background, plus small dot markers for event /
-              // fasting days. Legibility never depends on how dark a photo
-              // happens to be.
-              //
-              // Wrapped in LayoutBuilder as a guard: on Flutter web, a
-              // GridView.builder(shrinkWrap: true) nested in a
-              // SingleChildScrollView can briefly receive an unbounded or
-              // zero-width constraint on the very first layout pass (or
-              // right after a hot reload), which makes the grid's internal
-              // cell-size math divide-by-zero into NaN and crash with
-              // "RangeError (index): Value not in range: NaN". Bailing out
-              // to a lightweight placeholder until a real, finite width is
-              // available avoids that crash entirely.
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  if (!constraints.maxWidth.isFinite || constraints.maxWidth <= 0) {
-                    return const SizedBox(
-                      height: 320,
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  return _buildCalendarGrid(firstDayOfWeek, daysCount);
-                },
-              ),
-              const SizedBox(height: 25),
-              // DETAILS PANEL — always-visible quick preview for the
-              // selected day (both dates, prayer times, ayah). Event days
-              // get a compact prompt card instead of the full hero — the
-              // hero image treatment now lives exclusively on the pushed
-              // detail page (see _openEventDetail).
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.navyBlue.withValues(alpha: 0.04),
-                      blurRadius: 15,
-                      offset: const Offset(0, 4),
-                    )
-                  ],
-                ),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              if (_showCalendarGridTab) ...[
+                const SizedBox(height: 12),
+                Row(
                   children: [
-                    Text(
-                      DateFormat('EEEE, MMMM d, yyyy').format(_selectedDate),
-                      style: GoogleFonts.poppins(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.navyBlue,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      selectedHijri.format(_isBengali),
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.midTeal,
-                      ),
-                    ),
-                    const Divider(height: 25, thickness: 1),
-                    _buildPrayerTimesSection(),
-                    const SizedBox(height: 18),
-                    _buildRelatedAyahSection(selectedEvent),
-                    const SizedBox(height: 18),
-                    if (selectedEvent != null) ...[
-                      _buildEventPromptCard(selectedEvent, selectedHijri),
-                    ] else if (selectedIsFasting) ...[
-                      _buildFastingDetailCard(selectedHijri),
-                    ] else ...[
-                      _buildRegularDayCard(),
-                    ]
+                    _legendDot(AppColors.coralOrange, _isBengali ? 'ইসলামিক দিবস' : 'Islamic event'),
+                    const SizedBox(width: 16),
+                    _legendDot(AppColors.midTeal, _isBengali ? 'নফল রোজা' : 'Sunnah fast'),
                   ],
                 ),
-              ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) {
+                    return SizedBox(
+                      width: 40,
+                      child: Text(
+                        day,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.navyBlue.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 8),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (!constraints.maxWidth.isFinite || constraints.maxWidth <= 0) {
+                      return const SizedBox(
+                        height: 320,
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    return _buildCalendarGrid(firstDayOfWeek, daysCount);
+                  },
+                ),
+                const SizedBox(height: 25),
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.navyBlue.withValues(alpha: 0.04),
+                        blurRadius: 15,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        DateFormat('EEEE, MMMM d, yyyy').format(_selectedDate),
+                        style: GoogleFonts.poppins(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.navyBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        selectedHijri.format(_isBengali),
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.midTeal,
+                        ),
+                      ),
+                      const Divider(height: 25, thickness: 1),
+                      _buildPrayerTimesSection(),
+                      const SizedBox(height: 18),
+                      _buildRelatedAyahSection(selectedEvent),
+                      const SizedBox(height: 18),
+                      if (selectedEvent != null) ...[
+                        _buildEventPromptCard(selectedEvent, selectedHijri),
+                      ] else if (selectedIsFasting) ...[
+                        _buildFastingDetailCard(selectedHijri),
+                      ] else ...[
+                        _buildRegularDayCard(),
+                      ]
+                    ],
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 20),
+                _buildSpecialEventsList(),
+              ],
               const SizedBox(height: 20),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildSpecialEventsList() {
+    final year = _currentMonth.year;
+    final events = _getEventsForYear(year);
+
+    if (events.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(30),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.event_busy_rounded, size: 40, color: Colors.grey),
+            const SizedBox(height: 12),
+            Text(
+              _isBengali ? 'কোন বিশেষ দিন পাওয়া যায়নি' : 'No special events found',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: AppColors.navyBlue,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
+          child: Text(
+            _isBengali ? '$year সালের বিশেষ দিনসমূহ' : 'Special Events in $year',
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: AppColors.navyBlue,
+            ),
+          ),
+        ),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: events.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final entry = events[index];
+            final date = entry.key;
+            final event = entry.value;
+            final eventHijri = HijriConverter.fromGregorian(date);
+
+            final eventTitle = _isBengali ? event.titleBengali : event.title;
+            final eventDesc = _isBengali ? event.descriptionBengali : event.description;
+            final gregorianStr = DateFormat('EEEE, MMMM d, yyyy').format(date);
+            final hijriStr = eventHijri.format(_isBengali);
+            final color = event.themeColor;
+
+            // Highlight if the event is in the currently viewed month
+            final isCurrentMonth = date.month == _currentMonth.month;
+
+            return Container(
+              decoration: BoxDecoration(
+                color: isCurrentMonth
+                    ? color.withValues(alpha: 0.05)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isCurrentMonth
+                      ? color.withValues(alpha: 0.25)
+                      : AppColors.dustyBlueTeal.withValues(alpha: 0.15),
+                  width: isCurrentMonth ? 1.5 : 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.navyBlue.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        color: color,
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      eventTitle,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.navyBlue,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isCurrentMonth)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: color.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        _isBengali ? 'এই মাস' : 'This Month',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: color,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                gregorianStr,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.midTeal,
+                                ),
+                              ),
+                              Text(
+                                hijriStr,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.navyBlue.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                eventDesc,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: AppColors.navyBlue.withValues(alpha: 0.7),
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Align(
+                                alignment: Alignment.bottomRight,
+                                child: TextButton.icon(
+                                  onPressed: () => _openEventDetail(event, date, eventHijri),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    backgroundColor: color.withValues(alpha: 0.1),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  icon: Icon(Icons.menu_book_rounded, size: 13, color: color),
+                                  label: Text(
+                                    _isBengali ? 'বিস্তারিত দেখুন' : 'View Details',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  List<MapEntry<DateTime, IslamicEvent>> _getEventsForYear(int year) {
+    List<MapEntry<DateTime, IslamicEvent>> events = [];
+    for (int month = 1; month <= 12; month++) {
+      int daysInMonth = DateTime(year, month + 1, 0).day;
+      for (int day = 1; day <= daysInMonth; day++) {
+        final date = DateTime(year, month, day);
+        final cellHijri = HijriConverter.fromGregorian(date);
+        final event = CalendarDatabase.getEvent(date, cellHijri);
+        if (event != null) {
+          if (events.isNotEmpty &&
+              events.last.value.title == event.title &&
+              date.difference(events.last.key).inDays <= 1) {
+            continue;
+          }
+          events.add(MapEntry(date, event));
+        }
+      }
+    }
+    return events;
   }
 
   // Extracted so the LayoutBuilder guard above can stay simple. Builds the
@@ -985,97 +1285,107 @@ class _CalendarTabState extends State<CalendarTab> {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 7,
-        crossAxisSpacing: 4,
-        mainAxisSpacing: 4,
-        childAspectRatio: 0.80,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 0.82,
       ),
       itemCount: 42,
       itemBuilder: (context, index) {
-                  final int dayNumber = index - firstDayOfWeek + 1;
-                  if (dayNumber <= 0 || dayNumber > daysCount) {
-                    return const SizedBox();
-                  }
-                  final cellDate = DateTime(_currentMonth.year, _currentMonth.month, dayNumber);
-                  final cellHijri = HijriConverter.fromGregorian(cellDate);
-                  final isSelected = cellDate.year == _selectedDate.year &&
-                      cellDate.month == _selectedDate.month &&
-                      cellDate.day == _selectedDate.day;
-                  final now = DateTime.now();
-                  final isToday =
-                      cellDate.year == now.year && cellDate.month == now.month && cellDate.day == now.day;
-                  final event = CalendarDatabase.getEvent(cellDate, cellHijri);
-                  final hasEvent = event != null;
-                  final isFasting = _isMondayOrThursday(cellDate) || _isWhiteDay(cellHijri);
+        final int dayNumber = index - firstDayOfWeek + 1;
+        if (dayNumber <= 0 || dayNumber > daysCount) {
+          return const SizedBox();
+        }
+        final cellDate = DateTime(_currentMonth.year, _currentMonth.month, dayNumber);
+        final cellHijri = HijriConverter.fromGregorian(cellDate);
+        final isSelected = cellDate.year == _selectedDate.year &&
+            cellDate.month == _selectedDate.month &&
+            cellDate.day == _selectedDate.day;
+        final now = DateTime.now();
+        final isToday =
+            cellDate.year == now.year && cellDate.month == now.month && cellDate.day == now.day;
+        final event = CalendarDatabase.getEvent(cellDate, cellHijri);
+        final hasEvent = event != null;
+        final isFasting = _isMondayOrThursday(cellDate) || _isWhiteDay(cellHijri);
 
-                  Color cellBgColor = Colors.transparent;
-                  Border? cellBorder;
-                  if (isSelected) {
-                    cellBgColor = AppColors.navyBlue;
-                  }
-                  if (isToday && !isSelected) {
-                    cellBorder = Border.all(color: AppColors.navyBlue, width: 1.5);
-                  }
+        Color cellBgColor = Colors.transparent;
+        Border? cellBorder;
 
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() => _selectedDate = cellDate);
-                      if (hasEvent) {
-                        _openEventDetail(event, cellDate, cellHijri);
-                      }
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+        if (isSelected) {
+          cellBgColor = AppColors.navyBlue;
+        } else {
+          if (hasEvent) {
+            cellBgColor = AppColors.coralOrange.withValues(alpha: 0.15);
+            cellBorder = Border.all(color: AppColors.coralOrange.withValues(alpha: 0.4), width: 1);
+          } else if (isFasting) {
+            cellBgColor = AppColors.midTeal.withValues(alpha: 0.15);
+            cellBorder = Border.all(color: AppColors.midTeal.withValues(alpha: 0.4), width: 1);
+          }
+
+          if (isToday) {
+            cellBorder = Border.all(color: AppColors.navyBlue, width: 1.5);
+          }
+        }
+
+        return GestureDetector(
+          onTap: () {
+            setState(() => _selectedDate = cellDate);
+            if (hasEvent) {
+              _openEventDetail(event, cellDate, cellHijri);
+            }
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            decoration: BoxDecoration(
+              color: cellBgColor,
+              borderRadius: BorderRadius.circular(12),
+              border: cellBorder,
+            ),
+            padding: const EdgeInsets.all(7),
+            child: Stack(
+              children: [
+                Align(
+                  alignment: Alignment.topLeft,
+                  child: Text(
+                    dayNumber.toString(),
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : AppColors.navyBlue,
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Text(
+                    cellHijri.day.toString(),
+                    style: GoogleFonts.poppins(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? AppColors.dustyBlueTeal
+                          : AppColors.navyBlue.withValues(alpha: 0.45),
+                    ),
+                  ),
+                ),
+                if (hasEvent || isFasting)
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Container(
+                      width: 5.5,
+                      height: 5.5,
                       decoration: BoxDecoration(
-                        color: cellBgColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: cellBorder,
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            dayNumber.toString(),
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.white : AppColors.navyBlue,
-                            ),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Text(
-                                cellHijri.day.toString(),
-                                style: GoogleFonts.poppins(
-                                  fontSize: 8.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: isSelected
-                                      ? AppColors.dustyBlueTeal
-                                      : AppColors.navyBlue.withValues(alpha: 0.5),
-                                ),
-                              ),
-                            ],
-                          ),
-                          // Dot markers row — the only visual signal for
-                          // event/fasting days on the grid itself.
-                          if (hasEvent || isFasting)
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (hasEvent) _gridDot(AppColors.coralOrange, isSelected),
-                                if (hasEvent && isFasting) const SizedBox(width: 3),
-                                if (isFasting) _gridDot(AppColors.midTeal, isSelected),
-                              ],
-                            )
-                          else
-                            const SizedBox(height: 2),
-                        ],
+                        color: isSelected
+                            ? Colors.white
+                            : (hasEvent ? AppColors.coralOrange : AppColors.midTeal),
+                        shape: BoxShape.circle,
                       ),
                     ),
-                  );
-                },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1101,13 +1411,114 @@ class _CalendarTabState extends State<CalendarTab> {
     );
   }
 
-  Widget _gridDot(Color color, bool isSelected) {
+  IconData _getPrayerIcon(String name) {
+    switch (name.toLowerCase()) {
+      case 'fajr':
+        return Icons.wb_twilight_rounded;
+      case 'dhuhr':
+        return Icons.wb_sunny_rounded;
+      case 'asr':
+        return Icons.wb_cloudy_rounded;
+      case 'maghrib':
+        return Icons.brightness_4_rounded;
+      case 'isha':
+        return Icons.nights_stay_rounded;
+      default:
+        return Icons.access_time_rounded;
+    }
+  }
+
+  Widget _buildPrayerCard(PrayerTimeEntry entry) {
     return Container(
-      width: 5,
-      height: 5,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: isSelected ? Colors.white : color,
-        shape: BoxShape.circle,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navyBlue.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(
+                _getPrayerIcon(entry.name),
+                size: 13,
+                color: AppColors.navyBlue.withValues(alpha: 0.65),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _isBengali ? entry.nameBengali : entry.name,
+                style: GoogleFonts.poppins(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.navyBlue,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            DateFormat('h:mm a').format(entry.time),
+            style: GoogleFonts.poppins(
+              fontSize: 11.5,
+              fontWeight: FontWeight.bold,
+              color: AppColors.midTeal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrayerCardCentered(PrayerTimeEntry entry) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navyBlue.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _getPrayerIcon(entry.name),
+            size: 13,
+            color: AppColors.navyBlue.withValues(alpha: 0.65),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _isBengali ? entry.nameBengali : entry.name,
+            style: GoogleFonts.poppins(
+              fontSize: 11.5,
+              fontWeight: FontWeight.bold,
+              color: AppColors.navyBlue,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            DateFormat('h:mm a').format(entry.time),
+            style: GoogleFonts.poppins(
+              fontSize: 11.5,
+              fontWeight: FontWeight.bold,
+              color: AppColors.midTeal,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1135,31 +1546,26 @@ class _CalendarTabState extends State<CalendarTab> {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: times.map((entry) {
-              return Expanded(
-                child: Column(
-                  children: [
-                    Text(
-                      _isBengali ? entry.nameBengali : entry.name,
-                      style: GoogleFonts.poppins(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.navyBlue.withValues(alpha: 0.6),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      DateFormat('h:mm a').format(entry.time),
-                      style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.midTeal),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
+          Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: _buildPrayerCard(times[0])),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildPrayerCard(times[1])),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: _buildPrayerCard(times[2])),
+                  const SizedBox(width: 8),
+                  Expanded(child: _buildPrayerCard(times[3])),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildPrayerCardCentered(times[4]),
+            ],
           ),
         ],
       ),
