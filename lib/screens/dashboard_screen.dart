@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -11,13 +11,7 @@ import 'package:intl/intl.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
 import 'calendar_tab.dart';
-import 'hajj_umrah_screen.dart';
-import 'inheritance_screen.dart';
 import 'qurbani_planner_screen.dart';
-import 'assistant_tab.dart';
-import 'zakat_manager_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -52,31 +46,19 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Selected prayer scene for dynamic prayer tab header
   String _selectedPrayerScene = "Asr";
 
-  // Qaza counter — incremented when a past prayer is missed (not ticked)
-  int _qazaCount = 0;
-
-  // Qaza prayer counter state (manually managed + saved via SharedPreferences)
-  final Map<String, int> _qazaCounts = {
-    'Fajr': 0,
-    'Dhuhr': 0,
-    'Asr': 0,
-    'Maghrib': 0,
-    'Isha': 0,
-  };
-
-  // Active alarms map for prayer list on Prayer page (all off by default; user toggles)
+  // Active alarms map for prayer list on Prayer page
   final Map<String, bool> _prayerAlarms = {
-    'Fajr': false,
+    'Fajr': true,
     'Sunrise': false,
     'Dhuhr': false,
-    'Asr': false,
+    'Asr': true,
     'Maghrib': false,
-    'Isha': false,
+    'Isha': true,
   };
 
   // Daily salat completion checklist states
   final Map<String, bool> _salatCompleted = {
-    'Fajr': false,
+    'Fajr': true,
     'Dhuhr': false,
     'Asr': false,
     'Maghrib': false,
@@ -85,19 +67,12 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ===== ZAKAT WEALTH STATE =====
   final TextEditingController _zakatCashCtrl = TextEditingController(text: '0');
-  final TextEditingController _zakatGoldGramsCtrl = TextEditingController(text: '0'); // investment gold
-  final TextEditingController _zakatGoldJewelryCtrl = TextEditingController(text: '0'); // personal jewelry gold
-  final TextEditingController _zakatSilverGramsCtrl = TextEditingController(text: '0'); // investment silver
-  final TextEditingController _zakatSilverJewelryCtrl = TextEditingController(text: '0'); // personal jewelry silver
+  final TextEditingController _zakatGoldGramsCtrl = TextEditingController(text: '0'); // grams of gold
+  final TextEditingController _zakatSilverGramsCtrl = TextEditingController(text: '0'); // grams of silver
   final TextEditingController _zakatStocksCtrl = TextEditingController(text: '0');
   final TextEditingController _zakatBusinessCtrl = TextEditingController(text: '0');
-  final TextEditingController _zakatReceivableCtrl = TextEditingController(text: '0'); // good debt
-  final TextEditingController _zakatReceivableBadCtrl = TextEditingController(text: '0'); // bad debt
-  final TextEditingController _zakatLiabilitiesCtrl = TextEditingController(text: '0'); // immediate/short-term
-  final TextEditingController _zakatLongTermLiabilitiesCtrl = TextEditingController(text: '0'); // long-term
-
-  // Zakat configuration (used by legacy dashboard Zakat summary)
-  final String _nisabStandard = 'silver'; // 'gold' or 'silver'
+  final TextEditingController _zakatReceivableCtrl = TextEditingController(text: '0');
+  final TextEditingController _zakatLiabilitiesCtrl = TextEditingController(text: '0');
 
   // Live metal prices (fetched from API)
   double _goldSpotUSD = 3280.0;   // per troy oz  (fallback)
@@ -113,10 +88,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   final List<double> _goldHistory = [];
   final List<double> _silverHistory = [];
 
-  // Dynamic Nisab threshold based on gold vs silver standard
-  double get _nisabBDT => _nisabStandard == 'gold'
-      ? 85.0 * _goldPricePerGramBDT
-      : 595.0 * _silverPricePerGramBDT;
+  // Nisab = 85g gold at live price
+  static const double _nisabGrams = 85.0;
+  double get _nisabBDT => _nisabGrams * _goldPricePerGramBDT;
 
   double _totalZakatableWealth = 0.0;
   double _zakatDue = 0.0;
@@ -232,108 +206,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _DashboardStarConfig(topFraction: 0.70, leftFraction: 0.65, size: 5, delayMs: 350),
     _DashboardStarConfig(topFraction: 0.78, leftFraction: 0.40, size: 4, delayMs: 550),
   ];
-  
-  
-
-  // Load manual Qaza counts from SharedPreferences
-  Future<void> _loadQazaCounts() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      for (final prayer in _qazaCounts.keys) {
-        final val = prefs.getInt('qaza_$prayer') ?? 0;
-        setState(() {
-          _qazaCounts[prayer] = val;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading qaza counts: $e');
-    }
-  }
-
-  // Save manual Qaza count for a specific prayer
-  Future<void> _saveQazaCount(String prayer, int val) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('qaza_$prayer', val);
-    } catch (e) {
-      debugPrint('Error saving qaza count: $e');
-    }
-  }
-
-  // Automatically log a missed prayer as Qaza
-  Future<void> _autoLogQaza(String prayer, String logKey) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (!(prefs.getBool(logKey) ?? false)) {
-        await prefs.setBool(logKey, true);
-        final currentCount = _qazaCounts[prayer] ?? 0;
-        final newCount = currentCount + 1;
-        setState(() {
-          _qazaCounts[prayer] = newCount;
-        });
-        await _saveQazaCount(prayer, newCount);
-      }
-    } catch (e) {
-      debugPrint('Error auto-logging qaza count: $e');
-    }
-  }
-
-  // Load daily salat completion status from SharedPreferences
-  Future<void> _loadSalatCompleted() async {
-    try {
-      final now = DateTime.now();
-      final ymd = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-      final prefs = await SharedPreferences.getInstance();
-      for (final salat in _salatCompleted.keys) {
-        final val = prefs.getBool('completed_${ymd}_$salat') ?? false;
-        setState(() {
-          _salatCompleted[salat] = val;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading salat completion: $e');
-    }
-  }
-
-  // Save daily salat completion status to SharedPreferences
-  Future<void> _saveSalatCompleted(String salat, bool val) async {
-    try {
-      final now = DateTime.now();
-      final ymd = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('completed_${ymd}_$salat', val);
-    } catch (e) {
-      debugPrint('Error saving salat completion: $e');
-    }
-  }
-
-  // Load alarm toggle states from SharedPreferences
-  Future<void> _loadAlarmStates() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      for (final prayer in _prayerAlarms.keys) {
-        // Default to false if never set (user picks their own alarms)
-        final val = prefs.getBool('alarm_$prayer') ?? false;
-        setState(() {
-          _prayerAlarms[prayer] = val;
-        });
-      }
-      // After loading states, sync actual scheduled notifications
-      _syncAlarms();
-    } catch (e) {
-      debugPrint('Error loading alarm states: $e');
-    }
-  }
-
-  // Save a single alarm toggle state to SharedPreferences
-  Future<void> _saveAlarmState(String prayer, bool val) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('alarm_$prayer', val);
-    } catch (e) {
-      debugPrint('Error saving alarm state: $e');
-    }
-  }
 
   @override
   void initState() {
@@ -363,13 +235,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _goldPricePerGramBDT = (_goldSpotUSD / 31.1035) * _usdToBDT;
     _silverPricePerGramBDT = (_silverSpotUSD / 31.1035) * _usdToBDT;
 
-    // Load saved Qaza counts
-    _loadQazaCounts();
-    // Load daily checklist status
-    _loadSalatCompleted();
-    // Load user alarm preferences
-    _loadAlarmStates();
-
     // Start location services & prayer time updates
     _initLocationAndTracking();
 
@@ -390,15 +255,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     _priceRefreshTimer?.cancel();
     _zakatCashCtrl.dispose();
     _zakatGoldGramsCtrl.dispose();
-    _zakatGoldJewelryCtrl.dispose();
     _zakatSilverGramsCtrl.dispose();
-    _zakatSilverJewelryCtrl.dispose();
     _zakatStocksCtrl.dispose();
     _zakatBusinessCtrl.dispose();
     _zakatReceivableCtrl.dispose();
-    _zakatReceivableBadCtrl.dispose();
     _zakatLiabilitiesCtrl.dispose();
-    _zakatLongTermLiabilitiesCtrl.dispose();
     super.dispose();
   }
 
@@ -535,25 +396,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       }
     }
 
-    // === Auto Qaza Calculation ===
-    // If a fard prayer time has passed today, is unchecked, and hasn't been auto-logged yet for today,
-    // automatically increment its persistent Qaza count.
-    final ymd = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final List<String> fardPrayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-    for (final sName in fardPrayers) {
-      final sTime = allTimes[sName];
-      if (sTime == null) continue;
-      final bool isPast = now.isAfter(sTime);
-      final bool isDone = _salatCompleted[sName] ?? false;
-      if (isPast && !isDone) {
-        final logKey = 'auto_qaza_logged_${ymd}_$sName';
-        if (!_triggeredAlarms.contains(logKey)) {
-          _triggeredAlarms.add(logKey);
-          _autoLogQaza(sName, logKey);
-        }
-      }
-    }
-
     // Identify current and next prayers
     final next = prayerTimes.nextPrayer();
 
@@ -658,19 +500,16 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  // Calculate approximate Hijri date string based on current Gregorian date
+  // Calculate exact Hijri date string using HijriConverter from calendar_tab.dart
   String _getHijriDateString() {
-    final today = DateTime.now();
-    final hijriMonths = [
-      "Muharram", "Safar", "Rabi' al-Awwal", "Rabi' ath-Thani",
-      "Jumada al-Ula", "Jumada al-Akhirah", "Rajab", "Sha'ban",
-      "Ramadan", "Shawwal", "Dhu al-Qa'dah", "Dhu al-Hijjah"
-    ];
-    // Custom mapping for realistic demonstration of Hijri year 1448 AH in 2026 AD
-    int monthIndex = (today.month + 3) % 12;
-    int day = (today.day + 12) % 29 + 1;
-    int year = today.year - 578; // 2026 - 578 = 1448
-    return "$day ${hijriMonths[monthIndex]}, $year AH";
+    try {
+      final today = DateTime.now();
+      final hijri = HijriConverter.fromGregorian(today);
+      return hijri.format(false); // formats as e.g. "4 Safar 1448 AH"
+    } catch (e) {
+      // Fallback in case of any issues
+      return "19 Muharram, 1448 AH";
+    }
   }
 
   // Identifies which prayer is current so it can be highlighted
@@ -737,7 +576,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               // Main content area with Smooth Slide and Fade Tab Transition
               Positioned.fill(
                 child: Padding(
-                  padding: EdgeInsets.only(bottom: 70 + MediaQuery.of(context).padding.bottom),
+                  padding: const EdgeInsets.only(bottom: 70),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 400),
                     switchInCurve: Curves.easeInOutCubic,
@@ -764,6 +603,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 bottom: 0,
                 left: 0,
                 right: 0,
+                height: 70,
                 child: _buildBottomNavigationBar(),
               ),
 
@@ -883,9 +723,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ===== BOTTOM NAVIGATION BAR =====
   Widget _buildBottomNavigationBar() {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
     return Container(
-      padding: EdgeInsets.only(bottom: bottomInset),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: const BorderRadius.only(
@@ -900,18 +738,15 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ],
       ),
-      child: SizedBox(
-        height: 70,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(0, Icons.home_rounded, 'Home'),
-            _buildNavItem(1, Icons.access_time_rounded, 'Prayer'),
-            _buildNavItem(2, Icons.calendar_month_rounded, 'Calendar'),
-            _buildNavItem(3, Icons.auto_awesome_rounded, 'Assistant'),
-            _buildNavItem(4, Icons.person_outline_rounded, 'Profile'),
-          ],
-        ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildNavItem(0, Icons.home_rounded, 'Home'),
+          _buildNavItem(1, Icons.access_time_rounded, 'Prayer'),
+          _buildNavItem(2, Icons.calendar_month_rounded, 'Calendar'),
+          _buildNavItem(3, Icons.auto_awesome_rounded, 'Assistant'),
+          _buildNavItem(4, Icons.person_outline_rounded, 'Profile'),
+        ],
       ),
     );
   }
@@ -966,7 +801,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ===== ACTIVE TAB CONTENT DISPATCHER =====
-Widget _buildActiveTabContent() {
+  Widget _buildActiveTabContent() {
     switch (_currentIndex) {
       case 0:
         return _buildHomeTab();
@@ -974,15 +809,13 @@ Widget _buildActiveTabContent() {
         return _buildPrayerTab();
       case 2:
         return CalendarTab(
-          key: const ValueKey('CalendarTab'),
           onOpenZakatCalculator: _showZakatCalculatorSheet,
         );
-      case 3:
-        return const AssistantTab();
       default:
         return _buildPlaceholderTab();
     }
   }
+
   // ===== HOME TAB (Main Dashboard) =====
   Widget _buildHomeTab() {
     return SingleChildScrollView(
@@ -1006,40 +839,37 @@ Widget _buildActiveTabContent() {
           ),
           const SizedBox(height: 28),
 
-// Today's Guidance Section
-_buildAnimatedEntry(
-  delay: 0.15,
-  child: _buildTodaysGuidance(),
-),
-const SizedBox(height: 28),
+          // Today's Guidance Section
+          _buildAnimatedEntry(
+            delay: 0.2,
+            child: _buildTodaysGuidance(),
+          ),
+          const SizedBox(height: 28),
 
-
-// Islamic Wealth Section
-_buildAnimatedEntry(
-  delay: 0.3,
+          // Islamic Wealth Section
+          _buildAnimatedEntry(
+            delay: 0.3,
             child: _buildSectionTitle('Islamic Wealth'),
           ),
           const SizedBox(height: 14),
 
           _buildAnimatedEntry(
-            delay: 0.25,
+            delay: 0.35,
             child: _buildIslamicWealthGrid(),
           ),
           const SizedBox(height: 28),
 
           // Worship Section
           _buildAnimatedEntry(
-            delay: 0.35,
+            delay: 0.45,
             child: _buildSectionTitle('Worship'),
           ),
           const SizedBox(height: 14),
 
           _buildAnimatedEntry(
-            delay: 0.4,
+            delay: 0.5,
             child: _buildWorshipGrid(),
           ),
-          const SizedBox(height: 28),
-
           const SizedBox(height: 20),
         ],
       ),
@@ -1054,72 +884,18 @@ _buildAnimatedEntry(
 
     final prayerTimes = PrayerTimes.today(coordinates, params);
     final formatter = DateFormat('hh:mm a');
-    final now = DateTime.now();
 
     final List<Map<String, dynamic>> prayerItems = [
-      {'name': 'Fajr',    'time': formatter.format(prayerTimes.fajr),    'dt': prayerTimes.fajr},
-      {'name': 'Sunrise', 'time': formatter.format(prayerTimes.sunrise), 'dt': prayerTimes.sunrise},
-      {'name': 'Dhuhr',   'time': formatter.format(prayerTimes.dhuhr),   'dt': prayerTimes.dhuhr},
-      {'name': 'Asr',     'time': formatter.format(prayerTimes.asr),     'dt': prayerTimes.asr},
-      {'name': 'Maghrib', 'time': formatter.format(prayerTimes.maghrib), 'dt': prayerTimes.maghrib},
-      {'name': 'Isha',    'time': formatter.format(prayerTimes.isha),    'dt': prayerTimes.isha},
+      {'name': 'Fajr', 'time': formatter.format(prayerTimes.fajr)},
+      {'name': 'Sunrise', 'time': formatter.format(prayerTimes.sunrise)},
+      {'name': 'Dhuhr', 'time': formatter.format(prayerTimes.dhuhr)},
+      {'name': 'Asr', 'time': formatter.format(prayerTimes.asr)},
+      {'name': 'Maghrib', 'time': formatter.format(prayerTimes.maghrib)},
+      {'name': 'Isha', 'time': formatter.format(prayerTimes.isha)},
     ];
 
     final currentPrayer = _getCurrentPrayerName();
     int completedCount = _salatCompleted.values.where((v) => v).length;
-
-    // Recalculate qaza count every build (prayers that have passed and aren't ticked)
-    // Sunrise is not a salat so excluded
-    final salatNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-    final Map<String, DateTime?> salatDts = {
-      'Fajr': prayerTimes.fajr,
-      'Dhuhr': prayerTimes.dhuhr,
-      'Asr': prayerTimes.asr,
-      'Maghrib': prayerTimes.maghrib,
-      'Isha': prayerTimes.isha,
-    };
-    // Calculate tomorrow's Fajr for Isha expiration check
-    final tomorrow = now.add(const Duration(days: 1));
-    final tomorrowPrayerTimes = PrayerTimes(
-      coordinates,
-      DateComponents.from(tomorrow),
-      params,
-    );
-    final tomorrowFajrTime = tomorrowPrayerTimes.fajr;
-
-    // Helper to calculate active Isha start time (handling midnight transition)
-    DateTime getIshaStartTime(DateTime todayIsha) {
-      final todayFajr = prayerTimes.fajr;
-      if (now.isBefore(todayFajr)) {
-        final yesterday = now.subtract(const Duration(days: 1));
-        final yesterdayPrayerTimes = PrayerTimes(
-          coordinates,
-          DateComponents.from(yesterday),
-          params,
-        );
-        return yesterdayPrayerTimes.isha;
-      }
-      return todayIsha;
-    }
-
-    int liveQaza = 0;
-    for (final s in salatNames) {
-      final isDone = _salatCompleted[s] ?? false;
-      final expireTime = s == 'Fajr' ? prayerTimes.sunrise
-          : s == 'Dhuhr' ? prayerTimes.asr
-          : s == 'Asr' ? prayerTimes.maghrib
-          : s == 'Maghrib' ? prayerTimes.isha
-          : tomorrowFajrTime;
-
-      if (now.isAfter(expireTime) && !isDone) {
-        liveQaza++;
-      }
-    }
-    if (liveQaza != _qazaCount) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _qazaCount = liveQaza);
-      });
-    }
 
     // === Define sky gradient per prayer scene (matching user spec exactly) ===
     LinearGradient skyGradient;
@@ -1229,7 +1005,7 @@ _buildAnimatedEntry(
         // ── PINNED SKY SCENE CARD (does NOT scroll) ──────────────────
         // 1. DYNAMIC SUN/MOON/SKY HEADER CARD
           Padding(
-            padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
             child: Container(
               height: 240,
               width: double.infinity,
@@ -1314,111 +1090,75 @@ _buildAnimatedEntry(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     IconButton(
-                                      icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white, size: 20),
+                                      icon: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
                                       onPressed: () => setState(() => _currentIndex = 0),
                                     ),
-                                    Column(
-                                      children: [
-                                        Text(
-                                          'Prayer Times',
-                                          style: GoogleFonts.poppins(
-                                            color: Colors.white,
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 0.4,
-                                          ),
-                                        ),
-                                        Text(
-                                          _getHijriDateString(),
-                                          style: GoogleFonts.inter(
-                                            color: Colors.white.withValues(alpha: 0.75),
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
+                                    Text(
+                                      _selectedPrayerScene,
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.5,
+                                      ),
                                     ),
                                     IconButton(
-                                      tooltip: 'Find nearby mosques',
-                                      icon: const Icon(Icons.location_on_rounded, color: Colors.white, size: 20),
-                                      onPressed: () async {
-                                        // Open Google Maps searching for mosques near current location
-                                        final lat = _latitude;
-                                        final lng = _longitude;
-                                        // Capture messenger before async gap
-                                        final messenger = ScaffoldMessenger.of(context);
-                                        // Try native Maps app first (geo: URI), fallback to browser
-                                        final geoUri = Uri.parse(
-                                          'geo:$lat,$lng?q=mosque+near+me&z=14',
-                                        );
-                                        final mapsWebUri = Uri.parse(
-                                          'https://www.google.com/maps/search/mosque+near+me/@$lat,$lng,14z',
-                                        );
-                                        if (await canLaunchUrl(geoUri)) {
-                                          await launchUrl(geoUri);
-                                        } else if (await canLaunchUrl(mapsWebUri)) {
-                                          await launchUrl(mapsWebUri, mode: LaunchMode.externalApplication);
-                                        } else {
-                                          messenger.showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                'Could not open Maps. Please install Google Maps.',
-                                                style: GoogleFonts.inter(fontSize: 13),
-                                              ),
-                                              backgroundColor: AppColors.navyBlue,
-                                              behavior: SnackBarBehavior.floating,
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                            ),
-                                          );
-                                        }
-                                      },
+                                      icon: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 20),
+                                      onPressed: () {},
                                     ),
                                   ],
                                 ),
                                 const Spacer(),
-                                // Next prayer name + countdown
+                                Text(
+                                  'Next prayer time',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  _liveCountdownStr,
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                                const Spacer(),
                                 Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Next: $_nextPrayerName',
+                                          'Location',
                                           style: GoogleFonts.inter(
-                                            color: Colors.white.withValues(alpha: 0.80),
-                                            fontSize: 12,
+                                            color: Colors.white.withValues(alpha: 0.6),
+                                            fontSize: 10,
                                             fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.3,
                                           ),
                                         ),
-                                        const SizedBox(height: 2),
+                                        const SizedBox(height: 1),
                                         Text(
-                                          _liveCountdownStr,
-                                          style: GoogleFonts.poppins(
+                                          _locationName.split(',').first,
+                                          style: GoogleFonts.inter(
                                             color: Colors.white,
-                                            fontSize: 34,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 1.0,
-                                            height: 1.1,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                // Location row
-                                Row(
-                                  children: [
-                                    const Icon(Icons.location_on_rounded, color: Colors.white54, size: 13),
-                                    const SizedBox(width: 4),
                                     Text(
-                                      _locationName.split(',').first,
+                                      _getHijriDateString(),
                                       style: GoogleFonts.inter(
-                                        color: Colors.white.withValues(alpha: 0.75),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white.withValues(alpha: 0.8),
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ],
@@ -1513,29 +1253,11 @@ _buildAnimatedEntry(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: _salatCompleted.keys.map((salat) {
                       final isDone = _salatCompleted[salat] ?? false;
-
-                      final sTime = salat == 'Isha' 
-                          ? getIshaStartTime(salatDts['Isha'] ?? now)
-                          : salatDts[salat];
-                      
-                      final expireTime = salat == 'Fajr' ? prayerTimes.sunrise
-                          : salat == 'Dhuhr' ? salatDts['Asr']
-                          : salat == 'Asr' ? salatDts['Maghrib']
-                          : salat == 'Maghrib' ? salatDts['Isha']
-                          : tomorrowFajrTime;
-
-                      final bool isFuture = sTime != null && now.isBefore(sTime);
-                      final bool isExpired = expireTime != null && now.isAfter(expireTime);
-                      final bool isSalatMissed = isExpired && !isDone;
-
                       return GestureDetector(
                         onTap: () {
-                          if (isSalatMissed || isFuture) return;
-                          final newDone = !isDone;
                           setState(() {
-                            _salatCompleted[salat] = newDone;
+                            _salatCompleted[salat] = !isDone;
                           });
-                          _saveSalatCompleted(salat, newDone);
                         },
                         child: Column(
                           children: [
@@ -1545,22 +1267,12 @@ _buildAnimatedEntry(
                               width: 44,
                               height: 44,
                               decoration: BoxDecoration(
-                                color: isSalatMissed
-                                    ? const Color(0xFFFFEBEE)
-                                    : isFuture
-                                        ? Colors.black.withValues(alpha: 0.04)
-                                        : isDone
-                                            ? AppColors.navyBlue
-                                            : Colors.white.withValues(alpha: 0.25),
+                                color: isDone
+                                    ? AppColors.navyBlue
+                                    : Colors.white.withValues(alpha: 0.25),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: isSalatMissed
-                                      ? const Color(0xFFE57373)
-                                      : isFuture
-                                          ? Colors.black.withValues(alpha: 0.12)
-                                          : isDone
-                                              ? AppColors.navyBlue
-                                              : Colors.white.withValues(alpha: 0.4),
+                                  color: isDone ? AppColors.navyBlue : Colors.white.withValues(alpha: 0.4),
                                   width: 1.8,
                                 ),
                                 boxShadow: isDone
@@ -1574,26 +1286,16 @@ _buildAnimatedEntry(
                                     : [],
                               ),
                               child: Center(
-                                child: isSalatMissed
-                                    ? const Icon(Icons.close_rounded, color: Color(0xFFE57373), size: 22)
-                                    : isFuture
-                                        ? Icon(Icons.lock_outline_rounded, color: Colors.black.withValues(alpha: 0.22), size: 18)
-                                        : isDone
-                                            ? const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24)
-                                            : Icon(Icons.circle_outlined, color: AppColors.navyBlue.withValues(alpha: 0.3), size: 20),
+                                child: isDone
+                                    ? const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24)
+                                    : Icon(Icons.circle_outlined, color: AppColors.navyBlue.withValues(alpha: 0.3), size: 20),
                               ),
                             ),
                             const SizedBox(height: 6),
                             Text(
                               salat,
                               style: GoogleFonts.poppins(
-                                color: isSalatMissed
-                                    ? const Color(0xFFE57373)
-                                    : isFuture
-                                        ? Colors.black.withValues(alpha: 0.3)
-                                        : isDone
-                                            ? AppColors.navyBlue
-                                            : AppColors.navyBlue.withValues(alpha: 0.6),
+                                color: isDone ? AppColors.navyBlue : AppColors.navyBlue.withValues(alpha: 0.6),
                                 fontSize: 11,
                                 fontWeight: isDone ? FontWeight.bold : FontWeight.w500,
                               ),
@@ -1620,20 +1322,7 @@ _buildAnimatedEntry(
                 final item = prayerItems[index];
                 final String pName = item['name'];
                 final String pTime = item['time'];
-
-                // Salat names (Sunrise is not a fard salat)
-                final bool isSalat = (pName != 'Sunrise');
-                bool isMissed = false;
-                if (isSalat) {
-                  final expireTime = pName == 'Fajr' ? prayerTimes.sunrise
-                      : pName == 'Dhuhr' ? salatDts['Asr']
-                      : pName == 'Asr' ? salatDts['Maghrib']
-                      : pName == 'Maghrib' ? salatDts['Isha']
-                      : tomorrowFajrTime;
-
-                  isMissed = expireTime != null && now.isAfter(expireTime) && !(_salatCompleted[pName] ?? false);
-                }
-
+                
                 // Highlight when card is either the active next prayer OR selected by the user scene
                 final bool isSceneSelected = (pName == _selectedPrayerScene);
                 final bool isActive = (pName == currentPrayer);
@@ -1686,18 +1375,14 @@ _buildAnimatedEntry(
                         curve: Curves.easeInOutCubic,
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
                         decoration: BoxDecoration(
-                          color: isMissed
-                              ? const Color(0xFFFFF0F0)   // very light red for missed
-                              : isSceneSelected
-                                  ? cardBg
-                                  : Colors.white.withValues(alpha: 0.55),
+                          color: isSceneSelected
+                              ? cardBg
+                              : Colors.white.withValues(alpha: 0.55),
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
-                            color: isMissed
-                                ? const Color(0xFFE57373).withValues(alpha: 0.55)
-                                : isSceneSelected
-                                    ? cardAccent
-                                    : Colors.white.withValues(alpha: 0.4),
+                            color: isSceneSelected
+                                ? cardAccent
+                                : Colors.white.withValues(alpha: 0.4),
                             width: isSceneSelected ? 2.0 : 1.0,
                           ),
                           boxShadow: isSceneSelected ? [
@@ -1730,22 +1415,10 @@ _buildAnimatedEntry(
                                     shape: BoxShape.circle,
                                   ),
                                 ),
-                                Text(
-                                  pName,
-                                  style: GoogleFonts.poppins(
-                                    color: isMissed
-                                        ? const Color(0xFFD32F2F)
-                                        : isSceneSelected ? cardAccent : AppColors.navyBlue,
-                                    fontSize: 15,
-                                    fontWeight: isSceneSelected ? FontWeight.bold : FontWeight.w600,
-                                    decoration: isMissed ? TextDecoration.lineThrough : null,
-                                    decorationColor: const Color(0xFFD32F2F),
-                                  ),
-                                ),
                                 if (isActive) ...[
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                    margin: const EdgeInsets.only(left: 8),
+                                    margin: const EdgeInsets.only(right: 8),
                                     decoration: BoxDecoration(
                                       color: AppColors.coralOrange.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(8),
@@ -1760,24 +1433,14 @@ _buildAnimatedEntry(
                                     ),
                                   ),
                                 ],
-                                if (isMissed) ...[
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    margin: const EdgeInsets.only(left: 8),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFE57373).withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(7),
-                                    ),
-                                    child: Text(
-                                      'Missed',
-                                      style: GoogleFonts.inter(
-                                        color: const Color(0xFFD32F2F),
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                                Text(
+                                  pName,
+                                  style: GoogleFonts.poppins(
+                                    color: isSceneSelected ? cardAccent : AppColors.navyBlue,
+                                    fontSize: 15,
+                                    fontWeight: isSceneSelected ? FontWeight.bold : FontWeight.w600,
                                   ),
-                                ],
+                                ),
                               ],
                             ),
                             Row(
@@ -1798,8 +1461,6 @@ _buildAnimatedEntry(
                                     setState(() {
                                       _prayerAlarms[pName] = newState;
                                     });
-                                    // Persist user preference
-                                    _saveAlarmState(pName, newState);
                                     // Schedule or cancel system notification for this prayer
                                     _syncAlarms();
                                     // Show snackbar feedback
@@ -1852,296 +1513,6 @@ _buildAnimatedEntry(
                   ),
                 );
               },
-            ),
-          ),
-          // ===== TODAY'S MISSED PRAYER STATUS CARD (Always Visible) =====
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 400),
-              child: _qazaCount > 0
-                  ? Container(
-                      key: const ValueKey('MissedWarning'),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFFFFF5F5), Color(0xFFFFEBEB)],
-                        ),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: const Color(0xFFE57373).withValues(alpha: 0.45),
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFE57373).withValues(alpha: 0.10),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 46,
-                            height: 46,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE57373).withValues(alpha: 0.14),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.warning_amber_rounded, color: Color(0xFFD32F2F), size: 24),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Today\'s Missed Prayers',
-                                  style: GoogleFonts.poppins(
-                                    color: const Color(0xFFB71C1C),
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'You missed $_qazaCount prayer${_qazaCount > 1 ? 's' : ''} today.',
-                                  style: GoogleFonts.inter(
-                                    color: const Color(0xFFD32F2F).withValues(alpha: 0.80),
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE57373).withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '$_qazaCount',
-                              style: GoogleFonts.poppins(
-                                color: const Color(0xFFB71C1C),
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : Container(
-                      key: const ValueKey('AllCompleted'),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFFF4FBF7), Color(0xFFEBF7F0)],
-                        ),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: const Color(0xFF81C784).withValues(alpha: 0.45),
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF81C784).withValues(alpha: 0.10),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 46,
-                            height: 46,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF81C784).withValues(alpha: 0.14),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.check_circle_outline_rounded, color: Color(0xFF2E7D32), size: 24),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'All Caught Up!',
-                                  style: GoogleFonts.poppins(
-                                    color: const Color(0xFF1B5E20),
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'No missed prayers detected today.',
-                                  style: GoogleFonts.inter(
-                                    color: const Color(0xFF2E7D32).withValues(alpha: 0.80),
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-            ),
-          ),
-
-          // ===== INTERACTIVE QAZA COUNTER SECTION (Always Visible) =====
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.4),
-                  width: 1.2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.navyBlue.withValues(alpha: 0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.history_toggle_off_rounded, color: AppColors.navyBlue, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Qaza Prayer Counter',
-                        style: GoogleFonts.poppins(
-                          color: AppColors.navyBlue,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Manually track and log your missed prayers to make them up over time.',
-                    style: GoogleFonts.inter(
-                      color: AppColors.navyBlue.withValues(alpha: 0.6),
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // List of 5 salats with increment / decrement buttons
-                  ...['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((salat) {
-                    final count = _qazaCounts[salat] ?? 0;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.coralOrange,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Text(
-                                salat,
-                                style: GoogleFonts.poppins(
-                                  color: AppColors.navyBlue,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              // Decrement Button
-                              GestureDetector(
-                                onTap: () {
-                                  if (count > 0) {
-                                    setState(() {
-                                      _qazaCounts[salat] = count - 1;
-                                    });
-                                    _saveQazaCount(salat, count - 1);
-                                  }
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.15)),
-                                  ),
-                                  child: const Icon(Icons.remove, size: 14, color: AppColors.navyBlue),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              // Counter Text
-                              SizedBox(
-                                width: 28,
-                                child: Text(
-                                  '$count',
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.poppins(
-                                    color: AppColors.navyBlue,
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              // Increment Button
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _qazaCounts[salat] = count + 1;
-                                  });
-                                  _saveQazaCount(salat, count + 1);
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.15)),
-                                  ),
-                                  child: const Icon(Icons.add, size: 14, color: AppColors.navyBlue),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ),
             ),
           ),
           const SizedBox(height: 80), // space above bottom nav
@@ -2369,59 +1740,25 @@ _buildAnimatedEntry(
   }
 
   // ===== NEXT PRAYER CARD (static — no float, but animated decoration) =====
-  // Returns the gradient for the Next Prayer Card based on the current prayer time
-  LinearGradient _getPrayerCardGradient() {
-    switch (_nextPrayerName) {
-      case 'Fajr':
-        return const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0F1E36), Color(0xFF1D3557), Color(0xFF457B9D)],
-        );
-      case 'Dhuhr':
-        return const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1A6EA8), Color(0xFF2A8FCC), Color(0xFF52AEDE)],
-        );
-      case 'Asr':
-        return const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1B5C8A), Color(0xFF2E7BAD), Color(0xFFD4874A)],
-        );
-      case 'Maghrib':
-        return const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF6B3A7D), Color(0xFFB05C8A), Color(0xFFE8855A)],
-        );
-      case 'Isha':
-        return const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF060D1A), Color(0xFF0D1F35), Color(0xFF152942)],
-        );
-      default: // Fajr fallback
-        return const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0F1E36), Color(0xFF1D3557), Color(0xFF457B9D)],
-        );
-    }
-  }
-
   Widget _buildNextPrayerCard() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 22),
       child: AnimatedBuilder(
+        // Only rebuild when cloud/pulse animation ticks — no float transform
         animation: Listenable.merge([_cloudsController, _pulseController]),
         builder: (context, _) {
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 800),
+          return Container(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              gradient: _getPrayerCardGradient(),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.navyBlue,
+                  Color(0xFF1D3550),
+                  Color(0xFF283F54),
+                ],
+              ),
               borderRadius: BorderRadius.circular(22),
               boxShadow: [
                 BoxShadow(
@@ -2439,11 +1776,10 @@ _buildAnimatedEntry(
                     painter: _NextPrayerCardDecorationPainter(
                       cloudAnimationVal: _cloudsController.value,
                       pulseVal: _pulseController.value,
-                      prayerName: _nextPrayerName,
                     ),
                   ),
                 ),
-                // Foreground Content
+                // Foreground Content — static text, no movement
                 Padding(
                   padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
                   child: Row(
@@ -2544,7 +1880,7 @@ _buildAnimatedEntry(
     );
   }
 
- // ===== ISLAMIC WEALTH GRID =====
+  // ===== ISLAMIC WEALTH GRID =====
   Widget _buildIslamicWealthGrid() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -2562,19 +1898,13 @@ _buildAnimatedEntry(
               ),
               const SizedBox(width: 14),
               Expanded(
-  child: _buildFeatureCard(
-    icon: Icons.pets_rounded,
-    label: 'Qurbani Planner',
-    iconPainter: _QurbaniIconPainter(),
-    onTap: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const QurbaniPlannerPage(),
-        ),
-      );
-    },
-  ),
-),
+                child: _buildFeatureCard(
+                  icon: Icons.pets_rounded,
+                  label: 'Qurbani Planner',
+                  iconPainter: _QurbaniIconPainter(),
+                  onTap: _showQurbaniPlannerSheet,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -2585,13 +1915,6 @@ _buildAnimatedEntry(
                   icon: Icons.flight_takeoff_rounded,
                   label: 'Hajj & Umrah',
                   iconPainter: _HajjIconPainter(),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const HajjUmrahPlannerScreen(),
-                      ),
-                    );
-                  },
                 ),
               ),
               const SizedBox(width: 14),
@@ -2600,13 +1923,6 @@ _buildAnimatedEntry(
                   icon: Icons.account_balance_rounded,
                   label: 'Inheritance',
                   iconPainter: _InheritanceIconPainter(),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const InheritanceGuideScreen(),
-                      ),
-                    );
-                  },
                 ),
               ),
             ],
@@ -2615,6 +1931,7 @@ _buildAnimatedEntry(
       ),
     );
   }
+
   // ===== WORSHIP GRID =====
   Widget _buildWorshipGrid() {
     return Padding(
@@ -2666,7 +1983,6 @@ _buildAnimatedEntry(
   }
 
   // ===== FEATURE CARD (Reusable) =====
- // ===== FEATURE CARD (Reusable) =====
   Widget _buildFeatureCard({
     required IconData icon,
     required String label,
@@ -2678,8 +1994,8 @@ _buildAnimatedEntry(
       child: InkWell(
         onTap: onTap ?? () {},
         borderRadius: BorderRadius.circular(18),
-        splashColor: AppColors.midTeal.withValues(alpha: 0.15),
-        highlightColor: AppColors.midTeal.withValues(alpha: 0.08),
+        splashColor: AppColors.dustyBlueTeal.withValues(alpha: 0.15),
+        highlightColor: AppColors.dustyBlueTeal.withValues(alpha: 0.08),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -2687,14 +2003,14 @@ _buildAnimatedEntry(
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: AppColors.navyBlue.withValues(alpha: 0.08),
-                blurRadius: 14,
-                offset: const Offset(0, 5),
+                color: AppColors.navyBlue.withValues(alpha: 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
             border: Border.all(
-              color: AppColors.navyBlue.withValues(alpha: 0.22),
-              width: 1.6,
+              color: AppColors.dustyBlueTeal.withValues(alpha: 0.12),
+              width: 1,
             ),
           ),
           child: Column(
@@ -2705,12 +2021,8 @@ _buildAnimatedEntry(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: AppColors.midTeal.withValues(alpha: 0.12),
+                  color: const Color(0xFFE8F4F0),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.midTeal.withValues(alpha: 0.25),
-                    width: 1,
-                  ),
                 ),
                 child: iconPainter != null
                     ? CustomPaint(painter: iconPainter)
@@ -2732,6 +2044,7 @@ _buildAnimatedEntry(
       ),
     );
   }
+
   // ===== TODAY'S GUIDANCE =====
   Widget _buildTodaysGuidance() {
     return Padding(
@@ -2847,7 +2160,7 @@ _buildAnimatedEntry(
   }
 
   // ===== ZAKAT WEALTH MANAGEMENT TAB =====
-  Widget _buildZakatTab({bool isBottomSheet = false, bool isPage = false, ScrollController? scrollController}) {
+  Widget _buildZakatTab({bool isBottomSheet = false, ScrollController? scrollController}) {
     final bool isEligible = _totalZakatableWealth >= _nisabBDT;
     String formatBDT(double v) {
       if (v >= 1000000) return '৳${(v / 1000000).toStringAsFixed(2)}M';
@@ -2865,11 +2178,8 @@ _buildAnimatedEntry(
       key: const ValueKey('ZakatTab'),
       controller: scrollController,
       physics: const BouncingScrollPhysics(),
-      padding: (isBottomSheet || isPage)
-          ? EdgeInsets.only(
-              top: isPage ? MediaQuery.of(context).padding.top + 16 : 16,
-              bottom: 24 + (isPage ? MediaQuery.of(context).padding.bottom : 0),
-            )
+      padding: isBottomSheet
+          ? const EdgeInsets.only(top: 16, bottom: 24)
           : const EdgeInsets.only(top: 52, bottom: 90),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2907,7 +2217,7 @@ _buildAnimatedEntry(
                     ],
                   ),
                 ),
-                if (isBottomSheet || isPage)
+                if (isBottomSheet)
                   IconButton(
                     icon: const Icon(Icons.close_rounded, color: AppColors.navyBlue),
                     onPressed: () => Navigator.pop(context),
@@ -3034,27 +2344,19 @@ _buildAnimatedEntry(
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            const Icon(Icons.analytics_rounded,
-                                color: AppColors.navyBlue, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Metal Market Rates (BDT/g)',
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: AppColors.navyBlue,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      Row(
+                        children: [
+                          const Icon(Icons.analytics_rounded,
+                              color: AppColors.navyBlue, size: 20),
+                          const SizedBox(width: 8),
+                          Text('Metal Market Rates (BDT/g)',
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13.5,
+                                color: AppColors.navyBlue,
+                              )),
+                        ],
                       ),
-                      const SizedBox(width: 8),
                       if (_pricesLoading)
                         const SizedBox(
                           width: 12,
@@ -3181,7 +2483,7 @@ _buildAnimatedEntry(
             child: Column(
               children: [
                 _buildWealthInputRow(
-                  icon: Icons.account_balance_wallet_outlined,
+                  icon: Icons.savings_outlined,
                   label: 'Cash & Bank Savings',
                   sublabel: 'Includes cash on hand and account balances',
                   controller: _zakatCashCtrl,
@@ -3420,12 +2722,82 @@ _buildAnimatedEntry(
     );
   }
 
-  void _showZakatCalculatorSheet() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const ZakatManagerScreen(),
+  void _showQurbaniPlannerSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(28),
+          topRight: Radius.circular(28),
+        ),
       ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.9,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return QurbaniPlannerSheet(scrollController: scrollController);
+          },
+        );
+      },
     );
+  }
+
+  void _showZakatCalculatorSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(28),
+          topRight: Radius.circular(28),
+        ),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            _onZakatChangedCallback = () {
+              setSheetState(() {});
+            };
+            return DraggableScrollableSheet(
+              initialChildSize: 0.9,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: _buildZakatTab(
+                        isBottomSheet: true,
+                        scrollController: scrollController,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    ).then((_) {
+      _onZakatChangedCallback = null;
+    });
   }
 
   Widget _buildZakatStatChip(String label, String value, IconData icon) {
@@ -3688,24 +3060,27 @@ class _DashboardTwinklingStarState extends State<_DashboardTwinklingStar>
 
   @override
   Widget build(BuildContext context) {
-    // Use Align with FractionalOffset instead of LayoutBuilder + Positioned.
-    // Positioned must be a direct child of a Stack render object; wrapping it
-    // in a LayoutBuilder breaks that requirement and throws a ParentDataWidget
-    // assertion. FractionalOffset(x, y) maps [0,0]→top-left, [1,1]→bottom-right.
-    return Align(
-      alignment: FractionalOffset(widget.leftFraction, widget.topFraction),
-      child: AnimatedBuilder(
-        animation: _opacity,
-        builder: (context, child) {
-          return Opacity(
-            opacity: _opacity.value,
-            child: CustomPaint(
-              size: Size(widget.size, widget.size),
-              painter: _DashboardStarPainter(),
-            ),
-          );
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final parentWidth = constraints.maxWidth;
+        final parentHeight = constraints.maxHeight;
+        return Positioned(
+          top: widget.topFraction * parentHeight,
+          left: widget.leftFraction * parentWidth,
+          child: AnimatedBuilder(
+            animation: _opacity,
+            builder: (context, child) {
+              return Opacity(
+                opacity: _opacity.value,
+                child: CustomPaint(
+                  size: Size(widget.size, widget.size),
+                  painter: _DashboardStarPainter(),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
@@ -3787,12 +3162,10 @@ class _DashboardTexturePainter extends CustomPainter {
 class _NextPrayerCardDecorationPainter extends CustomPainter {
   final double cloudAnimationVal;
   final double pulseVal;
-  final String prayerName;
 
   _NextPrayerCardDecorationPainter({
     required this.cloudAnimationVal,
     required this.pulseVal,
-    this.prayerName = 'Fajr',
   });
 
   @override
@@ -3800,64 +3173,36 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
     final double w = size.width;
     final double h = size.height;
 
-    final bool isNight = prayerName == 'Fajr' || prayerName == 'Isha';
-    final bool isDaytime = prayerName == 'Dhuhr' || prayerName == 'Asr';
+    // 1. Draw Twinkling Sparkling Stars in the Card Sky
+    final starPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.35 + (0.35 * math.sin(pulseVal * math.pi)))
+      ..style = PaintingStyle.fill;
 
-    // 1. Draw Twinkling Stars — only for Fajr and Isha
-    if (isNight) {
-      final starPaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.35 + (0.35 * math.sin(pulseVal * math.pi)))
-        ..style = PaintingStyle.fill;
+    final List<Offset> starLocations = [
+      Offset(w * 0.15, h * 0.22),
+      Offset(w * 0.35, h * 0.12),
+      Offset(w * 0.48, h * 0.28),
+      Offset(w * 0.72, h * 0.18),
+      Offset(w * 0.90, h * 0.32),
+      Offset(w * 0.25, h * 0.35),
+    ];
 
-      final List<Offset> starLocations = [
-        Offset(w * 0.15, h * 0.22),
-        Offset(w * 0.35, h * 0.12),
-        Offset(w * 0.48, h * 0.28),
-        Offset(w * 0.72, h * 0.18),
-        Offset(w * 0.90, h * 0.32),
-        Offset(w * 0.25, h * 0.35),
-      ];
-
-      for (var offset in starLocations) {
-        _drawSparklingStar(canvas, offset, 5.0, starPaint);
-      }
+    for (var offset in starLocations) {
+      _drawSparklingStar(canvas, offset, 5.0, starPaint);
     }
 
-    // 2. Draw a glowing sun for daytime prayers (Dhuhr, Asr)
-    if (isDaytime) {
-      final sunGlow = Paint()
-        ..color = Colors.white.withValues(alpha: 0.10 + 0.06 * math.sin(pulseVal * math.pi))
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18);
-      canvas.drawCircle(Offset(w * 0.82, h * 0.22), 32, sunGlow);
-      final sunCore = Paint()
-        ..color = Colors.white.withValues(alpha: 0.22)
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(Offset(w * 0.82, h * 0.22), 16, sunCore);
-    }
-
-    // 3. Draw a warm glow orb for Maghrib
-    if (prayerName == 'Maghrib') {
-      final glowPaint = Paint()
-        ..color = const Color(0xFFFF9966).withValues(alpha: 0.18 + 0.07 * math.sin(pulseVal * math.pi))
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 22);
-      canvas.drawCircle(Offset(w * 0.80, h * 0.25), 38, glowPaint);
-    }
-
-    // 4. Draw Translucent Floating Clouds
-    final cloudAlpha = isDaytime ? 0.12 : 0.08;
+    // 2. Draw Translucent Floating Clouds
     final cloudPaint = Paint()
-      ..color = Colors.white.withValues(alpha: cloudAlpha)
+      ..color = Colors.white.withValues(alpha: 0.08)
       ..style = PaintingStyle.fill;
 
     // Cloud 1: Slow top drift
     double cx1 = (w * cloudAnimationVal + w * 0.2) % (w + 80) - 40;
     _drawCloud(canvas, Offset(cx1, h * 0.20), 22, cloudPaint);
 
-    // Cloud 2: Faster middle drift (hidden at night)
-    if (!isNight) {
-      double cx2 = (w * 1.5 * cloudAnimationVal + w * 0.6) % (w + 100) - 50;
-      _drawCloud(canvas, Offset(cx2, h * 0.38), 28, cloudPaint);
-    }
+    // Cloud 2: Faster middle drift
+    double cx2 = (w * 1.5 * cloudAnimationVal + w * 0.6) % (w + 100) - 50;
+    _drawCloud(canvas, Offset(cx2, h * 0.38), 28, cloudPaint);
 
     // 3. Draw Silhouette Mosque Vector at the Bottom Right
     final mosquePaint = Paint()
@@ -3959,8 +3304,7 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _NextPrayerCardDecorationPainter oldDelegate) {
     return oldDelegate.cloudAnimationVal != cloudAnimationVal ||
-        oldDelegate.pulseVal != pulseVal ||
-        oldDelegate.prayerName != prayerName;
+        oldDelegate.pulseVal != pulseVal;
   }
 }
 
@@ -4107,7 +3451,6 @@ class _CrescentMoonPainter extends CustomPainter {
 }
 
 // ===== MOSQUE SILHOUETTE PAINTER (Renders splash screen mosque silhouette in header) =====
-// ===== FULL RICH MOSQUE SILHOUETTE (matching splash screen style) =====
 class _MosqueSilhouettePainter extends CustomPainter {
   final String selectedScene;
 
@@ -4118,138 +3461,131 @@ class _MosqueSilhouettePainter extends CustomPainter {
     final double w = size.width;
     final double h = size.height;
 
-    // Pick palette per scene — same logic as before but with richer fill details
-    Color navyC, tealC, whiteC;
+    // Determine colored mosque palette based on scene
+    Color baseColor;
+    Color highlightColor;
     switch (selectedScene) {
       case 'Fajr':
-        navyC  = const Color(0xFF1D2D44);
-        tealC  = const Color(0xFF4A7C74);
-        whiteC = const Color(0xFFB8CEDE);
+        baseColor = const Color(0xFF1D2D44);
+        highlightColor = const Color(0xFF8FA89B); // Early dawn mint-teal highlight
         break;
       case 'Sunrise':
-        navyC  = const Color(0xFF5D3A1A);
-        tealC  = const Color(0xFFD4854A);
-        whiteC = const Color(0xFFFFE9D6);
+        baseColor = const Color(0xFF4E342E); // Warm wood brown
+        highlightColor = const Color(0xFFFFD3B6); // Peach/rose highlight
         break;
       case 'Dhuhr':
-        navyC  = const Color(0xFF0D47A1);
-        tealC  = const Color(0xFF1976D2);
-        whiteC = Colors.white;
+        baseColor = const Color(0xFF0D47A1); // Deep pure sky blue
+        highlightColor = Colors.white.withValues(alpha: 0.95);
         break;
       case 'Asr':
-        navyC  = const Color(0xFF1B5E8A);
-        tealC  = const Color(0xFF4FA8D2);
-        whiteC = const Color(0xFFE0F7FA);
+        baseColor = const Color(0xFF4FA8D2); // Beautiful soft blue type
+        highlightColor = const Color(0xFFE0F7FA); // Soft cyan/blue highlight
         break;
       case 'Maghrib':
-        navyC  = const Color(0xFF4A1942);
-        tealC  = const Color(0xFFB05C8A);
-        whiteC = const Color(0xFFFFD4E8);
+        baseColor = const Color(0xFF3F1D38); // Soft plum twilight base
+        highlightColor = const Color(0xFFFFCCD5); // Soft sunset pink highlight
         break;
       case 'Isha':
       default:
-        navyC  = const Color(0xFF0A1628);
-        tealC  = const Color(0xFF1A3050);
-        whiteC = const Color(0xFF7B93B0);
+        baseColor = const Color(0xFF0F172A); // Midnight navy black base
+        highlightColor = const Color(0xFF64748B); // Silver-blue twilight highlight
         break;
     }
 
-    final paintNavy  = Paint()..color = navyC ..style = PaintingStyle.fill;
-    final paintTeal  = Paint()..color = tealC ..style = PaintingStyle.fill;
-    final paintWhite = Paint()..color = whiteC..style = PaintingStyle.fill;
+    final paintBase = Paint()
+      ..color = baseColor
+      ..style = PaintingStyle.fill;
 
-    // ── 1. Side domes (teal, background) ────────────────────────────
-    _drawOnionDome(canvas, w * 0.28, h * 0.68, w * 0.16, h * 0.26, paintTeal);
-    _drawOnionDome(canvas, w * 0.72, h * 0.68, w * 0.16, h * 0.26, paintTeal);
+    final paintHighlight = Paint()
+      ..color = highlightColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
 
-    // ── 2. Central building walls (white) ───────────────────────────
-    final wallPath = Path()
-      ..moveTo(w * 0.12, h)
-      ..lineTo(w * 0.12, h * 0.70)
-      ..lineTo(w * 0.88, h * 0.70)
-      ..lineTo(w * 0.88, h)
-      ..close();
-    canvas.drawPath(wallPath, paintWhite);
+    final double cx = size.width * 0.5;
+    final double domeW = size.width * 0.38;
+    final double domeH = h * 0.50;
+    final double domeY = h * 0.62;
 
-    // ── 3. Central dome (navy) ───────────────────────────────────────
-    _drawOnionDome(canvas, w * 0.50, h * 0.65, w * 0.32, h * 0.42, paintNavy);
+    // 1. Draw central building body under the dome
+    final double bodyLeft = cx - domeW * 0.5;
+    final double bodyRight = cx + domeW * 0.5;
+    final double bodyTop = domeY;
+    final double bodyBottom = h;
+    final Rect bodyRect = Rect.fromLTRB(bodyLeft, bodyTop, bodyRight, bodyBottom);
+    canvas.drawRect(bodyRect, paintBase);
+    canvas.drawRect(bodyRect, paintHighlight);
 
-    // Crescent + spire on center dome
-    final double spireTop = h * 0.65 - h * 0.42 - 8;
-    final spirePaint = Paint()
-      ..color = whiteC
-      ..strokeWidth = 1.6
-      ..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(w * 0.50, h * 0.65 - h * 0.42), Offset(w * 0.50, spireTop), spirePaint);
-    canvas.drawCircle(Offset(w * 0.50, spireTop), 2.2, paintWhite);
-
-    // ── 4. Arched entrance door (navy) ──────────────────────────────
-    final double doorCx = w * 0.50;
-    final double doorW  = w * 0.12;
-    final double doorH  = h * 0.30;
-    final double doorTop = h - doorH;
-    final doorPath = Path()
-      ..moveTo(doorCx - doorW / 2, h)
-      ..lineTo(doorCx - doorW / 2, doorTop + doorW * 0.5)
-      ..quadraticBezierTo(doorCx, doorTop - doorW * 0.3, doorCx + doorW / 2, doorTop + doorW * 0.5)
-      ..lineTo(doorCx + doorW / 2, h)
-      ..close();
-    canvas.drawPath(doorPath, paintNavy);
-
-    // Side windows (two small arched windows)
-    for (final wx in [w * 0.35, w * 0.65]) {
-      final winW = w * 0.07;
-      final winH = h * 0.16;
-      final winTop = h - winH - h * 0.06;
-      final winPath = Path()
-        ..moveTo(wx - winW / 2, h - h * 0.06)
-        ..lineTo(wx - winW / 2, winTop + winW * 0.5)
-        ..quadraticBezierTo(wx, winTop - winW * 0.2, wx + winW / 2, winTop + winW * 0.5)
-        ..lineTo(wx + winW / 2, h - h * 0.06)
-        ..close();
-      canvas.drawPath(winPath, paintNavy);
-    }
-
-    // Ground floor fill
-    canvas.drawRect(Rect.fromLTRB(0, h * 0.92, w, h), paintWhite);
-
-    // ── 5. Left minaret ──────────────────────────────────────────────
-    _drawMinaret(canvas, w * 0.14, h, w * 0.07, h * 0.90, paintWhite, paintTeal);
-
-    // ── 6. Right minaret ─────────────────────────────────────────────
-    _drawMinaret(canvas, w * 0.86, h, w * 0.07, h * 0.90, paintWhite, paintTeal);
-  }
-
-  void _drawOnionDome(Canvas canvas, double cx, double by, double width, double height, Paint paint) {
+    // 2. Draw central dome
     final path = Path();
-    final double w2    = width / 2;
-    final double bulge = width * 0.08;
-    path.moveTo(cx - w2, by);
+    final double bulge = domeW * 0.08;
+    path.moveTo(cx - domeW / 2, domeY);
     path.cubicTo(
-      cx - w2 - bulge, by - height * 0.35,
-      cx - w2 + bulge * 0.2, by - height * 0.75,
-      cx, by - height,
+      cx - domeW / 2 - bulge, domeY - domeH * 0.35,
+      cx - domeW / 2 + bulge * 0.2, domeY - domeH * 0.75,
+      cx, domeY - domeH,
     );
     path.cubicTo(
-      cx + w2 - bulge * 0.2, by - height * 0.75,
-      cx + w2 + bulge, by - height * 0.35,
-      cx + w2, by,
+      cx + domeW / 2 - bulge * 0.2, domeY - domeH * 0.75,
+      cx + domeW / 2 + bulge, domeY - domeH * 0.35,
+      cx + domeW / 2, domeY,
     );
     path.close();
-    canvas.drawPath(path, paint);
-  }
+    canvas.drawPath(path, paintBase);
+    canvas.drawPath(path, paintHighlight);
 
-  void _drawMinaret(Canvas canvas, double cx, double by, double width, double height,
-      Paint paintBody, Paint paintCap) {
-    final double colW     = width * 0.55;
-    final double balconyW = width * 1.15;
-    // Column
-    canvas.drawRect(Rect.fromLTRB(cx - colW / 2, by - height, cx + colW / 2, by), paintBody);
-    // Balconies
-    canvas.drawRect(Rect.fromLTRB(cx - balconyW / 2, by - height * 0.72, cx + balconyW / 2, by - height * 0.69), paintBody);
-    canvas.drawRect(Rect.fromLTRB(cx - balconyW / 2, by - height - 2,     cx + balconyW / 2, by - height),         paintBody);
-    // Onion dome cap
-    _drawOnionDome(canvas, cx, by - height - 2, width * 0.75, height * 0.13, paintCap);
+    // Spire
+    final spirePaint = Paint()
+      ..color = paintBase.color
+      ..strokeWidth = 1.6
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(Offset(cx, domeY - domeH), Offset(cx, domeY - domeH - 12), spirePaint);
+    canvas.drawCircle(Offset(cx, domeY - domeH - 12), 1.5, paintBase);
+
+    // 3. Draw Arched Entrance Doorway
+    final double doorW = domeW * 0.32;
+    final double doorH = h * 0.28;
+    final double doorY = h - doorH;
+    
+    final doorPath = Path()
+      ..moveTo(cx - doorW / 2, h)
+      ..lineTo(cx - doorW / 2, doorY + doorW * 0.4)
+      ..quadraticBezierTo(cx, doorY - doorW * 0.25, cx + doorW / 2, doorY + doorW * 0.4)
+      ..lineTo(cx + doorW / 2, h)
+      ..close();
+      
+    final doorPaint = Paint()
+      ..color = highlightColor.withValues(alpha: 0.35)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(doorPath, doorPaint);
+    canvas.drawPath(doorPath, paintHighlight);
+
+    // 4. Draw Left Minaret
+    final double minW = w * 0.09;
+    final double minH = h * 0.88;
+    final double minX = w * 0.20;
+    canvas.drawRect(Rect.fromLTRB(minX - minW / 2, h - minH, minX + minW / 2, h), paintBase);
+
+    final capW = minW * 1.3;
+    final capH = minH * 0.16;
+    final capY = h - minH;
+    final capPath = Path()
+      ..moveTo(minX - capW / 2, capY)
+      ..lineTo(minX + capW / 2, capY)
+      ..lineTo(minX, capY - capH)
+      ..close();
+    canvas.drawPath(capPath, paintBase);
+    canvas.drawPath(capPath, paintHighlight);
+
+    // 5. Draw Right Minaret
+    final double minX2 = w * 0.80;
+    canvas.drawRect(Rect.fromLTRB(minX2 - minW / 2, h - minH, minX2 + minW / 2, h), paintBase);
+    final capPath2 = Path()
+      ..moveTo(minX2 - capW / 2, capY)
+      ..lineTo(minX2 + capW / 2, capY)
+      ..lineTo(minX2, capY - capH)
+      ..close();
+    canvas.drawPath(capPath2, paintBase);
+    canvas.drawPath(capPath2, paintHighlight);
   }
 
   @override
@@ -4694,51 +4030,4 @@ class _SparklinePainter extends CustomPainter {
     return oldDelegate.data != data || oldDelegate.lineColor != lineColor;
   }
 
-}
-
-// ===== ZAKAT CALCULATOR FULL SCREEN PAGE =====
-class _ZakatCalculatorPage extends StatefulWidget {
-  final _DashboardScreenState dashboardState;
-
-  const _ZakatCalculatorPage({required this.dashboardState});
-
-  @override
-  State<_ZakatCalculatorPage> createState() => _ZakatCalculatorPageState();
-}
-
-class _ZakatCalculatorPageState extends State<_ZakatCalculatorPage> {
-  @override
-  void initState() {
-    super.initState();
-    widget.dashboardState._onZakatChangedCallback = () {
-      if (mounted) setState(() {});
-    };
-  }
-
-  @override
-  void dispose() {
-    widget.dashboardState._onZakatChangedCallback = null;
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFE8E8E8),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 430),
-          child: Scaffold(
-            backgroundColor: Colors.white,
-            body: SafeArea(
-              top: false,
-              child: widget.dashboardState._buildZakatTab(
-                isPage: true,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
