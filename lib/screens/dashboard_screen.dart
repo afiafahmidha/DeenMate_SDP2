@@ -11,7 +11,10 @@ import 'package:intl/intl.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
 import 'calendar_tab.dart';
+import 'hajj_umrah_screen.dart';
+import 'inheritance_screen.dart';
 import 'qurbani_planner_screen.dart';
+import 'zakat_manager_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -1864,6 +1867,24 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  void _openHajjUmrahPlanner() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const HajjUmrahPlannerScreen()),
+    );
+  }
+
+  void _openInheritanceGuide() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const InheritanceGuideScreen()),
+    );
+  }
+
+  void _openZakatManager() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ZakatManagerScreen()),
+    );
+  }
+
   // ===== SECTION TITLE =====
   Widget _buildSectionTitle(String title) {
     return Padding(
@@ -1891,9 +1912,9 @@ class _DashboardScreenState extends State<DashboardScreen>
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.calculate_rounded,
-                  label: 'Zakat Calculator',
+                  label: 'Zakat Manager',
                   iconPainter: _ZakatIconPainter(),
-                  onTap: _showZakatCalculatorSheet,
+                  onTap: _openZakatManager,
                 ),
               ),
               const SizedBox(width: 14),
@@ -1915,6 +1936,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.flight_takeoff_rounded,
                   label: 'Hajj & Umrah',
                   iconPainter: _HajjIconPainter(),
+                  onTap: _openHajjUmrahPlanner,
                 ),
               ),
               const SizedBox(width: 14),
@@ -1923,6 +1945,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   icon: Icons.account_balance_rounded,
                   label: 'Inheritance',
                   iconPainter: _InheritanceIconPainter(),
+                  onTap: _openInheritanceGuide,
                 ),
               ),
             ],
