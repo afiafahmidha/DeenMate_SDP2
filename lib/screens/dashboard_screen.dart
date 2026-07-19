@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -282,7 +282,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       final prefs = await SharedPreferences.getInstance();
       setState(() {
         _lastDateToday = prefs.getString('kaza_last_date') ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
-        
+
         for (final key in _kazaCounts.keys) {
           _kazaCounts[key] = prefs.getInt('kaza_count_$key') ?? 0;
         }
@@ -878,9 +878,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         return _buildPrayerTab();
       case 2:
         return _buildCalendarTab();
-        return CalendarTab(
-          onOpenZakatCalculator: _showZakatCalculatorSheet,
-        );
       default:
         return _buildPlaceholderTab();
     }
@@ -912,13 +909,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           // Today's Guidance Section
           _buildAnimatedEntry(
             delay: 0.15,
-            child: _buildTodaysGuidance(),
-          ),
-          const SizedBox(height: 28),
-
-          // Islamic Wealth Section
-          _buildAnimatedEntry(
-            delay: 0.2,
             child: _buildTodaysGuidance(),
           ),
           const SizedBox(height: 28),
@@ -1399,7 +1389,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 final item = prayerItems[index];
                 final String pName = item['name'];
                 final String pTime = item['time'];
-                
+
                 // Highlight when card is either the active next prayer OR selected by the user scene
                 final bool isSceneSelected = (pName == _selectedPrayerScene);
                 final bool isActive = (pName == currentPrayer);
@@ -1540,7 +1530,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     });
                                     // Schedule or cancel system notification for this prayer
                                     _syncAlarms();
-                                    // Show snackbar feedback
                                     // Show snackbar feedback
                                     if (mounted) {
                                       ScaffoldMessenger.of(context).clearSnackBars();
@@ -1978,7 +1967,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                     );
                   },
-                  onTap: _showZakatCalculatorSheet,
                 ),
               ),
               const SizedBox(width: 14),
@@ -2074,65 +2062,55 @@ class _DashboardScreenState extends State<DashboardScreen>
     CustomPainter? iconPainter,
     VoidCallback? onTap,
   }) {
-    return Container(
-      decoration: BoxDecoration(
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap ?? () {},
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AppColors.dustyBlueTeal.withValues(alpha: 0.55),
-          width: 1.5,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap ?? () {},
-          borderRadius: BorderRadius.circular(16),
-          splashColor: AppColors.dustyBlueTeal.withValues(alpha: 0.15),
-          highlightColor: AppColors.dustyBlueTeal.withValues(alpha: 0.08),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.navyBlue.withValues(alpha: 0.05),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        splashColor: AppColors.dustyBlueTeal.withValues(alpha: 0.15),
+        highlightColor: AppColors.dustyBlueTeal.withValues(alpha: 0.08),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.dustyBlueTeal.withValues(alpha: 0.55),
+              width: 1.5,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Icon container with custom vector art
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8F4F0),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: iconPainter != null
-                      ? CustomPaint(painter: iconPainter)
-                      : Icon(icon, color: AppColors.navyBlue, size: 22),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navyBlue.withValues(alpha: 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F4F0),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 14),
-                Text(
-                  label,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.navyBlue,
-                    letterSpacing: 0.1,
-                  ),
+                child: iconPainter != null
+                    ? CustomPaint(painter: iconPainter)
+                    : Icon(icon, color: AppColors.navyBlue, size: 22),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.navyBlue,
+                  letterSpacing: 0.1,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -2206,7 +2184,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final daysInM = _daysInMonth(_calendarViewDate);
 
     final monthName = DateFormat('MMMM yyyy').format(_calendarViewDate);
-    
+
     final startHijri = _getHijriDateStringFor(DateTime(year, month, 1));
     final endHijri = _getHijriDateStringFor(DateTime(year, month, daysInM));
     final hijriYear = year - 578;
@@ -2827,8 +2805,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ===== ZAKAT WEALTH MANAGEMENT BODY =====
-  Widget _buildZakatTabBody(BuildContext context) {
   // ===== ZAKAT WEALTH MANAGEMENT TAB =====
   Widget _buildZakatTab({bool isBottomSheet = false, ScrollController? scrollController}) {
     final bool isEligible = _totalZakatableWealth >= _nisabBDT;
@@ -2848,7 +2824,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       key: const ValueKey('ZakatTab'),
       controller: scrollController,
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.only(top: 16, bottom: 20),
       padding: isBottomSheet
           ? const EdgeInsets.only(top: 16, bottom: 24)
           : const EdgeInsets.only(top: 52, bottom: 90),
@@ -3279,7 +3254,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   _buildStatementLine('Receivables & Loans', _zakatReceivableCtrl.text),
                   const Divider(height: 24, thickness: 1, color: Color(0xFFEEEEEE)),
                   _buildStatementLine('Total Gross Assets',
-                      (double.tryParse(_zakatCashCtrl.text.replaceAll(',', '')) ?? 0 +
+                      ((double.tryParse(_zakatCashCtrl.text.replaceAll(',', '')) ?? 0) +
                               goldVal +
                               silverVal +
                               (double.tryParse(_zakatStocksCtrl.text.replaceAll(',', '')) ?? 0) +
@@ -3918,13 +3893,13 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
   void _drawMosqueSilhouette(Canvas canvas, double cx, double by, double width, double height, Paint paint) {
     final path = Path();
     final double w2 = width / 2;
-    
+
     // Main Dome
     final domeH = height * 0.55;
     final domeW = width * 0.6;
     final domeX = cx;
     final domeY = by - height * 0.4;
-    
+
     final double bulge = domeW * 0.08;
     path.moveTo(domeX - domeW / 2, domeY);
     path.cubicTo(
@@ -3945,7 +3920,7 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
     final min1H = height * 0.85;
     final min1X = cx - w2 + min1W * 0.6;
     canvas.drawRect(Rect.fromLTRB(min1X - min1W / 2, by - min1H, min1X + min1W / 2, by), paint);
-    
+
     final capW = min1W * 1.2;
     final capH = min1H * 0.18;
     final capY = by - min1H;
@@ -4216,14 +4191,14 @@ class _MosqueSilhouettePainter extends CustomPainter {
     final double doorW = domeW * 0.32;
     final double doorH = h * 0.28;
     final double doorY = h - doorH;
-    
+
     final doorPath = Path()
       ..moveTo(cx - doorW / 2, h)
       ..lineTo(cx - doorW / 2, doorY + doorW * 0.4)
       ..quadraticBezierTo(cx, doorY - doorW * 0.25, cx + doorW / 2, doorY + doorW * 0.4)
       ..lineTo(cx + doorW / 2, h)
       ..close();
-      
+
     final doorPaint = Paint()
       ..color = highlightColor.withValues(alpha: 0.35)
       ..style = PaintingStyle.fill;
@@ -4700,7 +4675,6 @@ class _SparklinePainter extends CustomPainter {
   bool shouldRepaint(covariant _SparklinePainter oldDelegate) {
     return oldDelegate.data != data || oldDelegate.lineColor != lineColor;
   }
-
 }
 
 // ===== ZAKAT CALCULATOR PAGE (Sub-page) =====
@@ -4730,8 +4704,7 @@ class _ZakatCalculatorPage extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: parentState._buildZakatTabBody(context),
+      body: parentState._buildZakatTab(),
     );
   }
 }
-
