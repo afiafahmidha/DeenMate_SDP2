@@ -46,8 +46,6 @@ dependencies:
   timezone: ^0.9.4
   shared_preferences: ^2.2.3
   url_launcher: ^6.3.1
-  pdf: ^3.10.8
-  printing: ^5.11.1
 
 dev_dependencies:
   flutter_test:
@@ -79,7 +77,6 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - assets/images/
     - assets/images/header_art.svg
     - assets/images/islamic_events/islamic_new_year/
     - assets/images/islamic_events/ashura/
