@@ -230,50 +230,54 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
                   // 6. Branding Center Layout (Calligraphy Logo + Text)
                   Center(
-                    child: Column(
-                      children: [
-                        SizedBox(height: size.height * 0.18),
-                        // Arabic Calligraphy Logo (scales up)
-                        Transform.scale(
-                          scale: _logoScale.value,
-                          child: const AppLogo(size: 85),
-                        ),
-                        const SizedBox(height: 18),
-                        // Logo title: GoogleFonts.playfairDisplay (original registration logo style)
-                        Opacity(
-                          opacity: _textFadeIn.value,
-                          child: Text(
-                            'DeenMate',
-                            style: GoogleFonts.playfairDisplay(
-                              fontSize: 42,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.navyBlue,
-                              letterSpacing: 1.0,
-                              shadows: [
-                                Shadow(
-                                  color: AppColors.white.withValues(alpha: 0.4),
-                                  offset: const Offset(0, 2),
-                                  blurRadius: 4,
-                                ),
-                              ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Arabic Calligraphy Logo (scales up)
+                          Transform.scale(
+                            scale: _logoScale.value,
+                            child: const AppLogo(size: 85),
+                          ),
+                          const SizedBox(height: 18),
+                          // Logo title: GoogleFonts.playfairDisplay (original registration logo style)
+                          Opacity(
+                            opacity: _textFadeIn.value,
+                            child: Text(
+                              'DeenMate',
+                              style: GoogleFonts.playfairDisplay(
+                                fontSize: 42,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.navyBlue,
+                                letterSpacing: 1.0,
+                                shadows: [
+                                  Shadow(
+                                    color: AppColors.white.withValues(alpha: 0.4),
+                                    offset: const Offset(0, 2),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        // Subtitle: GoogleFonts.inter (original registration subtitle style)
-                        Opacity(
-                          opacity: _subtitleFadeIn.value,
-                          child: Text(
-                            'YOUR AI-POWERED ISLAMIC LIFESTYLE COMPANION',
-                            style: GoogleFonts.inter(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.navyBlue.withValues(alpha: 0.7),
-                              letterSpacing: 1.8,
+                          const SizedBox(height: 6),
+                          // Subtitle: GoogleFonts.inter (original registration subtitle style)
+                          Opacity(
+                            opacity: _subtitleFadeIn.value,
+                            child: Text(
+                              'YOUR AI-POWERED ISLAMIC LIFESTYLE COMPANION',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.navyBlue.withValues(alpha: 0.7),
+                                letterSpacing: 1.8,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
