@@ -1,10 +1,8 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:adhan/adhan.dart';
 import '../widgets/auth_header.dart'; // Import AppColors
-
 // ===== HIJRI DATE MODEL =====
 class HijriDate {
   final int year;
@@ -49,7 +47,6 @@ class HijriDate {
     }
     return '$day $monthName $year AH';
   }
-
   static String _toBengaliNumber(int number) {
     const englishDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
@@ -60,13 +57,7 @@ class HijriDate {
     return result;
   }
 }
-
 // ===== HIJRI CONVERTER =====
-// NOTE: Still a tabular approximation with manual Gregorian overrides for
-// 2026/2027. Swapping this for a true Umm al-Qura calculation (or a moon-
-// sighting service) is tracked separately — flagging it here so it isn't
-// lost, since the roadmap message calls for events to be driven off that
-// calculation rather than off this table.
 class HijriConverter {
   static int gToJd(int y, int m, int d) {
     if (m < 3) {
@@ -80,8 +71,8 @@ class HijriConverter {
     int f = (30.6001 * (m + 1)).floor();
     return c + d + e + f - 1524;
   }
-
   static HijriDate jdToH(int jd) {
+    // 16 July 622 CE is JD 1948440
     int jdShift = jd - 1948440 + 10632;
     int cycle = (jdShift / 10631).floor();
     int rem = jdShift % 10631;
@@ -115,13 +106,12 @@ class HijriConverter {
     }
     return HijriDate(hYear, hMonth, hDay);
   }
-
   static HijriDate fromGregorian(DateTime date) {
+    // Basic tabular calculation. Add +1 adjustment to match standard moon calendars in South Asia
     int jd = gToJd(date.year, date.month, date.day);
     return jdToH(jd);
   }
 }
-
 // ===== ISLAMIC EVENT MODEL =====
 class IslamicEvent {
   final String title;
@@ -133,14 +123,6 @@ class IslamicEvent {
   final List<String> activities;
   final List<String> activitiesBengali;
   final Color themeColor;
-  final String? backgroundImagePath;
-  // NEW: set of photos shown as an auto-scrolling carousel on the detail
-  // page hero, instead of a flat theme-color gradient. Put 5-6 related
-  // images per event at these paths (and register the folder in
-  // pubspec.yaml). If left empty, the hero falls back to
-  // backgroundImagePath (single image) and finally to a themeColor
-  // gradient — nothing breaks if the assets aren't there yet.
-  final List<String> heroImages;
   const IslamicEvent({
     required this.title,
     required this.titleBengali,
@@ -150,20 +132,10 @@ class IslamicEvent {
     required this.historyBengali,
     required this.activities,
     required this.activitiesBengali,
-    this.themeColor = const Color(0xFFEB8A6C),
-    this.backgroundImagePath,
-    this.heroImages = const [],
+    this.themeColor = const Color(0xFFEB8A6C), // Coral accent
   });
-
-  // Resolves the actual list of images to show in the hero carousel,
-  // falling back gracefully so nothing crashes before real assets exist.
-  List<String> get carouselImages {
-    if (heroImages.isNotEmpty) return heroImages;
-    if (backgroundImagePath != null) return [backgroundImagePath!];
-    return const [];
-  }
 }
-
+// ===== ISLAMIC EVENTS DATABASE =====
 class CalendarDatabase {
   // Key: Month/Day as "Month-Day"
   static final Map<String, IslamicEvent> hijriEvents = {
@@ -171,9 +143,9 @@ class CalendarDatabase {
       title: 'Islamic New Year',
       titleBengali: 'হিজরি নববর্ষ',
       description: 'First day of the Hijri year. It marks the migration of Prophet Muhammad (PBUH) from Makkah to Madinah.',
-      descriptionBengali: 'হিজরি সনের প্রথম দিন। এটি মহানবী হযরত মুহাম্মদ (সা.)-এর মক্কা থেকে মদিনায় হিজরতের স্মৃতি বহন করে।',
+      descriptionBengali: 'হিজরি সনের প্রথম দিন। এটি মহানবী হযরত মুহাম্মদ (সা.)-এর মক্কা থেকে মদিনায় হিজরতের স্মৃতি বহন করে।',
       history: 'The Islamic calendar was introduced during the caliphate of Umar ibn al-Khattab, choosing the Hijrah (migration) in 622 CE as the starting point of the calendar because it marked the establishment of the first sovereign Muslim community.',
-      historyBengali: 'হযরত ওমর ফারুক (রা.)-এর খেলাফতকালে হিজরি সন প্রবর্তন করা হয়। ৬২২ খ্রিস্টাব্দের হিজরতকে ইসলামি বর্ষপঞ্জির সূচনা হিসেবে বেছে নেওয়া হয়েছিল কারণ এটি প্রথম মুসলিম সমাজ গঠনের মাইলফলক ছিল।',
+      historyBengali: 'হযরত ওমর ফারুক (রা.)-এর খেলাফতকালে হিজরি সন প্রবর্তন করা হয়। ৬২২ খ্রিস্টাব্দের হিজরতকে ইসলামি বর্ষপঞ্জির সূচনা হিসেবে বেছে নেওয়া হয়েছিল কারণ এটি প্রথম মুসলিম সমাজ গঠনের মাইলফলক ছিল।',
       activities: [
         'Reflect on the lessons of Hijrah (sacrifice, perseverance, and brotherhood).',
         'Make resolutions for spiritual improvement in the new year.',
@@ -181,28 +153,19 @@ class CalendarDatabase {
         'Read about the early history of Madinah and the Ansar.',
       ],
       activitiesBengali: [
-        'হিজরতের শিক্ষা (ত্যাগ, ধৈর্য এবং ভ্রাতৃত্ব) নিয়ে চিন্তা করা।',
+        'হিজরতের শিক্ষা (ত্যাগ, ধৈর্য এবং ভ্রাতৃত্ব) নিয়ে চিন্তা করা।',
         'নতুন বছরে আধ্যাত্মিক উন্নতির জন্য বিশেষ সংকল্প করা।',
-        'নফল নামাজ আদায় এবং বিগত বছরের গুনাহের জন্য ক্ষমাপ্রার্থনা করা।',
-        'মদিনার প্রারম্ভিক ইতিহাস ও আনসারদের অবদান সম্পর্কে অধ্যয়ন করা।',
-      ],
-      backgroundImagePath: 'assets/images/islamic_events/islamic_new_year.jpg',
-      heroImages: [
-        'assets/images/islamic_events/islamic_new_year/1.jpg',
-        'assets/images/islamic_events/islamic_new_year/2.jpg',
-        'assets/images/islamic_events/islamic_new_year/3.jpg',
-        'assets/images/islamic_events/islamic_new_year/4.jpg',
-        'assets/images/islamic_events/islamic_new_year/5.jpg',
-        'assets/images/islamic_events/islamic_new_year/6.jpg',
+        'নফল নামাজ আদায় এবং বিগত বছরের গুনাহের জন্য ক্ষমাপ্রার্থনা করা।',
+        'মদিনার প্রারম্ভিক ইতিহাস ও আনসারদের অবদান সম্পর্কে অধ্যয়ন করা।',
       ],
     ),
     '1-10': const IslamicEvent(
       title: 'Day of Ashura',
       titleBengali: 'পবিত্র আশুরা',
       description: 'The 10th of Muharram is a day of historic deliverance, gratitude, and remembrance of sacrifices.',
-      descriptionBengali: 'মহররমের ১০ তারিখ একটি ঐতিহাসিক মুক্তি, কৃতজ্ঞতা ও আত্মত্যাগের স্মৃতিবিজড়িত দিন।',
+      descriptionBengali: 'মহররমের ১০ তারিখ একটি ঐতিহাসিক মুক্তি, কৃতজ্ঞতা ও আত্মত্যাগের স্মৃতিবিজড়িত দিন।',
       history: 'On this day, Allah split the Red Sea to deliver Prophet Musa (Moses) and the Children of Israel from the tyranny of Pharaoh. It is also the day of the tragic martyrdom of Imam Hussain (RA), the grandson of the Prophet, at the Battle of Karbala while standing up against injustice.',
-      historyBengali: 'এই দিনে আল্লাহ তায়ালা লোহিত সাগর দ্বিখণ্ডিত করে হযরত মুসা (আ.) ও বনী ইসরাইলকে ফেরাউনের অত্যাচার থেকে রক্ষা করেছিলেন। এছাড়াও, এই দিনে মহানবী (সা.)-এর দৌহিত্র হযরত ইমাম হোসাইন (রা.) কারবালার ময়দানে অন্যায়ের বিরুদ্ধে লড়াই করে শাহাদাত বরণ করেন।',
+      historyBengali: 'এই দিনে আল্লাহ তায়ালা লোহিত সাগর দ্বিখণ্ডিত করে হযরত মুসা (আ.) ও বনী ইসরাইলকে ফেরাউনের অত্যাচার থেকে রক্ষা করেছিলেন। এছাড়াও, এই দিনে মহানবী (সা.)-এর দৌহিত্র হযরত ইমাম হোসাইন (রা.) কারবালার ময়দানে অন্যায়ের বিরুদ্ধে লড়াই করে শাহাদাত বরণ করেন।',
       activities: [
         'Fast on the 10th of Muharram, along with either the 9th or 11th (expiates the sins of the previous year).',
         'Provide generous meals and charity to family, relatives, and the poor.',
@@ -210,21 +173,12 @@ class CalendarDatabase {
         'Reflect on Imam Hussain\'s bravery in standing up for justice and the truth.',
       ],
       activitiesBengali: [
-        'মহররমের ১০ তারিখ রোজা রাখা এবং এর সাথে মিলিয়ে ৯ বা ১১ তারিখে আরেকটি রোজা রাখা (যা বিগত এক বছরের গুনাহ মাফ করে)।',
+        'মহররমের ১০ তারিখ রোজা রাখা এবং এর সাথে মিলিয়ে ৯ বা ১১ তারিখে আরেকটি রোজা রাখা (যা বিগত এক বছরের গুনাহ মাফ করে)।',
         'পরিবার ও অভাবীদের জন্য উন্নত মানের খাবার এবং দান-সদকার ব্যবস্থা করা।',
         'অনিক পরিমাণে ইস্তিগফার ও দরূদ পাঠ করা।',
-        'অন্যায়ের বিরুদ্ধে ইমাম হোসাইন (রা.)-এর আপসহীন লড়াইয়ের শিক্ষা নিজের জীবনে ধারণ করা।',
+        'অন্যায়ের বিরুদ্ধে ইমাম হোসাইন (রা.)-এর আপসহীন লড়াইয়ের শিক্ষা নিজের জীবনে ধারণ করা।',
       ],
-      themeColor: Color(0xFFC84B31),
-      backgroundImagePath: 'assets/images/islamic_events/ashura.jpg',
-      heroImages: [
-        'assets/images/islamic_events/ashura/1.jpg',
-        'assets/images/islamic_events/ashura/2.jpg',
-        'assets/images/islamic_events/ashura/3.jpg',
-        'assets/images/islamic_events/ashura/4.jpg',
-        'assets/images/islamic_events/ashura/5.jpg',
-        'assets/images/islamic_events/ashura/6.jpg',
-      ],
+      themeColor: Color(0xFFC84B31), // Deep red/coral
     ),
     '3-12': const IslamicEvent(
       title: 'Mawlid al-Nabi',
@@ -232,7 +186,7 @@ class CalendarDatabase {
       description: 'The birth anniversary of the Prophet Muhammad (PBUH), sent as a mercy to all creation.',
       descriptionBengali: 'মানবজাতির মুক্তির দূত হযরত মুহাম্মদ (সা.)-এর পবিত্র জন্ম ও ওফাত দিবস।',
       history: 'Prophet Muhammad (PBUH) was born in Makkah in the Year of the Elephant (circa 570 CE). His arrival transformed Arabia and guided humanity from darkness into the light of monotheism and character excellence.',
-      historyBengali: 'হযরত মুহাম্মদ (সা.) হাতির বছরে (৫৭০ খ্রি.) মক্কায় জন্ম নেন। তাঁর আগমন আরবের জাহেলিয়াত দূর করে এবং মানুষকে একত্ববাদ ও সর্বোত্তম চরিত্রের আলোর দিকে পরিচালিত করে।',
+      historyBengali: 'হযরত মুহাম্মদ (সা.) হাতির বছরে (৫৭০ খ্রি.) মক্কায় জন্ম নেন। তাঁর আগমন আরবের জাহেলিয়াত দূর করে এবং মানুষকে একত্ববাদ ও সর্বোত্তম চরিত্রের আলোর দিকে পরিচালিত করে।',
       activities: [
         'Send abundant blessings and Salawat upon the Prophet (PBUH).',
         'Read and study the Seerah (biography) of the Prophet.',
@@ -242,26 +196,17 @@ class CalendarDatabase {
       activitiesBengali: [
         'নবীজির প্রতি অধিক হারে দরূদ ও সালাম প্রেরণ করা।',
         'রাসূলুল্লাহ (সা.)-এর পবিত্র সীরাত (জীবনী) পাঠ ও আলোচনা করা।',
-        'পরিবারের সাথে নবীজির ক্ষমা, দয়া ও উন্নত চরিত্রের গুণাবলি নিয়ে আলোচনা করা।',
-        'নবীজির দানশীলতার অনুসরণে গরিবদের খাবার খাওয়ানো ও দান-সদকা করা।',
-      ],
-      backgroundImagePath: 'assets/images/islamic_events/mawlid.jpg',
-      heroImages: [
-        'assets/images/islamic_events/mawlid/1.jpg',
-        'assets/images/islamic_events/mawlid/2.jpg',
-        'assets/images/islamic_events/mawlid/3.jpg',
-        'assets/images/islamic_events/mawlid/4.jpg',
-        'assets/images/islamic_events/mawlid/5.jpg',
-        'assets/images/islamic_events/mawlid/6.jpg',
+        'পরিবারের সাথে নবীজির ক্ষমা, দয়া ও উন্নত চরিত্রের গুণাবলি নিয়ে আলোচনা করা।',
+        'নবীজির দানশীলতার অনুসরণে গরিবদের খাবার খাওয়ানো ও দান-সদকা করা।',
       ],
     ),
     '7-27': const IslamicEvent(
       title: 'Isra\' and Mi\'raj',
       titleBengali: 'শবে মেরাজ',
       description: 'The miraculous Night Journey and Ascension of Prophet Muhammad (PBUH) through the heavens.',
-      descriptionBengali: 'নবীজির অলৌকিক নৈশ ভ্রমণ ও ঊর্ধ্বলোকে আরোহণের স্মরণীয় রজনী।',
+      descriptionBengali: 'নবীজির অলৌকিক নৈশ ভ্রমণ ও ঊর্ধ্বলোকে আরোহণের স্মরণীয় রজনী।',
       history: 'In a single night, the Prophet was taken from Makkah to Jerusalem (Al-Aqsa Mosque) and ascended through the seven heavens to meet Allah. On this night, the five daily prayers (Salah) were gifted to the Muslim Ummah as a direct connection to Allah.',
-      historyBengali: 'এক রাতে জিবরাইল (আ.)-এর সাথে মহানবী (সা.) মক্কা থেকে আল-আকসায় এবং সেখান থেকে সপ্তাকাশ পাড়ি দিয়ে আল্লাহর সান্নিধ্যে যান। এই রজনীতে উম্মতের জন্য উপহারস্বরূপ পাঁচ ওয়াক্ত নামাজ ফরজ করা হয়।',
+      historyBengali: 'এক রাতে জিবরাইল (আ.)-এর সাথে মহানবী (সা.) মক্কা থেকে আল-আকসায় এবং সেখান থেকে সপ্তাকাশ পাড়ি দিয়ে আল্লাহর সান্নিধ্যে যান। এই রজনীতে উম্মতের জন্য উপহারস্বরূপ পাঁচ ওয়াক্ত নামাজ ফরজ করা হয়।',
       activities: [
         'Guard your daily Salah and focus on improving its quality and humility (Khushu).',
         'Perform voluntary night prayers (Tahajjud) and make sincere Duas.',
@@ -269,19 +214,10 @@ class CalendarDatabase {
         'Share lessons of faith and trust in Allah with family.',
       ],
       activitiesBengali: [
-        'পাঁচ ওয়াক্ত নামাজের যত্ন নেওয়া এবং খুশু-খুজুর (মনোযোগ) সাথে আদায়ের চেষ্টা করা।',
-        'নফল ইবাদত, তাহাজ্জুদ আদায় এবং আল্লাহর কাছে ক্ষমা চাওয়া।',
-        'সূরা আল-ইসরা তিলাওয়াত করা এবং বাইতুল মুকাদ্দাস ও আল-আকসা মসজিদের গুরুত্ব জানা।',
-        'ঈমান ও আল্লাহর প্রতি তাওয়াক্কুল সম্পর্কিত মেরাজের শিক্ষা ছড়িয়ে দেওয়া।',
-      ],
-      backgroundImagePath: 'assets/images/islamic_events/isra_miraj.jpg',
-      heroImages: [
-        'assets/images/islamic_events/isra_miraj/1.jpg',
-        'assets/images/islamic_events/isra_miraj/2.jpg',
-        'assets/images/islamic_events/isra_miraj/3.jpg',
-        'assets/images/islamic_events/isra_miraj/4.jpg',
-        'assets/images/islamic_events/isra_miraj/5.jpg',
-        'assets/images/islamic_events/isra_miraj/6.jpg',
+        'পাঁচ ওয়াক্ত নামাজের যত্ন নেওয়া এবং খুশু-খুজুর (মনোযোগ) সাথে আদায়ের চেষ্টা করা।',
+        'নফল ইবাদত, তাহাজ্জুদ আদায় এবং আল্লাহর কাছে ক্ষমা চাওয়া।',
+        'সূরা আল-ইসরা তিলাওয়াত করা এবং বাইতুল মুকাদ্দাস ও আল-আকসা মসজিদের গুরুত্ব জানা।',
+        'ঈমান ও আল্লাহর প্রতি তাওয়াক্কুল সম্পর্কিত মেরাজের শিক্ষা ছড়িয়ে দেওয়া।',
       ],
     ),
     '8-15': const IslamicEvent(
@@ -290,7 +226,7 @@ class CalendarDatabase {
       description: 'The Night of Salvation and Records. A night of immense divine mercy, forgiveness, and decree.',
       descriptionBengali: 'মুক্তি ও ভাগ্যের রজনী। এটি আল্লাহর রহমত, ক্ষমা এবং বান্দার ভাগ্য নির্ধারণের রাত।',
       history: 'According to tradition, Allah descends to the lowest heaven on the night of 15th Sha\'ban to forgive seeking servants and write decrees for the year regarding life, death, and sustenance.',
-      historyBengali: 'হাদিস শরিফ অনুযায়ী, ১৫ই শাবানের রাতে মহান আল্লাহ প্রথম আসমানে অবতরণ করেন এবং ক্ষমাপ্রার্থনাকারী বান্দাদের ক্ষমা করেন ও পরবর্তী বছরের জন্য হায়াত-মউত ও রিজিকের ফয়সালা করেন।',
+      historyBengali: 'হাদিস শরিফ অনুযায়ী, ১৫ই শাবানের রাতে মহান আল্লাহ প্রথম আসমানে অবতরণ করেন এবং ক্ষমাপ্রার্থনাকারী বান্দাদের ক্ষমা করেন ও পরবর্তী বছরের জন্য হায়াত-মউত ও রিজিকের ফয়সালা করেন।',
       activities: [
         'Perform night prayers (Qiyam-ul-Layl) and recite Quran.',
         'Fast on the 15th day of Sha\'ban (Sunnah).',
@@ -298,28 +234,19 @@ class CalendarDatabase {
         'Reconcile with any relatives or friends you are not speaking to, as grudges prevent forgiveness.',
       ],
       activitiesBengali: [
-        'নফল ইবাদত, কোরআন তিলাওয়াত ও জিকিরে রাত কাটানো।',
+        'নফল ইবাদত, কোরআন তিলাওয়াত ও জিকিরে রাত কাটানো।',
         '১৫ই শাবান দিবসে রোজা রাখা (নফল)।',
-        'ক্ষমা, সুস্থতা ও হালাল রিজিকের জন্য আল্লাহর দরবারে কান্নাজড়িত দোয়া করা।',
-        'কারো সাথে মনমালিন্য থাকলে তা মিটিয়ে ফেলা, কারণ হিংসা ও শত্রুতা ক্ষমা পাওয়ার অন্তরায়।',
-      ],
-      backgroundImagePath: 'assets/images/islamic_events/shab_e_barat.jpg',
-      heroImages: [
-        'assets/images/islamic_events/shab_e_barat/1.jpg',
-        'assets/images/islamic_events/shab_e_barat/2.jpg',
-        'assets/images/islamic_events/shab_e_barat/3.jpg',
-        'assets/images/islamic_events/shab_e_barat/4.jpg',
-        'assets/images/islamic_events/shab_e_barat/5.jpg',
-        'assets/images/islamic_events/shab_e_barat/6.jpg',
+        'ক্ষমা, সুস্থতা ও হালাল রিজিকের জন্য আল্লাহর দরবারে কান্নাজড়িত দোয়া করা।',
+        'কারো সাথে মনমালিন্য থাকলে তা মিটিয়ে ফেলা, কারণ হিংসা ও শত্রুতা ক্ষমা পাওয়ার অন্তরায়।',
       ],
     ),
     '9-1': const IslamicEvent(
       title: 'First Day of Ramadan',
       titleBengali: 'রমজানের প্রথম দিন',
       description: 'The start of the blessed month of fasting, intense spiritual devotion, and Quran.',
-      descriptionBengali: 'রোজা, আত্মসংযম এবং কোরআন নাজিলের বরকতময় মাসের সূচনা।',
+      descriptionBengali: 'রোজা, আত্মসংযম এবং কোরআন নাজিলের বরকতময় মাসের সূচনা।',
       history: 'The month of Ramadan is the month in which the Quran was sent down as a guide for humanity. Fasting was made obligatory during the second year of Hijrah to teach Taqwa (God-consciousness).',
-      historyBengali: 'রমজান হলো সেই মাস যে মাসে মানবজাতির পথপ্রদর্শক হিসেবে কোরআন অবতীর্ণ হয়েছে। হিজরি দ্বিতীয় সনে তাকওয়া অর্জনের উদ্দেশ্যে রোজা ফরজ করা হয়।',
+      historyBengali: 'রমজান হলো সেই মাস যে মাসে মানবজাতির পথপ্রদর্শক হিসেবে কোরআন অবতীর্ণ হয়েছে। হিজরি দ্বিতীয় সনে তাকওয়া অর্জনের উদ্দেশ্যে রোজা ফরজ করা হয়।',
       activities: [
         'Intend to fast the whole month with sincere faith and reward-seeking.',
         'Establish congregational Taraweeh prayers.',
@@ -327,29 +254,20 @@ class CalendarDatabase {
         'Control speech from gossip, lying, and anger, and practice patience.',
       ],
       activitiesBengali: [
-        'পূর্ণ ঈমান ও সওয়াব পাওয়ার নিয়তে পুরো মাস রোজা রাখার সংকল্প করা।',
-        'তারাবিহর নামাজ গুরুত্বের সাথে আদায় করা।',
-        'প্রতিদিন নিয়মিত পবিত্র কোরআন পাঠ ও অর্থ বোঝার লক্ষ্য নির্ধারণ করা।',
-        'মিথ্যা, গিবত, রাগ পরিহার করে জিহ্বাকে নিয়ন্ত্রণে রাখা ও ধৈর্য ধারণ করা।',
+        'পূর্ণ ঈমান ও সওয়াব পাওয়ার নিয়তে পুরো মাস রোজা রাখার সংকল্প করা।',
+        'তারাবিহর নামাজ গুরুত্বের সাথে আদায় করা।',
+        'প্রতিদিন নিয়মিত পবিত্র কোরআন পাঠ ও অর্থ বোঝার লক্ষ্য নির্ধারণ করা।',
+        'মিথ্যা, গিবত, রাগ পরিহার করে জিহ্বাকে নিয়ন্ত্রণে রাখা ও ধৈর্য ধারণ করা।',
       ],
-      themeColor: Color(0xFF0F6F6B),
-      backgroundImagePath: 'assets/images/islamic_events/ramadan_start.jpg',
-      heroImages: [
-        'assets/images/islamic_events/ramadan_start/1.jpg',
-        'assets/images/islamic_events/ramadan_start/2.jpg',
-        'assets/images/islamic_events/ramadan_start/3.jpg',
-        'assets/images/islamic_events/ramadan_start/4.jpg',
-        'assets/images/islamic_events/ramadan_start/5.jpg',
-        'assets/images/islamic_events/ramadan_start/6.jpg',
-      ],
+      themeColor: Color(0xFF0F6F6B), // Teal accent
     ),
     '9-27': const IslamicEvent(
       title: 'Laylat al-Qadr',
       titleBengali: 'লাইলাতুল কদর (কদরের রাত)',
       description: 'The Night of Decree and Power, which is better than a thousand months (83 years) of worship.',
-      descriptionBengali: 'মহিমান্বিত কদরের রাত, যা হাজার মাসের (প্রায় ৮৩ বছর) ইবাদতের চেয়েও শ্রেষ্ঠ।',
+      descriptionBengali: 'মহিমান্বিত কদরের রাত, যা হাজার মাসের (প্রায় ৮৩ বছর) ইবাদতের চেয়েও শ্রেষ্ঠ।',
       history: 'Surah Al-Qadr was revealed regarding this night. It marks the commencement of the descent of the Quran from the Preserved Tablet (Lauh al-Mahfuz) to the earthly sky, to be revealed to the Prophet (PBUH).',
-      historyBengali: 'কদরের রজনী নিয়ে পবিত্র কোরআনে সূরা আল-কদর অবতীর্ণ হয়েছে। এই রাতেই লাওহে মাহফুজ থেকে পবিত্র কোরআন দুনিয়ার আকাশে প্রথম অবতীর্ণ হয়।',
+      historyBengali: 'কদরের রজনী নিয়ে পবিত্র কোরআনে সূরা আল-কদর অবতীর্ণ হয়েছে। এই রাতেই লাওহে মাহফুজ থেকে পবিত্র কোরআন দুনিয়ার আকাশে প্রথম অবতীর্ণ হয়।',
       activities: [
         'Spend the night in continuous prayer, Tahajjud, and Dua.',
         'Recite the special Dua: "Allahumma innaka \'afuwwun tuhibbul \'afwa fa\'fu \'anni".',
@@ -358,20 +276,11 @@ class CalendarDatabase {
       ],
       activitiesBengali: [
         'সারারাত নফল নামাজ, তাহাজ্জুদ ও জিকিরে অতিবাহিত করা।',
-        'নবীজির শেখানো দোয়া বেশি বেশি পড়া: "আল্লাহুম্মা ইন্নাকা আফুউউন তুহিব্বুল আফওয়া ফাফু আন্নী"।',
-        'দান-সদকা করা (অল্প হলেও, কারণ এ রাতের সওয়াব বহুগুণ বৃদ্ধি পায়)।',
+        'নবীজির শেখানো দোয়া বেশি বেশি পড়া: "আল্লাহুম্মা ইন্নাকা আফুউউন তুহিব্বুল আফওয়া ফাফু আন্নী"।',
+        'দান-সদকা করা (অল্প হলেও, কারণ এ রাতের সওয়াব বহুগুণ বৃদ্ধি পায়)।',
         'সম্ভব হলে শেষ দশকে মসজিদে ইতিকাফ করা।',
       ],
-      themeColor: Color(0xFF459490),
-      backgroundImagePath: 'assets/images/islamic_events/laylat_al_qadr.jpg',
-      heroImages: [
-        'assets/images/islamic_events/laylat_al_qadr/1.jpg',
-        'assets/images/islamic_events/laylat_al_qadr/2.jpg',
-        'assets/images/islamic_events/laylat_al_qadr/3.jpg',
-        'assets/images/islamic_events/laylat_al_qadr/4.jpg',
-        'assets/images/islamic_events/laylat_al_qadr/5.jpg',
-        'assets/images/islamic_events/laylat_al_qadr/6.jpg',
-      ],
+      themeColor: Color(0xFF459490), // Green/Teal accent
     ),
     '10-1': const IslamicEvent(
       title: 'Eid al-Fitr',
@@ -379,7 +288,7 @@ class CalendarDatabase {
       description: 'The festival of breaking the fast, celebrating the successful completion of Ramadan.',
       descriptionBengali: 'রোজা ভাঙার ও রমজানের ইবাদত সফলভাবে সম্পন্ন করার আনন্দের উৎসব।',
       history: 'Established by the Prophet Muhammad (PBUH) in Madinah as a day of thanksgiving to Allah, joy, and unity after fasting for a full month.',
-      historyBengali: 'মদিনায় হিজরতের পর মহানবী (সা.) মুসলমানদের জন্য আল্লাহ তায়ালার প্রতি কৃতজ্ঞতা প্রকাশ ও আনন্দের দিন হিসেবে এই উৎসব নির্ধারণ করেন।',
+      historyBengali: 'মদিনায় হিজরতের পর মহানবী (সা.) মুসলমানদের জন্য আল্লাহ তায়ালার প্রতি কৃতজ্ঞতা প্রকাশ ও আনন্দের দিন হিসেবে এই উৎসব নির্ধারণ করেন।',
       activities: [
         'Pay Zakat al-Fitr (Fitra) before the Eid prayer to help the poor.',
         'Perform Ghusl, wear clean or new clothes, and apply perfume.',
@@ -387,29 +296,20 @@ class CalendarDatabase {
         'Attend the Eid prayer, listen to the Khutbah, and greet the community.',
       ],
       activitiesBengali: [
-        'ঈদের নামাজের আগে ফিতরা আদায় করা, যেন দরিদ্ররাও উৎসবে শামিল হতে পারে।',
-        'গোসল করা, নতুন বা পরিষ্কার জামাকাপড় পরা এবং সুগন্ধি মাখা।',
-        'ঈদের নামাজে যাওয়ার আগে মিষ্টি মুখ করা (বিজোড় সংখ্যক খেজুর খাওয়া সুন্নাত)।',
-        'ঈদের নামাজে শরিক হওয়া, খুতবা শোনা এবং পরস্পরের সাথে শুভেচ্ছা বিনিময় করা।',
+        'ঈদের নামাজের আগে ফিতরা আদায় করা, যেন দরিদ্ররাও উৎসবে শামিল হতে পারে।',
+        'গোসল করা, নতুন বা পরিষ্কার জামাকাপড় পরা এবং সুগন্ধি মাখা।',
+        'ঈদের নামাজে যাওয়ার আগে মিষ্টি মুখ করা (বিজোড় সংখ্যক খেজুর খাওয়া সুন্নাত)।',
+        'ঈদের নামাজে শরিক হওয়া, খুতবা শোনা এবং পরস্পরের সাথে শুভেচ্ছা বিনিময় করা।',
       ],
-      themeColor: Color(0xFF84B5B4),
-      backgroundImagePath: 'assets/images/islamic_events/eid_al_fitr.jpg',
-      heroImages: [
-        'assets/images/islamic_events/eid_al_fitr/1.jpg',
-        'assets/images/islamic_events/eid_al_fitr/2.jpg',
-        'assets/images/islamic_events/eid_al_fitr/3.jpg',
-        'assets/images/islamic_events/eid_al_fitr/4.jpg',
-        'assets/images/islamic_events/eid_al_fitr/5.jpg',
-        'assets/images/islamic_events/eid_al_fitr/6.jpg',
-      ],
+      themeColor: Color(0xFF84B5B4), // Blue/Teal accent
     ),
     '12-9': const IslamicEvent(
       title: 'Day of Arafah',
       titleBengali: 'আরাফাহ দিবস',
       description: 'The pinnacle day of the Hajj pilgrimage and a day of supreme forgiveness and acceptance of Duas.',
-      descriptionBengali: 'হজের মূল দিন এবং আল্লাহর দরবারে ক্ষমা ও দোয়া কবুলের সর্বশ্রেষ্ঠ দিন।',
+      descriptionBengali: 'হজের মূল দিন এবং আল্লাহর দরবারে ক্ষমা ও দোয়া কবুলের সর্বশ্রেষ্ঠ দিন।',
       history: 'On this day, pilgrims gather on the plain of Mount Arafah to pray. It is the day Allah perfected the religion of Islam and completed His favors upon us. For non-pilgrims, fasting expiates the sins of the previous year and the coming year.',
-      historyBengali: 'এই দিনে হাজিগণ আরাফাতের ময়দানে সমবেত হয়ে ক্ষমা প্রার্থনা করেন। এই দিনেই ইসলামকে পূর্ণাঙ্গ দ্বীন হিসেবে ঘোষণার আয়াত নাজিল হয়। হাজি ছাড়া অন্যদের জন্য এ দিনে রোজা রাখা অত্যন্ত সওয়াবের কাজ।',
+      historyBengali: 'এই দিনে হাজিগণ আরাফাতের ময়দানে সমবেত হয়ে ক্ষমা প্রার্থনা করেন। এই দিনেই ইসলামকে পূর্ণাঙ্গ দ্বীন হিসেবে ঘোষণার আয়াত নাজিল হয়। হাজি ছাড়া অন্যদের জন্য এ দিনে রোজা রাখা অত্যন্ত সওয়াবের কাজ।',
       activities: [
         'Fast on this day (for those not performing Hajj) to expiate two years of sins.',
         'Make abundant Dua, especially the best Dua: "La ilaha illallahu wahdahu la sharika lahu...".',
@@ -417,19 +317,10 @@ class CalendarDatabase {
         'Seek sincere forgiveness and repent from all sins.',
       ],
       activitiesBengali: [
-        'হাজি ছাড়া অন্যরা রোজা রাখা (যা বিগত ও আগামী বছরের গুনাহ মাফ করে)।',
-        'বেশি বেশি দোয়া করা, বিশেষ করে আরাফার সর্বোত্তম দোয়া পাঠ করা।',
-        'ফজরের পর থেকে প্রত্যেক ফরজ নামাজের পর তাকবিরে তাশরিক ("আল্লাহু আকবার, আল্লাহু আকবার...") পড়া।',
+        'হাজি ছাড়া অন্যরা রোজা রাখা (যা বিগত ও আগামী বছরের গুনাহ মাফ করে)।',
+        'বেশি বেশি দোয়া করা, বিশেষ করে আরাফার সর্বোত্তম দোয়া পাঠ করা।',
+        'ফজরের পর থেকে প্রত্যেক ফরজ নামাজের পর তাকবিরে তাশরিক ("আল্লাহু আকবার, আল্লাহু আকবার...") পড়া।',
         'খালেস দিলে তাওবা করা এবং আল্লাহর রহমত কামনা করা।',
-      ],
-      backgroundImagePath: 'assets/images/islamic_events/arafah.jpg',
-      heroImages: [
-        'assets/images/islamic_events/arafah/1.jpg',
-        'assets/images/islamic_events/arafah/2.jpg',
-        'assets/images/islamic_events/arafah/3.jpg',
-        'assets/images/islamic_events/arafah/4.jpg',
-        'assets/images/islamic_events/arafah/5.jpg',
-        'assets/images/islamic_events/arafah/6.jpg',
       ],
     ),
     '12-10': const IslamicEvent(
@@ -438,7 +329,7 @@ class CalendarDatabase {
       description: 'The festival of sacrifice, commemorating the submission and devotion of Prophet Ibrahim (AS).',
       descriptionBengali: 'কোরবানির ঈদ, যা হযরত ইব্রাহিম (আ.)-এর মহান আত্মত্যাগ ও আল্লাহর প্রতি আনুগত্যের স্মৃতি বহন করে।',
       history: 'It honors the willingness of Prophet Ibrahim (AS) to sacrifice his son Ismail (AS) in obedience to Allah\'s command. Before the sacrifice, Allah replaced Ismail with a ram, establishing this tradition for generations.',
-      historyBengali: 'হযরত ইব্রাহিম (আ.) আল্লাহর আদেশে তাঁর প্রিয় পুত্র ইসমাইল (আ.)-কে কোরবানি করতে প্রস্তুত হয়েছিলেন। তাঁর এই চরম আনুগত্যে সন্তুষ্ট হয়ে আল্লাহ জান্নাতি দুম্বা পাঠিয়ে দেন। সেই থেকে পশু কোরবানি সুন্নাত হিসেবে পালিত হয়।',
+      historyBengali: 'হযরত ইব্রাহিম (আ.) আল্লাহর আদেশে তাঁর প্রিয় পুত্র ইসমাইল (আ.)-কে কোরবানি করতে প্রস্তুত হয়েছিলেন। তাঁর এই চরম আনুগত্যে সন্তুষ্ট হয়ে আল্লাহ জান্নাতি দুম্বা পাঠিয়ে দেন। সেই থেকে পশু কোরবানি সুন্নাত হিসেবে পালিত হয়।',
       activities: [
         'Perform the Eid prayer in the morning.',
         'Perform the Qurbani (sacrifice of a halal animal) if you have the financial means.',
@@ -447,56 +338,48 @@ class CalendarDatabase {
         'Maintain family ties and spread kindness.',
       ],
       activitiesBengali: [
-        'সকালে ঈদের নামাজ আদায় করা।',
+        'সকালে ঈদের নামাজ আদায় করা।',
         'সামর্থ্য থাকলে আল্লাহর সন্তুষ্টির জন্য পশু কোরবানি করা।',
-        'কোরবানির গোশত তিন ভাগে বণ্টন করা: এক ভাগ গরিবের, এক ভাগ আত্মীয়দের এবং এক ভাগ নিজের পরিবারের জন্য।',
+        'কোরবানির গোশত তিন ভাগে বণ্টন করা: এক ভাগ গরিবের, এক ভাগ আত্মীয়দের এবং এক ভাগ নিজের পরিবারের জন্য।',
         'প্রতিটি ফরজ নামাজের পর তাকবিরে তাশরিক পাঠ করা।',
-        'পারিবারিক সম্পর্ক মজবুত করা এবং ভ্রাতৃত্বের হাত বাড়িয়ে দেওয়া।',
+        'পারিবারিক সম্পর্ক মজবুত করা এবং ভ্রাতৃত্বের হাত বাড়িয়ে দেওয়া।',
       ],
-      themeColor: Color(0xFFEB8A6C),
-      backgroundImagePath: 'assets/images/islamic_events/eid_al_adha.jpg',
-      heroImages: [
-        'assets/images/islamic_events/eid_al_adha/1.jpg',
-        'assets/images/islamic_events/eid_al_adha/2.jpg',
-        'assets/images/islamic_events/eid_al_adha/3.jpg',
-        'assets/images/islamic_events/eid_al_adha/4.jpg',
-        'assets/images/islamic_events/eid_al_adha/5.jpg',
-        'assets/images/islamic_events/eid_al_adha/6.jpg',
-      ],
+      themeColor: Color(0xFFEB8A6C), // Coral
     ),
   };
   // Gregorian Overrides for 2026 and 2027 to align perfectly with regional moon calendars
   static const Map<String, String> gregorianOverrides = {
-    // 2026y
-    '2026-01-16': '7-27',
-    '2026-02-03': '8-15',
-    '2026-02-18': '9-1',
-    '2026-03-17': '9-27',
-    '2026-03-20': '10-1',
-    '2026-05-26': '12-9',
-    '2026-05-27': '12-10',
-    '2026-06-16': '1-1',
-    '2026-06-25': '1-10',
-    '2026-08-25': '3-12',
+    // 2026
+    '2026-01-16': '7-27',   // Isra' Mi'raj
+    '2026-02-03': '8-15',   // Shab-e-Barat
+    '2026-02-18': '9-1',    // Ramadan Start
+    '2026-03-17': '9-27',   // Laylat al-Qadr
+    '2026-03-20': '10-1',   // Eid al-Fitr
+    '2026-05-26': '12-9',   // Day of Arafah
+    '2026-05-27': '12-10',  // Eid al-Adha
+    '2026-06-16': '1-1',    // Islamic New Year
+    '2026-06-25': '1-10',   // Day of Ashura
+    '2026-08-25': '3-12',   // Mawlid al-Nabi
     // 2027
-    '2027-01-05': '7-27',
-    '2027-01-23': '8-15',
-    '2027-02-07': '9-1',
-    '2027-03-06': '9-27',
-    '2027-03-09': '10-1',
-    '2027-05-15': '12-9',
-    '2027-05-16': '12-10',
-    '2027-06-06': '1-1',
-    '2027-06-15': '1-10',
-    '2027-08-15': '3-12',
+    '2027-01-05': '7-27',   // Isra' Mi'raj
+    '2027-01-23': '8-15',   // Shab-e-Barat
+    '2027-02-07': '9-1',    // Ramadan Start
+    '2027-03-06': '9-27',   // Laylat al-Qadr
+    '2027-03-09': '10-1',   // Eid al-Fitr
+    '2027-05-15': '12-9',   // Day of Arafah
+    '2027-05-16': '12-10',  // Eid al-Adha
+    '2027-06-06': '1-1',    // Islamic New Year
+    '2027-06-15': '1-10',   // Day of Ashura
+    '2027-08-15': '3-12',   // Mawlid al-Nabi
   };
-
   static IslamicEvent? getEvent(DateTime date, HijriDate hijriDate) {
+    // Check Gregorian overrides first
     final keyGregorian = DateFormat('yyyy-MM-dd').format(date);
     if (gregorianOverrides.containsKey(keyGregorian)) {
       final hijriKey = gregorianOverrides[keyGregorian]!;
       return hijriEvents[hijriKey];
     }
+    // Fallback to dynamic Hijri mapping
     final keyHijri = '${hijriDate.month}-${hijriDate.day}';
     return hijriEvents[keyHijri];
   }
@@ -640,7 +523,6 @@ class PrayerTimeEntry {
   final DateTime time;
   PrayerTimeEntry(this.name, this.nameBengali, this.time);
 }
-
 // ===== INTERACTIVE CALENDAR TAB WIDGET =====
 class CalendarTab extends StatefulWidget {
   final VoidCallback onOpenZakatCalculator;
@@ -651,76 +533,53 @@ class CalendarTab extends StatefulWidget {
   @override
   State<CalendarTab> createState() => _CalendarTabState();
 }
-
 class _CalendarTabState extends State<CalendarTab> {
   DateTime _currentMonth = DateTime(2026, 7, 1);
   DateTime _selectedDate = DateTime(2026, 7, 13);
   bool _isBengali = false;
   bool _showCalendarGridTab = true;
   final Map<String, bool> _activityStatus = {};
-
   @override
   void initState() {
     super.initState();
     final today = DateTime.now();
-    if (today.year == 2026) {
-      _selectedDate = DateTime(2026, today.month, today.day);
-      _currentMonth = DateTime(2026, today.month, 1);
-    }
+    _selectedDate = today;
+    _currentMonth = DateTime(today.year, today.month, 1);
   }
-
   void _nextMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
+      _selectDefaultDateForMonth(_currentMonth);
     });
   }
-
   void _prevMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
+      _selectDefaultDateForMonth(_currentMonth);
     });
   }
-
+  void _selectDefaultDateForMonth(DateTime month) {
+    final today = DateTime.now();
+    if (today.year == month.year && today.month == month.month) {
+      _selectedDate = today;
+    } else {
+      _selectedDate = DateTime(month.year, month.month, 1);
+    }
+  }
+  // Fasting checks
   bool _isMondayOrThursday(DateTime date) {
     return date.weekday == DateTime.monday || date.weekday == DateTime.thursday;
   }
-
   bool _isWhiteDay(HijriDate hijri) {
     return hijri.day == 13 || hijri.day == 14 || hijri.day == 15;
   }
-
-  // Pushes the dedicated, full-bleed detail page for a significant day.
-  // This is the ONLY place a background image ever renders — the month
-  // grid itself never shows imagery, only small dot markers (see the grid
-  // builder below). Keeping the two visually distinct is deliberate: a
-  // grid full of thumbnails is unreadable at a glance, but a single
-  // full-screen moment for a day you've tapped into is exactly the kind
-  // of "deliberate moment" worth spending a hero image on.
-  void _openEventDetail(IslamicEvent event, DateTime date, HijriDate hijri) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => EventDetailPage(
-          event: event,
-          date: date,
-          hijri: hijri,
-          isBengali: _isBengali,
-          activityStatus: _activityStatus,
-          onToggleActivity: (key, val) => setState(() => _activityStatus[key] = val),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final daysInMonthString =
-        DateFormat('d').format(DateTime(_currentMonth.year, _currentMonth.month + 1, 0));
+    final daysInMonthString = DateFormat('d').format(DateTime(_currentMonth.year, _currentMonth.month + 1, 0));
     final daysCount = int.parse(daysInMonthString);
-    final firstDayOfWeek = DateTime(_currentMonth.year, _currentMonth.month, 1).weekday % 7;
-    final currentHijriMonthStart =
-        HijriConverter.fromGregorian(DateTime(_currentMonth.year, _currentMonth.month, 1));
-    final currentHijriMonthEnd =
-        HijriConverter.fromGregorian(DateTime(_currentMonth.year, _currentMonth.month, daysCount));
+    final firstDayOfWeek = DateTime(_currentMonth.year, _currentMonth.month, 1).weekday % 7; // 0 for Sunday
+    final currentHijriMonthStart = HijriConverter.fromGregorian(DateTime(_currentMonth.year, _currentMonth.month, 1));
+    final currentHijriMonthEnd = HijriConverter.fromGregorian(DateTime(_currentMonth.year, _currentMonth.month, daysCount));
     String hijriRangeStr = '';
     if (currentHijriMonthStart.month == currentHijriMonthEnd.month) {
       final mName = _isBengali ? currentHijriMonthStart.monthNameBengali : currentHijriMonthStart.monthName;
@@ -733,17 +592,16 @@ class _CalendarTabState extends State<CalendarTab> {
     final selectedHijri = HijriConverter.fromGregorian(_selectedDate);
     final selectedEvent = CalendarDatabase.getEvent(_selectedDate, selectedHijri);
     final selectedIsFasting = _isMondayOrThursday(_selectedDate) || _isWhiteDay(selectedHijri);
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        bottom: false,
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // HEADER WITH LANG TOGGLE
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -755,6 +613,7 @@ class _CalendarTabState extends State<CalendarTab> {
                       color: AppColors.navyBlue,
                     ),
                   ),
+                  // Premium English / বাংলা toggle pill
                   Container(
                     decoration: BoxDecoration(
                       color: AppColors.dustyBlueTeal.withValues(alpha: 0.15),
@@ -900,28 +759,12 @@ class _CalendarTabState extends State<CalendarTab> {
               const SizedBox(height: 15),
               Container(
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.navyBlue, Color(0xFF2C4356)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.navyBlue.withValues(alpha: 0.15),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    )
-                  ],
+                  color: AppColors.dustyBlueTeal.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                padding: const EdgeInsets.all(4),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-                      onPressed: _prevMonth,
-                    ),
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -945,7 +788,7 @@ class _CalendarTabState extends State<CalendarTab> {
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
                     IconButton(
@@ -1522,28 +1365,42 @@ class _CalendarTabState extends State<CalendarTab> {
       ),
     );
   }
-
-  Widget _buildPrayerTimesSection() {
-    final times = CalendarDatabase.getPrayerTimesForDate(_selectedDate);
+  // ===== SEGMENTED COMPONENT: DETAILS PANEL =====
+  Widget _buildDetailsPanel(HijriDate selectedHijri, IslamicEvent? selectedEvent, bool selectedIsFasting) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.navyBlue.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.2)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navyBlue.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.access_time_filled_rounded, color: AppColors.navyBlue, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                _isBengali ? 'এই দিনের নামাজের সময়' : 'Prayer Times for This Day',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-              ),
-            ],
+          Text(
+            DateFormat('EEEE, MMMM d, yyyy').format(_selectedDate),
+            style: GoogleFonts.poppins(
+              fontSize: 14.5,
+              fontWeight: FontWeight.bold,
+              color: AppColors.navyBlue,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            selectedHijri.format(_isBengali),
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.midTeal,
+            ),
           ),
           const SizedBox(height: 12),
           Column(
@@ -1567,96 +1424,148 @@ class _CalendarTabState extends State<CalendarTab> {
               _buildPrayerCardCentered(times[4]),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
-
-  Widget _buildRelatedAyahSection(IslamicEvent? event) {
-    final selectedHijri = HijriConverter.fromGregorian(_selectedDate);
-    final ayah = CalendarDatabase.getAyahForDate(_selectedDate, selectedHijri, event);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.coralOrange.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.coralOrange.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  // ===== HELPER: GREGORIAN DATE RESOLVERS FOR EVENTS LIST =====
+  String _getGregorianDateForEvent(String hijriKey, int year) {
+    final rawDate = _getGregorianDateForEventRaw(hijriKey, year);
+    if (rawDate.isNotEmpty) {
+      final date = DateTime.parse(rawDate);
+      return DateFormat('dd MMMM, yyyy').format(date);
+    }
+    return '';
+  }
+  String _getGregorianDateForEventRaw(String hijriKey, int year) {
+    for (var entry in CalendarDatabase.gregorianOverrides.entries) {
+      if (entry.key.startsWith('$year-') && entry.value == hijriKey) {
+        return entry.key;
+      }
+    }
+    // Fallback search to 2026/2027 mapping
+    for (var entry in CalendarDatabase.gregorianOverrides.entries) {
+      if (entry.key.startsWith('2026-') && entry.value == hijriKey) {
+        return entry.key.replaceAll('2026-', '$year-');
+      }
+    }
+    return '';
+  }
+  // ===== RENDER EVENT DETAILS =====
+  Widget _buildEventDetailCard(IslamicEvent event) {
+    final title = _isBengali ? event.titleBengali : event.title;
+    final description = _isBengali ? event.descriptionBengali : event.description;
+    final history = _isBengali ? event.historyBengali : event.history;
+    final activities = _isBengali ? event.activitiesBengali : event.activities;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Event Badge
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: event.themeColor.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: event.themeColor.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.menu_book_rounded, color: AppColors.coralOrange, size: 16),
-              const SizedBox(width: 8),
+              Icon(Icons.star_rounded, color: event.themeColor, size: 16),
+              const SizedBox(width: 6),
               Text(
-                _isBengali ? 'আজকের প্রাসঙ্গিক আয়াত' : 'Related Ayah for Today',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: event.themeColor,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            _isBengali ? ayah.referenceBengali : ayah.reference,
-            style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.coralOrange),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _isBengali ? ayah.reflectionBengali : ayah.reflection,
-            style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.5),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Compact card shown inline for event days — a teaser, not the full
-  // experience. Tapping it (or the grid cell) opens the full-bleed
-  // EventDetailPage where the hero image treatment actually lives.
-  Widget _buildEventPromptCard(IslamicEvent event, HijriDate hijri) {
-    final title = _isBengali ? event.titleBengali : event.title;
-    final description = _isBengali ? event.descriptionBengali : event.description;
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () => _openEventDetail(event, _selectedDate, hijri),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [event.themeColor, event.themeColor.withValues(alpha: 0.75)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+        const SizedBox(height: 16),
+        // Description
+        Text(
+          _isBengali ? 'বিবরণ' : 'Description',
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: AppColors.navyBlue,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          description,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: AppColors.navyBlue.withValues(alpha: 0.75),
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 18),
+        // History
+        Text(
+          _isBengali ? 'ইতিহাস ও গুরুত্ব' : 'History & Significance',
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: AppColors.navyBlue,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          history,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: AppColors.navyBlue.withValues(alpha: 0.75),
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 20),
+        // Recommended Activities
+        Text(
+          _isBengali ? 'করণীয় আমলসমূহ' : 'Recommended Activities',
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: AppColors.navyBlue,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Column(
+          children: List.generate(activities.length, (index) {
+            final key = '${DateFormat('yyyyMMdd').format(_selectedDate)}_event_$index';
+            final isChecked = _activityStatus[key] ?? false;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: CheckboxListTile(
+                value: isChecked,
+                onChanged: (val) {
+                  setState(() {
+                    _activityStatus[key] = val ?? false;
+                  });
+                },
+                title: Text(
+                  activities[index],
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    color: AppColors.navyBlue.withValues(alpha: 0.8),
+                    decoration: isChecked ? TextDecoration.lineThrough : null,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(fontSize: 12, color: Colors.white.withValues(alpha: 0.9), height: 1.4),
-                  ),
-                ],
+                ),
+                activeColor: AppColors.midTeal,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
               ),
-            ),
-            const SizedBox(width: 10),
-            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
-          ],
+            );
+          }),
         ),
-      ),
+      ],
     );
   }
-
+  // ===== RENDER FASTING DETAILS =====
   Widget _buildFastingDetailCard(HijriDate hijri) {
     final isWhiteDay = _isWhiteDay(hijri);
     final isMonday = _selectedDate.weekday == DateTime.monday;
@@ -1672,11 +1581,9 @@ class _CalendarTabState extends State<CalendarTab> {
       fastingTitle = 'Ayyam al-Beedh (White Days) Fast';
       fastingTitleBn = 'আইয়ামে বিজের রোজা (চন্দ্র মাসের ১৩, ১৪ ও ১৫ তারিখ)';
       fastingDesc = 'Fasting on the 13th, 14th, and 15th of the lunar month is highly recommended.';
-      fastingDescBn = 'প্রতি হিজরি মাসের ১৩, ১৪ ও ১৫ তারিখ রোজা রাখা অত্যন্ত সওয়াবের কাজ ও গুরুত্বপূর্ণ সুন্নাত।';
-      fastingHistory =
-          'The Prophet Muhammad (PBUH) instructed his companions to fast three days of every month—the white days—saying that it is like fasting a lifetime because the reward of a good deed is multiplied tenfold.';
-      fastingHistoryBn =
-          'রাসূলুল্লাহ (সা.) সাহাবিদের প্রতি মাসে তিনটি রোজা (আইয়ামে বিজ) রাখার নির্দেশ দিতেন। তিনি বলেন, প্রতি কাজের সওয়াব দশ গুণ বৃদ্ধি পাওয়ার কারণে তিন দিনের রোজা সারা বছর রোজা রাখার সমান।';
+      fastingDescBn = 'প্রতি হিজরি মাসের ১৩, ১৪ ও ১৫ তারিখ রোজা রাখা অত্যন্ত সওয়াবের কাজ ও গুরুত্বপূর্ণ সুন্নাত।';
+      fastingHistory = 'The Prophet Muhammad (PBUH) instructed his companions to fast three days of every month—the white days—saying that it is like fasting a lifetime because the reward of a good deed is multiplied tenfold.';
+      fastingHistoryBn = 'রাসূলুল্লাহ (সা.) সাহাবিদের প্রতি মাসে তিনটি রোজা (আইয়ামে বিজ) রাখার নির্দেশ দিতেন। তিনি বলেন, প্রতি কাজের সওয়াব দশ গুণ বৃদ্ধি পাওয়ার কারণে তিন দিনের রোজা সারা বছর রোজা রাখার সমান।';
       fastingActs = [
         'Keep the fast (abstain from food & drink from dawn to sunset).',
         'Read Quran and perform voluntary prayers.',
@@ -1685,8 +1592,8 @@ class _CalendarTabState extends State<CalendarTab> {
       ];
       fastingActsBn = [
         'রোজা রাখা (সুবহে সাদেক থেকে সূর্যাস্ত পর্যন্ত পানাহার থেকে বিরত থাকা)।',
-        'কোরআন তিলাওয়াত ও নফল নামাজ আদায় করা।',
-        'ইফতারের সময় আল্লাহর কাছে দুআ করা, কেননা রোজাদারের দুআ ফিরিয়ে দেওয়া হয় না।',
+        'কোরআন তিলাওয়াত ও নফল নামাজ আদায় করা।',
+        'ইফতারের সময় আল্লাহর কাছে দুআ করা, কেননা রোজাদারের দুআ ফিরিয়ে দেওয়া হয় না।',
         'অভাবীকে দান-সদকা করা।',
       ];
     } else {
@@ -1695,11 +1602,9 @@ class _CalendarTabState extends State<CalendarTab> {
       fastingTitle = 'Sunnah $dayName Fast';
       fastingTitleBn = 'সুন্নাত $dayNameBn-এর রোজা';
       fastingDesc = 'Fasting on Mondays and Thursdays is an established practice of the Messenger of Allah (PBUH).';
-      fastingDescBn = 'সোমবার এবং বৃহস্পতিবার রোজা রাখা মহানবী হযরত মুহাম্মদ (সা.)-এর নিয়মিত আমল ও সুন্নাত ছিল।';
-      fastingHistory =
-          'The Prophet (PBUH) said: "The deeds of people are presented (to Allah) on Mondays and Thursdays, and I like that my deeds are presented while I am fasting." It was also on a Monday that the Prophet was born and began receiving revelation.';
-      fastingHistoryBn =
-          'নবীজি (সা.) বলেছেন, "সোমবার ও বৃহস্পতিবার বান্দার আমল আল্লাহর দরবারে পেশ করা হয়। আর আমার আমল রোজা রাখা অবস্থায় পেশ করা হোক, এটাই আমি পছন্দ করি।" তাছাড়া সোমবারে নবীজির জন্ম ও নবুওয়াত প্রকাশ পেয়েছিল।';
+      fastingDescBn = 'সোমবার এবং বৃহস্পতিবার রোজা রাখা মহানবী হযরত মুহাম্মদ (সা.)-এর নিয়মিত আমল ও সুন্নাত ছিল।';
+      fastingHistory = 'The Prophet (PBUH) said: "The deeds of people are presented (to Allah) on Mondays and Thursdays, and I like that my deeds are presented while I am fasting." It was also on a Monday that the Prophet was born and began receiving revelation.';
+      fastingHistoryBn = 'নবীজি (সা.) বলেছেন, "সোমবার ও বৃহস্পতিবার বান্দার আমল আল্লাহর দরবারে পেশ করা হয়। আর আমার আমল রোজা রাখা অবস্থায় পেশ করা হোক, এটাই আমি পছন্দ করি।" তাছাড়া সোমবারে নবীজির জন্ম ও নবুওয়াত প্রকাশ পেয়েছিল।';
       fastingActs = [
         'Perform the Sunnah fast.',
         'Make Iftar supplications and feed another fasting person if possible.',
@@ -1708,7 +1613,7 @@ class _CalendarTabState extends State<CalendarTab> {
       ];
       fastingActsBn = [
         'সুন্নাত রোজা রাখা।',
-        'ইফতারের সময় দুআ করা এবং সম্ভব হলে কোনো রোজাদারকে ইফতার করানো।',
+        'ইফতারের সময় দুআ করা এবং সম্ভব হলে কোনো রোজাদারকে ইফতার করানো।',
         'সারা দিন কাজের ফাকে জিকির করা।',
         'নিজের জন্য এবং পুরো মুসলিম উম্মাহর জন্য ক্ষমা প্রার্থনা করা।',
       ];
@@ -1720,6 +1625,7 @@ class _CalendarTabState extends State<CalendarTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Fasting Badge
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
@@ -1734,35 +1640,62 @@ class _CalendarTabState extends State<CalendarTab> {
               const SizedBox(width: 6),
               Text(
                 title,
-                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.midTeal,
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
+        // Description
         Text(
           _isBengali ? 'বিবরণ' : 'Description',
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: AppColors.navyBlue,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
           description,
-          style: GoogleFonts.inter(fontSize: 13, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.5),
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: AppColors.navyBlue.withValues(alpha: 0.75),
+            height: 1.5,
+          ),
         ),
         const SizedBox(height: 18),
+        // History
         Text(
           _isBengali ? 'ইতিহাস ও গুরুত্ব' : 'History & Significance',
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: AppColors.navyBlue,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
           history,
-          style: GoogleFonts.inter(fontSize: 13, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.5),
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: AppColors.navyBlue.withValues(alpha: 0.75),
+            height: 1.5,
+          ),
         ),
         const SizedBox(height: 20),
+        // Fasting Activities
         Text(
           _isBengali ? 'আমল ও করণীয়' : 'Spiritual Activities',
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: AppColors.navyBlue,
+          ),
         ),
         const SizedBox(height: 10),
         Column(
@@ -1773,15 +1706,17 @@ class _CalendarTabState extends State<CalendarTab> {
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: CheckboxListTile(
                 value: isChecked,
-                onChanged: (val) => setState(() => _activityStatus[key] = val ?? false),
+                onChanged: (val) {
+                  setState(() {
+                    _activityStatus[key] = val ?? false;
+                  });
+                },
                 title: Text(
                   activities[index],
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
-                    color: isChecked
-                        ? const Color(0xFF4CAF50).withValues(alpha: 0.85)
-                        : AppColors.navyBlue.withValues(alpha: 0.8),
-                    decoration: TextDecoration.none,
+                    color: AppColors.navyBlue.withValues(alpha: 0.8),
+                    decoration: isChecked ? TextDecoration.lineThrough : null,
                   ),
                 ),
                 activeColor: AppColors.midTeal,
@@ -1795,7 +1730,7 @@ class _CalendarTabState extends State<CalendarTab> {
       ],
     );
   }
-
+  // ===== RENDER REGULAR DAY PLANNER =====
   Widget _buildRegularDayCard() {
     final List<String> dailyActs = [
       'Perform all 5 daily prayers on time (Fajr, Dhuhr, Asr, Maghrib, Isha).',
@@ -1816,24 +1751,34 @@ class _CalendarTabState extends State<CalendarTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Title
         Row(
           children: [
             const Icon(Icons.wb_sunny_outlined, color: AppColors.navyBlue, size: 20),
             const SizedBox(width: 8),
             Text(
               title,
-              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: AppColors.navyBlue,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 6),
         Text(
           _isBengali
-              ? 'একটি নিয়মিত আধ্যাত্মিক রুটিন বজায় রাখা ঈমান মজবুত করতে সাহায্য করে। নিচের তালিকাটি ব্যবহার করে আজকের আমলগুলো ট্র্যাক করুন:'
+              ? 'একটি নিয়মিত আধ্যাত্মিক রুটিন বজায় রাখা ঈমান মজবুত করতে সাহায্য করে। নিচের তালিকাটি ব্যবহার করে আজকের আমলগুলো ট্র্যাক করুন:'
               : 'Maintaining a structured daily spiritual routine strengthens your faith. Check off today\'s actions as you complete them:',
-          style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.navyBlue.withValues(alpha: 0.65), height: 1.4),
+          style: GoogleFonts.inter(
+            fontSize: 12.5,
+            color: AppColors.navyBlue.withValues(alpha: 0.65),
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 12),
+        // Checklist items
         Column(
           children: List.generate(activities.length, (index) {
             final key = '${DateFormat('yyyyMMdd').format(_selectedDate)}_regular_$index';
@@ -1842,15 +1787,17 @@ class _CalendarTabState extends State<CalendarTab> {
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: CheckboxListTile(
                 value: isChecked,
-                onChanged: (val) => setState(() => _activityStatus[key] = val ?? false),
+                onChanged: (val) {
+                  setState(() {
+                    _activityStatus[key] = val ?? false;
+                  });
+                },
                 title: Text(
                   activities[index],
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
-                    color: isChecked
-                        ? const Color(0xFF4CAF50).withValues(alpha: 0.85)
-                        : AppColors.navyBlue.withValues(alpha: 0.8),
-                    decoration: TextDecoration.none,
+                    color: AppColors.navyBlue.withValues(alpha: 0.8),
+                    decoration: isChecked ? TextDecoration.lineThrough : null,
                   ),
                 ),
                 activeColor: AppColors.midTeal,
@@ -1862,411 +1809,6 @@ class _CalendarTabState extends State<CalendarTab> {
           }),
         ),
       ],
-    );
-  }
-}
-
-// ===== HERO IMAGE CAROUSEL =====
-// Auto-scrolling carousel of 5-6 related photos for the event detail hero,
-// replacing the flat theme-color block. Cycles on a timer and shows dot
-// indicators. Falls back to a themeColor gradient per-slide (or entirely,
-// if no images are configured yet) so nothing breaks before real photo
-// assets are added.
-class _HeroImageCarousel extends StatefulWidget {
-  final List<String> images;
-  final Color fallbackColor;
-  final Duration interval;
-
-  const _HeroImageCarousel({
-    required this.images,
-    required this.fallbackColor,
-  }) : interval = const Duration(seconds: 4);
-
-  @override
-  State<_HeroImageCarousel> createState() => _HeroImageCarouselState();
-}
-
-class _HeroImageCarouselState extends State<_HeroImageCarousel> {
-  late final PageController _controller;
-  Timer? _timer;
-  int _page = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController();
-    _startAutoScroll();
-  }
-
-  void _startAutoScroll() {
-    if (widget.images.length <= 1) return;
-    _timer = Timer.periodic(widget.interval, (_) {
-      if (!mounted || !_controller.hasClients) return;
-      _page = (_page + 1) % widget.images.length;
-      _controller.animateToPage(
-        _page,
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeInOut,
-      );
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Widget _gradientFallback() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [widget.fallbackColor, widget.fallbackColor.withValues(alpha: 0.7)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.images.isEmpty) {
-      return _gradientFallback();
-    }
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        PageView.builder(
-          controller: _controller,
-          itemCount: widget.images.length,
-          onPageChanged: (i) => setState(() => _page = i),
-          itemBuilder: (context, index) {
-            return Image.asset(
-              widget.images[index],
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => _gradientFallback(),
-            );
-          },
-        ),
-        if (widget.images.length > 1)
-          Positioned(
-            bottom: 78,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(widget.images.length, (i) {
-                final isActive = i == _page;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: isActive ? 16 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: isActive ? 0.95 : 0.5),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                );
-              }),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-// ===== EVENT DETAIL PAGE =====
-// The dedicated, full-bleed "moment" screen for a significant Islamic day.
-// This is where the hero carousel + gradient overlay treatment lives —
-// nowhere else. The date is pinned in the app bar so it stays clearly
-// legible even once the user scrolls past the images.
-//
-// MOBILE-SIZE FRAME: regardless of the outer app's layout (e.g. a full
-// browser window on desktop), this page always renders itself inside a
-// fixed phone-width column (capped at 430px) centered on a grey
-// letterboxed background — the same trick used by responsive web apps to
-// preview a "phone" experience on a wide screen. On an actual phone,
-// 430px is wider than the viewport, so this is a no-op and it simply
-// fills the screen as before.
-class EventDetailPage extends StatelessWidget {
-  final IslamicEvent event;
-  final DateTime date;
-  final HijriDate hijri;
-  final bool isBengali;
-  final Map<String, bool> activityStatus;
-  final void Function(String key, bool value) onToggleActivity;
-
-  static const double _mobileFrameWidth = 430;
-
-  const EventDetailPage({
-    super.key,
-    required this.event,
-    required this.date,
-    required this.hijri,
-    required this.isBengali,
-    required this.activityStatus,
-    required this.onToggleActivity,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final title = isBengali ? event.titleBengali : event.title;
-    final description = isBengali ? event.descriptionBengali : event.description;
-    final history = isBengali ? event.historyBengali : event.history;
-    final activities = isBengali ? event.activitiesBengali : event.activities;
-    final gregorianStr = DateFormat('EEEE, MMMM d, yyyy').format(date);
-    final hijriStr = hijri.format(isBengali);
-
-    return Container(
-      // Grey letterbox background — only visible on screens wider than
-      // the mobile frame (i.e. desktop/laptop browsers).
-      color: const Color(0xFFE8E8E8),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _mobileFrameWidth),
-          child: Scaffold(
-            backgroundColor: Colors.white,
-            body: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverAppBar(
-                  expandedHeight: 300,
-                  pinned: true,
-                  backgroundColor: event.themeColor,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  flexibleSpace: FlexibleSpaceBar(
-                    collapseMode: CollapseMode.pin,
-                    background: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        _HeroImageCarousel(
-                          images: event.carouselImages,
-                          fallbackColor: event.themeColor,
-                        ),
-                        // Gradient overlay — guarantees the date/title read
-                        // clearly regardless of the underlying photo's brightness.
-                        IgnorePointer(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.black.withValues(alpha: 0.05),
-                                  Colors.black.withValues(alpha: 0.85),
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                stops: const [0.35, 1.0],
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 20,
-                          right: 20,
-                          bottom: 20,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                style: GoogleFonts.playfairDisplay(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              // Both dates, always clearly legible — the core
-                              // requirement, regardless of image content.
-                              Text(
-                                gregorianStr,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              Text(
-                                hijriStr,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white.withValues(alpha: 0.85),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildPrayerTimesSection(),
-                        const SizedBox(height: 18),
-                        _buildAyahSection(),
-                        const SizedBox(height: 20),
-                        Text(
-                          isBengali ? 'বিবরণ' : 'Description',
-                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          description,
-                          style: GoogleFonts.inter(fontSize: 13.5, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.6),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          isBengali ? 'ইতিহাস ও গুরুত্ব' : 'History & Significance',
-                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          history,
-                          style: GoogleFonts.inter(fontSize: 13.5, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.6),
-                        ),
-                        const SizedBox(height: 22),
-                        Text(
-                          isBengali ? 'করণীয় আমলসমূহ' : 'Recommended Activities',
-                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-                        ),
-                        const SizedBox(height: 10),
-                        Column(
-                          children: List.generate(activities.length, (index) {
-                            final key = '${DateFormat('yyyyMMdd').format(date)}_event_$index';
-                            final isChecked = activityStatus[key] ?? false;
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4.0),
-                              child: CheckboxListTile(
-                                value: isChecked,
-                                onChanged: (val) => onToggleActivity(key, val ?? false),
-                                title: Text(
-                                  activities[index],
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    color: isChecked
-                                        ? const Color(0xFF4CAF50).withValues(alpha: 0.85)
-                                        : AppColors.navyBlue.withValues(alpha: 0.8),
-                                    decoration: TextDecoration.none,
-                                  ),
-                                ),
-                                activeColor: AppColors.midTeal,
-                                contentPadding: EdgeInsets.zero,
-                                dense: true,
-                                controlAffinity: ListTileControlAffinity.leading,
-                              ),
-                            );
-                          }),
-                        ),
-                        SizedBox(height: 20 + MediaQuery.of(context).padding.bottom),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPrayerTimesSection() {
-    final times = CalendarDatabase.getPrayerTimesForDate(date);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.navyBlue.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.access_time_filled_rounded, color: AppColors.navyBlue, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                isBengali ? 'এই দিনের নামাজের সময়' : 'Prayer Times for This Day',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: times.map((entry) {
-              return Expanded(
-                child: Column(
-                  children: [
-                    Text(
-                      isBengali ? entry.nameBengali : entry.name,
-                      style: GoogleFonts.poppins(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.navyBlue.withValues(alpha: 0.6),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      DateFormat('h:mm a').format(entry.time),
-                      style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.midTeal),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAyahSection() {
-    final ayah = CalendarDatabase.getAyahForDate(date, hijri, event);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.coralOrange.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.coralOrange.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.menu_book_rounded, color: AppColors.coralOrange, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                isBengali ? 'আজকের প্রাসঙ্গিক আয়াত' : 'Related Ayah for Today',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            isBengali ? ayah.referenceBengali : ayah.reference,
-            style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.coralOrange),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            isBengali ? ayah.reflectionBengali : ayah.reflection,
-            style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.5),
-          ),
-        ],
-      ),
     );
   }
 }
