@@ -275,10 +275,55 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
       ),
       child: Column(
         children: [
-          if (widget.isPage)
-            SizedBox(height: MediaQuery.of(context).padding.top + 16)
-          else ...[
-            // Header handle
+          if (widget.isPage) ...[
+            SizedBox(height: MediaQuery.of(context).padding.top),
+            // Standardized page header: back button + icon + title
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                        color: AppColors.navyBlue, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.navyBlue,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.pets_rounded,
+                        color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Qurbani & Aqiqah Planner',
+                          style: GoogleFonts.poppins(
+                            color: AppColors.navyBlue,
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Plan your sacrifice according to Sunnah',
+                          style: GoogleFonts.inter(
+                            color: AppColors.navyBlue.withValues(alpha: 0.55),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Header handle for bottom sheet mode
             const SizedBox(height: 12),
             Container(
               width: 40,
@@ -289,54 +334,55 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
               ),
             ),
             const SizedBox(height: 12),
-          ],
-          // Sheet Title
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.navyBlue.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(14),
+            // Sheet Title (original layout for bottom sheet)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.navyBlue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.pets_rounded,
+                        color: AppColors.navyBlue, size: 24),
                   ),
-                  child: const Icon(Icons.pets_rounded, color: AppColors.navyBlue, size: 24),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Qurbani & Aqiqah Planner',
-                        style: GoogleFonts.poppins(
-                          color: AppColors.navyBlue,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Qurbani & Aqiqah Planner',
+                          style: GoogleFonts.poppins(
+                            color: AppColors.navyBlue,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      Text(
-                        'Plan and track your sacrifice according to Sunnah',
-                        style: GoogleFonts.inter(
-                          color: Colors.grey[600],
-                          fontSize: 12,
+                        Text(
+                          'Plan and track your sacrifice according to Sunnah',
+                          style: GoogleFonts.inter(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded, color: Colors.grey),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.grey[200],
-                    padding: const EdgeInsets.all(8),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.grey[200],
+                      padding: const EdgeInsets.all(8),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: 16),
           
           Padding(
