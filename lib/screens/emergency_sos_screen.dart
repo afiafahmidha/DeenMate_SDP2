@@ -589,7 +589,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
 
     NotificationService.instance.showCustomNotification(
       id: 9998,
-      title: "💚 Status Safe 💚",
+      title: " Status Safe ",
       body: "An 'I am Safe' broadcast has been sent to your emergency contacts.",
       scheduledTime: DateTime.now().add(const Duration(seconds: 1)),
     );
@@ -1652,7 +1652,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         ),
         const SizedBox(height: 8),
         _buildSafetyGuideCard(
-          title: "☀️ Heatstroke & Dehydration",
+          title: " Heatstroke & Dehydration",
           subtitle: "Recognize heat exhaustion & act instantly",
           icon: Icons.light_mode_rounded,
           iconColor: Colors.orange,
@@ -1660,7 +1660,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               "• Actions: Move to a shaded cool place immediately, spray skin with cold water or cover with damp sheets, fan actively. Offer small sips of cool water if conscious.",
         ),
         _buildSafetyGuideCard(
-          title: "🤝 Crowd Crush Survival Guide",
+          title: " Crowd Crush Survival Guide",
           subtitle: "What to do in a high-density crowd surge",
           icon: Icons.groups_rounded,
           iconColor: AppColors.navyBlue,
@@ -1669,7 +1669,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               "• Move Diagonally: Never fight the crowd force. Move diagonally with the flow toward edges.",
         ),
         _buildSafetyGuideCard(
-          title: "❤️ CPR & Basic First Aid",
+          title: " CPR & Basic First Aid",
           subtitle: "Offline quick-action cardiovascular resuscitation",
           icon: Icons.favorite_rounded,
           iconColor: Colors.red[800]!,
@@ -1679,7 +1679,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               "4. If trained, deliver 2 rescue breaths after every 30 compressions.",
         ),
         _buildSafetyGuideCard(
-          title: "🎒 \"Lost Pilgrim\" Protocol",
+          title: " \"Lost Pilgrim\" Protocol",
           subtitle: "Action steps if separated from group",
           icon: Icons.person_search_rounded,
           iconColor: AppColors.midTeal,
