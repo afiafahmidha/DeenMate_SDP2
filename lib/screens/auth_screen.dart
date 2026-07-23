@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
 import 'registration_page.dart';
-import 'dashboard_screen.dart';
+import 'package:deenmate_sdp2/screens/dashboard_screen.dart';
 
 enum AppScreenState {
   loading,
