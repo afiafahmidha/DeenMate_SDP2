@@ -641,7 +641,7 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'This guide only covers common cases: spouse, children, and parents. It does not handle siblings, grandparents, multiple wives with children from different marriages, debts, or wills (up to 1/3 of estate must be deducted first). For real distribution, please consult a qualified Islamic scholar or Faraid expert.',
+            'This guide only covers common cases: spouse, children, and parents. It does not handle siblings, grandparents, debts, or wills (up to 1/3 of estate must be deducted first). For real distribution, please consult a qualified Islamic scholar or Faraid expert.',
             style: GoogleFonts.inter(fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.6), height: 1.5),
           ),
         ],
