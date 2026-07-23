@@ -14,6 +14,7 @@ import 'inheritance_screen.dart';
 import 'qurbani_planner_screen.dart';
 import 'assistant_tab.dart';
 import 'zakat_manager_screen.dart';
+import 'quran_tracker_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'emergency_sos_screen.dart';
@@ -2496,6 +2497,13 @@ _buildAnimatedEntry(
                   icon: Icons.menu_book_rounded,
                   label: 'Quran Tracker',
                   iconPainter: _QuranIconPainter(),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const QuranTrackerScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 14),
