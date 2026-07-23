@@ -1430,7 +1430,7 @@ class _CalendarTabState extends State<CalendarTab> {
 
   Widget _buildPrayerCard(PrayerTimeEntry entry) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1446,28 +1446,35 @@ class _CalendarTabState extends State<CalendarTab> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Icon(
-                _getPrayerIcon(entry.name),
-                size: 13,
-                color: AppColors.navyBlue.withValues(alpha: 0.65),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                _isBengali ? entry.nameBengali : entry.name,
-                style: GoogleFonts.poppins(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.navyBlue,
+          Expanded(
+            child: Row(
+              children: [
+                Icon(
+                  _getPrayerIcon(entry.name),
+                  size: 13,
+                  color: AppColors.navyBlue.withValues(alpha: 0.65),
                 ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _isBengali ? entry.nameBengali : entry.name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.navyBlue,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 6),
           Text(
             DateFormat('h:mm a').format(entry.time),
             style: GoogleFonts.poppins(
-              fontSize: 11.5,
+              fontSize: 11,
               fontWeight: FontWeight.bold,
               color: AppColors.midTeal,
             ),
@@ -1730,7 +1737,7 @@ class _CalendarTabState extends State<CalendarTab> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.favorite_rounded, color: AppColors.midTeal, size: 16),
+              const Icon(Icons.spa_rounded, color: AppColors.midTeal, size: 16),
               const SizedBox(width: 6),
               Text(
                 title,
