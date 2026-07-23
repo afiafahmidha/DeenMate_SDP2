@@ -17,6 +17,7 @@ import 'zakat_manager_screen.dart';
 import 'quran_tracker_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'emergency_sos_screen.dart';
 import 'dhikr_counter_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -2538,6 +2539,14 @@ _buildAnimatedEntry(
                   icon: Icons.health_and_safety_rounded,
                   label: 'Emergency SOS',
                   iconPainter: _EmergencyIconPainter(),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const EmergencySosScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
