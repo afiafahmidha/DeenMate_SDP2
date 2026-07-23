@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'emergency_sos_screen.dart';
 import 'dhikr_counter_screen.dart';
+import 'profile_tab.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -32,6 +33,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   int _currentIndex = 0; // Bottom navigation tab
+  bool _isDarkMode = false; // Global Dark Mode state for the app
 
 
   // Animation controllers
@@ -215,9 +217,21 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
+  Future<void> _loadAppTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
+      });
+    } catch (e) {
+      debugPrint('Error loading app theme: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _loadAppTheme();
 
     _staggerController = AnimationController(
       vsync: this,
@@ -565,14 +579,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     return PopScope(
       canPop: false, // Prevent accidental back navigation that causes red error
       child: Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _isDarkMode ? const Color(0xFF121212) : Colors.white,
       body: Center(
         child: Container(
           width: appWidth,
           height: double.infinity,
           clipBehavior: Clip.antiAlias,
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: _isDarkMode ? const Color(0xFF121212) : Colors.white,
           ),
           child: Stack(
             children: [
@@ -746,7 +760,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Container(
       padding: EdgeInsets.only(bottom: bottomInset),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24),
           topRight: Radius.circular(24),
@@ -777,7 +791,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   Widget _buildNavItem(int index, IconData icon, String label) {
     final bool isSelected = _currentIndex == index;
-    final Color activeColor = AppColors.navyBlue;
+    final Color activeColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final Color inactiveColor = _isDarkMode ? Colors.white38 : AppColors.placeholder;
 
     return GestureDetector(
       onTap: () => setState(() {
@@ -799,13 +814,13 @@ class _DashboardScreenState extends State<DashboardScreen>
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? AppColors.dustyBlueTeal.withValues(alpha: 0.25)
+                    ? (_isDarkMode ? Colors.white.withOpacity(0.15) : AppColors.dustyBlueTeal.withValues(alpha: 0.25))
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
                 icon,
-                color: isSelected ? activeColor : AppColors.placeholder,
+                color: isSelected ? activeColor : inactiveColor,
                 size: 22,
               ),
             ),
@@ -815,7 +830,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               style: GoogleFonts.poppins(
                 fontSize: 10,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? activeColor : AppColors.placeholder,
+                color: isSelected ? activeColor : inactiveColor,
               ),
             ),
           ],
@@ -847,6 +862,19 @@ Widget _buildActiveTabContent() {
         );
       case 3:
         return const AssistantTab();
+      case 4:
+        return ProfileTab(
+          key: const ValueKey('ProfileTab'),
+          onLogout: widget.onLogout,
+          isDarkMode: _isDarkMode,
+          onThemeChanged: (isDark) async {
+            setState(() {
+              _isDarkMode = isDark;
+            });
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('is_dark_mode', isDark);
+          },
+        );
       default:
         return _buildPlaceholderTab();
     }
@@ -2158,7 +2186,7 @@ _buildAnimatedEntry(
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: AppColors.navyBlue.withValues(alpha: 0.65),
+                        color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65),
                         letterSpacing: 0.2,
                       ),
                     ),
@@ -2187,7 +2215,7 @@ _buildAnimatedEntry(
                   style: GoogleFonts.poppins(
                     fontSize: 30,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.navyBlue,
+                    color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -2405,7 +2433,7 @@ _buildAnimatedEntry(
         style: GoogleFonts.poppins(
           fontSize: 18,
           fontWeight: FontWeight.bold,
-          color: AppColors.navyBlue,
+          color: _isDarkMode ? Colors.white : AppColors.navyBlue,
           letterSpacing: 0.3,
         ),
       ),
@@ -2424,25 +2452,25 @@ _buildAnimatedEntry(
                 child: _buildFeatureCard(
                   icon: Icons.calculate_rounded,
                   label: 'Zakat Calculator',
-                  iconPainter: _ZakatIconPainter(),
+                  iconPainter: _ZakatIconPainter(isDark: _isDarkMode),
                   onTap: _showZakatCalculatorSheet,
                 ),
               ),
               const SizedBox(width: 14),
               Expanded(
-  child: _buildFeatureCard(
-    icon: Icons.pets_rounded,
-    label: 'Qurbani Planner',
-    iconPainter: _QurbaniIconPainter(),
-    onTap: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const QurbaniPlannerPage(),
-        ),
-      );
-    },
-  ),
-),
+                child: _buildFeatureCard(
+                  icon: Icons.pets_rounded,
+                  label: 'Qurbani Planner',
+                  iconPainter: _QurbaniIconPainter(isDark: _isDarkMode),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const QurbaniPlannerPage(),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -2452,7 +2480,7 @@ _buildAnimatedEntry(
                 child: _buildFeatureCard(
                   icon: Icons.flight_takeoff_rounded,
                   label: 'Hajj & Umrah',
-                  iconPainter: _HajjIconPainter(),
+                  iconPainter: _HajjIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -2467,7 +2495,7 @@ _buildAnimatedEntry(
                 child: _buildFeatureCard(
                   icon: Icons.account_balance_rounded,
                   label: 'Inheritance',
-                  iconPainter: _InheritanceIconPainter(),
+                  iconPainter: _InheritanceIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -2483,7 +2511,7 @@ _buildAnimatedEntry(
       ),
     );
   }
-  // ===== WORSHIP GRID =====
+
   // ===== WORSHIP GRID =====
   Widget _buildWorshipGrid() {
     return Padding(
@@ -2496,7 +2524,7 @@ _buildAnimatedEntry(
                 child: _buildFeatureCard(
                   icon: Icons.menu_book_rounded,
                   label: 'Quran Tracker',
-                  iconPainter: _QuranIconPainter(),
+                  iconPainter: _QuranIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -2511,7 +2539,7 @@ _buildAnimatedEntry(
                 child: _buildFeatureCard(
                   icon: Icons.fingerprint_rounded,
                   label: 'Dhikr Counter',
-                  iconPainter: _DhikrIconPainter(),
+                  iconPainter: _DhikrIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -2530,7 +2558,7 @@ _buildAnimatedEntry(
                 child: _buildFeatureCard(
                   icon: Icons.qr_code_scanner_rounded,
                   label: 'Halal Scanner',
-                  iconPainter: _HalalIconPainter(),
+                  iconPainter: _HalalIconPainter(isDark: _isDarkMode),
                 ),
               ),
               const SizedBox(width: 14),
@@ -2538,7 +2566,7 @@ _buildAnimatedEntry(
                 child: _buildFeatureCard(
                   icon: Icons.health_and_safety_rounded,
                   label: 'Emergency SOS',
-                  iconPainter: _EmergencyIconPainter(),
+                  iconPainter: _EmergencyIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -2573,17 +2601,17 @@ _buildAnimatedEntry(
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: AppColors.navyBlue.withValues(alpha: 0.08),
+                color: _isDarkMode ? Colors.black.withOpacity(0.3) : AppColors.navyBlue.withValues(alpha: 0.08),
                 blurRadius: 14,
                 offset: const Offset(0, 5),
               ),
             ],
             border: Border.all(
-              color: AppColors.navyBlue.withValues(alpha: 0.22),
+              color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.navyBlue.withValues(alpha: 0.22),
               width: 1.6,
             ),
           ),
@@ -2595,25 +2623,24 @@ _buildAnimatedEntry(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: AppColors.midTeal.withValues(alpha: 0.12),
+                  color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.midTeal.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppColors.midTeal.withValues(alpha: 0.25),
+                    color: _isDarkMode ? Colors.white.withOpacity(0.2) : AppColors.midTeal.withValues(alpha: 0.25),
                     width: 1,
                   ),
                 ),
                 child: iconPainter != null
                     ? CustomPaint(painter: iconPainter)
-                    : Icon(icon, color: AppColors.navyBlue, size: 22),
+                    : Icon(icon, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 22),
               ),
               const SizedBox(height: 14),
               Text(
                 label,
                 style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.navyBlue,
-                  letterSpacing: 0.1,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.bold,
+                  color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                 ),
               ),
             ],
@@ -2629,17 +2656,17 @@ _buildAnimatedEntry(
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: AppColors.navyBlue.withValues(alpha: 0.05),
+              color: _isDarkMode ? Colors.black.withOpacity(0.3) : AppColors.navyBlue.withValues(alpha: 0.05),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
           ],
           border: Border.all(
-            color: AppColors.dustyBlueTeal.withValues(alpha: 0.12),
+            color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.dustyBlueTeal.withValues(alpha: 0.12),
             width: 1,
           ),
         ),
@@ -2659,7 +2686,7 @@ _buildAnimatedEntry(
                   style: GoogleFonts.poppins(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.navyBlue,
+                    color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                   ),
                 ),
               ],
@@ -2670,7 +2697,7 @@ _buildAnimatedEntry(
               style: GoogleFonts.inter(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w400,
-                color: AppColors.navyBlue.withValues(alpha: 0.7),
+                color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.7),
                 height: 1.5,
               ),
             ),
@@ -2783,7 +2810,7 @@ class _DashboardTwinklingStarState extends State<_DashboardTwinklingStar>
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     );
-    _opacity = Tween<double>(begin: 0.05, end: 0.45).animate(
+    _opacity = Tween<double>(begin: 0.25, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
 
@@ -2830,7 +2857,7 @@ class _DashboardStarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.navyBlue.withValues(alpha: 0.25)
+      ..color = const Color(0xFFFFE082).withOpacity(0.9) // Bright glowing yellow-gold star
       ..style = PaintingStyle.fill;
     final path = Path();
     final cx = size.width / 2;
@@ -2848,7 +2875,7 @@ class _DashboardStarPainter extends CustomPainter {
     canvas.drawPath(path, paint);
 
     final corePaint = Paint()
-      ..color = AppColors.dustyBlueTeal.withValues(alpha: 0.6)
+      ..color = Colors.white.withOpacity(0.95)
       ..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(cx, cy), size.width * 0.12, corePaint);
   }
@@ -3377,10 +3404,13 @@ class _MosqueSilhouettePainter extends CustomPainter {
 
 // Zakat Calculator Icon
 class _ZakatIconPainter extends CustomPainter {
+  final bool isDark;
+  _ZakatIconPainter({this.isDark = false});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round;
@@ -3418,10 +3448,13 @@ class _ZakatIconPainter extends CustomPainter {
 
 // Qurbani Planner Icon
 class _QurbaniIconPainter extends CustomPainter {
+  final bool isDark;
+  _QurbaniIconPainter({this.isDark = false});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round
@@ -3465,10 +3498,13 @@ class _QurbaniIconPainter extends CustomPainter {
 
 // Hajj & Umrah Icon
 class _HajjIconPainter extends CustomPainter {
+  final bool isDark;
+  _HajjIconPainter({this.isDark = false});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round
@@ -3511,10 +3547,13 @@ class _HajjIconPainter extends CustomPainter {
 
 // Inheritance Icon
 class _InheritanceIconPainter extends CustomPainter {
+  final bool isDark;
+  _InheritanceIconPainter({this.isDark = false});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round;
@@ -3565,10 +3604,13 @@ class _InheritanceIconPainter extends CustomPainter {
 
 // Quran Tracker Icon
 class _QuranIconPainter extends CustomPainter {
+  final bool isDark;
+  _QuranIconPainter({this.isDark = false});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round
@@ -3610,10 +3652,13 @@ class _QuranIconPainter extends CustomPainter {
 
 // Dhikr Counter Icon
 class _DhikrIconPainter extends CustomPainter {
+  final bool isDark;
+  _DhikrIconPainter({this.isDark = false});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
@@ -3645,10 +3690,13 @@ class _DhikrIconPainter extends CustomPainter {
 
 // Halal Scanner Icon
 class _HalalIconPainter extends CustomPainter {
+  final bool isDark;
+  _HalalIconPainter({this.isDark = false});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round;
@@ -3689,6 +3737,9 @@ class _HalalIconPainter extends CustomPainter {
 
 // Emergency SOS Icon
 class _EmergencyIconPainter extends CustomPainter {
+  final bool isDark;
+  _EmergencyIconPainter({this.isDark = false});
+
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
@@ -3696,7 +3747,7 @@ class _EmergencyIconPainter extends CustomPainter {
     final s = size.width * 0.16;
 
     final paint = Paint()
-      ..color = AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round;
