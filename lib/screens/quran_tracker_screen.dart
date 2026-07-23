@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart'; // AppColors
@@ -39,7 +40,7 @@ class AyahContent {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QURAN TRACKER & OVERHAULED HUB
+// QURAN TRACKER & LIVE APP ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
 
 class QuranTrackerScreen extends StatefulWidget {
@@ -56,6 +57,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   // Active Reader View State (null means showing Surah List in Quran Tab)
   int? _activeReaderSurahId;
   int _activeReaderAyahIndex = 1;
+  bool _isLoadingSurah = false;
+  List<AyahContent> _loadedAyahs = [];
 
   // Active More view navigation
   String? _activeMoreSubView; // null, 'hifz', 'bookmarks', 'daily_ayah', 'stats', 'settings'
@@ -178,18 +181,18 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     SurahInfo(114, 'An-Nas', 'Mankind', 6, 'Makki', 30),
   ];
 
-  // State Persistence Data
-  int _currentStreak = 12;
-  int _longestStreak = 92;
+  // RESET Default Starting States (0 Completed metrics for a clean starting experience)
+  int _currentStreak = 0;
+  int _longestStreak = 0;
   int _targetDailyPages = 5;
-  int _completedPagesToday = 3;
-  int _khatmTotalJuzCompleted = 12;
-  String _khatmEstimatedCompletion = '15 September';
-  int _khatmTargetDays = 30; // Planner selection
+  int _completedPagesToday = 0;
+  int _khatmTotalJuzCompleted = 0;
+  String _khatmEstimatedCompletion = 'Not Configured';
+  int _khatmTargetDays = 30; // Planner target
 
   // Continue Reading Reference
-  int _continueSurahId = 2; // Al-Baqarah
-  int _continuePage = 57;
+  int _continueSurahId = 1; // Al-Fatihah
+  int _continuePage = 1;
   int _continueAyah = 1;
 
   // Search Filter
@@ -207,23 +210,12 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   // Completed states mapped by "Category_Supplication" -> bool
   final Map<String, bool> _completedWazifas = {};
 
-  // Hifz State
-  final int _hifzCompletedSurahs = 12;
-  final List<String> _weakSurahs = ['Surah Ar-Rahman', 'Surah Ya-Sin'];
-  final List<Map<String, dynamic>> _hifzRecords = [
-    {'surah': 'Surah Al-Mulk', 'ayahs': '1-10', 'date': 'Today'},
-    {'surah': 'Surah Al-Waqi\'ah', 'ayahs': '1-15', 'date': 'Yesterday'},
-  ];
+  // Bookmarks & Notes (Reset empty)
+  final List<Map<String, String>> _bookmarks = [];
+  final List<Map<String, String>> _reflections = [];
 
-  // Bookmarks & Notes
-  final List<Map<String, String>> _bookmarks = [
-    {'surah': 'Al-Baqarah', 'ayah': '255', 'name': 'Ayatul Kursi'},
-    {'surah': 'Al-Asr', 'ayah': '1', 'name': 'Surah Al-Asr Ayah 1'},
-    {'surah': 'Al-Mulk', 'ayah': '1', 'name': 'Surah Al-Mulk Ayah 1'},
-  ];
-  final List<Map<String, String>> _reflections = [
-    {'surah': 'Al-Baqarah', 'ayah': '183', 'note': 'Reflection on patience and self-restraint during fasting.'},
-  ];
+  // Dynamic Hifz Visual Quran Map state
+  Set<int> _memorizedSurahIds = {};
 
   // Settings state
   double _arabicFontSize = 24.0;
@@ -239,10 +231,9 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // STATIC REAL VERSES DICTIONARY
+  // STATIC REAL VERSES DICTIONARY (OFFLINE FALLBACK)
   // ─────────────────────────────────────────────────────────────────────────────
   static final Map<int, List<AyahContent>> _realQuranText = {
-    // Al-Fatihah (1)
     1: [
       const AyahContent(
         number: 1,
@@ -301,7 +292,6 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         englishExplanation: 'A prayer to be placed among the righteous, avoiding anger and deviation.',
       ),
     ],
-    // Al-Asr (103)
     103: [
       const AyahContent(
         number: 1,
@@ -328,7 +318,6 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         englishExplanation: 'The 4 conditions for success: Faith, good deeds, inviting to truth, and encouraging perseverance.',
       ),
     ],
-    // Al-Ikhlas (112)
     112: [
       const AyahContent(
         number: 1,
@@ -356,7 +345,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       ),
       const AyahContent(
         number: 4,
-        arabic: 'وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ',
+        arabic: 'وَمَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ',
         banglaTranslation: 'এবং তাঁর সমকক্ষ কেউ নেই।',
         englishTranslation: 'And there is none co-equal or comparable to Him."',
         banglaExplanation: 'গুণাবলীতে ও ক্ষমতায় আল্লাহর সমকক্ষ কেউ হতে পারে না।',
@@ -365,11 +354,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     ],
   };
 
-  // Safe and Dynamic Cap Generator to eliminate out-of-bounds error on Al-Asr and others
+  // Safe Generator Capped exactly at Surah size
   List<AyahContent> _generateSurahContent(int surahId, int totalAyahs) {
     if (_realQuranText.containsKey(surahId)) {
       final list = _realQuranText[surahId]!;
-      // Double check length matches or truncate/generate dynamically if mismatches
       if (list.length == totalAyahs) {
         return list;
       }
@@ -390,21 +378,81 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // STATE LOADING / SAVING
+  // LIVE API QURAN FETCHING SERVICE
+  // ─────────────────────────────────────────────────────────────────────────────
+  Future<void> _loadSurahData(int surahId, int totalAyahs) async {
+    setState(() {
+      _isLoadingSurah = true;
+      _loadedAyahs = [];
+    });
+
+    try {
+      final arabicUri = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId');
+      final banglaUri = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId/bn.bengali');
+      final englishUri = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId/en.sahih');
+
+      final responses = await Future.wait([
+        http.get(arabicUri).timeout(const Duration(seconds: 8)),
+        http.get(banglaUri).timeout(const Duration(seconds: 8)),
+        http.get(englishUri).timeout(const Duration(seconds: 8)),
+      ]);
+
+      if (responses[0].statusCode == 200 &&
+          responses[1].statusCode == 200 &&
+          responses[2].statusCode == 200) {
+        final arabicJson = jsonDecode(responses[0].body);
+        final banglaJson = jsonDecode(responses[1].body);
+        final englishJson = jsonDecode(responses[2].body);
+
+        final List<dynamic> arabicAyahs = arabicJson['data']['ayahs'];
+        final List<dynamic> banglaAyahs = banglaJson['data']['ayahs'];
+        final List<dynamic> englishAyahs = englishJson['data']['ayahs'];
+
+        final List<AyahContent> fetchedList = [];
+        for (int i = 0; i < arabicAyahs.length; i++) {
+          fetchedList.add(AyahContent(
+            number: arabicAyahs[i]['numberInSurah'] ?? (i + 1),
+            arabic: arabicAyahs[i]['text'] ?? '',
+            banglaTranslation: banglaAyahs[i]['text'] ?? '',
+            englishTranslation: englishAyahs[i]['text'] ?? '',
+            banglaExplanation: 'এই আয়াতের তাফসির আল্লাহর বাণী অনুযায়ী দ্বীনের সঠিক সরল পথের শিক্ষা দান করে।',
+            englishExplanation: 'This ayah guides the heart towards absolute righteousness and belief.',
+          ));
+        }
+
+        setState(() {
+          _loadedAyahs = fetchedList;
+          _isLoadingSurah = false;
+        });
+        return;
+      }
+    } catch (e) {
+      // Offline fallback
+    }
+
+    // Offline / timeout fallback generator
+    setState(() {
+      _loadedAyahs = _generateSurahContent(surahId, totalAyahs);
+      _isLoadingSurah = false;
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SHAPED STORAGE PERSISTENCE
   // ─────────────────────────────────────────────────────────────────────────────
   Future<void> _loadState() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _currentStreak = prefs.getInt('quran_tracker_streak') ?? 12;
-      _longestStreak = prefs.getInt('quran_longest_streak') ?? 92;
-      _completedPagesToday = prefs.getInt('quran_completed_pages_today') ?? 3;
+      _currentStreak = prefs.getInt('quran_tracker_streak') ?? 0;
+      _longestStreak = prefs.getInt('quran_longest_streak') ?? 0;
+      _completedPagesToday = prefs.getInt('quran_completed_pages_today') ?? 0;
       _targetDailyPages = prefs.getInt('quran_target_daily_pages') ?? 5;
-      _khatmTotalJuzCompleted = prefs.getInt('quran_khatm_juz_completed') ?? 12;
+      _khatmTotalJuzCompleted = prefs.getInt('quran_khatm_juz_completed') ?? 0;
       _isDarkMode = prefs.getBool('quran_settings_dark') ?? false;
       _arabicFontSize = prefs.getDouble('quran_settings_font_size') ?? 24.0;
 
-      _continueSurahId = prefs.getInt('quran_continue_surah') ?? 2;
-      _continuePage = prefs.getInt('quran_continue_page') ?? 57;
+      _continueSurahId = prefs.getInt('quran_continue_surah') ?? 1;
+      _continuePage = prefs.getInt('quran_continue_page') ?? 1;
       _continueAyah = prefs.getInt('quran_continue_ayah') ?? 1;
 
       // Load custom wazifa lists
@@ -424,6 +472,32 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           _completedWazifas[key] = val as bool;
         });
       }
+
+      // Load bookmarks & reflections
+      final bookmarkStr = prefs.getString('quran_bookmarks_json');
+      if (bookmarkStr != null) {
+        final List<dynamic> decoded = jsonDecode(bookmarkStr);
+        _bookmarks.clear();
+        for (final item in decoded) {
+          _bookmarks.add(Map<String, String>.from(item));
+        }
+      }
+
+      final reflectionsStr = prefs.getString('quran_reflections_json');
+      if (reflectionsStr != null) {
+        final List<dynamic> decoded = jsonDecode(reflectionsStr);
+        _reflections.clear();
+        for (final item in decoded) {
+          _reflections.add(Map<String, String>.from(item));
+        }
+      }
+
+      // Load Hifz memorized Surah IDs
+      final hifzStr = prefs.getString('quran_hifz_memorized_ids');
+      if (hifzStr != null) {
+        final List<dynamic> decoded = jsonDecode(hifzStr);
+        _memorizedSurahIds = decoded.map((e) => e as int).toSet();
+      }
     });
   }
 
@@ -441,17 +515,24 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     await prefs.setInt('quran_continue_page', _continuePage);
     await prefs.setInt('quran_continue_ayah', _continueAyah);
 
-    // Save custom wazifa lists
+    // Save custom wazifas
     for (final cat in _wazifaSupplications.keys) {
       await prefs.setString('quran_wazifa_supps_$cat', jsonEncode(_wazifaSupplications[cat]));
     }
 
-    // Save check states
+    // Save wazifa checks
     await prefs.setString('quran_wazifa_checks', jsonEncode(_completedWazifas));
+
+    // Save bookmarks & reflections
+    await prefs.setString('quran_bookmarks_json', jsonEncode(_bookmarks));
+    await prefs.setString('quran_reflections_json', jsonEncode(_reflections));
+
+    // Save Hifz memorized Surah IDs
+    await prefs.setString('quran_hifz_memorized_ids', jsonEncode(_memorizedSurahIds.toList()));
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // BASE WIDGET BUILD
+  // BASE STRUCTURE
   // ─────────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -602,7 +683,6 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   Widget _buildHomeTab(Color cardBg, Color themeText) {
     final continueSurahName = _surahList.firstWhere((e) => e.id == _continueSurahId).name;
 
-    // Calculate dynamic Wazifa completion for homepage Overview
     int totalTodayWazifas = 0;
     int completedTodayWazifas = 0;
     _wazifaSupplications.forEach((cat, list) {
@@ -661,6 +741,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                       _activeReaderAyahIndex = _continueAyah;
                       _bottomNavIndex = 1;
                     });
+                    _loadSurahData(_continueSurahId, _surahList.firstWhere((e) => e.id == _continueSurahId).totalAyahs);
                   },
                   child: Text('Continue', style: GoogleFonts.poppins(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                 ),
@@ -669,7 +750,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Streak & Goals
+          // Streak & Goals Row
           Row(
             children: [
               Expanded(
@@ -710,14 +791,14 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Today\'s Goal Progress', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: themeText)),
-                    Text('${((_completedPagesToday / _targetDailyPages) * 100).toInt().clamp(0, 100)}%', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                    Text('${_targetDailyPages > 0 ? ((_completedPagesToday / _targetDailyPages) * 100).toInt().clamp(0, 100) : 0}%', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
                   ],
                 ),
                 const SizedBox(height: 10),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: LinearProgressIndicator(
-                    value: (_completedPagesToday / _targetDailyPages).clamp(0.0, 1.0),
+                    value: _targetDailyPages > 0 ? (_completedPagesToday / _targetDailyPages).clamp(0.0, 1.0) : 0.0,
                     minHeight: 10,
                     backgroundColor: Colors.grey.withValues(alpha: 0.1),
                     valueColor: const AlwaysStoppedAnimation(AppColors.midTeal),
@@ -750,7 +831,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Today's Wazifa Card
+          // Supplication card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -768,7 +849,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                       children: [
                         const Icon(Icons.spa_rounded, color: AppColors.midTeal, size: 20),
                         const SizedBox(width: 8),
-                        Text('Supplication (Wazifa) Tracker', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: themeText)),
+                        Text('Supplication Tracker', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: themeText)),
                       ],
                     ),
                     Text('$completedTodayWazifas / $totalTodayWazifas Completed', style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
@@ -787,97 +868,49 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Dashboard Hifz Card
-          _buildDashboardHifzCard(cardBg, themeText),
+          // Dynamic Dashboard Hifz Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.bookmark_added_rounded, color: AppColors.coralOrange, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Hifz Memorization Progress', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: themeText)),
+                      ],
+                    ),
+                    Text('${_memorizedSurahIds.length} Surahs', style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text('Track your Quran memorization goals via the interactive Hifz Quran Map.', style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.placeholder)),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  onPressed: () => setState(() {
+                    _bottomNavIndex = 4;
+                    _activeMoreSubView = 'hifz';
+                  }),
+                  child: Text('Open Hifz Dashboard', style: GoogleFonts.poppins(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 14),
 
           // Daily Ayah Inspiration Card
           _buildDashboardDailyAyahCard(cardBg, themeText),
           const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHomeMiniCard(Color cardBg, IconData icon, Color iconColor, String title, String val) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: iconColor, size: 24),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder)),
-                const SizedBox(height: 2),
-                Text(val, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDashboardHifzCard(Color cardBg, Color themeText) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.favorite_rounded, color: AppColors.coralOrange, size: 20),
-              const SizedBox(width: 8),
-              Text('Hifz Revision Reminders', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: themeText)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ..._hifzRecords.map((r) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.coralOrange.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(r['surah']!, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: themeText)),
-                        Text('Ayah ${r['ayahs']} • Status: ${r['date']}', style: GoogleFonts.inter(fontSize: 11, color: AppColors.placeholder)),
-                      ],
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.coralOrange,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Revised ${r['surah']} successfully!')),
-                        );
-                      },
-                      child: Text('Revise', style: GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              )),
         ],
       ),
     );
@@ -903,7 +936,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            '“إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ”',
+            '“إِيَّاكَ نَعْبُعْدُ وَإِيَّاكَ نَسْتَعِينُ”',
             style: GoogleFonts.amiri(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
@@ -976,6 +1009,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                         _activeReaderSurahId = surah.id;
                         _activeReaderAyahIndex = 1;
                       });
+                      _loadSurahData(surah.id, surah.totalAyahs);
                     },
                   ),
                 );
@@ -988,21 +1022,45 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // VIEW 3: QURAN READER VIEW (PREVENTS AL-ASR ERROR & ADDS PAGE INCREMENT)
+  // VIEW 3: QURAN READER VIEW
   // ─────────────────────────────────────────────────────────────────────────────
   Widget _buildQuranReaderView(Color cardBg, Color themeText) {
-    final surah = _surahList.firstWhere((e) => e.id == _activeReaderSurahId);
-    final ayahs = _generateSurahContent(surah.id, surah.totalAyahs);
+    if (_isLoadingSurah) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(color: AppColors.midTeal),
+            const SizedBox(height: 16),
+            Text(
+              'Fetching verses from Holy Quran API...',
+              style: GoogleFonts.poppins(color: AppColors.midTeal, fontWeight: FontWeight.bold, fontSize: 13.5),
+            ),
+            Text(
+              'Please wait a moment',
+              style: GoogleFonts.inter(color: AppColors.placeholder, fontSize: 11.5),
+            ),
+          ],
+        ),
+      );
+    }
 
-    // Guard Ayah Index bounds safely
-    if (_activeReaderAyahIndex > surah.totalAyahs) {
-      _activeReaderAyahIndex = surah.totalAyahs;
+    final surah = _surahList.firstWhere((e) => e.id == _activeReaderSurahId);
+    if (_loadedAyahs.isEmpty) {
+      return Center(
+        child: Text('No Quran data loaded.', style: TextStyle(color: themeText)),
+      );
+    }
+
+    // Guard Index bounds
+    if (_activeReaderAyahIndex > _loadedAyahs.length) {
+      _activeReaderAyahIndex = _loadedAyahs.length;
     }
     if (_activeReaderAyahIndex < 1) {
       _activeReaderAyahIndex = 1;
     }
 
-    final currentAyah = ayahs[_activeReaderAyahIndex - 1];
+    final currentAyah = _loadedAyahs[_activeReaderAyahIndex - 1];
     final isBookmarked = _bookmarks.any((b) => b['surah'] == surah.name && b['ayah'] == '${currentAyah.number}');
 
     return Padding(
@@ -1128,33 +1186,31 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 child: Text('← Previous', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
               ),
               Text(
-                'Ayah $_activeReaderAyahIndex / ${surah.totalAyahs}',
+                'Ayah $_activeReaderAyahIndex / ${_loadedAyahs.length}',
                 style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: themeText),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue),
                 onPressed: () {
                   setState(() {
-                    if (_activeReaderAyahIndex < surah.totalAyahs) {
+                    if (_activeReaderAyahIndex < _loadedAyahs.length) {
                       _activeReaderAyahIndex++;
                     } else {
-                      // Surah finished, route back or show snackbar
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Completed Surah ${surah.name}!')),
                       );
                       return;
                     }
-                    // Sync Continue Reading State
                     _continueSurahId = surah.id;
                     _continueAyah = _activeReaderAyahIndex;
 
-                    // Dynamically increment read progress (approx 0.2 pages per Ayah)
+                    // Increment progress indicator
                     _completedPagesToday++;
                     _saveState();
                   });
                 },
                 child: Text(
-                  _activeReaderAyahIndex == surah.totalAyahs ? 'Finish' : 'Next Ayah →',
+                  _activeReaderAyahIndex == _loadedAyahs.length ? 'Finish' : 'Next Ayah →',
                   style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -1209,7 +1265,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // VIEW 4: PROGRESS TAB VIEW (INCLUDES KHATM PLANNER)
+  // VIEW 4: PROGRESS TAB VIEW
   // ─────────────────────────────────────────────────────────────────────────────
   Widget _buildProgressTabView(Color cardBg, Color themeText) {
     return SingleChildScrollView(
@@ -1239,7 +1295,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 const Divider(height: 16),
                 _buildProgressStatRow('Streak Counter', '$_currentStreak Days', Icons.local_fire_department_rounded),
                 const Divider(height: 16),
-                _buildProgressStatRow('Reading Time', '18 Hours', Icons.hourglass_top_rounded),
+                _buildProgressStatRow('Reading Time', '0 Hours', Icons.hourglass_top_rounded),
               ],
             ),
           ),
@@ -1548,7 +1604,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       crossAxisSpacing: 14,
       mainAxisSpacing: 14,
       children: [
-        _buildMoreGridItem(cardBg, Icons.favorite_rounded, AppColors.coralOrange, 'Hifz Tracker', 'Track memorized Surahs', () {
+        _buildMoreGridItem(cardBg, Icons.favorite_rounded, AppColors.coralOrange, 'Hifz Quran Map', 'Track memorization progression', () {
           setState(() => _activeMoreSubView = 'hifz');
         }),
         _buildMoreGridItem(cardBg, Icons.bookmark_rounded, AppColors.midTeal, 'Bookmarks', 'Saved Ayahs and Tafsir notes', () {
@@ -1628,7 +1684,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
 
     switch (_activeMoreSubView) {
       case 'hifz':
-        headerTitle = 'Hifz Tracker';
+        headerTitle = 'Hifz Quran Map';
         pageBody = _buildHifzFullPage(cardBg, themeText);
         break;
       case 'bookmarks':
@@ -1677,139 +1733,121 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   // FULL PAGE OVERRIDES FOR MORE TAB (HIGH-QUALITY INTERFACES)
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // 1. OVERHAULED HIFZ FULL PAGE
+  // 1. HIFZ QURAN MAP OVERVIEW (Visual Quran representation completed/remaining)
   Widget _buildHifzFullPage(Color cardBg, Color themeText) {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
+    final completed = _memorizedSurahIds.length;
+    final remaining = 114 - completed;
+    final percentage = completed > 0 ? ((completed / 114.0) * 100).toInt() : 0;
+
+    return Column(
+      children: [
+        // Summary Dashboard Card
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [AppColors.midTeal, Color(0xFF1D3557)]),
+              gradient: const LinearGradient(
+                colors: [AppColors.navyBlue, Color(0xFF1D3557)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Completed Hifz Portion', style: GoogleFonts.inter(color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text('$_hifzCompletedSurahs Surahs Memorized', style: GoogleFonts.poppins(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Quran Memorization Status', style: GoogleFonts.inter(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        Text('$completed Completed • $remaining Remaining', style: GoogleFonts.poppins(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Text('$percentage%', style: GoogleFonts.poppins(color: AppColors.coralOrange, fontSize: 20, fontWeight: FontWeight.bold)),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle),
-                  child: const Icon(Icons.bookmark_added_rounded, color: Colors.white, size: 24),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: completed / 114.0,
+                    minHeight: 8,
+                    backgroundColor: Colors.white10,
+                    valueColor: const AlwaysStoppedAnimation(AppColors.coralOrange),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
+        ),
 
-          Text('Today\'s Revision Plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13.5, color: themeText)),
-          const SizedBox(height: 8),
-          ..._hifzRecords.map((r) => Card(
+        // Visual Hifz Quran Surahs List
+        Expanded(
+          child: ListView.builder(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            itemCount: _surahList.length,
+            itemBuilder: (ctx, idx) {
+              final surah = _surahList[idx];
+              final isMemorized = _memorizedSurahIds.contains(surah.id);
+
+              return Card(
                 color: cardBg,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  title: Text(r['surah']!, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5)),
-                  subtitle: Text('Ayah ${r['ayahs']} • Scheduled: ${r['date']}', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
-                  trailing: const Icon(Icons.check_circle_outline_rounded, color: AppColors.midTeal),
-                ),
-              )),
-
-          const SizedBox(height: 14),
-          Text('Weak Surahs Needing Attention', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13.5, color: themeText)),
-          const SizedBox(height: 8),
-          ..._weakSurahs.map((w) => Card(
-                color: cardBg,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                margin: const EdgeInsets.only(bottom: 6),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   child: Row(
                     children: [
-                      const Icon(Icons.warning_amber_rounded, color: AppColors.coralOrange, size: 18),
-                      const SizedBox(width: 10),
-                      Text(w, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold)),
+                      CircleAvatar(
+                        backgroundColor: isMemorized ? AppColors.midTeal.withValues(alpha: 0.15) : Colors.grey.shade100,
+                        child: Text('${surah.id}', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: isMemorized ? AppColors.midTeal : AppColors.placeholder)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(surah.name, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: themeText)),
+                            Text('${surah.totalAyahs} Ayahs • ${surah.type}', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isMemorized ? AppColors.midTeal : AppColors.placeholder.withValues(alpha: 0.2),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            if (isMemorized) {
+                              _memorizedSurahIds.remove(surah.id);
+                            } else {
+                              _memorizedSurahIds.add(surah.id);
+                            }
+                            _saveState();
+                          });
+                        },
+                        child: Text(
+                          isMemorized ? 'Memorized' : 'Mark Done',
+                          style: GoogleFonts.poppins(color: isMemorized ? Colors.white : themeText, fontSize: 10.5, fontWeight: FontWeight.bold),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              )),
-          const SizedBox(height: 14),
-
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue, padding: const EdgeInsets.symmetric(vertical: 12)),
-            icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 18),
-            label: Text('Log New Memorized Portion', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5)),
-            onPressed: () {
-              _showAddHifzLogDialog();
+              );
             },
           ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  void _showAddHifzLogDialog() {
-    final surahController = TextEditingController();
-    final ayahsController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Text('Log Hifz Memorization', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: surahController,
-                style: TextStyle(color: _isDarkMode ? Colors.white : Colors.black),
-                decoration: const InputDecoration(hintText: 'Surah Name (e.g. Surah Yasin)'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: ayahsController,
-                style: TextStyle(color: _isDarkMode ? Colors.white : Colors.black),
-                decoration: const InputDecoration(hintText: 'Ayah Range (e.g. 1-15)'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel', style: GoogleFonts.poppins(color: AppColors.placeholder)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue),
-              onPressed: () {
-                if (surahController.text.trim().isNotEmpty && ayahsController.text.trim().isNotEmpty) {
-                  setState(() {
-                    _hifzRecords.insert(0, {
-                      'surah': surahController.text.trim(),
-                      'ayahs': ayahsController.text.trim(),
-                      'date': 'Today',
-                    });
-                    _saveState();
-                  });
-                  Navigator.pop(ctx);
-                }
-              },
-              child: Text('Log', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
+        ),
+      ],
     );
   }
 
@@ -1831,65 +1869,79 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           Expanded(
             child: TabBarView(
               children: [
-                ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _bookmarks.length,
-                  itemBuilder: (ctx, idx) {
-                    final item = _bookmarks[idx];
-                    return Card(
-                      color: cardBg,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: const Icon(Icons.bookmark_rounded, color: AppColors.coralOrange),
-                        title: Text(item['name']!, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
-                        subtitle: Text('Tap to open in reader', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
-                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.placeholder),
-                        onTap: () {
-                          // Find surah ID from list
-                          final targetSurah = _surahList.firstWhere((e) => e.name == item['surah'], orElse: () => _surahList[0]);
-                          setState(() {
-                            _activeReaderSurahId = targetSurah.id;
-                            _activeReaderAyahIndex = int.tryParse(item['ayah']!) ?? 1;
-                            _bottomNavIndex = 1;
-                            _activeMoreSubView = null;
-                          });
+                _bookmarks.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No Bookmarks saved yet.',
+                          style: GoogleFonts.poppins(color: AppColors.placeholder, fontSize: 12.5),
+                        ),
+                      )
+                    : ListView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _bookmarks.length,
+                        itemBuilder: (ctx, idx) {
+                          final item = _bookmarks[idx];
+                          return Card(
+                            color: cardBg,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              leading: const Icon(Icons.bookmark_rounded, color: AppColors.coralOrange),
+                              title: Text(item['name']!, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
+                              subtitle: Text('Tap to open in reader', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+                              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.placeholder),
+                              onTap: () {
+                                final targetSurah = _surahList.firstWhere((e) => e.name == item['surah'], orElse: () => _surahList[0]);
+                                setState(() {
+                                  _activeReaderSurahId = targetSurah.id;
+                                  _activeReaderAyahIndex = int.tryParse(item['ayah']!) ?? 1;
+                                  _bottomNavIndex = 1;
+                                  _activeMoreSubView = null;
+                                });
+                                _loadSurahData(targetSurah.id, targetSurah.totalAyahs);
+                              },
+                            ),
+                          );
                         },
                       ),
-                    );
-                  },
-                ),
-                ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _reflections.length,
-                  itemBuilder: (ctx, idx) {
-                    final item = _reflections[idx];
-                    return Card(
-                      color: cardBg,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: const Icon(Icons.sticky_note_2_outlined, color: AppColors.midTeal),
-                        title: Text('${item['surah']} [Ayah ${item['ayah']}]', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(item['note']!, style: GoogleFonts.inter(fontSize: 11.5, color: themeText)),
+                _reflections.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No Reflections recorded yet.',
+                          style: GoogleFonts.poppins(color: AppColors.placeholder, fontSize: 12.5),
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: AppColors.coralOrange, size: 18),
-                          onPressed: () {
-                            setState(() {
-                              _reflections.removeAt(idx);
-                              _saveState();
-                            });
-                          },
-                        ),
+                      )
+                    : ListView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _reflections.length,
+                        itemBuilder: (ctx, idx) {
+                          final item = _reflections[idx];
+                          return Card(
+                            color: cardBg,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              leading: const Icon(Icons.sticky_note_2_outlined, color: AppColors.midTeal),
+                              title: Text('${item['surah']} [Ayah ${item['ayah']}]', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(item['note']!, style: GoogleFonts.inter(fontSize: 11.5, color: themeText)),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, color: AppColors.coralOrange, size: 18),
+                                onPressed: () {
+                                  setState(() {
+                                    _reflections.removeAt(idx);
+                                    _saveState();
+                                  });
+                                },
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ],
             ),
           ),
@@ -1898,7 +1950,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     );
   }
 
-  // 3. OVERHAULED DAILY AYAH FULL PAGE (SPIRITUAL DESIGN)
+  // 3. DAILY AYAH FULL PAGE
   Widget _buildDailyAyahFullPage(Color cardBg, Color themeText) {
     final reflectionCtrl = TextEditingController();
 
@@ -1958,7 +2010,6 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Log user reflection
           Card(
             color: cardBg,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -2025,8 +2076,6 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
               children: [
                 Text('Visual Progress Dashboard', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.midTeal)),
                 const SizedBox(height: 14),
-
-                // Mock visual progression representation
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -2059,7 +2108,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                   const Divider(height: 14),
                   _buildStatTile('Accumulated Progress', '15 Juz'),
                   const Divider(height: 14),
-                  _buildStatTile('Total Reading Time', '34 Hours'),
+                  _buildStatTile('Total Reading Time', '0 Hours'),
                   const Divider(height: 14),
                   _buildStatTile('Longest Streak Record', '$_longestStreak Days'),
                 ],
@@ -2174,6 +2223,33 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         Text(label, style: GoogleFonts.inter(fontSize: 12, color: AppColors.placeholder)),
         Text(val, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
       ],
+    );
+  }
+
+  Widget _buildHomeMiniCard(Color cardBg, IconData icon, Color iconColor, String title, String val) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 24),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder)),
+                const SizedBox(height: 2),
+                Text(val, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
