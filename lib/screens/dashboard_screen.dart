@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -16,6 +16,7 @@ import 'assistant_tab.dart';
 import 'zakat_manager_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dhikr_counter_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -2481,6 +2482,7 @@ _buildAnimatedEntry(
     );
   }
   // ===== WORSHIP GRID =====
+  // ===== WORSHIP GRID =====
   Widget _buildWorshipGrid() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -2501,6 +2503,13 @@ _buildAnimatedEntry(
                   icon: Icons.fingerprint_rounded,
                   label: 'Dhikr Counter',
                   iconPainter: _DhikrIconPainter(),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const DhikrCounterScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -2529,9 +2538,7 @@ _buildAnimatedEntry(
       ),
     );
   }
-
-
-  // ===== FEATURE CARD (Reusable) =====
+ 
  // ===== FEATURE CARD (Reusable) =====
   Widget _buildFeatureCard({
     required IconData icon,
