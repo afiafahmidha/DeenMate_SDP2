@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../widgets/auth_header.dart'; // Import AppColors
+
 // ===== HIJRI DATE MODEL =====
 class HijriDate {
   final int year;
   final int month;
   final int day;
+
   HijriDate(this.year, this.month, this.day);
+
   static const List<String> monthNames = [
     'Muharram',
     'Safar',
@@ -22,6 +25,7 @@ class HijriDate {
     'Dhu al-Qa\'dah',
     'Dhu al-Hijjah',
   ];
+
   static const List<String> monthNamesBengali = [
     'মহররম',
     'সফর',
@@ -36,8 +40,10 @@ class HijriDate {
     'জিলকদ',
     'জিলহজ',
   ];
+
   String get monthName => monthNames[month - 1];
   String get monthNameBengali => monthNamesBengali[month - 1];
+
   String format(bool isBengali) {
     if (isBengali) {
       final bnDay = _toBengaliNumber(day);
@@ -46,6 +52,7 @@ class HijriDate {
     }
     return '$day $monthName $year AH';
   }
+
   static String _toBengaliNumber(int number) {
     const englishDigits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
@@ -56,6 +63,7 @@ class HijriDate {
     return result;
   }
 }
+
 // ===== HIJRI CONVERTER =====
 class HijriConverter {
   static int gToJd(int y, int m, int d) {
@@ -70,11 +78,13 @@ class HijriConverter {
     int f = (30.6001 * (m + 1)).floor();
     return c + d + e + f - 1524;
   }
+
   static HijriDate jdToH(int jd) {
     // 16 July 622 CE is JD 1948440
     int jdShift = jd - 1948440 + 10632;
     int cycle = (jdShift / 10631).floor();
     int rem = jdShift % 10631;
+
     int yearInCycle = 1;
     int elapsedDays = 0;
     final List<int> leapYears = [2, 5, 7, 10, 13, 16, 18, 21, 24, 26, 29];
@@ -86,8 +96,10 @@ class HijriConverter {
       }
       elapsedDays += days;
     }
+
     int hYear = cycle * 30 + yearInCycle - 30;
     int dayOfYear = rem - elapsedDays;
+
     int hMonth = 1;
     int hDay = 1;
     int tempDays = 0;
@@ -103,14 +115,17 @@ class HijriConverter {
       }
       tempDays += daysInMonth;
     }
+
     return HijriDate(hYear, hMonth, hDay);
   }
+
   static HijriDate fromGregorian(DateTime date) {
     // Basic tabular calculation. Add +1 adjustment to match standard moon calendars in South Asia
     int jd = gToJd(date.year, date.month, date.day);
     return jdToH(jd);
   }
 }
+
 // ===== ISLAMIC EVENT MODEL =====
 class IslamicEvent {
   final String title;
@@ -122,6 +137,7 @@ class IslamicEvent {
   final List<String> activities;
   final List<String> activitiesBengali;
   final Color themeColor;
+
   const IslamicEvent({
     required this.title,
     required this.titleBengali,
@@ -134,6 +150,7 @@ class IslamicEvent {
     this.themeColor = const Color(0xFFEB8A6C), // Coral accent
   });
 }
+
 // ===== ISLAMIC EVENTS DATABASE =====
 class CalendarDatabase {
   // Key: Month/Day as "Month-Day"
@@ -346,6 +363,7 @@ class CalendarDatabase {
       themeColor: Color(0xFFEB8A6C), // Coral
     ),
   };
+
   // Gregorian Overrides for 2026 and 2027 to align perfectly with regional moon calendars
   static const Map<String, String> gregorianOverrides = {
     // 2026
@@ -359,6 +377,7 @@ class CalendarDatabase {
     '2026-06-16': '1-1',    // Islamic New Year
     '2026-06-25': '1-10',   // Day of Ashura
     '2026-08-25': '3-12',   // Mawlid al-Nabi
+
     // 2027
     '2027-01-05': '7-27',   // Isra' Mi'raj
     '2027-01-23': '8-15',   // Shab-e-Barat
@@ -371,6 +390,7 @@ class CalendarDatabase {
     '2027-06-15': '1-10',   // Day of Ashura
     '2027-08-15': '3-12',   // Mawlid al-Nabi
   };
+
   static IslamicEvent? getEvent(DateTime date, HijriDate hijriDate) {
     // Check Gregorian overrides first
     final keyGregorian = DateFormat('yyyy-MM-dd').format(date);
@@ -383,24 +403,32 @@ class CalendarDatabase {
     return hijriEvents[keyHijri];
   }
 }
+
 // ===== INTERACTIVE CALENDAR TAB WIDGET =====
 class CalendarTab extends StatefulWidget {
   final VoidCallback onOpenZakatCalculator;
+  final bool isPage;
+
   const CalendarTab({
     super.key,
     required this.onOpenZakatCalculator,
+    this.isPage = false,
   });
+
   @override
   State<CalendarTab> createState() => _CalendarTabState();
 }
+
 class _CalendarTabState extends State<CalendarTab> {
   DateTime _currentMonth = DateTime(2026, 7, 1); // Defaults to July 2026
   DateTime _selectedDate = DateTime(2026, 7, 13); // Defaults to July 13, 2026 (System current)
   bool _isBengali = false; // Language toggle state
   bool _showAllEvents = false; // View toggle: false for grid, true for list of all events
+
   // In-memory state of checked Islamic activities for selected date to make it interactive!
   // Key: DateString + ActivityIndex
   final Map<String, bool> _activityStatus = {};
+
   @override
   void initState() {
     super.initState();
@@ -408,18 +436,21 @@ class _CalendarTabState extends State<CalendarTab> {
     _selectedDate = today;
     _currentMonth = DateTime(today.year, today.month, 1);
   }
+
   void _nextMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
       _selectDefaultDateForMonth(_currentMonth);
     });
   }
+
   void _prevMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
       _selectDefaultDateForMonth(_currentMonth);
     });
   }
+
   void _selectDefaultDateForMonth(DateTime month) {
     final today = DateTime.now();
     if (today.year == month.year && today.month == month.month) {
@@ -428,20 +459,25 @@ class _CalendarTabState extends State<CalendarTab> {
       _selectedDate = DateTime(month.year, month.month, 1);
     }
   }
+
   // Fasting checks
   bool _isMondayOrThursday(DateTime date) {
     return date.weekday == DateTime.monday || date.weekday == DateTime.thursday;
   }
+
   bool _isWhiteDay(HijriDate hijri) {
     return hijri.day == 13 || hijri.day == 14 || hijri.day == 15;
   }
+
   @override
   Widget build(BuildContext context) {
     final daysInMonthString = DateFormat('d').format(DateTime(_currentMonth.year, _currentMonth.month + 1, 0));
     final daysCount = int.parse(daysInMonthString);
     final firstDayOfWeek = DateTime(_currentMonth.year, _currentMonth.month, 1).weekday % 7; // 0 for Sunday
+
     final currentHijriMonthStart = HijriConverter.fromGregorian(DateTime(_currentMonth.year, _currentMonth.month, 1));
     final currentHijriMonthEnd = HijriConverter.fromGregorian(DateTime(_currentMonth.year, _currentMonth.month, daysCount));
+
     String hijriRangeStr = '';
     if (currentHijriMonthStart.month == currentHijriMonthEnd.month) {
       final mName = _isBengali ? currentHijriMonthStart.monthNameBengali : currentHijriMonthStart.monthName;
@@ -451,9 +487,11 @@ class _CalendarTabState extends State<CalendarTab> {
       final mNameEnd = _isBengali ? currentHijriMonthEnd.monthNameBengali : currentHijriMonthEnd.monthName;
       hijriRangeStr = '$mNameStart - $mNameEnd ${currentHijriMonthStart.year}';
     }
+
     final selectedHijri = HijriConverter.fromGregorian(_selectedDate);
     final selectedEvent = CalendarDatabase.getEvent(_selectedDate, selectedHijri);
     final selectedIsFasting = _isMondayOrThursday(_selectedDate) || _isWhiteDay(selectedHijri);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -467,12 +505,28 @@ class _CalendarTabState extends State<CalendarTab> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    _isBengali ? 'ইসলামিক ক্যালেন্ডার' : 'Islamic Calendar',
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.navyBlue,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        if (widget.isPage) ...[
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navyBlue),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        Expanded(
+                          child: Text(
+                            _isBengali ? 'ইসলামিক ক্যালেন্ডার' : 'Islamic Calendar',
+                            style: GoogleFonts.playfairDisplay(
+                              fontSize: widget.isPage ? 20 : 24,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.navyBlue,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   // Premium English / বাংলা toggle pill
@@ -526,6 +580,7 @@ class _CalendarTabState extends State<CalendarTab> {
                 ],
               ),
               const SizedBox(height: 12),
+
               // Segmented Toggle for Calendar vs All Events List
               Container(
                 decoration: BoxDecoration(
@@ -601,6 +656,7 @@ class _CalendarTabState extends State<CalendarTab> {
                 ),
               ),
               const SizedBox(height: 18),
+
               if (_showAllEvents) ...[
                 // ALL SPECIAL EVENTS LIST MODE
                 _buildEventsListView(),
@@ -617,28 +673,13 @@ class _CalendarTabState extends State<CalendarTab> {
                 // DETAILS PANEL
                 _buildDetailsPanel(selectedHijri, selectedEvent, selectedIsFasting),
               ],
-              const SizedBox(height: 20),
-              // SHORTCUT TO ZAKAT CALCULATOR
-              Center(
-                child: TextButton.icon(
-                  onPressed: widget.onOpenZakatCalculator,
-                  icon: const Icon(Icons.calculate_outlined, color: AppColors.midTeal, size: 18),
-                  label: Text(
-                    _isBengali ? 'জাকাত ক্যালকুলেটর খুলুন' : 'Open Zakat Calculator',
-                    style: GoogleFonts.poppins(
-                      color: AppColors.midTeal,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
       ),
     );
   }
+
   // ===== SEGMENTED COMPONENT: MONTH SELECTOR CARD =====
   Widget _buildMonthSelectorCard(String hijriRangeStr) {
     return Container(
@@ -697,6 +738,7 @@ class _CalendarTabState extends State<CalendarTab> {
       ),
     );
   }
+
   // ===== SEGMENTED COMPONENT: WEEKDAY HEADER =====
   Widget _buildWeekdayHeader() {
     return Row(
@@ -717,6 +759,7 @@ class _CalendarTabState extends State<CalendarTab> {
       }).toList(),
     );
   }
+
   // ===== SEGMENTED COMPONENT: CALENDAR GRID =====
   Widget _buildCalendarGrid(int daysCount, int firstDayOfWeek) {
     return GridView.builder(
@@ -734,19 +777,24 @@ class _CalendarTabState extends State<CalendarTab> {
         if (dayNumber <= 0 || dayNumber > daysCount) {
           return const SizedBox();
         }
+
         final cellDate = DateTime(_currentMonth.year, _currentMonth.month, dayNumber);
         final cellHijri = HijriConverter.fromGregorian(cellDate);
         final isSelected = cellDate.year == _selectedDate.year &&
             cellDate.month == _selectedDate.month &&
             cellDate.day == _selectedDate.day;
+
         final now = DateTime.now();
         final isToday = cellDate.year == now.year &&
             cellDate.month == now.month &&
             cellDate.day == now.day;
+
         final hasEvent = CalendarDatabase.getEvent(cellDate, cellHijri) != null;
         final isFasting = _isMondayOrThursday(cellDate) || _isWhiteDay(cellHijri);
+
         Color cellBgColor = Colors.transparent;
         Border? cellBorder;
+
         if (isSelected) {
           cellBgColor = AppColors.navyBlue;
         } else if (hasEvent) {
@@ -756,9 +804,11 @@ class _CalendarTabState extends State<CalendarTab> {
           cellBgColor = const Color(0xFFE8F4F0);
           cellBorder = Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.3), width: 1);
         }
+
         if (isToday && !isSelected) {
           cellBorder = Border.all(color: AppColors.navyBlue, width: 1.5, style: BorderStyle.solid);
         }
+
         return GestureDetector(
           onTap: () {
             setState(() {
@@ -833,6 +883,7 @@ class _CalendarTabState extends State<CalendarTab> {
       },
     );
   }
+
   // ===== SEGMENTED COMPONENT: DETAILS PANEL =====
   Widget _buildDetailsPanel(HijriDate selectedHijri, IslamicEvent? selectedEvent, bool selectedIsFasting) {
     return Container(
@@ -871,6 +922,7 @@ class _CalendarTabState extends State<CalendarTab> {
             ),
           ),
           const Divider(height: 25, thickness: 1),
+
           if (selectedEvent != null) ...[
             _buildEventDetailCard(selectedEvent),
           ] else if (selectedIsFasting) ...[
@@ -882,10 +934,12 @@ class _CalendarTabState extends State<CalendarTab> {
       ),
     );
   }
+
   // ===== HELPER: ALL EVENTS LIST VIEW MODE =====
   Widget _buildEventsListView() {
     final events = CalendarDatabase.hijriEvents.values.toList();
     final keys = CalendarDatabase.hijriEvents.keys.toList();
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -893,17 +947,22 @@ class _CalendarTabState extends State<CalendarTab> {
       itemBuilder: (context, index) {
         final event = events[index];
         final hijriKey = keys[index];
+
         final parts = hijriKey.split('-');
         final hMonth = int.parse(parts[0]);
         final hDay = int.parse(parts[1]);
+
         final tempHijri = HijriDate(2026, hMonth, hDay);
         final hijriDateStr = _isBengali
             ? '${HijriDate._toBengaliNumber(hDay)} ${tempHijri.monthNameBengali}'
             : '$hDay ${tempHijri.monthName}';
+
         final eventYear = _currentMonth.year;
         final gregDateStr = _getGregorianDateForEvent(hijriKey, eventYear);
+
         final title = _isBengali ? event.titleBengali : event.title;
         final description = _isBengali ? event.descriptionBengali : event.description;
+
         return Card(
           margin: const EdgeInsets.only(bottom: 16),
           color: Colors.white,
@@ -959,6 +1018,7 @@ class _CalendarTabState extends State<CalendarTab> {
                   children: [
                     const Divider(height: 1, thickness: 0.8),
                     const SizedBox(height: 12),
+
                     Text(
                       _isBengali ? 'বিবরণ' : 'Description',
                       style: GoogleFonts.poppins(
@@ -977,6 +1037,7 @@ class _CalendarTabState extends State<CalendarTab> {
                       ),
                     ),
                     const SizedBox(height: 12),
+
                     Text(
                       _isBengali ? 'ইতিহাস ও গুরুত্ব' : 'Significance & History',
                       style: GoogleFonts.poppins(
@@ -995,6 +1056,7 @@ class _CalendarTabState extends State<CalendarTab> {
                       ),
                     ),
                     const SizedBox(height: 12),
+
                     Text(
                       _isBengali ? 'করণীয় আমলসমূহ' : 'Recommended Activities',
                       style: GoogleFonts.poppins(
@@ -1011,6 +1073,7 @@ class _CalendarTabState extends State<CalendarTab> {
                           final activity = _isBengali ? event.activitiesBengali[actIndex] : event.activities[actIndex];
                           final key = '${eventYear}_${hijriKey}_act_$actIndex';
                           final isChecked = _activityStatus[key] ?? false;
+
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 2.0),
                             child: CheckboxListTile(
@@ -1037,6 +1100,7 @@ class _CalendarTabState extends State<CalendarTab> {
                         },
                       ),
                     ),
+
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerRight,
@@ -1072,6 +1136,7 @@ class _CalendarTabState extends State<CalendarTab> {
       },
     );
   }
+
   // ===== HELPER: GREGORIAN DATE RESOLVERS FOR EVENTS LIST =====
   String _getGregorianDateForEvent(String hijriKey, int year) {
     final rawDate = _getGregorianDateForEventRaw(hijriKey, year);
@@ -1081,6 +1146,7 @@ class _CalendarTabState extends State<CalendarTab> {
     }
     return '';
   }
+
   String _getGregorianDateForEventRaw(String hijriKey, int year) {
     for (var entry in CalendarDatabase.gregorianOverrides.entries) {
       if (entry.key.startsWith('$year-') && entry.value == hijriKey) {
@@ -1095,12 +1161,14 @@ class _CalendarTabState extends State<CalendarTab> {
     }
     return '';
   }
+
   // ===== RENDER EVENT DETAILS =====
   Widget _buildEventDetailCard(IslamicEvent event) {
     final title = _isBengali ? event.titleBengali : event.title;
     final description = _isBengali ? event.descriptionBengali : event.description;
     final history = _isBengali ? event.historyBengali : event.history;
     final activities = _isBengali ? event.activitiesBengali : event.activities;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1129,6 +1197,7 @@ class _CalendarTabState extends State<CalendarTab> {
           ),
         ),
         const SizedBox(height: 16),
+
         // Description
         Text(
           _isBengali ? 'বিবরণ' : 'Description',
@@ -1148,6 +1217,7 @@ class _CalendarTabState extends State<CalendarTab> {
           ),
         ),
         const SizedBox(height: 18),
+
         // History
         Text(
           _isBengali ? 'ইতিহাস ও গুরুত্ব' : 'History & Significance',
@@ -1167,6 +1237,7 @@ class _CalendarTabState extends State<CalendarTab> {
           ),
         ),
         const SizedBox(height: 20),
+
         // Recommended Activities
         Text(
           _isBengali ? 'করণীয় আমলসমূহ' : 'Recommended Activities',
@@ -1181,6 +1252,7 @@ class _CalendarTabState extends State<CalendarTab> {
           children: List.generate(activities.length, (index) {
             final key = '${DateFormat('yyyyMMdd').format(_selectedDate)}_event_$index';
             final isChecked = _activityStatus[key] ?? false;
+
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: CheckboxListTile(
@@ -1209,10 +1281,12 @@ class _CalendarTabState extends State<CalendarTab> {
       ],
     );
   }
+
   // ===== RENDER FASTING DETAILS =====
   Widget _buildFastingDetailCard(HijriDate hijri) {
     final isWhiteDay = _isWhiteDay(hijri);
     final isMonday = _selectedDate.weekday == DateTime.monday;
+
     String fastingTitle = '';
     String fastingTitleBn = '';
     String fastingDesc = '';
@@ -1221,6 +1295,7 @@ class _CalendarTabState extends State<CalendarTab> {
     String fastingHistoryBn = '';
     List<String> fastingActs = [];
     List<String> fastingActsBn = [];
+
     if (isWhiteDay) {
       fastingTitle = 'Ayyam al-Beedh (White Days) Fast';
       fastingTitleBn = 'আইয়ামে বিজের রোজা (চন্দ্র মাসের ১৩, ১৪ ও ১৫ তারিখ)';
@@ -1262,10 +1337,12 @@ class _CalendarTabState extends State<CalendarTab> {
         'নিজের জন্য এবং পুরো মুসলিম উম্মাহর জন্য ক্ষমা প্রার্থনা করা।',
       ];
     }
+
     final title = _isBengali ? fastingTitleBn : fastingTitle;
     final description = _isBengali ? fastingDescBn : fastingDesc;
     final history = _isBengali ? fastingHistoryBn : fastingHistory;
     final activities = _isBengali ? fastingActsBn : fastingActs;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1294,6 +1371,7 @@ class _CalendarTabState extends State<CalendarTab> {
           ),
         ),
         const SizedBox(height: 16),
+
         // Description
         Text(
           _isBengali ? 'বিবরণ' : 'Description',
@@ -1313,6 +1391,7 @@ class _CalendarTabState extends State<CalendarTab> {
           ),
         ),
         const SizedBox(height: 18),
+
         // History
         Text(
           _isBengali ? 'ইতিহাস ও গুরুত্ব' : 'History & Significance',
@@ -1332,6 +1411,7 @@ class _CalendarTabState extends State<CalendarTab> {
           ),
         ),
         const SizedBox(height: 20),
+
         // Fasting Activities
         Text(
           _isBengali ? 'আমল ও করণীয়' : 'Spiritual Activities',
@@ -1346,6 +1426,7 @@ class _CalendarTabState extends State<CalendarTab> {
           children: List.generate(activities.length, (index) {
             final key = '${DateFormat('yyyyMMdd').format(_selectedDate)}_fasting_$index';
             final isChecked = _activityStatus[key] ?? false;
+
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: CheckboxListTile(
@@ -1374,6 +1455,7 @@ class _CalendarTabState extends State<CalendarTab> {
       ],
     );
   }
+
   // ===== RENDER REGULAR DAY PLANNER =====
   Widget _buildRegularDayCard() {
     final List<String> dailyActs = [
@@ -1383,6 +1465,7 @@ class _CalendarTabState extends State<CalendarTab> {
       'Recite Salawat (100 times) and Istighfar (100 times).',
       'Do a voluntary good deed (help family, check on a neighbor, give charity).',
     ];
+
     final List<String> dailyActsBn = [
       'পাঁচ ওয়াক্ত ফরজ নামাজ সময়মতো আদায় করা (ফজর, জোহর, আসর, মাগরিব, এশা)।',
       'সকাল ও সন্ধ্যার মাসনুন জিকির ও দুআসমূহ (আজকার) পাঠ করা।',
@@ -1390,8 +1473,10 @@ class _CalendarTabState extends State<CalendarTab> {
       '১০০ বার দরূদ পাঠ ও ১০০ বার ইস্তিগফার (ক্ষমাপ্রার্থনা) করা।',
       'একটি নফল ভালো কাজ করা (পরিবারকে সাহায্য, দান বা ভালো কথা বলা)।',
     ];
+
     final title = _isBengali ? 'দৈনিক ইসলামি নির্দেশিকা' : 'Daily Islamic Guidance';
     final activities = _isBengali ? dailyActsBn : dailyActs;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1422,11 +1507,13 @@ class _CalendarTabState extends State<CalendarTab> {
           ),
         ),
         const SizedBox(height: 12),
+
         // Checklist items
         Column(
           children: List.generate(activities.length, (index) {
             final key = '${DateFormat('yyyyMMdd').format(_selectedDate)}_regular_$index';
             final isChecked = _activityStatus[key] ?? false;
+
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: CheckboxListTile(
