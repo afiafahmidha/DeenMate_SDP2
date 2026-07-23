@@ -109,7 +109,7 @@ class NotificationService {
 
     await _plugin.zonedSchedule(
       id,
-      '🕌 $arabicName • Time to Pray',
+      '$arabicName • Time to Pray',
       '$prayerName prayer time has arrived. May Allah accept your prayers.',
       tzTime,
       details,

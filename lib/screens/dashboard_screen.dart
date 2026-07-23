@@ -1,12 +1,10 @@
-﻿import 'dart:async';
-import 'dart:convert';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:adhan/adhan.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
@@ -15,6 +13,7 @@ import 'hajj_umrah_screen.dart';
 import 'inheritance_screen.dart';
 import 'qurbani_planner_screen.dart';
 import 'assistant_tab.dart';
+import 'zakat_manager_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -30,7 +29,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   int _currentIndex = 0; // Bottom navigation tab
-  VoidCallback? _onZakatChangedCallback;
+
 
   // Animation controllers
   late AnimationController _staggerController;
@@ -82,59 +81,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     'Isha': false,
   };
 
-  // ===== ZAKAT WEALTH STATE =====
-  final TextEditingController _zakatCashCtrl = TextEditingController(text: '0');
-  final TextEditingController _zakatGoldGramsCtrl = TextEditingController(text: '0'); // investment gold
-  final TextEditingController _zakatGoldJewelryCtrl = TextEditingController(text: '0'); // personal jewelry gold
-  final TextEditingController _zakatSilverGramsCtrl = TextEditingController(text: '0'); // investment silver
-  final TextEditingController _zakatSilverJewelryCtrl = TextEditingController(text: '0'); // personal jewelry silver
-  final TextEditingController _zakatStocksCtrl = TextEditingController(text: '0');
-  final TextEditingController _zakatBusinessCtrl = TextEditingController(text: '0');
-  final TextEditingController _zakatReceivableCtrl = TextEditingController(text: '0'); // good debt
-  final TextEditingController _zakatReceivableBadCtrl = TextEditingController(text: '0'); // bad debt
-  final TextEditingController _zakatLiabilitiesCtrl = TextEditingController(text: '0'); // immediate/short-term
-  final TextEditingController _zakatLongTermLiabilitiesCtrl = TextEditingController(text: '0'); // long-term mortgage/loans
 
-  // Zakat configuration settings (persisted)
-  String _nisabStandard = 'silver'; // 'gold' or 'silver'
-  String _zakatSchoolOfOpinion = 'hanafi'; // 'hanafi' (jewelry zakatable) or 'others' (jewelry exempt)
-  String _stockTradingIntent = 'holding'; // 'trading' (100%) or 'holding' (30%)
-  DateTime? _zakatStartCrossingDate; // When wealth first crossed Nisab
-
-  // Payment Logs (persisted as JSON strings)
-  List<Map<String, dynamic>> _zakatPayments = [];
-
-  // Zakat al-Fitr (persisted)
-  int _fitraFamilySize = 1;
-  String _fitraStaple = 'Flour'; // Flour, Dates, Raisins, Barley
-  double _fitraCustomRate = 115.0; // BDT
-  List<Map<String, dynamic>> _fitraPayments = [];
-
-  // What-if simulator values (percentage / amount)
-  double _whatIfDonation = 0.0;
-  double _whatIfInvestmentGrowth = 0.0; // 0 to 100 percentage
-
-  // Live metal prices (fetched from API)
-  double _goldSpotUSD = 3280.0;   // per troy oz  (fallback)
-  double _silverSpotUSD = 33.0;   // per troy oz  (fallback)
-  double _usdToBDT = 110.0;       // exchange rate (fallback)
-  double _goldPricePerGramBDT = 0.0;
-  double _silverPricePerGramBDT = 0.0;
-  bool _pricesLoading = true;
-  String _pricesLastUpdated = '--:-- --';
-  Timer? _priceRefreshTimer;
-
-  // Price history for sparkline charts (stores BDT/gram readings over session)
-  final List<double> _goldHistory = [];
-  final List<double> _silverHistory = [];
-
-  // Dynamic Nisab threshold based on gold vs silver standard
-  double get _nisabBDT => _nisabStandard == 'gold'
-      ? 85.0 * _goldPricePerGramBDT
-      : 595.0 * _silverPricePerGramBDT;
-
-  double _totalZakatableWealth = 0.0;
-  double _zakatDue = 0.0;
 
   // In-app alarm overlay (shown when prayer time strikes while app is open)
   bool _showAlarmOverlay = false;
@@ -144,91 +91,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Cached today's prayer DateTimes for alarm scheduling
   DateTime? _fajrTime, _sunriseTime, _dhuhrTime, _asrTime, _maghribTime, _ishaTime;
 
-  // Fetch live gold/silver spot prices + USD-BDT exchange rate
-  Future<void> _fetchLivePrices() async {
-    try {
-      // 1. Fetch metal spot prices (metals.live - free, no key)
-      final metalRes = await http
-          .get(Uri.parse('https://api.metals.live/v1/spot'))
-          .timeout(const Duration(seconds: 10));
-      if (metalRes.statusCode == 200) {
-        final List<dynamic> data = json.decode(metalRes.body);
-        final Map<String, dynamic> spot = data.first as Map<String, dynamic>;
-        _goldSpotUSD = (spot['gold'] as num).toDouble();
-        _silverSpotUSD = (spot['silver'] as num).toDouble();
-      }
-    } catch (e) {
-      debugPrint('Metals price fetch failed: $e');
-    }
-
-    try {
-      // 2. Fetch live USD → BDT exchange rate
-      final fxRes = await http
-          .get(Uri.parse('https://open.er-api.com/v6/latest/USD'))
-          .timeout(const Duration(seconds: 10));
-      if (fxRes.statusCode == 200) {
-        final Map<String, dynamic> fx = json.decode(fxRes.body);
-        _usdToBDT = (fx['rates']['BDT'] as num).toDouble();
-      }
-    } catch (e) {
-      debugPrint('FX rate fetch failed: $e');
-    }
-
-    // 3. Convert to BDT per gram  (1 troy oz = 31.1035 g)
-    final newGold = (_goldSpotUSD / 31.1035) * _usdToBDT;
-    final newSilver = (_silverSpotUSD / 31.1035) * _usdToBDT;
-
-    // Seed initial history with small realistic variance so chart looks alive
-    if (_goldHistory.isEmpty) {
-      for (int i = 8; i >= 1; i--) {
-        _goldHistory.add(newGold * (1.0 + (math.Random().nextDouble() - 0.5) * 0.006));
-      }
-      for (int i = 8; i >= 1; i--) {
-        _silverHistory.add(newSilver * (1.0 + (math.Random().nextDouble() - 0.5) * 0.008));
-      }
-    }
-    _goldHistory.add(newGold);
-    _silverHistory.add(newSilver);
-    // Keep last 20 readings
-    if (_goldHistory.length > 20) _goldHistory.removeAt(0);
-    if (_silverHistory.length > 20) _silverHistory.removeAt(0);
-
-    if (mounted) {
-      setState(() {
-        _goldPricePerGramBDT = newGold;
-        _silverPricePerGramBDT = newSilver;
-        _pricesLoading = false;
-        _pricesLastUpdated = DateFormat('hh:mm a').format(DateTime.now());
-      });
-      _recalculateZakat();
-    }
-  }
-
-  void _recalculateZakat() {
-    final cash = double.tryParse(_zakatCashCtrl.text.replaceAll(',', '')) ?? 0;
-    final goldGrams = double.tryParse(_zakatGoldGramsCtrl.text.replaceAll(',', '')) ?? 0;
-    final silverGrams = double.tryParse(_zakatSilverGramsCtrl.text.replaceAll(',', '')) ?? 0;
-    final goldValue = goldGrams * _goldPricePerGramBDT;
-    final silverValue = silverGrams * _silverPricePerGramBDT;
-    final stocks = double.tryParse(_zakatStocksCtrl.text.replaceAll(',', '')) ?? 0;
-    final business = double.tryParse(_zakatBusinessCtrl.text.replaceAll(',', '')) ?? 0;
-    final receivable = double.tryParse(_zakatReceivableCtrl.text.replaceAll(',', '')) ?? 0;
-    final liabilities = double.tryParse(_zakatLiabilitiesCtrl.text.replaceAll(',', '')) ?? 0;
-    final gross = cash + goldValue + silverValue + stocks + business + receivable;
-    final net = (gross - liabilities).clamp(0.0, double.infinity);
-    if (mounted) {
-      setState(() {
-        _totalZakatableWealth = net;
-        _zakatDue = (_goldPricePerGramBDT > 0 && net >= _nisabBDT) ? net * 0.025 : 0.0;
-      });
-    } else {
-      _totalZakatableWealth = net;
-      _zakatDue = (_goldPricePerGramBDT > 0 && net >= _nisabBDT) ? net * 0.025 : 0.0;
-    }
-    if (_onZakatChangedCallback != null) {
-      _onZakatChangedCallback!();
-    }
-  }
 
   // Stars configuration for dashboard background
   final List<_DashboardStarConfig> _stars = [
@@ -374,9 +236,6 @@ class _DashboardScreenState extends State<DashboardScreen>
       duration: const Duration(milliseconds: 30000), // slow drift
     )..repeat();
 
-    // Initialize gold & silver price in BDT per gram with instant fallback prices
-    _goldPricePerGramBDT = (_goldSpotUSD / 31.1035) * _usdToBDT;
-    _silverPricePerGramBDT = (_silverSpotUSD / 31.1035) * _usdToBDT;
 
     // Load saved Qaza counts
     _loadQazaCounts();
@@ -387,12 +246,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     // Start location services & prayer time updates
     _initLocationAndTracking();
-
-    // Fetch live gold/silver/forex prices immediately, then refresh every 5 minutes
-    _fetchLivePrices();
-    _priceRefreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      if (mounted) _fetchLivePrices();
-    });
   }
 
   @override
@@ -402,18 +255,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _floatController.dispose();
     _cloudsController.dispose();
     _realTimeTimer?.cancel();
-    _priceRefreshTimer?.cancel();
-    _zakatCashCtrl.dispose();
-    _zakatGoldGramsCtrl.dispose();
-    _zakatGoldJewelryCtrl.dispose();
-    _zakatSilverGramsCtrl.dispose();
-    _zakatSilverJewelryCtrl.dispose();
-    _zakatStocksCtrl.dispose();
-    _zakatBusinessCtrl.dispose();
-    _zakatReceivableCtrl.dispose();
-    _zakatReceivableBadCtrl.dispose();
-    _zakatLiabilitiesCtrl.dispose();
-    _zakatLongTermLiabilitiesCtrl.dispose();
     super.dispose();
   }
 
@@ -976,6 +817,15 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ===== ZAKAT NAVIGATION =====
+  void _showZakatCalculatorSheet() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ZakatManagerScreen(),
       ),
     );
   }
@@ -2861,782 +2711,7 @@ _buildAnimatedEntry(
     );
   }
 
-  // ===== ZAKAT WEALTH MANAGEMENT TAB =====
-  Widget _buildZakatTab({bool isBottomSheet = false, bool isPage = false, ScrollController? scrollController}) {
-    final bool isEligible = _totalZakatableWealth >= _nisabBDT;
-    String formatBDT(double v) {
-      if (v >= 1000000) return '৳${(v / 1000000).toStringAsFixed(2)}M';
-      if (v >= 100000) return '৳${(v / 100000).toStringAsFixed(1)}L';
-      if (v >= 1000) return '৳${(v / 1000).toStringAsFixed(1)}K';
-      return '৳${v.toStringAsFixed(0)}';
-    }
-
-    final double goldGrams = double.tryParse(_zakatGoldGramsCtrl.text) ?? 0;
-    final double silverGrams = double.tryParse(_zakatSilverGramsCtrl.text) ?? 0;
-    final double goldVal = goldGrams * _goldPricePerGramBDT;
-    final double silverVal = silverGrams * _silverPricePerGramBDT;
-
-    return SingleChildScrollView(
-      key: const ValueKey('ZakatTab'),
-      controller: scrollController,
-      physics: const BouncingScrollPhysics(),
-      padding: (isBottomSheet || isPage)
-          ? EdgeInsets.only(
-              top: isPage ? MediaQuery.of(context).padding.top + 16 : 16,
-              bottom: 24 + (isPage ? MediaQuery.of(context).padding.bottom : 0),
-            )
-          : const EdgeInsets.only(top: 52, bottom: 90),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── Page Title ──────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.navyBlue,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.volunteer_activism_rounded,
-                      color: Colors.white, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Zakat Manager',
-                          style: GoogleFonts.poppins(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.navyBlue,
-                          )),
-                      Text('Manage your wealth & obligations',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: AppColors.navyBlue.withValues(alpha: 0.55),
-                          )),
-                    ],
-                  ),
-                ),
-                if (isBottomSheet || isPage)
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: AppColors.navyBlue),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Zakat Due / Nisab Status Card ────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Container(
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: isEligible
-                      ? [const Color(0xFF14243B), const Color(0xFF1C3A27)] // Deep navy & deep green
-                      : [const Color(0xFF14243B), const Color(0xFF22364A)],
-                ),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.navyBlue.withValues(alpha: 0.20),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        isEligible ? 'Zakat Due This Year' : 'Below Nisab Threshold',
-                        style: GoogleFonts.inter(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isEligible
-                              ? const Color(0xFF4CAF50).withValues(alpha: 0.22)
-                              : Colors.white.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          isEligible ? '2.5% Applied' : 'Not Eligible',
-                          style: GoogleFonts.inter(
-                            color: isEligible ? const Color(0xFF81C784) : Colors.white60,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    isEligible
-                        ? '৳ ${_zakatDue.toStringAsFixed(0)}'
-                        : '৳ 0',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 34,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(color: Colors.white12, height: 1),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildZakatStatChip(
-                          'Net Zakatable',
-                          formatBDT(_totalZakatableWealth),
-                          Icons.account_balance_wallet_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildZakatStatChip(
-                          'Nisab (85g Gold)',
-                          formatBDT(_nisabBDT),
-                          Icons.stars_rounded,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Real-World Market Spot Prices Card with Sparkline ────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.navyBlue.withValues(alpha: 0.05),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            const Icon(Icons.analytics_rounded,
-                                color: AppColors.navyBlue, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Metal Market Rates (BDT/g)',
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: AppColors.navyBlue,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (_pricesLoading)
-                        const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.navyBlue),
-                          ),
-                        )
-                      else
-                        Text(
-                          'Live · $_pricesLastUpdated',
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF2E7D32),
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      // Gold info & sparkline
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('24K Gold Price',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppColors.navyBlue.withValues(alpha: 0.5),
-                                  fontWeight: FontWeight.w500,
-                                )),
-                            const SizedBox(height: 3),
-                            Text('৳ ${_goldPricePerGramBDT.toStringAsFixed(1)}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.navyBlue,
-                                )),
-                            const SizedBox(height: 8),
-                            // Gold Sparkline
-                            SizedBox(
-                              height: 30,
-                              width: double.infinity,
-                              child: CustomPaint(
-                                painter: _SparklinePainter(
-                                  data: _goldHistory,
-                                  lineColor: const Color(0xFFB59410),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      // Silver info & sparkline
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Pure Silver Price',
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppColors.navyBlue.withValues(alpha: 0.5),
-                                  fontWeight: FontWeight.w500,
-                                )),
-                            const SizedBox(height: 3),
-                            Text('৳ ${_silverPricePerGramBDT.toStringAsFixed(1)}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.navyBlue,
-                                )),
-                            const SizedBox(height: 8),
-                            // Silver Sparkline
-                            SizedBox(
-                              height: 30,
-                              width: double.infinity,
-                              child: CustomPaint(
-                                painter: _SparklinePainter(
-                                  data: _silverHistory,
-                                  lineColor: const Color(0xFF78909C),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ── Section: Wealth Inputs ───────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Row(
-              children: [
-                Container(width: 4, height: 18,
-                    decoration: BoxDecoration(
-                      color: AppColors.navyBlue,
-                      borderRadius: BorderRadius.circular(2),
-                    )),
-                const SizedBox(width: 10),
-                Text('Zakatable Assets',
-                    style: GoogleFonts.poppins(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.navyBlue,
-                    )),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Wealth input cards (Using clean monochrome navy outline design style)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Column(
-              children: [
-                _buildWealthInputRow(
-                  icon: Icons.account_balance_wallet_outlined,
-                  label: 'Cash & Bank Savings',
-                  sublabel: 'Includes cash on hand and account balances',
-                  controller: _zakatCashCtrl,
-                  suffix: '৳',
-                ),
-                _buildWealthInputRow(
-                  icon: Icons.brightness_high_outlined,
-                  label: 'Gold Quantity',
-                  sublabel: 'Total weight of gold in grams',
-                  controller: _zakatGoldGramsCtrl,
-                  suffix: 'g',
-                ),
-                _buildWealthInputRow(
-                  icon: Icons.blur_on_outlined,
-                  label: 'Silver Quantity',
-                  sublabel: 'Total weight of silver in grams',
-                  controller: _zakatSilverGramsCtrl,
-                  suffix: 'g',
-                ),
-                _buildWealthInputRow(
-                  icon: Icons.trending_up_outlined,
-                  label: 'Stocks & Fund Shares',
-                  sublabel: 'Current value of investment portfolio',
-                  controller: _zakatStocksCtrl,
-                  suffix: '৳',
-                ),
-                _buildWealthInputRow(
-                  icon: Icons.store_outlined,
-                  label: 'Business Assets',
-                  sublabel: 'Value of inventory, goods & raw materials',
-                  controller: _zakatBusinessCtrl,
-                  suffix: '৳',
-                ),
-                _buildWealthInputRow(
-                  icon: Icons.receipt_long_outlined,
-                  label: 'Receivables & Loans',
-                  sublabel: 'Monies owed to you expected to be repaid',
-                  controller: _zakatReceivableCtrl,
-                  suffix: '৳',
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Section: Liabilities ─────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Row(
-              children: [
-                Container(width: 4, height: 18,
-                    decoration: BoxDecoration(
-                      color: AppColors.coralOrange,
-                      borderRadius: BorderRadius.circular(2),
-                    )),
-                const SizedBox(width: 10),
-                Text('Liabilities & Debts',
-                    style: GoogleFonts.poppins(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.navyBlue,
-                    )),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: _buildWealthInputRow(
-              icon: Icons.money_off_outlined,
-              label: 'Outstanding Debts & Bills',
-              sublabel: 'Liabilities, upcoming bills & immediate dues',
-              controller: _zakatLiabilitiesCtrl,
-              suffix: '৳',
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ── Wealth Statement ─────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Container(
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.navyBlue.withValues(alpha: 0.05),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.description_outlined,
-                          color: AppColors.navyBlue, size: 20),
-                      const SizedBox(width: 8),
-                      Text('Wealth Statement Summary',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14.5,
-                            color: AppColors.navyBlue,
-                          )),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  _buildStatementLine('Cash & Bank', _zakatCashCtrl.text),
-                  _buildStatementLine(
-                      'Gold (${goldGrams.toStringAsFixed(1)}g @ BDT ${_goldPricePerGramBDT.toStringAsFixed(0)}/g)',
-                      goldVal.toStringAsFixed(0)),
-                  _buildStatementLine(
-                      'Silver (${silverGrams.toStringAsFixed(1)}g @ BDT ${_silverPricePerGramBDT.toStringAsFixed(0)}/g)',
-                      silverVal.toStringAsFixed(0)),
-                  _buildStatementLine('Stocks & Investments', _zakatStocksCtrl.text),
-                  _buildStatementLine('Business Inventory', _zakatBusinessCtrl.text),
-                  _buildStatementLine('Receivables & Loans', _zakatReceivableCtrl.text),
-                  const Divider(height: 24, thickness: 1, color: Color(0xFFEEEEEE)),
-                  _buildStatementLine('Total Gross Assets',
-                      (double.tryParse(_zakatCashCtrl.text.replaceAll(',', '')) ?? 0 +
-                              goldVal +
-                              silverVal +
-                              (double.tryParse(_zakatStocksCtrl.text.replaceAll(',', '')) ?? 0) +
-                              (double.tryParse(_zakatBusinessCtrl.text.replaceAll(',', '')) ?? 0) +
-                              (double.tryParse(_zakatReceivableCtrl.text.replaceAll(',', '')) ?? 0))
-                          .toStringAsFixed(0),
-                      bold: true),
-                  _buildStatementLine(
-                      'Less: Liabilities', _zakatLiabilitiesCtrl.text,
-                      isDeduction: true),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5FB),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Net Zakatable Wealth',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12.5,
-                              color: AppColors.navyBlue,
-                            )),
-                        Text(
-                          '৳ ${_totalZakatableWealth.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13.5,
-                            color: AppColors.navyBlue,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF14243B), Color(0xFF1C3A27)],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Zakat Due (2.5%)',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12.5,
-                              color: Colors.white,
-                            )),
-                        Text(
-                          '৳ ${_zakatDue.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13.5,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Zakat Info Bullet Card ───────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.info_outline_rounded,
-                          color: AppColors.navyBlue, size: 18),
-                      const SizedBox(width: 8),
-                      Text('Obligatory Guidelines',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13.5,
-                            color: AppColors.navyBlue,
-                          )),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoBullet('Zakat is obligatory on Muslims who own wealth above the Nisab for one full lunar year (Hawl).'),
-                  _buildInfoBullet('Nisab threshold is the equivalent of 85g of pure gold or 595g of pure silver.'),
-                  _buildInfoBullet('Zakat is payable at the standard rate of 2.5% on all net qualifying assets.'),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showZakatCalculatorSheet() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _ZakatCalculatorPage(dashboardState: this),
-      ),
-    );
-  }
-
-  Widget _buildZakatStatChip(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: Colors.white60, size: 13),
-              const SizedBox(width: 5),
-              Text(label,
-                  style: GoogleFonts.inter(
-                    color: Colors.white60,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                  )),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(value,
-              style: GoogleFonts.poppins(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWealthInputRow({
-    required IconData icon,
-    required String label,
-    required String sublabel,
-    required TextEditingController controller,
-    required String suffix,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.navyBlue.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.navyBlue.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: AppColors.navyBlue, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.navyBlue,
-                    )),
-                Text(sublabel,
-                    style: GoogleFonts.inter(
-                      fontSize: 10.5,
-                      color: AppColors.navyBlue.withValues(alpha: 0.45),
-                    )),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 105,
-            child: TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.right,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppColors.navyBlue,
-              ),
-              decoration: InputDecoration(
-                suffixText: ' $suffix',
-                suffixStyle: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.navyBlue.withValues(alpha: 0.4),
-                ),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                filled: true,
-                fillColor: const Color(0xFFF5F7FA),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                    color: AppColors.midTeal, width: 1.5),
-                ),
-              ),
-              onChanged: (_) => _recalculateZakat(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatementLine(String label, String value,
-      {bool bold = false, bool isDeduction = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 12.5,
-                fontWeight: bold ? FontWeight.bold : FontWeight.w500,
-                color: AppColors.navyBlue.withValues(alpha: bold ? 0.85 : 0.6),
-              ),
-            ),
-          ),
-          Text(
-            '${isDeduction ? '- ' : ''}৳ ${value.replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
-              color: isDeduction
-                  ? AppColors.coralOrange
-                  : AppColors.navyBlue.withValues(alpha: bold ? 0.9 : 0.7),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoBullet(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 5),
-            child: Container(
-              width: 5,
-              height: 5,
-              decoration: BoxDecoration(
-                color: AppColors.midTeal,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: AppColors.navyBlue.withValues(alpha: 0.7),
-                height: 1.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
-
-// ===== STAR CONFIGURATION =====
 class _DashboardStarConfig {
   final double topFraction;
   final double leftFraction;
@@ -3706,7 +2781,7 @@ class _DashboardTwinklingStarState extends State<_DashboardTwinklingStar>
     // Use Align with FractionalOffset instead of LayoutBuilder + Positioned.
     // Positioned must be a direct child of a Stack render object; wrapping it
     // in a LayoutBuilder breaks that requirement and throws a ParentDataWidget
-    // assertion. FractionalOffset(x, y) maps [0,0]→top-left, [1,1]→bottom-right.
+    // assertion. FractionalOffset(x, y) maps [0,0]?top-left, [1,1]?bottom-right.
     return Align(
       alignment: FractionalOffset(widget.leftFraction, widget.topFraction),
       child: AnimatedBuilder(
@@ -3818,7 +2893,7 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
     final bool isNight = prayerName == 'Fajr' || prayerName == 'Isha';
     final bool isDaytime = prayerName == 'Dhuhr' || prayerName == 'Asr';
 
-    // 1. Draw Twinkling Stars — only for Fajr and Isha
+    // 1. Draw Twinkling Stars � only for Fajr and Isha
     if (isNight) {
       final starPaint = Paint()
         ..color = Colors.white.withValues(alpha: 0.35 + (0.35 * math.sin(pulseVal * math.pi)))
@@ -3995,15 +3070,15 @@ class _DriftingCloudsPainter extends CustomPainter {
       ..color = cloudColor.withValues(alpha: 0.14)
       ..style = PaintingStyle.fill;
 
-    // Cloud 1 — gentle slow drift
+    // Cloud 1 � gentle slow drift
     double x1 = (w * animVal + w * 0.1) % (w + 100) - 50;
     _drawCloud(canvas, Offset(x1, h * 0.25), 26, cloudPaint);
 
-    // Cloud 2 — slightly faster drift from the other side
+    // Cloud 2 � slightly faster drift from the other side
     double x2 = (w * 1.4 * animVal + w * 0.55) % (w + 120) - 60;
     _drawCloud(canvas, Offset(x2, h * 0.42), 32, cloudPaint);
 
-    // Cloud 3 — small accent cloud
+    // Cloud 3 � small accent cloud
     double x3 = (w * 0.7 * animVal + w * 0.3) % (w + 80) - 40;
     _drawCloud(canvas, Offset(x3, h * 0.60), 16,
         Paint()..color = cloudColor.withValues(alpha: 0.08)..style = PaintingStyle.fill);
@@ -4133,7 +3208,7 @@ class _MosqueSilhouettePainter extends CustomPainter {
     final double w = size.width;
     final double h = size.height;
 
-    // Pick palette per scene — same logic as before but with richer fill details
+    // Pick palette per scene � same logic as before but with richer fill details
     Color navyC, tealC, whiteC;
     switch (selectedScene) {
       case 'Fajr':
@@ -4173,11 +3248,11 @@ class _MosqueSilhouettePainter extends CustomPainter {
     final paintTeal  = Paint()..color = tealC ..style = PaintingStyle.fill;
     final paintWhite = Paint()..color = whiteC..style = PaintingStyle.fill;
 
-    // ── 1. Side domes (teal, background) ────────────────────────────
+    // -- 1. Side domes (teal, background) ----------------------------
     _drawOnionDome(canvas, w * 0.28, h * 0.68, w * 0.16, h * 0.26, paintTeal);
     _drawOnionDome(canvas, w * 0.72, h * 0.68, w * 0.16, h * 0.26, paintTeal);
 
-    // ── 2. Central building walls (white) ───────────────────────────
+    // -- 2. Central building walls (white) ---------------------------
     final wallPath = Path()
       ..moveTo(w * 0.12, h)
       ..lineTo(w * 0.12, h * 0.70)
@@ -4186,7 +3261,7 @@ class _MosqueSilhouettePainter extends CustomPainter {
       ..close();
     canvas.drawPath(wallPath, paintWhite);
 
-    // ── 3. Central dome (navy) ───────────────────────────────────────
+    // -- 3. Central dome (navy) ---------------------------------------
     _drawOnionDome(canvas, w * 0.50, h * 0.65, w * 0.32, h * 0.42, paintNavy);
 
     // Crescent + spire on center dome
@@ -4198,7 +3273,7 @@ class _MosqueSilhouettePainter extends CustomPainter {
     canvas.drawLine(Offset(w * 0.50, h * 0.65 - h * 0.42), Offset(w * 0.50, spireTop), spirePaint);
     canvas.drawCircle(Offset(w * 0.50, spireTop), 2.2, paintWhite);
 
-    // ── 4. Arched entrance door (navy) ──────────────────────────────
+    // -- 4. Arched entrance door (navy) ------------------------------
     final double doorCx = w * 0.50;
     final double doorW  = w * 0.12;
     final double doorH  = h * 0.30;
@@ -4228,10 +3303,10 @@ class _MosqueSilhouettePainter extends CustomPainter {
     // Ground floor fill
     canvas.drawRect(Rect.fromLTRB(0, h * 0.92, w, h), paintWhite);
 
-    // ── 5. Left minaret ──────────────────────────────────────────────
+    // -- 5. Left minaret ----------------------------------------------
     _drawMinaret(canvas, w * 0.14, h, w * 0.07, h * 0.90, paintWhite, paintTeal);
 
-    // ── 6. Right minaret ─────────────────────────────────────────────
+    // -- 6. Right minaret ---------------------------------------------
     _drawMinaret(canvas, w * 0.86, h, w * 0.07, h * 0.90, paintWhite, paintTeal);
   }
 
@@ -4620,140 +3695,4 @@ class _EmergencyIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ===== SPARKLINE TREND GRAPH PAINTER (Custom vector price history wave) =====
-class _SparklinePainter extends CustomPainter {
-  final List<double> data;
-  final Color lineColor;
-
-  _SparklinePainter({required this.data, required this.lineColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (data.length < 2) return;
-
-    final double w = size.width;
-    final double h = size.height;
-
-    // Find min/max values to scale properly
-    double minVal = data.reduce(math.min);
-    double maxVal = data.reduce(math.max);
-    if (minVal == maxVal) {
-      minVal -= 1;
-      maxVal += 1;
-    }
-    final double range = maxVal - minVal;
-
-    final Path path = Path();
-    final Path fillPath = Path();
-
-    // Map data points to canvas space
-    final double dx = w / (data.length - 1);
-    final List<Offset> points = [];
-
-    for (int i = 0; i < data.length; i++) {
-      final double x = i * dx;
-      // Invert y so higher value is physically higher up
-      final double y = h * 0.95 - ((data[i] - minVal) / range) * (h * 0.9);
-      points.add(Offset(x, y));
-    }
-
-    // Draw smooth curve using cubic beziers
-    path.moveTo(points[0].dx, points[0].dy);
-    fillPath.moveTo(points[0].dx, h);
-    fillPath.lineTo(points[0].dx, points[0].dy);
-
-    for (int i = 0; i < points.length - 1; i++) {
-      final p0 = points[i];
-      final p1 = points[i + 1];
-      final controlX = p0.dx + (p1.dx - p0.dx) / 2;
-      path.cubicTo(controlX, p0.dy, controlX, p1.dy, p1.dx, p1.dy);
-      fillPath.cubicTo(controlX, p0.dy, controlX, p1.dy, p1.dx, p1.dy);
-    }
-
-    fillPath.lineTo(points.last.dx, h);
-    fillPath.close();
-
-    // Draw area fill under the line (gradient transition)
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          lineColor.withValues(alpha: 0.22),
-          lineColor.withValues(alpha: 0.0),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, w, h))
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(fillPath, fillPaint);
-
-    // Draw the sparkline itself
-    final strokePaint = Paint()
-      ..color = lineColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..strokeCap = StrokeCap.round;
-    canvas.drawPath(path, strokePaint);
-
-    // Draw a small glowing point on the last reading
-    final pointPaint = Paint()
-      ..color = lineColor
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(points.last, 3.5, pointPaint);
-    canvas.drawCircle(points.last, 7.5, Paint()..color = lineColor.withValues(alpha: 0.25)..style = PaintingStyle.fill);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SparklinePainter oldDelegate) {
-    return oldDelegate.data != data || oldDelegate.lineColor != lineColor;
-  }
-
-}
-
-// ===== ZAKAT CALCULATOR FULL SCREEN PAGE =====
-class _ZakatCalculatorPage extends StatefulWidget {
-  final _DashboardScreenState dashboardState;
-
-  const _ZakatCalculatorPage({required this.dashboardState});
-
-  @override
-  State<_ZakatCalculatorPage> createState() => _ZakatCalculatorPageState();
-}
-
-class _ZakatCalculatorPageState extends State<_ZakatCalculatorPage> {
-  @override
-  void initState() {
-    super.initState();
-    widget.dashboardState._onZakatChangedCallback = () {
-      if (mounted) setState(() {});
-    };
-  }
-
-  @override
-  void dispose() {
-    widget.dashboardState._onZakatChangedCallback = null;
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFE8E8E8),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 430),
-          child: Scaffold(
-            backgroundColor: Colors.white,
-            body: SafeArea(
-              top: false,
-              child: widget.dashboardState._buildZakatTab(
-                isPage: true,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
