@@ -1,17 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart'; // AppColors
 
-/// ===== SIMPLE INHERITANCE (FARAID) GUIDE SCREEN =====
-/// Covers the most common family scenario: spouse + children + parents.
-/// Does NOT handle extended family / Awl / Radd edge cases — a disclaimer
-/// is shown for those situations.
-///
-/// Push like the other planner pages:
-///   Navigator.of(context).push(
-///     MaterialPageRoute(builder: (_) => const InheritanceGuideScreen()),
-///   );
 class InheritanceGuideScreen extends StatefulWidget {
   const InheritanceGuideScreen({super.key});
 
@@ -19,12 +11,6 @@ class InheritanceGuideScreen extends StatefulWidget {
   State<InheritanceGuideScreen> createState() => _InheritanceGuideScreenState();
 }
 
-// ===== INHERITANCE-RELATED AYAH DATA =====
-// Each entry pairs one background image with one Faraid-related ayah so
-// the hero carousel and the ayah caption change together as it cycles.
-// Add your own images to assets/images/inheritance/1.jpg ... 5.jpg (and
-// register the folder in pubspec.yaml) — if an image is missing, that
-// slide gracefully falls back to a navy gradient instead of crashing.
 class _InheritanceAyahSlide {
   final String imagePath;
   final String reference;
@@ -77,7 +63,7 @@ const List<_InheritanceAyahSlide> _inheritanceAyahs = [
 ];
 
 class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
-  // ===== INPUT STATE =====
+  bool _isDarkMode = false;
   String _deceasedGender = 'Male'; // 'Male' or 'Female'
   bool _spouseAlive = false;
   int _wivesCount = 1; // only relevant if deceased is Male
@@ -89,6 +75,19 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
   final TextEditingController _estateCtrl = TextEditingController(text: '0');
 
   @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
+    });
+  }
+
+  @override
   void dispose() {
     _estateCtrl.dispose();
     super.dispose();
@@ -98,17 +97,13 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
 
   bool get _hasChildren => _sonsCount > 0 || _daughtersCount > 0;
 
-  // ===== CORE FARAID CALCULATION (common-case simplification) =====
-  // Returns a list of {label, fraction, note}
   List<Map<String, dynamic>> _calculateShares() {
     final List<Map<String, dynamic>> result = [];
     double usedFraction = 0.0;
 
-    // ---- 1. Spouse share (Fard) ----
     double spouseFraction = 0.0;
     if (_spouseAlive) {
       if (_deceasedGender == 'Male') {
-        // Deceased is a husband -> wife/wives share
         spouseFraction = _hasChildren ? (1 / 8) : (1 / 4);
         final double perWife = spouseFraction / _wivesCount;
         for (int i = 0; i < _wivesCount; i++) {
@@ -119,7 +114,6 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
           });
         }
       } else {
-        // Deceased is a wife -> husband share
         spouseFraction = _hasChildren ? (1 / 4) : (1 / 2);
         result.add({
           'label': 'Husband',
@@ -130,7 +124,6 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
       usedFraction += spouseFraction;
     }
 
-    // ---- 2. Mother share (Fard) ----
     double motherFraction = 0.0;
     if (_motherAlive) {
       motherFraction = _hasChildren ? (1 / 6) : (1 / 3);
@@ -142,9 +135,7 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
       usedFraction += motherFraction;
     }
 
-    // ---- 3. Father & Children ----
     if (_hasChildren) {
-      // Father gets 1/6 as Fard when children are present
       double fatherFraction = 0.0;
       if (_fatherAlive) {
         fatherFraction = 1 / 6;
@@ -157,7 +148,6 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
       }
 
       if (_sonsCount > 0) {
-        // Sons + daughters share the remainder as Asaba, ratio 2:1
         final double remainder = (1.0 - usedFraction).clamp(0.0, 1.0);
         final double shareUnits = ((_sonsCount * 2) + _daughtersCount).toDouble();
         final double perUnit = shareUnits > 0 ? remainder / shareUnits : 0.0;
@@ -176,7 +166,6 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
           });
         }
       } else if (_daughtersCount > 0) {
-        // No sons: daughters get Fard share directly
         double daughtersFraction = _daughtersCount == 1 ? (1 / 2) : (2 / 3);
         result.add({
           'label': _daughtersCount > 1 ? '$_daughtersCount Daughters (combined)' : 'Daughter',
@@ -185,10 +174,8 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
         });
         usedFraction += daughtersFraction;
 
-        // Remainder (if any) goes to father as Asaba
         if (_fatherAlive) {
           final double remainder = (1.0 - usedFraction).clamp(0.0, 1.0);
-          // Update father's entry to include residue
           final int fatherIdx = result.indexWhere((e) => e['label'] == 'Father');
           if (fatherIdx != -1) {
             result[fatherIdx]['fraction'] = (result[fatherIdx]['fraction'] as double) + remainder;
@@ -197,7 +184,6 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
         }
       }
     } else {
-      // ---- No children: father takes residue as Asaba ----
       if (_fatherAlive) {
         final double remainder = (1.0 - usedFraction).clamp(0.0, 1.0);
         result.add({
@@ -215,7 +201,6 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
   bool get _hasUnallocatedRemainder {
     final shares = _calculateShares();
     final total = shares.fold<double>(0.0, (sum, e) => sum + (e['fraction'] as double));
-    // If nobody is set as residuary and total < 1, there's unallocated estate
     return total < 0.999 && (_spouseAlive || _motherAlive || _fatherAlive || _hasChildren);
   }
 
@@ -223,22 +208,23 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
   Widget build(BuildContext context) {
     final shares = _calculateShares();
     final bool anyoneSelected = _spouseAlive || _motherAlive || _fatherAlive || _hasChildren;
+    final bgColor = _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F7F5);
+    final outerBg = _isDarkMode ? const Color(0xFF000000) : const Color(0xFFE8E8E8);
 
     return Container(
-      color: const Color(0xFFE8E8E8),
+      color: outerBg,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
           child: Scaffold(
-            backgroundColor: const Color(0xFFF7F7F5),
+            backgroundColor: bgColor,
             body: CustomScrollView(
               physics: const BouncingScrollPhysics(),
               slivers: [
-                // ── HERO IMAGE + AYAH CAROUSEL (auto-scrolls while on this page) ──
                 SliverAppBar(
                   expandedHeight: 260,
                   pinned: true,
-                  backgroundColor: AppColors.navyBlue,
+                  backgroundColor: _isDarkMode ? const Color(0xFF1A1A1A) : AppColors.navyBlue,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   leading: IconButton(
@@ -250,7 +236,6 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
                     background: const _InheritanceHeroCarousel(slides: _inheritanceAyahs),
                   ),
                 ),
-                // ── REST OF THE PAGE (unchanged calculator) ──
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -284,39 +269,42 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
   }
 
   Widget _buildSectionLabel(String title) {
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
     return Align(
       alignment: Alignment.centerLeft,
       child: Row(
         children: [
-          Container(width: 4, height: 16, decoration: BoxDecoration(color: AppColors.navyBlue, borderRadius: BorderRadius.circular(2))),
+          Container(width: 4, height: 16, decoration: BoxDecoration(color: AppColors.midTeal, borderRadius: BorderRadius.circular(2))),
           const SizedBox(width: 8),
-          Text(title, style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+          Text(title, style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: textColor)),
         ],
       ),
     );
   }
 
-  // ===== ESTATE VALUE INPUT =====
   Widget _buildEstateInput() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3))],
       ),
       child: Row(
         children: [
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.account_balance_wallet_rounded, color: AppColors.navyBlue, size: 20),
+            decoration: BoxDecoration(color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
+            child: Icon(Icons.account_balance_wallet_rounded, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text('Net Estate Value',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navyBlue)),
+                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
           ),
           SizedBox(
             width: 130,
@@ -324,13 +312,14 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
               controller: _estateCtrl,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.right,
-              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: textColor),
               decoration: InputDecoration(
                 prefixText: '৳ ',
+                prefixStyle: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[600]),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 filled: true,
-                fillColor: const Color(0xFFF5F7FA),
+                fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -345,19 +334,21 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
     );
   }
 
-  // ===== DECEASED GENDER SELECTOR =====
   Widget _buildDeceasedGenderCard() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Deceased Person', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navyBlue)),
+          Text('Deceased Person', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
           const SizedBox(height: 10),
           Row(
             children: ['Male', 'Female'].map((g) {
@@ -373,14 +364,14 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: selected ? AppColors.navyBlue : const Color(0xFFF5F7FA),
+                      color: selected ? (_isDarkMode ? AppColors.midTeal : AppColors.navyBlue) : (_isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA)),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(g,
                         style: GoogleFonts.poppins(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
-                          color: selected ? Colors.white : AppColors.navyBlue.withValues(alpha: 0.55),
+                          color: selected ? Colors.white : (_isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55)),
                         )),
                   ),
                 ),
@@ -392,23 +383,24 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
     );
   }
 
-  // ===== SURVIVORS INPUT =====
   Widget _buildSurvivorsCard() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Surviving Family Members',
-              style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navyBlue)),
+              style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
           const SizedBox(height: 14),
 
-          // Spouse toggle
           _buildSwitchRow(
             label: _deceasedGender == 'Male' ? 'Wife/Wives alive' : 'Husband alive',
             value: _spouseAlive,
@@ -424,7 +416,7 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
               onChanged: (v) => setState(() => _wivesCount = v),
             ),
           ],
-          const Divider(height: 28),
+          Divider(height: 28, color: _isDarkMode ? Colors.white12 : Colors.grey[200]),
 
           _buildCounterRow(
             label: 'Number of sons',
@@ -441,7 +433,7 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
             max: 10,
             onChanged: (v) => setState(() => _daughtersCount = v),
           ),
-          const Divider(height: 28),
+          Divider(height: 28, color: _isDarkMode ? Colors.white12 : Colors.grey[200]),
 
           _buildSwitchRow(
             label: 'Father alive',
@@ -460,16 +452,17 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
   }
 
   Widget _buildSwitchRow({required String label, required bool value, required ValueChanged<bool> onChanged}) {
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.navyBlue)),
+        Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: textColor)),
         Switch(
           value: value,
           onChanged: onChanged,
           activeThumbColor: Colors.white,
           activeTrackColor: AppColors.midTeal,
-          inactiveTrackColor: const Color(0xFFE0E0E0),
+          inactiveTrackColor: _isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
         ),
       ],
     );
@@ -482,10 +475,11 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
     required int max,
     required ValueChanged<int> onChanged,
   }) {
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.navyBlue)),
+        Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: textColor)),
         Row(
           children: [
             _counterButton(Icons.remove_rounded, () {
@@ -494,7 +488,7 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
             Container(
               width: 32,
               alignment: Alignment.center,
-              child: Text('$value', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+              child: Text('$value', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: textColor)),
             ),
             _counterButton(Icons.add_rounded, () {
               if (value < max) onChanged(value + 1);
@@ -511,53 +505,60 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
       child: Container(
         width: 28,
         height: 28,
-        decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.08), shape: BoxShape.circle),
-        child: Icon(icon, size: 16, color: AppColors.navyBlue),
+        decoration: BoxDecoration(
+          color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.navyBlue.withValues(alpha: 0.08),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 16, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
       ),
     );
   }
 
-  // ===== EMPTY STATE =====
   Widget _buildEmptyState() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.5);
+
     return Container(
       padding: const EdgeInsets.all(24),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         children: [
-          Icon(Icons.family_restroom_rounded, size: 36, color: AppColors.navyBlue.withValues(alpha: 0.25)),
+          Icon(Icons.family_restroom_rounded, size: 36, color: _isDarkMode ? Colors.white38 : AppColors.navyBlue.withValues(alpha: 0.25)),
           const SizedBox(height: 10),
           Text('Select surviving family members above to see the share distribution.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(fontSize: 12, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+              style: GoogleFonts.inter(fontSize: 12, color: textColor)),
         ],
       ),
     );
   }
 
-  // ===== SHARE RESULT CARD =====
   Widget _buildShareCard(Map<String, dynamic> share) {
     final double fraction = share['fraction'] as double;
     final double amount = fraction * _estateValue;
     final String fractionStr = _fractionToReadable(fraction);
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.5);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3))],
       ),
       child: Row(
         children: [
           Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
             alignment: Alignment.center,
             child: Text(fractionStr,
                 style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
@@ -568,16 +569,16 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(share['label'] as String,
-                    style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                    style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor)),
                 const SizedBox(height: 2),
                 Text(share['note'] as String,
-                    style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                    style: GoogleFonts.inter(fontSize: 10.5, color: subtextColor)),
               ],
             ),
           ),
           if (_estateValue > 0)
             Text('৳ ${amount.toStringAsFixed(0)}',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
         ],
       ),
     );
@@ -585,7 +586,6 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
 
   String _fractionToReadable(double f) {
     if (f <= 0) return '0';
-    // Try to express as a simple fraction for common Faraid values
     const Map<String, double> common = {
       '1/2': 0.5, '1/3': 1 / 3, '1/4': 0.25, '1/6': 1 / 6,
       '1/8': 0.125, '2/3': 2 / 3, '1/12': 1 / 12, '1/24': 1 / 24,
@@ -601,7 +601,7 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
       margin: const EdgeInsets.only(top: 4, bottom: 4),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.coralOrange.withValues(alpha: 0.1),
+        color: AppColors.coralOrange.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -611,7 +611,7 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
           Expanded(
             child: Text(
               'Part of the estate remains unallocated — this usually goes to other relatives (siblings, grandparents) not covered in this simplified guide.',
-              style: GoogleFonts.inter(fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.65), height: 1.4),
+              style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65), height: 1.4),
             ),
           ),
         ],
@@ -619,30 +619,33 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
     );
   }
 
-  // ===== DISCLAIMER =====
   Widget _buildDisclaimerCard() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white.withValues(alpha: 0.7);
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.6);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.7),
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.08)),
+        border: Border.all(color: _isDarkMode ? Colors.white.withOpacity(0.1) : AppColors.navyBlue.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: AppColors.navyBlue, size: 16),
+              Icon(Icons.warning_amber_rounded, color: _isDarkMode ? AppColors.coralOrange : AppColors.navyBlue, size: 16),
               const SizedBox(width: 8),
               Text('Important Note',
-                  style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                  style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor)),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             'This guide only covers common cases: spouse, children, and parents. It does not handle siblings, grandparents, debts, or wills (up to 1/3 of estate must be deducted first). For real distribution, please consult a qualified Islamic scholar or Faraid expert.',
-            style: GoogleFonts.inter(fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.6), height: 1.5),
+            style: GoogleFonts.inter(fontSize: 11, color: subtextColor, height: 1.5),
           ),
         ],
       ),
@@ -650,10 +653,6 @@ class _InheritanceGuideScreenState extends State<InheritanceGuideScreen> {
   }
 }
 
-// ===== HERO IMAGE + AYAH CAROUSEL =====
-// Auto-scrolls through the image+ayah pairs the whole time the user stays
-// on this page. Falls back to a navy gradient per-slide if the image
-// asset isn't found yet, so nothing crashes before real photos are added.
 class _InheritanceHeroCarousel extends StatefulWidget {
   final List<_InheritanceAyahSlide> slides;
   const _InheritanceHeroCarousel({required this.slides});
@@ -723,14 +722,13 @@ class _InheritanceHeroCarouselState extends State<_InheritanceHeroCarousel> {
             );
           },
         ),
-        // Gradient overlay so the ayah text stays legible over any photo
         IgnorePointer(
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
                   Colors.black.withValues(alpha: 0.05),
-                  Colors.black.withValues(alpha: 0.80),
+                  Colors.black.withValues(alpha: 0.85),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -739,7 +737,6 @@ class _InheritanceHeroCarouselState extends State<_InheritanceHeroCarousel> {
             ),
           ),
         ),
-        // Ayah caption — changes together with the image
         Positioned(
           left: 20,
           right: 20,
@@ -773,7 +770,6 @@ class _InheritanceHeroCarouselState extends State<_InheritanceHeroCarousel> {
             ),
           ),
         ),
-        // Dot indicators
         if (widget.slides.length > 1)
           Positioned(
             top: 100,

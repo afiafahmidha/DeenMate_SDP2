@@ -289,6 +289,7 @@ class ZakatManagerScreen extends StatefulWidget {
 
 class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   int _tab = 0;
+  bool _isDarkMode = false;
   bool? _userPaymentsExpanded;
   bool get _isPaymentsExpanded => _userPaymentsExpanded ?? (_stillOwed > 0);
 
@@ -496,6 +497,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
 
   Future<void> _loadPrefs() async {
     final p = await SharedPreferences.getInstance();
+    _isDarkMode = p.getBool('is_dark_mode') ?? false;
 
     // Wealth fields
     _cashCtrl.text = p.getString('zm_cash') ?? '0';
@@ -799,18 +801,18 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
               child: AlertDialog(
-                backgroundColor: Colors.white,
+                backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 title: Text('Confirm Deletion',
                     style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                content: Text(message, style: GoogleFonts.inter()),
+                        fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                content: Text(message, style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.black87)),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
                     child: Text('Cancel',
                         style: GoogleFonts.inter(
-                            color: AppColors.navyBlue, fontWeight: FontWeight.bold)),
+                            color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold)),
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, true),
@@ -848,14 +850,14 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     );
 
     return Container(
-      color: const Color(0xFFE8E8E8), // Outer background for desktop/laptop screens
+      color: _isDarkMode ? const Color(0xFF000000) : const Color(0xFFE8E8E8), // Outer background for desktop/laptop screens
       child: Center(
         child: Container(
           width: appWidth,
           height: double.infinity,
-          color: const Color(0xFFF5F7FA),
+          color: _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF5F7FA),
           child: Scaffold(
-            backgroundColor: const Color(0xFFF5F7FA),
+            backgroundColor: _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF5F7FA),
             body: content,
           ),
         ),
@@ -864,48 +866,58 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   }
 
   Widget _buildPremiumHeader() {
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55);
+
     return Container(
-      height: 100,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF101B2B), Color(0xFF183B36)],
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: _isDarkMode ? Colors.white.withOpacity(0.08) : AppColors.navyBlue.withValues(alpha: 0.08),
+          ),
         ),
       ),
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white, size: 20),
+                icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
                 onPressed: () => Navigator.pop(context),
               ),
-              const SizedBox(width: 4),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Zakat Manager',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.volunteer_activism_rounded, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Zakat Manager',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'Wealth, Haul & Obligations',
-                    style: GoogleFonts.inter(
-                      fontSize: 10.5,
-                      color: Colors.white.withValues(alpha: 0.7),
+                    Text(
+                      'Wealth, Haul & Obligations',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: subtextColor,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -928,11 +940,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: AppColors.navyBlue.withValues(alpha: 0.06),
+              color: Colors.black.withOpacity(0.06),
               blurRadius: 10,
               offset: const Offset(0, 3)),
         ],
@@ -956,7 +968,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         size: 16,
                         color: active
                             ? Colors.white
-                            : AppColors.navyBlue.withValues(alpha: 0.4)),
+                            : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
                     const SizedBox(height: 2),
                     Text(_tabLabels[i],
                         style: GoogleFonts.inter(
@@ -964,7 +976,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                             fontWeight: FontWeight.w600,
                             color: active
                                 ? Colors.white
-                                : AppColors.navyBlue.withValues(alpha: 0.4))),
+                                : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)))),
                   ],
                 ),
               ),
@@ -1082,7 +1094,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-              color: AppColors.navyBlue.withValues(alpha: 0.22),
+              color: _isDarkMode ? Colors.white.withOpacity(0.22) : AppColors.navyBlue.withValues(alpha: 0.22),
               blurRadius: 18,
               offset: const Offset(0, 8)),
         ],
@@ -1284,13 +1296,13 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.analytics_rounded, color: AppColors.navyBlue, size: 18),
+                  Icon(Icons.analytics_rounded, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 18),
                   const SizedBox(width: 8),
                   Text('Metal Rates (BDT/g)',
                       style: GoogleFonts.poppins(
                           fontWeight: FontWeight.bold,
                           fontSize: 12.5,
-                          color: AppColors.navyBlue)),
+                          color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                 ],
               ),
               _pricesLoading
@@ -1340,7 +1352,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   _manualOverridePrices
                       ? Icons.check_box_rounded
                       : Icons.check_box_outline_blank_rounded,
-                  color: AppColors.navyBlue,
+                  color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                   size: 18,
                 ),
                 const SizedBox(width: 8),
@@ -1348,7 +1360,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     style: GoogleFonts.inter(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.navyBlue)),
+                        color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
               ],
             ),
           ),
@@ -1380,14 +1392,14 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       onChanged: (_) => onChanged(),
       style: GoogleFonts.poppins(
-          fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+          fontSize: 12.5, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: GoogleFonts.inter(fontSize: 11, color: AppColors.placeholder),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         filled: true,
-        fillColor: const Color(0xFFF5F7FA),
+        fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
       ),
@@ -1400,11 +1412,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       children: [
         Text(label,
             style: GoogleFonts.inter(
-                fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                fontSize: 11, color: _isDarkMode ? Colors.white.withOpacity(0.5) : AppColors.navyBlue.withValues(alpha: 0.5))),
         const SizedBox(height: 3),
         Text('Tk ${price.toStringAsFixed(1)}',
             style: GoogleFonts.poppins(
-                fontSize: 14.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                fontSize: 14.5, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
         const SizedBox(height: 8),
         SizedBox(
             height: 24,
@@ -1423,11 +1435,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.currency_exchange_rounded, color: AppColors.navyBlue, size: 16),
+              Icon(Icons.currency_exchange_rounded, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 16),
               const SizedBox(width: 8),
               Text('Input Currency',
                   style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.navyBlue)),
+                      fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
             ],
           ),
           const SizedBox(height: 10),
@@ -1463,7 +1475,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             const SizedBox(height: 8),
             Text('1 ${super.widget.key != null ? "" : _currency.symbol} ≈ Tk ${_toBDT.toStringAsFixed(2)}',
                 style: GoogleFonts.inter(
-                    fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.45))),
+                    fontSize: 10.5, color: _isDarkMode ? Colors.white.withOpacity(0.45) : AppColors.navyBlue.withValues(alpha: 0.45))),
           ],
         ],
       ),
@@ -1479,11 +1491,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.settings_rounded, color: AppColors.navyBlue, size: 16),
+              Icon(Icons.settings_rounded, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 16),
               const SizedBox(width: 8),
               Text('Configuration',
                   style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.navyBlue)),
+                      fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
             ],
           ),
           const SizedBox(height: 12),
@@ -1491,7 +1503,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               style: GoogleFonts.inter(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.navyBlue.withValues(alpha: 0.7))),
+                  color: _isDarkMode ? Colors.white.withOpacity(0.7) : AppColors.navyBlue.withValues(alpha: 0.7))),
           const SizedBox(height: 6),
           Row(
             children: ['gold', 'silver'].map((s) {
@@ -1537,7 +1549,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             'Gold weights vary by purity (Karat). We calculate the pure gold weight equivalent:',
             style: GoogleFonts.inter(
                 fontSize: 11.5,
-                color: AppColors.navyBlue.withValues(alpha: 0.6),
+                color: _isDarkMode ? Colors.white.withOpacity(0.6) : AppColors.navyBlue.withValues(alpha: 0.6),
                 height: 1.4),
           ),
           const SizedBox(height: 14),
@@ -1553,12 +1565,12 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   style: GoogleFonts.inter(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.navyBlue.withValues(alpha: 0.7))),
+                      color: _isDarkMode ? Colors.white.withOpacity(0.7) : AppColors.navyBlue.withValues(alpha: 0.7))),
               Text('${_pureGoldEquivalentGrams.toStringAsFixed(2)} g',
                   style: GoogleFonts.poppins(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.navyBlue)),
+                      color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
             ],
           ),
           const SizedBox(height: 6),
@@ -1569,7 +1581,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   style: GoogleFonts.inter(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.navyBlue.withValues(alpha: 0.7))),
+                      color: _isDarkMode ? Colors.white.withOpacity(0.7) : AppColors.navyBlue.withValues(alpha: 0.7))),
               Text(
                 'Tk ${(_pureGoldEquivalentGrams * _effectiveGoldPrice).toStringAsFixed(0)}',
                 style: GoogleFonts.poppins(
@@ -1591,7 +1603,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         children: [
           Expanded(
             child: Text(label,
-                style: GoogleFonts.inter(fontSize: 12, color: AppColors.navyBlue)),
+                style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
           ),
           const SizedBox(width: 10),
           SizedBox(
@@ -1601,17 +1613,17 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               textAlign: TextAlign.right,
               style: GoogleFonts.poppins(
-                  fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                  fontSize: 12.5, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
               decoration: InputDecoration(
                 suffixText: ' g',
                 suffixStyle: GoogleFonts.inter(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.navyBlue.withValues(alpha: 0.4)),
+                    color: _isDarkMode ? Colors.white.withOpacity(0.4) : AppColors.navyBlue.withValues(alpha: 0.4)),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 filled: true,
-                fillColor: const Color(0xFFF5F7FA),
+                fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
               ),
@@ -1632,7 +1644,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         const SizedBox(width: 10),
         Text(title,
             style: GoogleFonts.poppins(
-                fontSize: 14.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                fontSize: 14.5, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
       ],
     );
   }
@@ -1649,9 +1661,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-                color: AppColors.navyBlue.withValues(alpha: 0.07),
+                color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.navyBlue.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: AppColors.navyBlue, size: 18),
+            child: Icon(icon, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1660,11 +1672,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               children: [
                 Text(label,
                     style: GoogleFonts.poppins(
-                        fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.navyBlue)),
+                        fontSize: 12, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                 Text(sub,
                     style: GoogleFonts.inter(
                         fontSize: 9.5,
-                        color: AppColors.navyBlue.withValues(alpha: 0.45))),
+                        color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.45))),
               ],
             ),
           ),
@@ -1676,17 +1688,17 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               textAlign: TextAlign.right,
               style: GoogleFonts.poppins(
-                  fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                  fontSize: 12.5, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
               decoration: InputDecoration(
                 suffixText: ' $suffix',
                 suffixStyle: GoogleFonts.inter(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.navyBlue.withValues(alpha: 0.4)),
+                    color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 filled: true,
-                fillColor: const Color(0xFFF5F7FA),
+                fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
               ),
@@ -1720,11 +1732,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.description_outlined, color: AppColors.navyBlue, size: 18),
+              Icon(Icons.description_outlined, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 18),
               const SizedBox(width: 8),
               Text('Wealth Statement',
                   style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.navyBlue)),
+                      fontWeight: FontWeight.bold, fontSize: 13.5, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
             ],
           ),
           const SizedBox(height: 16),
@@ -1741,16 +1753,16 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
-                color: const Color(0xFFF1F5FB), borderRadius: BorderRadius.circular(12)),
+                color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF1F5FB), borderRadius: BorderRadius.circular(12)),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Net Zakatable Wealth',
                     style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.navyBlue)),
+                        fontWeight: FontWeight.bold, fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                 Text('Tk ${_totalWealth.toStringAsFixed(0)}',
                     style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.navyBlue)),
+                        fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
               ],
             ),
           ),
@@ -1758,7 +1770,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF14243B), Color(0xFF1C3A27)]),
+              gradient: const LinearGradient(colors: [Color(0xFF1B4D3E), Color(0xFF142E24)]),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -1790,7 +1802,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: bold ? FontWeight.bold : FontWeight.w500,
-                    color: AppColors.navyBlue.withValues(alpha: bold ? 0.85 : 0.6))),
+                    color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: bold ? 0.85 : 0.6))),
           ),
           Text(
             '${isDeduction ? '- ' : ''}Tk $value',
@@ -1799,7 +1811,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 fontWeight: bold ? FontWeight.bold : FontWeight.w600,
                 color: isDeduction
                     ? AppColors.coralOrange
-                    : AppColors.navyBlue.withValues(alpha: 0.75)),
+                    : (_isDarkMode ? Colors.white : AppColors.navyBlue.withValues(alpha: 0.75))),
           ),
         ],
       ),
@@ -1810,20 +1822,20 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.2)),
+        border: Border.all(color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.dustyBlueTeal.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.info_outline_rounded, color: AppColors.navyBlue, size: 16),
+              Icon(Icons.info_outline_rounded, color: _isDarkMode ? AppColors.midTeal : AppColors.navyBlue, size: 16),
               const SizedBox(width: 8),
               Text('Obligatory Guidelines',
                   style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.navyBlue)),
+                      fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
             ],
           ),
           const SizedBox(height: 10),
@@ -1855,7 +1867,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             child: Text(text,
                 style: GoogleFonts.inter(
                     fontSize: 11.5,
-                    color: AppColors.navyBlue.withValues(alpha: 0.68),
+                    color: _isDarkMode ? Colors.white.withOpacity(0.68) : AppColors.navyBlue.withValues(alpha: 0.68),
                     height: 1.5)),
           ),
         ],
@@ -1869,7 +1881,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
 
   Widget _buildCustomFieldsSection({required bool isLiability}) {
     final list = isLiability ? _customLiabilities : _customAssets;
-    final color = isLiability ? AppColors.coralOrange : AppColors.navyBlue;
+    final color = isLiability ? AppColors.coralOrange : (_isDarkMode ? Colors.white : AppColors.navyBlue);
     final label = isLiability ? 'Custom Liabilities' : 'Custom Assets';
     final hint = isLiability
         ? 'e.g. Loan, Credit Card, Mortgage…'
@@ -1930,17 +1942,17 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   }
 
   Widget _buildCustomAssetRow(_CustomAsset asset, {required bool isLiability}) {
-    final color = isLiability ? AppColors.coralOrange : AppColors.navyBlue;
+    final color = isLiability ? AppColors.coralOrange : (_isDarkMode ? Colors.white : AppColors.navyBlue);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withValues(alpha: 0.15)),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.04),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -1968,11 +1980,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
-                        color: AppColors.navyBlue)),
+                        color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                 Text('${asset.currency} ${asset.value.toStringAsFixed(0)}',
                     style: GoogleFonts.inter(
                         fontSize: 11,
-                        color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                        color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.5))),
               ],
             ),
           ),
@@ -2019,9 +2031,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       constraints: const BoxConstraints(maxWidth: 430),
       builder: (_) => StatefulBuilder(
         builder: (ctx, setModal) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: EdgeInsets.fromLTRB(
               20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
@@ -2047,7 +2059,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     ? 'e.g. Home Loan, Credit Card Debt, Car Finance…'
                     : 'e.g. Property Value, Livestock Value, Rental Income, Crypto…',
                 style: GoogleFonts.inter(
-                    fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.45)),
+                    fontSize: 11, color: _isDarkMode ? Colors.white.withOpacity(0.45) : AppColors.navyBlue.withValues(alpha: 0.45)),
               ),
               const SizedBox(height: 16),
               _sheetField(nameCtrl, 'Field Name (e.g. Property Value)'),
@@ -2065,7 +2077,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       style: GoogleFonts.poppins(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.navyBlue),
+                          color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                       onChanged: (v) => setModal(() => currency = v!),
                       items: _currencies
                           .map((c) => DropdownMenuItem(
@@ -2137,12 +2149,12 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.12)),
+        border: Border.all(color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.navyBlue.withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.navyBlue.withValues(alpha: 0.04),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -2170,11 +2182,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
-                            color: AppColors.navyBlue)),
+                            color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                     Text('Each type has its own Nisab threshold',
                         style: GoogleFonts.inter(
                             fontSize: 10.5,
-                            color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                            color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5))),
                   ],
                 ),
               ),
@@ -2284,7 +2296,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       children: [
         Row(
           children: [
-            Icon(icon, color: AppColors.navyBlue.withValues(alpha: 0.6), size: 20),
+            Icon(icon, color: _isDarkMode ? Colors.white.withOpacity(0.6) : AppColors.navyBlue.withValues(alpha: 0.6), size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -2294,7 +2306,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       style: GoogleFonts.poppins(
                           fontWeight: FontWeight.w600,
                           fontSize: 12.5,
-                          color: AppColors.navyBlue)),
+                          color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                   Text(
                     meetsNisab
                         ? 'Nisab met ($nisab+) · Zakat due'
@@ -2303,7 +2315,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       fontSize: 10,
                       color: meetsNisab
                           ? const Color(0xFF2E7D32)
-                          : AppColors.navyBlue.withValues(alpha: 0.4),
+                          : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)),
                       fontWeight: meetsNisab ? FontWeight.bold : FontWeight.normal,
                     ),
                   ),
@@ -2320,7 +2332,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.navyBlue)),
+                          color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                 ),
                 _iconBtn(Icons.add_rounded, onIncrement),
               ],
@@ -2335,16 +2347,16 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 child: TextField(
                   controller: valueCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: GoogleFonts.poppins(fontSize: 12, color: AppColors.navyBlue),
+                  style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                   decoration: InputDecoration(
                     hintText: 'Market value per animal (Tk)',
                     hintStyle: GoogleFonts.inter(
                         fontSize: 11,
-                        color: AppColors.navyBlue.withValues(alpha: 0.25)),
+                        color: _isDarkMode ? Colors.white.withOpacity(0.25) : AppColors.navyBlue.withValues(alpha: 0.25)),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     filled: true,
-                    fillColor: const Color(0xFFF5F7FA),
+                    fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none),
@@ -2463,10 +2475,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                           style: GoogleFonts.poppins(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
-                              color: AppColors.navyBlue)),
+                              color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                       Text('Get notified when wealth drops below or crosses Nisab',
                           style: GoogleFonts.inter(
-                              fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                              fontSize: 10.5, color: _isDarkMode ? Colors.white.withOpacity(0.5) : AppColors.navyBlue.withValues(alpha: 0.5))),
                     ],
                   ),
                 ),
@@ -2490,11 +2502,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppColors.navyBlue.withValues(alpha: 0.08),
+                    color: _isDarkMode ? Colors.white.withOpacity(0.08) : AppColors.navyBlue.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.calendar_month_rounded,
-                      color: AppColors.navyBlue, size: 20),
+                  child: Icon(Icons.calendar_month_rounded, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Column(
@@ -2502,10 +2513,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   children: [
                     Text('Today (Hijri)',
                         style: GoogleFonts.inter(
-                            fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                            fontSize: 11, color: _isDarkMode ? Colors.white.withOpacity(0.5) : AppColors.navyBlue.withValues(alpha: 0.5))),
                     Text(todayHijri.toString(),
                         style: GoogleFonts.poppins(
-                            fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                            fontSize: 14, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                   ],
                 ),
               ],
@@ -2525,7 +2536,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               borderRadius: BorderRadius.circular(22),
               boxShadow: [
                 BoxShadow(
-                    color: AppColors.navyBlue.withValues(alpha: 0.22),
+                    color: _isDarkMode ? Colors.white.withOpacity(0.22) : AppColors.navyBlue.withValues(alpha: 0.22),
                     blurRadius: 18,
                     offset: const Offset(0, 8)),
               ],
@@ -2599,13 +2610,13 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.edit_calendar_rounded, color: AppColors.navyBlue, size: 18),
+                    Icon(Icons.edit_calendar_rounded, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 18),
                     const SizedBox(width: 8),
                     Text('Nisab Crossing Date',
                         style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold,
                             fontSize: 13.5,
-                            color: AppColors.navyBlue)),
+                            color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -2613,7 +2624,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     'Set the date your wealth first crossed the Nisab threshold. This starts the Haul clock.',
                     style: GoogleFonts.inter(
                         fontSize: 11.5,
-                        color: AppColors.navyBlue.withValues(alpha: 0.55),
+                        color: _isDarkMode ? Colors.white.withOpacity(0.55) : AppColors.navyBlue.withValues(alpha: 0.55),
                         height: 1.5)),
                 const SizedBox(height: 14),
                 Row(
@@ -2622,7 +2633,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF5F7FA),
+                          color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -2633,8 +2644,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                               color: _haulStartDate != null
-                                  ? AppColors.navyBlue
-                                  : AppColors.navyBlue.withValues(alpha: 0.35)),
+                                  ? (_isDarkMode ? Colors.white : AppColors.navyBlue)
+                                  : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.35))),
                         ),
                       ),
                     ),
@@ -2686,7 +2697,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   const SizedBox(height: 8),
                   Text('Hijri start: ${_Hijri.fromGregorian(_haulStartDate!)}',
                       style: GoogleFonts.inter(
-                          fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                          fontSize: 10.5, color: _isDarkMode ? Colors.white.withOpacity(0.5) : AppColors.navyBlue.withValues(alpha: 0.5))),
                 ],
               ],
             ),
@@ -2742,7 +2753,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.navyBlue.withValues(alpha: 0.1),
+                    color: _isDarkMode ? Colors.white.withOpacity(0.1) : AppColors.navyBlue.withValues(alpha: 0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -2835,7 +2846,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     style: GoogleFonts.poppins(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: AppColors.navyBlue,
+                      color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -2896,11 +2907,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               children: [
                 Text('Household Members',
                     style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.navyBlue)),
+                        fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                 const SizedBox(height: 4),
                 Text('Include yourself, spouse, children, and dependants',
                     style: GoogleFonts.inter(
-                        fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                        fontSize: 11, color: _isDarkMode ? Colors.white.withOpacity(0.5) : AppColors.navyBlue.withValues(alpha: 0.5))),
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -2917,7 +2928,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                           style: GoogleFonts.poppins(
                               fontSize: 28,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.navyBlue)),
+                              color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                     ),
                     _iconBtn(Icons.add_rounded, () {
                       setState(() => _fitraMembers++);
@@ -2937,13 +2948,13 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               children: [
                 Text('Staple Food Weights & Rates',
                     style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.navyBlue)),
+                        fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                 const SizedBox(height: 6),
                 Text(
                     'Staple food prices vary significantly by region and variety. Please check your local market rates and input them below.',
                     style: GoogleFonts.inter(
                         fontSize: 11,
-                        color: AppColors.navyBlue.withValues(alpha: 0.5),
+                        color: _isDarkMode ? Colors.white.withOpacity(0.5) : AppColors.navyBlue.withValues(alpha: 0.5),
                         height: 1.4)),
                 const SizedBox(height: 12),
                 Wrap(
@@ -2992,7 +3003,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         style: GoogleFonts.poppins(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.navyBlue),
+                            color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                         decoration: InputDecoration(
                           labelText: 'Weight per person (kg)',
                           labelStyle: GoogleFonts.inter(
@@ -3001,7 +3012,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                           contentPadding:
                               const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           filled: true,
-                          fillColor: const Color(0xFFF5F7FA),
+                          fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide.none),
@@ -3020,7 +3031,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         style: GoogleFonts.poppins(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.navyBlue),
+                            color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                         decoration: InputDecoration(
                           labelText: 'Local Price per kg (BDT)',
                           labelStyle: GoogleFonts.inter(
@@ -3030,7 +3041,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                           contentPadding:
                               const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           filled: true,
-                          fillColor: const Color(0xFFF5F7FA),
+                          fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide.none),
@@ -3158,7 +3169,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               children: [
                 Text('About Zakat al-Fitr',
                     style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold, fontSize: 12.5, color: AppColors.navyBlue)),
+                        fontWeight: FontWeight.bold, fontSize: 12.5, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                 const SizedBox(height: 8),
                 _bullet(
                     'Obligatory on every Muslim who has food in excess of their needs on Eid day.'),
@@ -3199,7 +3210,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                    color: AppColors.navyBlue.withValues(alpha: 0.2),
+                    color: _isDarkMode ? Colors.white.withOpacity(0.2) : AppColors.navyBlue.withValues(alpha: 0.2),
                     blurRadius: 14,
                     offset: const Offset(0, 6)),
               ],
@@ -3330,11 +3341,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 child: Column(
                   children: [
                     Icon(Icons.receipt_long_rounded,
-                        size: 48, color: AppColors.navyBlue.withValues(alpha: 0.18)),
+                        size: 48, color: _isDarkMode ? Colors.white.withOpacity(0.18) : AppColors.navyBlue.withValues(alpha: 0.18)),
                     const SizedBox(height: 12),
                     Text('No payments logged yet.',
                         style: GoogleFonts.poppins(
-                            color: AppColors.navyBlue.withValues(alpha: 0.4), fontSize: 13)),
+                            color: _isDarkMode ? Colors.white.withOpacity(0.4) : AppColors.navyBlue.withValues(alpha: 0.4), fontSize: 13)),
                   ],
                 ),
               ),
@@ -3353,7 +3364,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.navyBlue.withValues(alpha: 0.05),
+                      color: _isDarkMode ? Colors.white.withOpacity(0.05) : AppColors.navyBlue.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -3361,7 +3372,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.navyBlue,
+                        color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                       ),
                     ),
                   ),
@@ -3380,7 +3391,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: AppColors.navyBlue.withValues(alpha: 0.45),
+                      color: _isDarkMode ? Colors.white.withOpacity(0.45) : AppColors.navyBlue.withValues(alpha: 0.45),
                     ),
                   ),
                 ),
@@ -3392,9 +3403,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.coralOrange.withValues(alpha: 0.3)),
+                border: Border.all(color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.coralOrange.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -3415,10 +3426,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                             style: GoogleFonts.poppins(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12.5,
-                                color: AppColors.navyBlue)),
+                                color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                         Text('Browse Zakat-eligible charity donation pages',
                             style: GoogleFonts.inter(
-                                fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                                fontSize: 10.5, color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5))),
                       ],
                     ),
                   ),
@@ -3457,7 +3468,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               const Spacer(),
               Text(DateFormat('d MMM yyyy').format(p.date),
                   style: GoogleFonts.inter(
-                      fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.45))),
+                      fontSize: 10.5, color: _isDarkMode ? Colors.white.withOpacity(0.45) : AppColors.navyBlue.withValues(alpha: 0.45))),
             ],
           ),
           const SizedBox(height: 8),
@@ -3469,18 +3480,18 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   children: [
                     Text(p.recipient,
                         style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.navyBlue)),
+                            fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                     if (p.note.isNotEmpty)
                       Text(p.note,
                           style: GoogleFonts.inter(
-                              fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                              fontSize: 11, color: _isDarkMode ? Colors.white.withOpacity(0.5) : AppColors.navyBlue.withValues(alpha: 0.5))),
                   ],
                 ),
               ),
               Text(
                   '${p.currency == "BDT" ? "Tk" : p.currency} ${p.amount.toStringAsFixed(0)}',
                   style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.navyBlue)),
+                      fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
             ],
           ),
           const SizedBox(height: 8),
@@ -3492,18 +3503,18 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.navyBlue.withValues(alpha: 0.07),
+                    color: _isDarkMode ? Colors.white.withOpacity(0.07) : AppColors.navyBlue.withValues(alpha: 0.07),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.share_rounded, size: 13, color: AppColors.navyBlue),
+                      Icon(Icons.share_rounded, size: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                       const SizedBox(width: 5),
                       Text('Share Receipt',
                           style: GoogleFonts.inter(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.navyBlue)),
+                              color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                     ],
                   ),
                 ),
@@ -3566,9 +3577,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       constraints: const BoxConstraints(maxWidth: 430),
       builder: (_) => StatefulBuilder(
         builder: (ctx, setModalState) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: EdgeInsets.fromLTRB(
               20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
@@ -3587,7 +3598,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 const SizedBox(height: 16),
                 Text(isFitra ? 'Log Fitra Payment' : 'Log Zakat Payment',
                     style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.navyBlue)),
+                        fontWeight: FontWeight.bold, fontSize: 16, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -3602,7 +3613,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         style: GoogleFonts.poppins(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.navyBlue),
+                            color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                         onChanged: (v) => setModalState(() => currency = v!),
                         items: _currencies
                             .map((c) => DropdownMenuItem(
@@ -3620,17 +3631,17 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 if (!isFitra) ...[
                   Text('Category (from Surah At-Tawbah 9:60)',
                       style: GoogleFonts.inter(
-                          fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.6))),
+                          fontSize: 11.5, color: _isDarkMode ? Colors.white.withOpacity(0.6) : AppColors.navyBlue.withValues(alpha: 0.6))),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     initialValue: category,
-                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.navyBlue),
+                    style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                     decoration: InputDecoration(
                       isDense: true,
                       contentPadding:
                           const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       filled: true,
-                      fillColor: const Color(0xFFF5F7FA),
+                      fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     ),
@@ -3675,7 +3686,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
-                      color: AppColors.navyBlue,
+                      color: _isDarkMode ? AppColors.midTeal : AppColors.navyBlue,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Center(
@@ -3700,15 +3711,15 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     return TextField(
       controller: ctrl,
       keyboardType: keyboardType,
-      style: GoogleFonts.poppins(fontSize: 13, color: AppColors.navyBlue),
+      style: GoogleFonts.poppins(fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
       decoration: InputDecoration(
         labelText: label,
         labelStyle:
-            GoogleFonts.inter(fontSize: 12, color: AppColors.navyBlue.withValues(alpha: 0.5)),
+            GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white.withOpacity(0.5) : AppColors.navyBlue.withValues(alpha: 0.5)),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         filled: true,
-        fillColor: const Color(0xFFF5F7FA),
+        fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       ),
@@ -4122,12 +4133,12 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 child: Column(
                   children: [
                     Icon(Icons.bar_chart_rounded,
-                        size: 48, color: AppColors.navyBlue.withValues(alpha: 0.15)),
+                        size: 48, color: _isDarkMode ? Colors.white.withOpacity(0.15) : AppColors.navyBlue.withValues(alpha: 0.15)),
                     const SizedBox(height: 12),
                     Text('Save snapshots to start tracking year-over-year history.',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
-                            color: AppColors.navyBlue.withValues(alpha: 0.4), fontSize: 13)),
+                            color: _isDarkMode ? Colors.white.withOpacity(0.4) : AppColors.navyBlue.withValues(alpha: 0.4), fontSize: 13)),
                   ],
                 ),
               ),
@@ -4140,7 +4151,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               decoration: _cardDeco(),
               child: SizedBox(
                 height: 180,
-                child: CustomPaint(painter: _BarChartPainter(snapshots: _history)),
+                child: CustomPaint(painter: _BarChartPainter(snapshots: _history, isDarkMode: _isDarkMode)),
               ),
             ),
             const SizedBox(height: 16),
@@ -4172,7 +4183,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     _savePrefs();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: AppColors.navyBlue,
+        backgroundColor: _isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         content: Text('$year snapshot saved',
@@ -4195,7 +4206,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             children: [
               Text('${s.year}',
                   style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.navyBlue)),
+                      fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -4265,7 +4276,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF5F7FA),
+          color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -4273,11 +4284,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           children: [
             Text(label,
                 style: GoogleFonts.inter(
-                    fontSize: 9.5, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                    fontSize: 9.5, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.5))),
             const SizedBox(height: 2),
             Text(value,
                 style: GoogleFonts.poppins(
-                    fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                    fontSize: 12, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
           ],
         ),
       ),
@@ -4299,9 +4310,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         maxChildSize: 0.95,
         minChildSize: 0.5,
         builder: (ctx, scrollCtrl) => Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFF5F7FA),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: _isDarkMode ? const Color(0xFF1E1E1E) : const Color(0xFFF5F7FA),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             children: [
@@ -4311,7 +4322,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                        color: const Color(0xFFE0E0E0),
+                        color: _isDarkMode ? Colors.white24 : const Color(0xFFE0E0E0),
                         borderRadius: BorderRadius.circular(2))),
               ),
               Padding(
@@ -4327,7 +4338,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                             style: GoogleFonts.poppins(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
-                                color: AppColors.navyBlue)),
+                                color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -4335,7 +4346,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         'Zakat-eligible organizations mapped to Surah At-Tawbah 9:60 categories. Tap "Go to Donation Page" to pay securely online.',
                         style: GoogleFonts.inter(
                             fontSize: 11.5,
-                            color: AppColors.navyBlue.withValues(alpha: 0.55),
+                            color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55),
                             height: 1.4)),
                   ],
                 ),
@@ -4369,19 +4380,19 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               Expanded(
                 child: Text(org.name,
                     style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.navyBlue)),
+                        fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F7FA),
+                  color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(org.country,
                     style: GoogleFonts.inter(
                         fontSize: 9.5,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                        color: _isDarkMode ? Colors.white.withOpacity(0.5) : AppColors.navyBlue.withValues(alpha: 0.5))),
               ),
             ],
           ),
@@ -4400,7 +4411,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           Text(org.description,
               style: GoogleFonts.inter(
                   fontSize: 11.5,
-                  color: AppColors.navyBlue.withValues(alpha: 0.6),
+                  color: _isDarkMode ? Colors.white.withOpacity(0.6) : AppColors.navyBlue.withValues(alpha: 0.6),
                   height: 1.5)),
           const SizedBox(height: 12),
           Row(
@@ -4411,7 +4422,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
-                      color: AppColors.navyBlue,
+                      color: _isDarkMode ? AppColors.midTeal : AppColors.navyBlue,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Center(
@@ -4446,21 +4457,20 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
-                      color: AppColors.navyBlue.withValues(alpha: 0.07),
+                      color: _isDarkMode ? Colors.white.withOpacity(0.07) : AppColors.navyBlue.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Center(
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.bookmark_add_rounded,
-                              size: 13, color: AppColors.navyBlue),
+                          Icon(Icons.bookmark_add_rounded, size: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                           const SizedBox(width: 5),
                           Text('Log Local Payment',
                               style: GoogleFonts.inter(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.navyBlue)),
+                                  color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                         ],
                       ),
                     ),
@@ -4483,14 +4493,14 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: AlertDialog(
-              backgroundColor: Colors.white,
+              backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: Text(
                 'Donate to ${org.name}',
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: AppColors.navyBlue,
+                  color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                 ),
               ),
               content: Column(
@@ -4501,7 +4511,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     'We will redirect you to the official donation page for ${org.name}. Enter the amount you wish to pay, and it will be saved in your DeenMate logs.',
                     style: GoogleFonts.inter(
                       fontSize: 12,
-                      color: AppColors.navyBlue.withValues(alpha: 0.65),
+                      color: _isDarkMode ? Colors.white.withOpacity(0.65) : AppColors.navyBlue.withValues(alpha: 0.65),
                       height: 1.5,
                     ),
                   ),
@@ -4511,7 +4521,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.navyBlue,
+                      color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -4521,13 +4531,13 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     style: GoogleFonts.poppins(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.navyBlue,
+                      color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                     ),
                     decoration: InputDecoration(
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       filled: true,
-                      fillColor: const Color(0xFFF5F7FA),
+                      fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -4544,13 +4554,13 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.navyBlue.withValues(alpha: 0.5),
+                      color: _isDarkMode ? Colors.white.withOpacity(0.5) : AppColors.navyBlue.withValues(alpha: 0.5),
                     ),
                   ),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.navyBlue,
+                    backgroundColor: _isDarkMode ? AppColors.midTeal : AppColors.navyBlue,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () {
@@ -4617,11 +4627,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   // ─────────────────────────────────────────────────────────────
 
   BoxDecoration _cardDeco() => BoxDecoration(
-        color: Colors.white,
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-              color: AppColors.navyBlue.withValues(alpha: 0.05),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 10,
               offset: const Offset(0, 3)),
         ],
@@ -4657,10 +4667,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: AppColors.navyBlue.withValues(alpha: 0.08),
+          color: _isDarkMode ? Colors.white.withOpacity(0.08) : AppColors.navyBlue.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: AppColors.navyBlue, size: 16),
+        child: Icon(icon, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 16),
       ),
     );
   }
@@ -4709,7 +4719,8 @@ class _SparklinePainter extends CustomPainter {
 
 class _BarChartPainter extends CustomPainter {
   final List<ZakatYearSnapshot> snapshots;
-  const _BarChartPainter({required this.snapshots});
+  final bool isDarkMode;
+  const _BarChartPainter({required this.snapshots, required this.isDarkMode});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -4729,7 +4740,7 @@ class _BarChartPainter extends CustomPainter {
       // Bar background
       canvas.drawRRect(
         RRect.fromRectAndRadius(Rect.fromLTWH(x, y, barWidth, barH), const Radius.circular(5)),
-        Paint()..color = const Color(0xFF1A2E40),
+        Paint()..color = isDarkMode ? const Color(0xFF2C3E50) : const Color(0xFF1A2E40),
       );
 
       // Paid overlay
@@ -4745,7 +4756,7 @@ class _BarChartPainter extends CustomPainter {
         ..text = TextSpan(
             text: '${s.year}',
             style: GoogleFonts.inter(
-                fontSize: 9, color: const Color(0xFF1A2E40), fontWeight: FontWeight.w600))
+                fontSize: 9, color: isDarkMode ? Colors.white70 : const Color(0xFF1A2E40), fontWeight: FontWeight.w600))
         ..layout();
       textPainter.paint(
           canvas, Offset(x + barWidth / 2 - textPainter.width / 2, size.height - 18));
@@ -4753,7 +4764,7 @@ class _BarChartPainter extends CustomPainter {
 
     // Legend
     final legendPaint = Paint()..style = PaintingStyle.fill;
-    legendPaint.color = const Color(0xFF1A2E40);
+    legendPaint.color = isDarkMode ? const Color(0xFF2C3E50) : const Color(0xFF1A2E40);
     canvas.drawRRect(
         RRect.fromRectAndRadius(const Rect.fromLTWH(0, 0, 12, 6), const Radius.circular(2)),
         legendPaint);
@@ -4764,13 +4775,13 @@ class _BarChartPainter extends CustomPainter {
     textPainter
       ..text = TextSpan(
           text: 'Due   Paid',
-          style: GoogleFonts.inter(fontSize: 9, color: const Color(0xFF1A2E40)))
+          style: GoogleFonts.inter(fontSize: 9, color: isDarkMode ? Colors.white70 : const Color(0xFF1A2E40)))
       ..layout();
     textPainter.paint(canvas, const Offset(34, -1));
   }
 
   @override
-  bool shouldRepaint(_BarChartPainter old) => old.snapshots != snapshots;
+  bool shouldRepaint(_BarChartPainter old) => old.snapshots != snapshots || old.isDarkMode != isDarkMode;
 }
 
 class CardBackgroundPainter extends CustomPainter {
@@ -4808,3 +4819,8 @@ class CardBackgroundPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+
+
+
+
