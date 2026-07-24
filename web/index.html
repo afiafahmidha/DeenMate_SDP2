@@ -31,6 +31,23 @@
 
   <title>deenmate_sdp2</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Google Maps JS SDK for Flutter Web -->
+  <script src="https://maps.googleapis.com/maps/api/js"></script>
+  
+  <style>
+    /* Hides the "This page can't load Google Maps correctly" modal dialog */
+    .gm-err-container, .gm-err-modal, .gm-err-title, .gm-err-content, .gm-err-icon {
+      display: none !important;
+    }
+    /* Hides "For development purposes only" text overlay */
+    .gm-style-cc {
+      display: none !important;
+    }
+    /* Hides the dark grey shade overlay overlaying the map tiles */
+    .gm-style iframe + div {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
   <!--

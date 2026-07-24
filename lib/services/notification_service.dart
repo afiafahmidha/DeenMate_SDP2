@@ -201,4 +201,47 @@ class NotificationService {
 
     debugPrint('[NotificationService] Scheduled custom notification: $title at $tzTime (id=$id)');
   }
+
+  // ---- Show a custom/local notification immediately ----
+  Future<void> showCustomNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+  }) async {
+    if (!_initialized) await init();
+
+    const androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDesc,
+      importance: Importance.max,
+      priority: Priority.max,
+      playSound: true,
+      sound: UriAndroidNotificationSound("content://settings/system/alarm_alert"),
+      enableVibration: true,
+      visibility: NotificationVisibility.public,
+      ongoing: false,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentSound: true,
+      presentBadge: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _plugin.show(
+      id,
+      title,
+      body,
+      details,
+    );
+
+    debugPrint('[NotificationService] Showed instant custom notification: $title (id=$id)');
+  }
 }
