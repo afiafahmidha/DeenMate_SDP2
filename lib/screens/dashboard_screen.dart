@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -20,6 +20,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'emergency_sos_screen.dart';
 import 'dhikr_counter_screen.dart';
 import 'profile_tab.dart';
+import 'halal_scanner/halal_scanner_home.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -2559,6 +2560,13 @@ _buildAnimatedEntry(
                   icon: Icons.qr_code_scanner_rounded,
                   label: 'Halal Scanner',
                   iconPainter: _HalalIconPainter(isDark: _isDarkMode),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const HalalScannerHomeScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 14),
