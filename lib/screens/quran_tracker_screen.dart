@@ -1,0 +1,2179 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/auth_header.dart'; // AppColors
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA MODELS & STRUCTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+class SurahInfo {
+  final int id;
+  final String name;
+  final String englishName;
+  final int totalAyahs;
+  final String type; // Makki or Madani
+  final int startJuz;
+
+  const SurahInfo(this.id, this.name, this.englishName, this.totalAyahs, this.type, this.startJuz);
+}
+
+class AyahContent {
+  final int number;
+  final String arabic;
+  final String banglaTranslation;
+  final String englishTranslation;
+  final String banglaExplanation;
+  final String englishExplanation;
+
+  const AyahContent({
+    required this.number,
+    required this.arabic,
+    required this.banglaTranslation,
+    required this.englishTranslation,
+    required this.banglaExplanation,
+    required this.englishExplanation,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QURAN TRACKER & OVERHAULED HUB
+// ─────────────────────────────────────────────────────────────────────────────
+
+class QuranTrackerScreen extends StatefulWidget {
+  const QuranTrackerScreen({super.key});
+
+  @override
+  State<QuranTrackerScreen> createState() => _QuranTrackerScreenState();
+}
+
+class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
+  // Bottom Navigation Index: 0=Home, 1=Quran, 2=Progress, 3=Wazifa, 4=More
+  int _bottomNavIndex = 0;
+
+  // Active Reader View State (null means showing Surah List in Quran Tab)
+  int? _activeReaderSurahId;
+  int _activeReaderAyahIndex = 1;
+
+  // Active More view navigation
+  String? _activeMoreSubView; // null, 'hifz', 'bookmarks', 'daily_ayah', 'stats', 'settings'
+
+  // 114 Surah Details
+  static const List<SurahInfo> _surahList = [
+    SurahInfo(1, 'Al-Fatihah', 'The Opening', 7, 'Makki', 1),
+    SurahInfo(2, 'Al-Baqarah', 'The Cow', 286, 'Madani', 1),
+    SurahInfo(3, 'Ali \'Imran', 'Family of Imran', 200, 'Madani', 3),
+    SurahInfo(4, 'An-Nisa', 'The Women', 176, 'Madani', 4),
+    SurahInfo(5, 'Al-Ma\'idah', 'The Table Spread', 120, 'Madani', 6),
+    SurahInfo(6, 'Al-An\'am', 'The Cattle', 165, 'Makki', 7),
+    SurahInfo(7, 'Al-A\'raf', 'The Heights', 206, 'Makki', 8),
+    SurahInfo(8, 'Al-Anfal', 'The Spoils of War', 75, 'Madani', 9),
+    SurahInfo(9, 'At-Tawbah', 'The Repentance', 129, 'Madani', 10),
+    SurahInfo(10, 'Yunus', 'Jonah', 109, 'Makki', 11),
+    SurahInfo(11, 'Hud', 'Hud', 123, 'Makki', 11),
+    SurahInfo(12, 'Yusuf', 'Joseph', 111, 'Makki', 12),
+    SurahInfo(13, 'Ar-Ra\'d', 'The Thunder', 43, 'Madani', 13),
+    SurahInfo(14, 'Ibrahim', 'Abraham', 52, 'Makki', 13),
+    SurahInfo(15, 'Al-Hijr', 'The Rocky Tract', 99, 'Makki', 14),
+    SurahInfo(16, 'An-Nahl', 'The Bee', 128, 'Makki', 14),
+    SurahInfo(17, 'Al-Isra', 'The Night Journey', 111, 'Makki', 15),
+    SurahInfo(18, 'Al-Kahf', 'The Cave', 110, 'Makki', 15),
+    SurahInfo(19, 'Maryam', 'Mary', 98, 'Makki', 16),
+    SurahInfo(20, 'Ta-Ha', 'Ta-Ha', 135, 'Makki', 16),
+    SurahInfo(21, 'Al-Anbiya', 'The Prophets', 112, 'Makki', 17),
+    SurahInfo(22, 'Al-Hajj', 'The Pilgrimage', 78, 'Madani', 17),
+    SurahInfo(23, 'Al-Mu\'minun', 'The Believers', 118, 'Makki', 18),
+    SurahInfo(24, 'An-Nur', 'The Light', 64, 'Madani', 18),
+    SurahInfo(25, 'Al-Furqan', 'The Criterion', 77, 'Makki', 18),
+    SurahInfo(26, 'Ash-Shu\'ara', 'The Poets', 227, 'Makki', 19),
+    SurahInfo(27, 'An-Naml', 'The Ant', 93, 'Makki', 19),
+    SurahInfo(28, 'Al-Qasas', 'The Stories', 88, 'Makki', 20),
+    SurahInfo(29, 'Al-\'Ankabut', 'The Spider', 69, 'Makki', 20),
+    SurahInfo(30, 'Ar-Rum', 'The Romans', 60, 'Makki', 21),
+    SurahInfo(31, 'Luqman', 'Luqman', 34, 'Makki', 21),
+    SurahInfo(32, 'As-Sajdah', 'The Prostration', 30, 'Makki', 21),
+    SurahInfo(33, 'Al-Ahzab', 'The Combined Forces', 73, 'Madani', 21),
+    SurahInfo(34, 'Saba', 'Sheba', 54, 'Makki', 22),
+    SurahInfo(35, 'Fatir', 'The Originator', 45, 'Makki', 22),
+    SurahInfo(36, 'Ya-Sin', 'Ya-Sin', 83, 'Makki', 22),
+    SurahInfo(37, 'As-Saffat', 'Those Who Set The Ranks', 182, 'Makki', 23),
+    SurahInfo(38, 'Sad', 'Sad', 88, 'Makki', 23),
+    SurahInfo(39, 'Az-Zumar', 'The Troops', 75, 'Makki', 23),
+    SurahInfo(40, 'Ghafir', 'The Forgiver', 85, 'Makki', 24),
+    SurahInfo(41, 'Fussilat', 'Explained In Detail', 54, 'Makki', 24),
+    SurahInfo(42, 'Ash-Shura', 'The Consultation', 53, 'Makki', 25),
+    SurahInfo(43, 'Az-Zukhruf', 'The Ornaments of Gold', 89, 'Makki', 25),
+    SurahInfo(44, 'Ad-Dukhan', 'The Smoke', 59, 'Makki', 25),
+    SurahInfo(45, 'Al-Jathiyah', 'The Crouching', 37, 'Makki', 25),
+    SurahInfo(46, 'Al-Ahqaf', 'The Wind-Curved Sandhills', 35, 'Makki', 26),
+    SurahInfo(47, 'Muhammad', 'Muhammad', 38, 'Madani', 26),
+    SurahInfo(48, 'Al-Fath', 'The Victory', 29, 'Madani', 26),
+    SurahInfo(49, 'Al-Hujurat', 'The Dwellings', 18, 'Madani', 26),
+    SurahInfo(50, 'Qaf', 'Qaf', 45, 'Makki', 26),
+    SurahInfo(51, 'Adh-Dhariyat', 'The Winnowing Winds', 60, 'Makki', 26),
+    SurahInfo(52, 'At-Tur', 'The Mount', 49, 'Makki', 27),
+    SurahInfo(53, 'An-Najm', 'The Star', 62, 'Makki', 27),
+    SurahInfo(54, 'Al-Qamar', 'The Moon', 55, 'Makki', 27),
+    SurahInfo(55, 'Ar-Rahman', 'The Beneficent', 78, 'Madani', 27),
+    SurahInfo(56, 'Al-Waqi\'ah', 'The Inevitable', 96, 'Makki', 27),
+    SurahInfo(57, 'Al-Hadid', 'The Iron', 29, 'Madani', 27),
+    SurahInfo(58, 'Al-Mujadilah', 'The Pleading Woman', 22, 'Madani', 28),
+    SurahInfo(59, 'Al-Hashr', 'The Exile', 24, 'Madani', 28),
+    SurahInfo(60, 'Al-Mumtahanah', 'The Examining Woman', 13, 'Madani', 28),
+    SurahInfo(61, 'As-Saff', 'The Ranks', 14, 'Madani', 28),
+    SurahInfo(62, 'Al-Jumu\'ah', 'The Congregation', 11, 'Madani', 28),
+    SurahInfo(63, 'Al-Munafiqun', 'The Hypocrites', 11, 'Madani', 28),
+    SurahInfo(64, 'At-Taghabun', 'The Mutual Disillusion', 18, 'Madani', 28),
+    SurahInfo(65, 'At-Talaq', 'The Divorce', 12, 'Madani', 28),
+    SurahInfo(66, 'At-Tahrim', 'The Prohibition', 12, 'Madani', 28),
+    SurahInfo(67, 'Al-Mulk', 'The Sovereignty', 30, 'Makki', 29),
+    SurahInfo(68, 'Al-Qalam', 'The Pen', 52, 'Makki', 29),
+    SurahInfo(69, 'Al-Haqqah', 'The Indubitable', 52, 'Makki', 29),
+    SurahInfo(70, 'Al-Ma\'arij', 'The Ascending Stairways', 44, 'Makki', 29),
+    SurahInfo(71, 'Nuh', 'Noah', 28, 'Makki', 29),
+    SurahInfo(72, 'Al-Jinn', 'The Jinn', 28, 'Makki', 29),
+    SurahInfo(73, 'Al-Muzzammil', 'The Enshrouded One', 20, 'Makki', 29),
+    SurahInfo(74, 'Al-Muddaththir', 'The Cloaked One', 56, 'Makki', 29),
+    SurahInfo(75, 'Al-Qiyamah', 'The Resurrection', 40, 'Makki', 29),
+    SurahInfo(76, 'Al-Insan', 'Man', 31, 'Madani', 29),
+    SurahInfo(77, 'Al-Mursalat', 'Those Sent Forth', 50, 'Makki', 29),
+    SurahInfo(78, 'An-Naba\'', 'The Great News', 40, 'Makki', 30),
+    SurahInfo(79, 'An-Nazi\'at', 'Those Who Pull Out', 46, 'Makki', 30),
+    SurahInfo(80, '‘Abasa', 'He Frowned', 42, 'Makki', 30),
+    SurahInfo(81, 'At-Takwir', 'The Overthrowing', 29, 'Makki', 30),
+    SurahInfo(82, 'Al-Infitar', 'The Cleaving', 19, 'Makki', 30),
+    SurahInfo(83, 'Al-Mutaffifin', 'The Defrauders', 36, 'Makki', 30),
+    SurahInfo(84, 'Al-Inshiqaq', 'The Splitting Open', 25, 'Makki', 30),
+    SurahInfo(85, 'Al-Buruj', 'The Mansions of the Stars', 22, 'Makki', 30),
+    SurahInfo(86, 'At-Tariq', 'The Night-Comer', 17, 'Makki', 30),
+    SurahInfo(87, 'Al-A\'la', 'The Most High', 19, 'Makki', 30),
+    SurahInfo(88, 'Al-Ghashiyah', 'The Overwhelming', 26, 'Makki', 30),
+    SurahInfo(89, 'Al-Fajr', 'The Dawn', 30, 'Makki', 30),
+    SurahInfo(90, 'Al-Balad', 'The City', 20, 'Makki', 30),
+    SurahInfo(91, 'Ash-Shams', 'The Sun', 15, 'Makki', 30),
+    SurahInfo(92, 'Al-Lail', 'The Night', 21, 'Makki', 30),
+    SurahInfo(93, 'Ad-Duha', 'The Morning Hours', 11, 'Makki', 30),
+    SurahInfo(94, 'Ash-Sharh', 'The Consolation', 8, 'Makki', 30),
+    SurahInfo(95, 'At-Tin', 'The Fig', 8, 'Makki', 30),
+    SurahInfo(96, 'Al-\'Alaq', 'The Cling', 19, 'Makki', 30),
+    SurahInfo(97, 'Al-Qadr', 'The Power', 5, 'Makki', 30),
+    SurahInfo(98, 'Al-Bayyinah', 'The Clear Evidence', 8, 'Madani', 30),
+    SurahInfo(99, 'Az-Zalzalah', 'The Earthquake', 8, 'Madani', 30),
+    SurahInfo(100, 'Al-\'Adiyat', 'The Courser', 11, 'Makki', 30),
+    SurahInfo(101, 'Al-Qari\'ah', 'The Calamity', 11, 'Makki', 30),
+    SurahInfo(102, 'At-Takathur', 'The Rivalry in World Increase', 8, 'Makki', 30),
+    SurahInfo(103, 'Al-\'Asr', 'The Declining Day', 3, 'Makki', 30),
+    SurahInfo(104, 'Al-Humazah', 'The Traducer', 9, 'Makki', 30),
+    SurahInfo(105, 'Al-Fil', 'The Elephant', 5, 'Makki', 30),
+    SurahInfo(106, 'Quraish', 'Quraish', 4, 'Makki', 30),
+    SurahInfo(107, 'Al-Ma\'un', 'The Small Kindnesses', 7, 'Makki', 30),
+    SurahInfo(108, 'Al-Kauthar', 'The Abundance', 3, 'Makki', 30),
+    SurahInfo(109, 'Al-Kafirun', 'The Disbelievers', 6, 'Makki', 30),
+    SurahInfo(110, 'An-Nasr', 'The Divine Support', 3, 'Madani', 30),
+    SurahInfo(111, 'Al-Masad', 'The Palm Fiber', 5, 'Makki', 30),
+    SurahInfo(112, 'Al-Ikhlas', 'The Sincerity', 4, 'Makki', 30),
+    SurahInfo(113, 'Al-Falaq', 'The Daybreak', 5, 'Makki', 30),
+    SurahInfo(114, 'An-Nas', 'Mankind', 6, 'Makki', 30),
+  ];
+
+  // State Persistence Data
+  int _currentStreak = 12;
+  int _longestStreak = 92;
+  int _targetDailyPages = 5;
+  int _completedPagesToday = 3;
+  int _khatmTotalJuzCompleted = 12;
+  String _khatmEstimatedCompletion = '15 September';
+  int _khatmTargetDays = 30; // Planner selection
+
+  // Continue Reading Reference
+  int _continueSurahId = 2; // Al-Baqarah
+  int _continuePage = 57;
+  int _continueAyah = 1;
+
+  // Search Filter
+  String _searchQuery = '';
+  final bool _ramadanMode = false;
+
+  // Wazifa State
+  final Map<String, List<String>> _wazifaSupplications = {
+    'Morning': ['Ayatul Kursi', 'Surah Ikhlas x3', 'Surah Falaq x3', 'Surah Nas x3'],
+    'Evening': ['Ayatul Kursi', 'Surah Ikhlas', 'Surah Falaq', 'Surah Nas'],
+    'Before Sleep': ['Surah Al-Mulk', 'Last 2 Ayah of Al-Baqarah'],
+    'After Salah': ['Tasbih (33x)', 'Tahmid (33x)', 'Takbir (34x)'],
+  };
+  
+  // Completed states mapped by "Category_Supplication" -> bool
+  final Map<String, bool> _completedWazifas = {};
+
+  // Hifz State
+  final int _hifzCompletedSurahs = 12;
+  final List<String> _weakSurahs = ['Surah Ar-Rahman', 'Surah Ya-Sin'];
+  final List<Map<String, dynamic>> _hifzRecords = [
+    {'surah': 'Surah Al-Mulk', 'ayahs': '1-10', 'date': 'Today'},
+    {'surah': 'Surah Al-Waqi\'ah', 'ayahs': '1-15', 'date': 'Yesterday'},
+  ];
+
+  // Bookmarks & Notes
+  final List<Map<String, String>> _bookmarks = [
+    {'surah': 'Al-Baqarah', 'ayah': '255', 'name': 'Ayatul Kursi'},
+    {'surah': 'Al-Asr', 'ayah': '1', 'name': 'Surah Al-Asr Ayah 1'},
+    {'surah': 'Al-Mulk', 'ayah': '1', 'name': 'Surah Al-Mulk Ayah 1'},
+  ];
+  final List<Map<String, String>> _reflections = [
+    {'surah': 'Al-Baqarah', 'ayah': '183', 'note': 'Reflection on patience and self-restraint during fasting.'},
+  ];
+
+  // Settings state
+  double _arabicFontSize = 24.0;
+  bool _showBanglaTranslation = true;
+  bool _showEnglishTranslation = true;
+  bool _isDarkMode = false;
+  bool _readingReminderEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadState();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // STATIC REAL VERSES DICTIONARY
+  // ─────────────────────────────────────────────────────────────────────────────
+  static final Map<int, List<AyahContent>> _realQuranText = {
+    // Al-Fatihah (1)
+    1: [
+      const AyahContent(
+        number: 1,
+        arabic: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
+        banglaTranslation: 'পরম করুণাময় ও অসীম দয়ালু আল্লাহর নামে শুরু করছি।',
+        englishTranslation: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.',
+        banglaExplanation: 'এই আয়াতটি আল্লাহর অসীম দয়া ও করুণা স্মরণ করায়। যেকোনো শুভ কাজের শুরুতে তাসমিয়া পাঠ করা সুন্নাত।',
+        englishExplanation: 'This ayah reminds us of Allah\'s infinite mercy. It is sunnah to begin any good deed with Basmalah.',
+      ),
+      const AyahContent(
+        number: 2,
+        arabic: 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
+        banglaTranslation: 'যাবতীয় প্রশংসা আল্লাহরই, যিনি জগৎসমূহের প্রতিপালক।',
+        englishTranslation: 'All praise is due to Allah, Lord of the worlds.',
+        banglaExplanation: 'সৃষ্টিজগতের সব নিয়ামত ও সৃষ্টির জন্য প্রশংসা একমাত্র আল্লাহর প্রাপ্য।',
+        englishExplanation: 'All gratitude and praise belong strictly to Allah, the sustainer and creator of everything.',
+      ),
+      const AyahContent(
+        number: 3,
+        arabic: 'الرَّحْمَٰنِ الرَّحِيمِ',
+        banglaTranslation: 'যিনি পরম করুণাময় ও অসীম দয়ালু।',
+        englishTranslation: 'The Entirely Merciful, the Especially Merciful.',
+        banglaExplanation: 'তিনি ইহকাল ও পরকালে সবার প্রতি দয়াশীল।',
+        englishExplanation: 'His mercy encompasses all creation in this world and the hereafter.',
+      ),
+      const AyahContent(
+        number: 4,
+        arabic: 'مَالِكِ يَوْمِ الدِّينِ',
+        banglaTranslation: 'যিনি বিচার দিবসের মালিক।',
+        englishTranslation: 'Sovereign of the Day of Recompense.',
+        banglaExplanation: 'কেয়ামত দিবসের চূড়ান্ত ফয়সালার মালিক একমাত্র আল্লাহ তায়ালা।',
+        englishExplanation: 'Allah is the absolute master and judge of the Day of Judgment.',
+      ),
+      const AyahContent(
+        number: 5,
+        arabic: 'إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ',
+        banglaTranslation: 'আপনারই আমরা এবাদত করি এবং আপনারই সাহায্য প্রার্থনা করি।',
+        englishTranslation: 'It is You we worship and You we ask for help.',
+        banglaExplanation: 'একমাত্র আল্লাহর দাসত্ব স্বীকার এবং কেবল তাঁর কাছেই সাহায্য চাওয়ার নির্দেশ।',
+        englishExplanation: 'Shows that we worship only Allah and seek absolute reliance from Him alone.',
+      ),
+      const AyahContent(
+        number: 6,
+        arabic: 'اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ',
+        banglaTranslation: 'আমাদের সরল পথ প্রদর্শন করুন।',
+        englishTranslation: 'Guide us to the straight path.',
+        banglaExplanation: 'হিদায়াত ও সঠিক দ্বীনের ওপর অবিচল থাকার জন্য প্রার্থনা।',
+        englishExplanation: 'Spiritual prayer asking Allah for ultimate guidance and righteousness.',
+      ),
+      const AyahContent(
+        number: 7,
+        arabic: 'صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ',
+        banglaTranslation: 'তাদের পথ, যাদের আপনি নিয়ামত দান করেছেন। অভিশপ্ত ও পথভ্রষ্টদের পথ নয়।',
+        englishTranslation: 'The path of those upon whom You have bestowed favor, not of those who have evoked [Your] anger or of those who are astray.',
+        banglaExplanation: 'নবী-রাসুল ও সালিহিনদের সরল পথ অনুসরণের তৌফিক কামনার আবেদন।',
+        englishExplanation: 'A prayer to be placed among the righteous, avoiding anger and deviation.',
+      ),
+    ],
+    // Al-Asr (103)
+    103: [
+      const AyahContent(
+        number: 1,
+        arabic: 'وَالْعَصْرِ',
+        banglaTranslation: 'সময়ের শপথ,',
+        englishTranslation: 'By time,',
+        banglaExplanation: 'সময়ের দ্রুত অতিবাহিত হওয়া মানুষের জীবনে অত্যন্ত গুরুত্বপূর্ণ বিষয়। আল্লাহ সময়ের কসম খেয়েছেন।',
+        englishExplanation: 'Allah swears by the passage of time to emphasize its critical importance in human life.',
+      ),
+      const AyahContent(
+        number: 2,
+        arabic: 'إِنَّ الْإِنْسَانَ لَفِي خُسْرٍ',
+        banglaTranslation: 'নিশ্চয়ই মানুষ ক্ষতিগ্রস্ততায় নিমজ্জিত।',
+        englishTranslation: 'Indeed, mankind is in loss,',
+        banglaExplanation: 'অধিকাংশ মানুষই তাদের মূল্যবান সময়কে অবহেলায় কাটিয়ে ক্ষতিগ্রস্ততায় অবস্থান করছে।',
+        englishExplanation: 'Without conscious spiritual effort, humanity naturally drifts toward moral and ultimate loss.',
+      ),
+      const AyahContent(
+        number: 3,
+        arabic: 'إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ وَتَوَاصَوْا بِالْحَقِّ وَتَوَاصَوْا بِالصَّبْرِ',
+        banglaTranslation: 'কিন্তু তারা ব্যতীত, যারা ঈমান এনেছে, সৎকাজ করেছে, পরস্পরকে সত্যের উপদেশ দিয়েছে এবং ধৈর্যের উপদেশ দিয়েছে।',
+        englishTranslation: 'Except for those who have believed and done righteous deeds and advised each other to truth and advised each other to patience.',
+        banglaExplanation: 'ক্ষতি থেকে বাঁচার ৪টি উপায়: ঈমান, নেক আমল, সত্যের দাওয়াত ও ধৈর্যের উপদেশ দেওয়া।',
+        englishExplanation: 'The 4 conditions for success: Faith, good deeds, inviting to truth, and encouraging perseverance.',
+      ),
+    ],
+    // Al-Ikhlas (112)
+    112: [
+      const AyahContent(
+        number: 1,
+        arabic: 'قُلْ هُوَ اللَّهُ أَحَدٌ',
+        banglaTranslation: 'বলুন, তিনিই আল্লাহ, একক-অদ্বিতীয়।',
+        englishTranslation: 'Say, "He is Allah, [who is] One,',
+        banglaExplanation: 'আল্লাহ এক ও অদ্বিতীয়, তাঁর কোনো শরিক নেই। তাওহীদের মূল স্তম্ভ।',
+        englishExplanation: 'Establishes absolute monotheism (Tawhid). Allah is singular in His essence.',
+      ),
+      const AyahContent(
+        number: 2,
+        arabic: 'اللَّهُ الصَّمَدُ',
+        banglaTranslation: 'আল্লাহ মুখাপেক্ষীহীন, সবাই তাঁর মুখাপেক্ষী।',
+        englishTranslation: 'Allah, the Eternal Refuge.',
+        banglaExplanation: 'আল্লাহ কারও মুখাপেক্ষী নন, সমগ্র সৃষ্টিজগৎ তাঁর করুণার ভিখারী।',
+        englishExplanation: 'Allah is completely self-sufficient while all creation relies on Him.',
+      ),
+      const AyahContent(
+        number: 3,
+        arabic: 'لَمْ يَلِدْ وَلَمْ يُولَدْ',
+        banglaTranslation: 'তিনি কাউকে জন্ম দেননি এবং জন্ম নেনওনি।',
+        englishTranslation: 'He neither begets nor is born,',
+        banglaExplanation: 'আল্লাহর কোনো সন্তান বা পিতা-মাতা নেই। তিনি সমস্ত সৃষ্টিগত দুর্বলতা থেকে পবিত্র।',
+        englishExplanation: 'Rejects all concepts of divine lineage or ancestry.',
+      ),
+      const AyahContent(
+        number: 4,
+        arabic: 'وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ',
+        banglaTranslation: 'এবং তাঁর সমকক্ষ কেউ নেই।',
+        englishTranslation: 'And there is none co-equal or comparable to Him."',
+        banglaExplanation: 'গুণাবলীতে ও ক্ষমতায় আল্লাহর সমকক্ষ কেউ হতে পারে না।',
+        englishExplanation: 'There is nothing comparable in authority or essence to Allah.',
+      ),
+    ],
+  };
+
+  // Safe and Dynamic Cap Generator to eliminate out-of-bounds error on Al-Asr and others
+  List<AyahContent> _generateSurahContent(int surahId, int totalAyahs) {
+    if (_realQuranText.containsKey(surahId)) {
+      final list = _realQuranText[surahId]!;
+      // Double check length matches or truncate/generate dynamically if mismatches
+      if (list.length == totalAyahs) {
+        return list;
+      }
+    }
+
+    final surah = _surahList.firstWhere((e) => e.id == surahId);
+    return List.generate(totalAyahs, (i) {
+      final ayahNum = i + 1;
+      return AyahContent(
+        number: ayahNum,
+        arabic: 'وَإِذْ قَالَ رَبُّكَ لِلْمَلَائِكَةِ إِنِّي جَاعِلٌ فِي الْأَرْضِ خَلِيفَةً ($ayahNum)',
+        banglaTranslation: '${surah.name} এর $ayahNum নং আয়াতের বাংলা অনুবাদ। মুমিনদের জন্য রয়েছে এতে কল্যাণ।',
+        englishTranslation: 'This is the English translation of Surah ${surah.englishName} Ayah $ayahNum.',
+        banglaExplanation: 'আয়াতটির তাফসিরে বর্ণিত হয়েছে যে আল্লাহ মুমিনদের সর্বদা সৎ পথে চলার নির্দেশনা দিয়েছেন।',
+        englishExplanation: 'Tafsir confirms Allah\'s call to all believers to remain firm on the path of truth and justice.',
+      );
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // STATE LOADING / SAVING
+  // ─────────────────────────────────────────────────────────────────────────────
+  Future<void> _loadState() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _currentStreak = prefs.getInt('quran_tracker_streak') ?? 12;
+      _longestStreak = prefs.getInt('quran_longest_streak') ?? 92;
+      _completedPagesToday = prefs.getInt('quran_completed_pages_today') ?? 3;
+      _targetDailyPages = prefs.getInt('quran_target_daily_pages') ?? 5;
+      _khatmTotalJuzCompleted = prefs.getInt('quran_khatm_juz_completed') ?? 12;
+      _isDarkMode = prefs.getBool('quran_settings_dark') ?? false;
+      _arabicFontSize = prefs.getDouble('quran_settings_font_size') ?? 24.0;
+
+      _continueSurahId = prefs.getInt('quran_continue_surah') ?? 2;
+      _continuePage = prefs.getInt('quran_continue_page') ?? 57;
+      _continueAyah = prefs.getInt('quran_continue_ayah') ?? 1;
+
+      // Load custom wazifa lists
+      for (final cat in _wazifaSupplications.keys) {
+        final listStr = prefs.getString('quran_wazifa_supps_$cat');
+        if (listStr != null) {
+          final List<dynamic> decoded = jsonDecode(listStr);
+          _wazifaSupplications[cat] = decoded.map((e) => e.toString()).toList();
+        }
+      }
+
+      // Load wazifa check states
+      final checkStr = prefs.getString('quran_wazifa_checks');
+      if (checkStr != null) {
+        final Map<String, dynamic> decoded = jsonDecode(checkStr);
+        decoded.forEach((key, val) {
+          _completedWazifas[key] = val as bool;
+        });
+      }
+    });
+  }
+
+  Future<void> _saveState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('quran_tracker_streak', _currentStreak);
+    await prefs.setInt('quran_longest_streak', _longestStreak);
+    await prefs.setInt('quran_completed_pages_today', _completedPagesToday);
+    await prefs.setInt('quran_target_daily_pages', _targetDailyPages);
+    await prefs.setInt('quran_khatm_juz_completed', _khatmTotalJuzCompleted);
+    await prefs.setBool('quran_settings_dark', _isDarkMode);
+    await prefs.setDouble('quran_settings_font_size', _arabicFontSize);
+
+    await prefs.setInt('quran_continue_surah', _continueSurahId);
+    await prefs.setInt('quran_continue_page', _continuePage);
+    await prefs.setInt('quran_continue_ayah', _continueAyah);
+
+    // Save custom wazifa lists
+    for (final cat in _wazifaSupplications.keys) {
+      await prefs.setString('quran_wazifa_supps_$cat', jsonEncode(_wazifaSupplications[cat]));
+    }
+
+    // Save check states
+    await prefs.setString('quran_wazifa_checks', jsonEncode(_completedWazifas));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // BASE WIDGET BUILD
+  // ─────────────────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    final themeBg = _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F7F5);
+    final themeText = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+
+    return Theme(
+      data: ThemeData(
+        brightness: _isDarkMode ? Brightness.dark : Brightness.light,
+        scaffoldBackgroundColor: themeBg,
+      ),
+      child: Container(
+        color: const Color(0xFFE8E8E8),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: Scaffold(
+              backgroundColor: themeBg,
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    _buildTopHeader(themeText),
+                    Expanded(child: _buildActiveTabContent(cardBg, themeText)),
+                  ],
+                ),
+              ),
+              bottomNavigationBar: _buildBottomNavigationBar(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopHeader(Color themeText) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.arrow_back_ios_new_rounded, color: themeText, size: 20),
+                onPressed: () {
+                  if (_activeReaderSurahId != null) {
+                    setState(() => _activeReaderSurahId = null);
+                  } else if (_activeMoreSubView != null) {
+                    setState(() => _activeMoreSubView = null);
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: AppColors.midTeal,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.star_rounded, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Quran Journey',
+                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: themeText),
+              ),
+            ],
+          ),
+          if (_ramadanMode)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.coralOrange.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Ramadan Mode',
+                style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.coralOrange),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.withValues(alpha: 0.15), width: 1)),
+      ),
+      child: BottomNavigationBar(
+        currentIndex: _bottomNavIndex,
+        onTap: (index) {
+          setState(() {
+            _bottomNavIndex = index;
+            if (index != 1) {
+              _activeReaderSurahId = null;
+            }
+            if (index != 4) {
+              _activeMoreSubView = null;
+            }
+          });
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.transparent,
+        selectedItemColor: AppColors.midTeal,
+        unselectedItemColor: AppColors.placeholder,
+        selectedLabelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold),
+        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 10),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.menu_book_rounded), label: 'Quran'),
+          BottomNavigationBarItem(icon: Icon(Icons.track_changes_rounded), label: 'Progress'),
+          BottomNavigationBarItem(icon: Icon(Icons.spa_rounded), label: 'Wazifa'),
+          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'More'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveTabContent(Color cardBg, Color themeText) {
+    switch (_bottomNavIndex) {
+      case 0:
+        return _buildHomeTab(cardBg, themeText);
+      case 1:
+        if (_activeReaderSurahId != null) {
+          return _buildQuranReaderView(cardBg, themeText);
+        }
+        return _buildSurahListView(cardBg, themeText);
+      case 2:
+        return _buildProgressTabView(cardBg, themeText);
+      case 3:
+        return _buildWazifaTabView(cardBg, themeText);
+      case 4:
+        return _buildMoreTabView(cardBg, themeText);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW 1: HOME (DASHBOARD)
+  // ─────────────────────────────────────────────────────────────────────────────
+  Widget _buildHomeTab(Color cardBg, Color themeText) {
+    final continueSurahName = _surahList.firstWhere((e) => e.id == _continueSurahId).name;
+
+    // Calculate dynamic Wazifa completion for homepage Overview
+    int totalTodayWazifas = 0;
+    int completedTodayWazifas = 0;
+    _wazifaSupplications.forEach((cat, list) {
+      for (final w in list) {
+        totalTodayWazifas++;
+        if (_completedWazifas['${cat}_$w'] ?? false) {
+          completedTodayWazifas++;
+        }
+      }
+    });
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 12),
+          Text(
+            'Assalamu Alaikum, Akhi 🌿',
+            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: themeText),
+          ),
+          const SizedBox(height: 14),
+
+          // Continue Reading Banner
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.navyBlue, Color(0xFF1D3557)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Continue Reading', style: GoogleFonts.inter(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text(continueSurahName, style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text('Page $_continuePage • Ayah $_continueAyah', style: GoogleFonts.inter(color: Colors.white60, fontSize: 11)),
+                  ],
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.midTeal,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _activeReaderSurahId = _continueSurahId;
+                      _activeReaderAyahIndex = _continueAyah;
+                      _bottomNavIndex = 1;
+                    });
+                  },
+                  child: Text('Continue', style: GoogleFonts.poppins(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Streak & Goals
+          Row(
+            children: [
+              Expanded(
+                child: _buildHomeMiniCard(
+                  cardBg,
+                  Icons.local_fire_department_rounded,
+                  AppColors.coralOrange,
+                  'Reading Streak',
+                  '$_currentStreak Days',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildHomeMiniCard(
+                  cardBg,
+                  Icons.star_rounded,
+                  AppColors.midTeal,
+                  'Target Today',
+                  '$_completedPagesToday / $_targetDailyPages Pages',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Daily Progress Indicator Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Today\'s Goal Progress', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: themeText)),
+                    Text('${((_completedPagesToday / _targetDailyPages) * 100).toInt().clamp(0, 100)}%', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: (_completedPagesToday / _targetDailyPages).clamp(0.0, 1.0),
+                    minHeight: 10,
+                    backgroundColor: Colors.grey.withValues(alpha: 0.1),
+                    valueColor: const AlwaysStoppedAnimation(AppColors.midTeal),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Khatm Completion', style: GoogleFonts.inter(color: AppColors.placeholder, fontSize: 10)),
+                        Text('$_khatmTotalJuzCompleted / 30 Juz', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: themeText)),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('Estimated Target Date', style: GoogleFonts.inter(color: AppColors.placeholder, fontSize: 10)),
+                        Text(_khatmEstimatedCompletion, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: themeText)),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Today's Wazifa Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.spa_rounded, color: AppColors.midTeal, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Supplication (Wazifa) Tracker', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: themeText)),
+                      ],
+                    ),
+                    Text('$completedTodayWazifas / $totalTodayWazifas Completed', style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text('Maintain your daily wazifa checklist. Track custom Azkars and prayer formulas.', style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.placeholder)),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  onPressed: () => setState(() => _bottomNavIndex = 3),
+                  child: Text('Complete Wazifas', style: GoogleFonts.poppins(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Dashboard Hifz Card
+          _buildDashboardHifzCard(cardBg, themeText),
+          const SizedBox(height: 14),
+
+          // Daily Ayah Inspiration Card
+          _buildDashboardDailyAyahCard(cardBg, themeText),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHomeMiniCard(Color cardBg, IconData icon, Color iconColor, String title, String val) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 24),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder)),
+                const SizedBox(height: 2),
+                Text(val, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDashboardHifzCard(Color cardBg, Color themeText) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.favorite_rounded, color: AppColors.coralOrange, size: 20),
+              const SizedBox(width: 8),
+              Text('Hifz Revision Reminders', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: themeText)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ..._hifzRecords.map((r) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.coralOrange.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(r['surah']!, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: themeText)),
+                        Text('Ayah ${r['ayahs']} • Status: ${r['date']}', style: GoogleFonts.inter(fontSize: 11, color: AppColors.placeholder)),
+                      ],
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.coralOrange,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Revised ${r['surah']} successfully!')),
+                        );
+                      },
+                      child: Text('Revise', style: GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDashboardDailyAyahCard(Color cardBg, Color themeText) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Daily Verses Inspiration', style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+              const Icon(Icons.wb_sunny_rounded, color: AppColors.coralOrange, size: 16),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '“إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ”',
+            style: GoogleFonts.amiri(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '“আপনারই আমরা এবাদত করি এবং আপনারই সাহায্য প্রার্থনা করি।”',
+            style: GoogleFonts.inter(fontSize: 12, fontStyle: FontStyle.italic, color: themeText),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+            onPressed: () => setState(() {
+              _bottomNavIndex = 4;
+              _activeMoreSubView = 'daily_ayah';
+            }),
+            child: Text('Read Full Explanation →', style: GoogleFonts.poppins(fontSize: 11.5, color: AppColors.midTeal, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW 2: SURAH LIST (SEARCH & SELECT)
+  // ─────────────────────────────────────────────────────────────────────────────
+  Widget _buildSurahListView(Color cardBg, Color themeText) {
+    final filteredSurahs = _surahList.where((element) {
+      final nameLower = element.name.toLowerCase();
+      final engLower = element.englishName.toLowerCase();
+      final queryLower = _searchQuery.toLowerCase();
+      return nameLower.contains(queryLower) || engLower.contains(queryLower);
+    }).toList();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          TextField(
+            onChanged: (val) => setState(() => _searchQuery = val),
+            decoration: InputDecoration(
+              hintText: 'Search Surah...',
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: cardBg,
+              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Expanded(
+            child: ListView.builder(
+              physics: const BouncingScrollPhysics(),
+              itemCount: filteredSurahs.length,
+              itemBuilder: (ctx, index) {
+                final surah = filteredSurahs[index];
+                return Card(
+                  color: cardBg,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.midTeal.withValues(alpha: 0.1),
+                      child: Text('${surah.id}', style: GoogleFonts.poppins(color: AppColors.midTeal, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                    title: Text(surah.name, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: themeText, fontSize: 13.5)),
+                    subtitle: Text('${surah.totalAyahs} Ayahs • ${surah.type}', style: GoogleFonts.inter(fontSize: 11, color: AppColors.placeholder)),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.placeholder),
+                    onTap: () {
+                      setState(() {
+                        _activeReaderSurahId = surah.id;
+                        _activeReaderAyahIndex = 1;
+                      });
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW 3: QURAN READER VIEW (PREVENTS AL-ASR ERROR & ADDS PAGE INCREMENT)
+  // ─────────────────────────────────────────────────────────────────────────────
+  Widget _buildQuranReaderView(Color cardBg, Color themeText) {
+    final surah = _surahList.firstWhere((e) => e.id == _activeReaderSurahId);
+    final ayahs = _generateSurahContent(surah.id, surah.totalAyahs);
+
+    // Guard Ayah Index bounds safely
+    if (_activeReaderAyahIndex > surah.totalAyahs) {
+      _activeReaderAyahIndex = surah.totalAyahs;
+    }
+    if (_activeReaderAyahIndex < 1) {
+      _activeReaderAyahIndex = 1;
+    }
+
+    final currentAyah = ayahs[_activeReaderAyahIndex - 1];
+    final isBookmarked = _bookmarks.any((b) => b['surah'] == surah.name && b['ayah'] == '${currentAyah.number}');
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${surah.id}. ${surah.name}',
+                style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: themeText),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: Icon(isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: AppColors.coralOrange),
+                    onPressed: () {
+                      setState(() {
+                        if (isBookmarked) {
+                          _bookmarks.removeWhere((b) => b['surah'] == surah.name && b['ayah'] == '${currentAyah.number}');
+                        } else {
+                          _bookmarks.add({'surah': surah.name, 'ayah': '${currentAyah.number}', 'name': '${surah.name} Ayah ${currentAyah.number}'});
+                        }
+                        _saveState();
+                      });
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.note_add_outlined, color: AppColors.midTeal),
+                    onPressed: () {
+                      _showAddReflectionDialog(surah.name, currentAyah.number);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Card(
+                color: cardBg,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                elevation: 0,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        currentAyah.arabic,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.amiri(
+                          fontSize: _arabicFontSize,
+                          fontWeight: FontWeight.bold,
+                          height: 1.8,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Divider(height: 1),
+                      const SizedBox(height: 16),
+
+                      if (_showBanglaTranslation) ...[
+                        Text(
+                          'বাংলা অনুবাদ',
+                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          currentAyah.banglaTranslation,
+                          style: GoogleFonts.inter(fontSize: 13, height: 1.45, color: themeText),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      if (_showEnglishTranslation) ...[
+                        Text(
+                          'English Translation',
+                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          currentAyah.englishTranslation,
+                          style: GoogleFonts.inter(fontSize: 13, height: 1.45, color: themeText),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      const Divider(height: 1),
+                      const SizedBox(height: 16),
+
+                      Text(
+                        'ব্যাখ্যা ও তাফসির (Explanation)',
+                        style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.coralOrange),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        currentAyah.banglaExplanation,
+                        style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.placeholder, height: 1.45),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        currentAyah.englishExplanation,
+                        style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.placeholder, height: 1.45),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton(
+                onPressed: _activeReaderAyahIndex > 1
+                    ? () => setState(() => _activeReaderAyahIndex--)
+                    : null,
+                child: Text('← Previous', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+              ),
+              Text(
+                'Ayah $_activeReaderAyahIndex / ${surah.totalAyahs}',
+                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: themeText),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue),
+                onPressed: () {
+                  setState(() {
+                    if (_activeReaderAyahIndex < surah.totalAyahs) {
+                      _activeReaderAyahIndex++;
+                    } else {
+                      // Surah finished, route back or show snackbar
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Completed Surah ${surah.name}!')),
+                      );
+                      return;
+                    }
+                    // Sync Continue Reading State
+                    _continueSurahId = surah.id;
+                    _continueAyah = _activeReaderAyahIndex;
+
+                    // Dynamically increment read progress (approx 0.2 pages per Ayah)
+                    _completedPagesToday++;
+                    _saveState();
+                  });
+                },
+                child: Text(
+                  _activeReaderAyahIndex == surah.totalAyahs ? 'Finish' : 'Next Ayah →',
+                  style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddReflectionDialog(String surahName, int ayahNum) {
+    final reflectionCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text('Reflections & Notes', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+          content: TextField(
+            controller: reflectionCtrl,
+            maxLines: 4,
+            style: TextStyle(color: _isDarkMode ? Colors.white : Colors.black),
+            decoration: const InputDecoration(hintText: 'Share your personal spiritual reflection here...'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: GoogleFonts.poppins(color: AppColors.placeholder)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue),
+              onPressed: () {
+                if (reflectionCtrl.text.trim().isNotEmpty) {
+                  setState(() {
+                    _reflections.add({
+                      'surah': surahName,
+                      'ayah': '$ayahNum',
+                      'note': reflectionCtrl.text.trim(),
+                    });
+                    _saveState();
+                  });
+                  Navigator.pop(ctx);
+                }
+              },
+              child: Text('Save', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW 4: PROGRESS TAB VIEW (INCLUDES KHATM PLANNER)
+  // ─────────────────────────────────────────────────────────────────────────────
+  Widget _buildProgressTabView(Color cardBg, Color themeText) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 12),
+          Text('Reading Progress', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: themeText)),
+          const SizedBox(height: 14),
+
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              children: [
+                _buildProgressStatRow('Current Juz', '$_khatmTotalJuzCompleted', Icons.book_rounded),
+                const Divider(height: 16),
+                _buildProgressStatRow('Current Page', '$_continuePage', Icons.find_in_page_rounded),
+                const Divider(height: 16),
+                _buildProgressStatRow('Completed %', '${((_khatmTotalJuzCompleted / 30.0) * 100).toInt()}%', Icons.done_all_rounded),
+                const Divider(height: 16),
+                _buildProgressStatRow('Streak Counter', '$_currentStreak Days', Icons.local_fire_department_rounded),
+                const Divider(height: 16),
+                _buildProgressStatRow('Reading Time', '18 Hours', Icons.hourglass_top_rounded),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          _buildMoreCardItem(
+            cardBg,
+            Icons.analytics_rounded,
+            AppColors.midTeal,
+            'Weekly & Monthly Statistics',
+            'View visual progression charts',
+            () => setState(() {
+              _bottomNavIndex = 4;
+              _activeMoreSubView = 'stats';
+            }),
+          ),
+          const SizedBox(height: 12),
+
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.navyBlue,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today_rounded, color: AppColors.coralOrange, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Quran Khatm Planner', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Finish reading the entire Quran by configuring customized daily page goals.',
+                  style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white70),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.midTeal,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    _showKhatmPlannerBottomSheet();
+                  },
+                  child: Text('Configure Planner Plan', style: GoogleFonts.poppins(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressStatRow(String label, String value, IconData icon) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: AppColors.midTeal, size: 18),
+            const SizedBox(width: 10),
+            Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        Text(value, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  void _showKhatmPlannerBottomSheet() {
+    int planDays = _khatmTargetDays;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final dailyRecPages = (604 / planDays).ceil();
+            final dailyRecJuz = (30.0 / planDays);
+
+            return Container(
+              decoration: BoxDecoration(
+                color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(4))),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Khatm Planner Plan', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  Text('Choose target timeframe:', style: GoogleFonts.inter(fontSize: 12, color: AppColors.placeholder)),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [15, 30, 60].map((days) {
+                      final isSelected = planDays == days;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setSheetState(() => planDays = days),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.navyBlue : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text('$days Days', textAlign: TextAlign.center, style: GoogleFonts.poppins(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.midTeal.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        Text('Resulting Reading Requirement:', style: GoogleFonts.poppins(fontSize: 11, color: AppColors.placeholder, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        Text('$dailyRecPages Pages Daily', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                        Text('or roughly ${dailyRecJuz.toStringAsFixed(2)} Juz Daily', style: GoogleFonts.inter(fontSize: 12, color: AppColors.placeholder)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue, padding: const EdgeInsets.symmetric(vertical: 14)),
+                    onPressed: () {
+                      setState(() {
+                        _khatmTargetDays = planDays;
+                        _targetDailyPages = dailyRecPages;
+                        _khatmEstimatedCompletion = DateFormat('dd MMMM yyyy').format(DateTime.now().add(Duration(days: planDays)));
+                        _saveState();
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Text('Start Plan', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW 5: WAZIFA PAGE (DYNAMIC ADD CUSTOM WAZIFAS)
+  // ─────────────────────────────────────────────────────────────────────────────
+  Widget _buildWazifaTabView(Color cardBg, Color themeText) {
+    return DefaultTabController(
+      length: 4,
+      child: Column(
+        children: [
+          Container(
+            color: cardBg,
+            child: TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              indicatorColor: AppColors.midTeal,
+              labelColor: AppColors.navyBlue,
+              unselectedLabelColor: AppColors.placeholder,
+              tabs: [
+                Tab(child: Text('Morning', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12))),
+                Tab(child: Text('Evening', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12))),
+                Tab(child: Text('Before Sleep', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12))),
+                Tab(child: Text('After Salah', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12))),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildWazifaCheckList('Morning', cardBg, themeText),
+                _buildWazifaCheckList('Evening', cardBg, themeText),
+                _buildWazifaCheckList('Before Sleep', cardBg, themeText),
+                _buildWazifaCheckList('After Salah', cardBg, themeText),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWazifaCheckList(String category, Color cardBg, Color themeText) {
+    final list = _wazifaSupplications[category] ?? [];
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: ListView.builder(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: list.length,
+        itemBuilder: (ctx, idx) {
+          final wazifa = list[idx];
+          final val = _completedWazifas['${category}_$wazifa'] ?? false;
+
+          return Card(
+            color: cardBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            margin: const EdgeInsets.only(bottom: 10),
+            child: ListTile(
+              leading: Checkbox(
+                value: val,
+                activeColor: AppColors.midTeal,
+                onChanged: (v) {
+                  setState(() {
+                    _completedWazifas['${category}_$wazifa'] = v!;
+                    _saveState();
+                  });
+                },
+              ),
+              title: Text(wazifa, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: themeText)),
+              subtitle: Text('Supplication Checklist entry', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline, color: AppColors.coralOrange, size: 18),
+                onPressed: () {
+                  setState(() {
+                    _wazifaSupplications[category]?.removeAt(idx);
+                    _completedWazifas.remove('${category}_$wazifa');
+                    _saveState();
+                  });
+                },
+              ),
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.small(
+        backgroundColor: AppColors.navyBlue,
+        child: const Icon(Icons.add, color: Colors.white),
+        onPressed: () {
+          _showAddWazifaDialog(category);
+        },
+      ),
+    );
+  }
+
+  void _showAddWazifaDialog(String category) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text('Add Wazifa ($category)', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+          content: TextField(
+            controller: controller,
+            style: TextStyle(color: _isDarkMode ? Colors.white : Colors.black),
+            decoration: const InputDecoration(hintText: 'Enter supplication name...'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: GoogleFonts.poppins(color: AppColors.placeholder)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue),
+              onPressed: () {
+                if (controller.text.trim().isNotEmpty) {
+                  setState(() {
+                    _wazifaSupplications[category]?.add(controller.text.trim());
+                    _saveState();
+                  });
+                  Navigator.pop(ctx);
+                }
+              },
+              child: Text('Add', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW 6: MORE TAB OVERVIEW & FULL PAGE NAVIGATION
+  // ─────────────────────────────────────────────────────────────────────────────
+  Widget _buildMoreTabView(Color cardBg, Color themeText) {
+    if (_activeMoreSubView != null) {
+      return _buildMoreSubViewContent(cardBg, themeText);
+    }
+
+    return GridView.count(
+      padding: const EdgeInsets.all(16),
+      crossAxisCount: 2,
+      crossAxisSpacing: 14,
+      mainAxisSpacing: 14,
+      children: [
+        _buildMoreGridItem(cardBg, Icons.favorite_rounded, AppColors.coralOrange, 'Hifz Tracker', 'Track memorized Surahs', () {
+          setState(() => _activeMoreSubView = 'hifz');
+        }),
+        _buildMoreGridItem(cardBg, Icons.bookmark_rounded, AppColors.midTeal, 'Bookmarks', 'Saved Ayahs and Tafsir notes', () {
+          setState(() => _activeMoreSubView = 'bookmarks');
+        }),
+        _buildMoreGridItem(cardBg, Icons.wb_sunny_rounded, AppColors.midTeal, 'Daily Ayah', 'Spiritual verses of the day', () {
+          setState(() => _activeMoreSubView = 'daily_ayah');
+        }),
+        _buildMoreGridItem(cardBg, Icons.bar_chart_rounded, AppColors.coralOrange, 'Statistics', 'Longest streaks & totals', () {
+          setState(() => _activeMoreSubView = 'stats');
+        }),
+        _buildMoreGridItem(cardBg, Icons.settings_rounded, AppColors.navyBlue, 'Settings', 'Adjust fonts and dark theme', () {
+          setState(() => _activeMoreSubView = 'settings');
+        }),
+      ],
+    );
+  }
+
+  Widget _buildMoreGridItem(Color cardBg, IconData icon, Color iconColor, String title, String desc, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: iconColor, size: 28),
+            const SizedBox(height: 10),
+            Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13.5)),
+            const SizedBox(height: 2),
+            Text(desc, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder), maxLines: 2, overflow: TextOverflow.ellipsis),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoreCardItem(Color cardBg, IconData icon, Color iconColor, String title, String desc, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: iconColor, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                  Text(desc, style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.placeholder),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoreSubViewContent(Color cardBg, Color themeText) {
+    Widget pageBody;
+    String headerTitle = '';
+
+    switch (_activeMoreSubView) {
+      case 'hifz':
+        headerTitle = 'Hifz Tracker';
+        pageBody = _buildHifzFullPage(cardBg, themeText);
+        break;
+      case 'bookmarks':
+        headerTitle = 'Bookmarks & Reflections';
+        pageBody = _buildBookmarksFullPage(cardBg, themeText);
+        break;
+      case 'daily_ayah':
+        headerTitle = 'Today\'s Daily Ayah';
+        pageBody = _buildDailyAyahFullPage(cardBg, themeText);
+        break;
+      case 'stats':
+        headerTitle = 'Statistics';
+        pageBody = _buildStatsFullPage(cardBg, themeText);
+        break;
+      case 'settings':
+        headerTitle = 'Settings';
+        pageBody = _buildSettingsFullPage(cardBg, themeText);
+        break;
+      default:
+        pageBody = const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton.icon(
+                onPressed: () => setState(() => _activeMoreSubView = null),
+                icon: const Icon(Icons.arrow_back_rounded, size: 16, color: AppColors.midTeal),
+                label: Text('Back to More', style: GoogleFonts.poppins(color: AppColors.midTeal, fontWeight: FontWeight.bold, fontSize: 12.5)),
+              ),
+              Text(headerTitle, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: themeText)),
+            ],
+          ),
+        ),
+        Expanded(child: pageBody),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FULL PAGE OVERRIDES FOR MORE TAB (HIGH-QUALITY INTERFACES)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // 1. OVERHAULED HIFZ FULL PAGE
+  Widget _buildHifzFullPage(Color cardBg, Color themeText) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [AppColors.midTeal, Color(0xFF1D3557)]),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Completed Hifz Portion', style: GoogleFonts.inter(color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text('$_hifzCompletedSurahs Surahs Memorized', style: GoogleFonts.poppins(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle),
+                  child: const Icon(Icons.bookmark_added_rounded, color: Colors.white, size: 24),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          Text('Today\'s Revision Plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13.5, color: themeText)),
+          const SizedBox(height: 8),
+          ..._hifzRecords.map((r) => Card(
+                color: cardBg,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  title: Text(r['surah']!, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  subtitle: Text('Ayah ${r['ayahs']} • Scheduled: ${r['date']}', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+                  trailing: const Icon(Icons.check_circle_outline_rounded, color: AppColors.midTeal),
+                ),
+              )),
+
+          const SizedBox(height: 14),
+          Text('Weak Surahs Needing Attention', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13.5, color: themeText)),
+          const SizedBox(height: 8),
+          ..._weakSurahs.map((w) => Card(
+                color: cardBg,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                margin: const EdgeInsets.only(bottom: 6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: AppColors.coralOrange, size: 18),
+                      const SizedBox(width: 10),
+                      Text(w, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              )),
+          const SizedBox(height: 14),
+
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue, padding: const EdgeInsets.symmetric(vertical: 12)),
+            icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 18),
+            label: Text('Log New Memorized Portion', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5)),
+            onPressed: () {
+              _showAddHifzLogDialog();
+            },
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  void _showAddHifzLogDialog() {
+    final surahController = TextEditingController();
+    final ayahsController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text('Log Hifz Memorization', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: surahController,
+                style: TextStyle(color: _isDarkMode ? Colors.white : Colors.black),
+                decoration: const InputDecoration(hintText: 'Surah Name (e.g. Surah Yasin)'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: ayahsController,
+                style: TextStyle(color: _isDarkMode ? Colors.white : Colors.black),
+                decoration: const InputDecoration(hintText: 'Ayah Range (e.g. 1-15)'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: GoogleFonts.poppins(color: AppColors.placeholder)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue),
+              onPressed: () {
+                if (surahController.text.trim().isNotEmpty && ayahsController.text.trim().isNotEmpty) {
+                  setState(() {
+                    _hifzRecords.insert(0, {
+                      'surah': surahController.text.trim(),
+                      'ayahs': ayahsController.text.trim(),
+                      'date': 'Today',
+                    });
+                    _saveState();
+                  });
+                  Navigator.pop(ctx);
+                }
+              },
+              child: Text('Log', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 2. OVERHAULED BOOKMARKS & REFLECTIONS FULL PAGE
+  Widget _buildBookmarksFullPage(Color cardBg, Color themeText) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          TabBar(
+            indicatorColor: AppColors.midTeal,
+            labelColor: AppColors.navyBlue,
+            unselectedLabelColor: AppColors.placeholder,
+            tabs: const [
+              Tab(child: Text('Bookmarks', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+              Tab(child: Text('Notes & Reflections', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                ListView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _bookmarks.length,
+                  itemBuilder: (ctx, idx) {
+                    final item = _bookmarks[idx];
+                    return Card(
+                      color: cardBg,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: const Icon(Icons.bookmark_rounded, color: AppColors.coralOrange),
+                        title: Text(item['name']!, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: Text('Tap to open in reader', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.placeholder),
+                        onTap: () {
+                          // Find surah ID from list
+                          final targetSurah = _surahList.firstWhere((e) => e.name == item['surah'], orElse: () => _surahList[0]);
+                          setState(() {
+                            _activeReaderSurahId = targetSurah.id;
+                            _activeReaderAyahIndex = int.tryParse(item['ayah']!) ?? 1;
+                            _bottomNavIndex = 1;
+                            _activeMoreSubView = null;
+                          });
+                        },
+                      ),
+                    );
+                  },
+                ),
+                ListView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _reflections.length,
+                  itemBuilder: (ctx, idx) {
+                    final item = _reflections[idx];
+                    return Card(
+                      color: cardBg,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: const Icon(Icons.sticky_note_2_outlined, color: AppColors.midTeal),
+                        title: Text('${item['surah']} [Ayah ${item['ayah']}]', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(item['note']!, style: GoogleFonts.inter(fontSize: 11.5, color: themeText)),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, color: AppColors.coralOrange, size: 18),
+                          onPressed: () {
+                            setState(() {
+                              _reflections.removeAt(idx);
+                              _saveState();
+                            });
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 3. OVERHAULED DAILY AYAH FULL PAGE (SPIRITUAL DESIGN)
+  Widget _buildDailyAyahFullPage(Color cardBg, Color themeText) {
+    final reflectionCtrl = TextEditingController();
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [AppColors.navyBlue, Color(0xFF1D3557)]),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  '“إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ”',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.amiri(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                const Divider(color: Colors.white30),
+                const SizedBox(height: 14),
+                Text(
+                  'Bangla: “আপনারই আমরা এবাদত করি এবং আপনারই সাহায্য প্রার্থনা করি।”',
+                  style: GoogleFonts.inter(fontSize: 13.5, color: Colors.white, height: 1.45),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'English: “It is You we worship and You we ask for help.”',
+                  style: GoogleFonts.inter(fontSize: 13.5, color: Colors.white70, height: 1.45),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Card(
+            color: cardBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Spiritual Explanation (Tafsir)', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'This core verse of Surah Al-Fatihah sums up the relationship between the servant and the Creator. Worship is designated solely for Allah (Tawhid al-Uluhiyyah), and help is requested strictly from His divine authority.',
+                    style: GoogleFonts.inter(fontSize: 12, height: 1.4, color: themeText),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Log user reflection
+          Card(
+            color: cardBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Journal Your Reflection', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: reflectionCtrl,
+                    maxLines: 3,
+                    style: TextStyle(color: _isDarkMode ? Colors.white : Colors.black),
+                    decoration: const InputDecoration(hintText: 'What did you learn from this ayah today?'),
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue),
+                    onPressed: () {
+                      if (reflectionCtrl.text.trim().isNotEmpty) {
+                        setState(() {
+                          _reflections.add({
+                            'surah': 'Al-Fatihah',
+                            'ayah': '5',
+                            'note': reflectionCtrl.text.trim(),
+                          });
+                          _saveState();
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Reflection journal saved!')),
+                        );
+                        reflectionCtrl.clear();
+                      }
+                    },
+                    child: Text('Save Reflection', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 4. OVERHAULED STATISTICS FULL PAGE
+  Widget _buildStatsFullPage(Color cardBg, Color themeText) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Visual Progress Dashboard', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.midTeal)),
+                const SizedBox(height: 14),
+
+                // Mock visual progression representation
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildStatBar('Mon', 4, AppColors.midTeal),
+                    _buildStatBar('Tue', 7, AppColors.coralOrange),
+                    _buildStatBar('Wed', 5, AppColors.midTeal),
+                    _buildStatBar('Thu', 2, AppColors.midTeal),
+                    _buildStatBar('Fri', 8, AppColors.navyBlue),
+                    _buildStatBar('Sat', 5, AppColors.midTeal),
+                    _buildStatBar('Sun', 3, AppColors.midTeal),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          Card(
+            color: cardBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildStatTile('Pages Read Today', '$_completedPagesToday Pages'),
+                  const Divider(height: 14),
+                  _buildStatTile('This Week Total', '42 Pages'),
+                  const Divider(height: 14),
+                  _buildStatTile('This Month Completion', '3 Juz'),
+                  const Divider(height: 14),
+                  _buildStatTile('Accumulated Progress', '15 Juz'),
+                  const Divider(height: 14),
+                  _buildStatTile('Total Reading Time', '34 Hours'),
+                  const Divider(height: 14),
+                  _buildStatTile('Longest Streak Record', '$_longestStreak Days'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatBar(String day, double heightFactor, Color color) {
+    return Column(
+      children: [
+        Container(
+          width: 14,
+          height: heightFactor * 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(day, style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder)),
+      ],
+    );
+  }
+
+  // 5. SETTINGS
+  Widget _buildSettingsFullPage(Color cardBg, Color themeText) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Card(
+        color: cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Arabic Font Size', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () => setState(() => _arabicFontSize = (_arabicFontSize - 2).clamp(16.0, 36.0))),
+                      Text('${_arabicFontSize.toInt()}'),
+                      IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => setState(() => _arabicFontSize = (_arabicFontSize + 2).clamp(16.0, 36.0))),
+                    ],
+                  ),
+                ],
+              ),
+              const Divider(height: 16),
+
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Bangla Translation', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                value: _showBanglaTranslation,
+                activeTrackColor: AppColors.midTeal.withValues(alpha: 0.5),
+                activeThumbColor: AppColors.midTeal,
+                onChanged: (v) => setState(() => _showBanglaTranslation = v),
+              ),
+              const Divider(height: 16),
+
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('English Translation', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                value: _showEnglishTranslation,
+                activeTrackColor: AppColors.midTeal.withValues(alpha: 0.5),
+                activeThumbColor: AppColors.midTeal,
+                onChanged: (v) => setState(() => _showEnglishTranslation = v),
+              ),
+              const Divider(height: 16),
+
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Dark Reading Theme', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                value: _isDarkMode,
+                activeTrackColor: AppColors.coralOrange.withValues(alpha: 0.5),
+                activeThumbColor: AppColors.coralOrange,
+                onChanged: (v) {
+                  setState(() {
+                    _isDarkMode = v;
+                    _saveState();
+                  });
+                },
+              ),
+              const Divider(height: 16),
+
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Daily Reading Reminder', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                value: _readingReminderEnabled,
+                activeTrackColor: AppColors.midTeal.withValues(alpha: 0.5),
+                activeThumbColor: AppColors.midTeal,
+                onChanged: (v) => setState(() => _readingReminderEnabled = v),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatTile(String label, String val) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: GoogleFonts.inter(fontSize: 12, color: AppColors.placeholder)),
+        Text(val, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+}
