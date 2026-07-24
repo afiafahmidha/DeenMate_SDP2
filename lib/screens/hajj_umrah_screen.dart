@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart'; // AppColors
 
-
 class HajjUmrahPlannerScreen extends StatefulWidget {
   const HajjUmrahPlannerScreen({super.key});
 
@@ -15,6 +14,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _mode = 'Hajj'; // 'Hajj' or 'Umrah'
+  bool _isDarkMode = false;
 
   final Map<String, bool> _hajjRitualDone = {};
   final Map<String, bool> _umrahRitualDone = {};
@@ -107,6 +107,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   Future<void> _loadState() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
+      _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
       for (final s in _hajjSteps) {
         _hajjRitualDone[s['id']!] = prefs.getBool('hajj_${s['id']}') ?? false;
       }
@@ -129,13 +130,16 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F7F5);
+    final outerBg = _isDarkMode ? const Color(0xFF000000) : const Color(0xFFE8E8E8);
+
     return Container(
-      color: const Color(0xFFE8E8E8),
+      color: outerBg,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
           child: Scaffold(
-            backgroundColor: const Color(0xFFF7F7F5),
+            backgroundColor: bgColor,
             body: SafeArea(
               child: Column(
                 children: [
@@ -163,18 +167,21 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
 
   // ===== HEADER (back button + title + Hajj/Umrah toggle) =====
   Widget _buildHeader() {
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 20),
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
             onPressed: () => Navigator.pop(context),
           ),
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.navyBlue,
+              color: _isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue,
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.flight_takeoff_rounded, color: Colors.white, size: 20),
@@ -186,10 +193,10 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               children: [
                 Text('Hajj & Umrah Planner',
                     style: GoogleFonts.poppins(
-                        fontSize: 15.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                        fontSize: 15.5, fontWeight: FontWeight.bold, color: textColor)),
                 Text('Rituals, packing & documents',
                     style: GoogleFonts.inter(
-                        fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.55))),
+                        fontSize: 11, color: subtextColor)),
               ],
             ),
           ),
@@ -197,7 +204,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
           Container(
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: AppColors.navyBlue.withValues(alpha: 0.08),
+              color: _isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -209,7 +216,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: selected ? AppColors.navyBlue : Colors.transparent,
+                      color: selected ? (_isDarkMode ? AppColors.midTeal : AppColors.navyBlue) : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(
@@ -217,7 +224,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                       style: GoogleFonts.poppins(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: selected ? Colors.white : AppColors.navyBlue.withValues(alpha: 0.6),
+                        color: selected ? Colors.white : (_isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.6)),
                       ),
                     ),
                   ),
@@ -231,19 +238,23 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   }
 
   Widget _buildTabBar() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final labelColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final unselectedColor = _isDarkMode ? Colors.white38 : AppColors.placeholder;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
       child: TabBar(
         controller: _tabController,
-        labelColor: AppColors.navyBlue,
-        unselectedLabelColor: AppColors.placeholder,
+        labelColor: labelColor,
+        unselectedLabelColor: unselectedColor,
         indicatorColor: AppColors.midTeal,
         indicatorWeight: 3,
         labelStyle: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.w700),
@@ -264,6 +275,9 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     final doneMap = _mode == 'Hajj' ? _hajjRitualDone : _umrahRitualDone;
     final prefix = _mode == 'Hajj' ? 'hajj_' : 'umrah_';
     final completed = doneMap.values.where((v) => v).length;
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.6);
 
     return ListView(
       key: ValueKey('rituals_$_mode'),
@@ -285,15 +299,15 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               child: Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cardBg,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: isDone ? AppColors.midTeal.withValues(alpha: 0.4) : Colors.transparent,
+                    color: isDone ? AppColors.midTeal.withValues(alpha: 0.4) : (_isDarkMode ? Colors.white.withOpacity(0.08) : Colors.transparent),
                     width: 1.4,
                   ),
                   boxShadow: [
                     BoxShadow(
-                        color: AppColors.navyBlue.withValues(alpha: 0.04),
+                        color: Colors.black.withOpacity(0.04),
                         blurRadius: 8,
                         offset: const Offset(0, 3)),
                   ],
@@ -306,7 +320,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                       height: 28,
                       margin: const EdgeInsets.only(top: 2),
                       decoration: BoxDecoration(
-                        color: isDone ? AppColors.midTeal : AppColors.navyBlue.withValues(alpha: 0.06),
+                        color: isDone ? AppColors.midTeal : (_isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.navyBlue.withValues(alpha: 0.06)),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -314,7 +328,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                             ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
                             : Text('${i + 1}',
                                 style: GoogleFonts.poppins(
-                                    fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                                    fontSize: 12, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -326,14 +340,14 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                               style: GoogleFonts.poppins(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.bold,
-                                color: isDone ? AppColors.midTeal : AppColors.navyBlue,
+                                color: isDone ? AppColors.midTeal : textColor,
                                 decoration: isDone ? TextDecoration.lineThrough : null,
                               )),
                           const SizedBox(height: 3),
                           Text(step['desc']!,
                               style: GoogleFonts.inter(
                                   fontSize: 11.5,
-                                  color: AppColors.navyBlue.withValues(alpha: 0.6),
+                                  color: subtextColor,
                                   height: 1.4)),
                         ],
                       ),
@@ -394,6 +408,10 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
 
   // ===== DUAS TAB =====
   Widget _buildDuasTab() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: _duas.map((dua) {
@@ -401,11 +419,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
           margin: const EdgeInsets.only(bottom: 14),
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardBg,
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                  color: AppColors.navyBlue.withValues(alpha: 0.05),
+                  color: Colors.black.withOpacity(0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 3)),
             ],
@@ -419,17 +437,17 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                   const SizedBox(width: 8),
                   Text(dua['title']!,
                       style: GoogleFonts.poppins(
-                          fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                          fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
               const SizedBox(height: 12),
               Text(
                 dua['arabic']!,
                 textAlign: TextAlign.right,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.navyBlue,
+                  color: _isDarkMode ? const Color(0xFF81C784) : AppColors.navyBlue,
                   height: 1.8,
                 ),
               ),
@@ -443,7 +461,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               const SizedBox(height: 4),
               Text(dua['meaning']!,
                   style: GoogleFonts.inter(
-                      fontSize: 12, color: AppColors.navyBlue.withValues(alpha: 0.65), height: 1.4)),
+                      fontSize: 12, color: subtextColor, height: 1.4)),
             ],
           ),
         );
@@ -457,14 +475,16 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.navyBlue, Color(0xFF1D3550)],
+          colors: _isDarkMode
+              ? [const Color(0xFF1E2638), const Color(0xFF111827)]
+              : [AppColors.navyBlue, const Color(0xFF1D3550)],
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.25), blurRadius: 16, offset: const Offset(0, 6)),
+          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 16, offset: const Offset(0, 6)),
         ],
       ),
       child: Column(
@@ -501,6 +521,9 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     required VoidCallback onTap,
     required IconData icon,
   }) {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: GestureDetector(
@@ -508,10 +531,10 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardBg,
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
-              BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2)),
+              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
             ],
           ),
           child: Row(
@@ -521,17 +544,17 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: isDone ? AppColors.midTeal : Colors.white,
+                  color: isDone ? AppColors.midTeal : cardBg,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: isDone ? AppColors.midTeal : AppColors.navyBlue.withValues(alpha: 0.25),
+                    color: isDone ? AppColors.midTeal : (_isDarkMode ? Colors.white38 : AppColors.navyBlue.withValues(alpha: 0.25)),
                     width: 1.6,
                   ),
                 ),
                 child: isDone ? const Icon(Icons.check_rounded, color: Colors.white, size: 14) : null,
               ),
               const SizedBox(width: 12),
-              Icon(icon, size: 16, color: AppColors.navyBlue.withValues(alpha: 0.35)),
+              Icon(icon, size: 16, color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.35)),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -539,7 +562,9 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                   style: GoogleFonts.inter(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w500,
-                    color: isDone ? AppColors.navyBlue.withValues(alpha: 0.4) : AppColors.navyBlue,
+                    color: isDone
+                        ? (_isDarkMode ? Colors.white38 : AppColors.navyBlue.withValues(alpha: 0.4))
+                        : textColor,
                     decoration: isDone ? TextDecoration.lineThrough : null,
                   ),
                 ),
