@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -816,35 +816,40 @@ Widget _buildActiveTabContent() {
       case 0:
         return _buildHomeTab();
       case 1:
-        return PrayerTab(
-          key: const ValueKey('PrayerTab'),
-          latitude: _latitude,
-          longitude: _longitude,
-          locationName: _locationName,
-          nextPrayerName: _nextPrayerName,
-          liveCountdownStr: _liveCountdownStr,
-          selectedPrayerScene: _selectedPrayerScene,
-          salatCompleted: _salatCompleted,
-          qazaCounts: _qazaCounts,
-          prayerAlarms: _prayerAlarms,
-          qazaCount: _qazaCount,
-          pulseController: _pulseController,
-          cloudsController: _cloudsController,
-          onSceneSelected: (scene) => setState(() => _selectedPrayerScene = scene),
-          onBack: () => setState(() => _currentIndex = 0),
-          onSalatToggle: (salat, done) {
-            setState(() => _salatCompleted[salat] = done);
-            _saveSalatCompleted(salat, done);
-          },
-          onQazaCountChange: (salat, newCount) {
-            setState(() => _qazaCounts[salat] = newCount);
-            _saveQazaCount(salat, newCount);
-          },
-          onAlarmToggle: (prayer, enabled) {
-            setState(() => _prayerAlarms[prayer] = enabled);
-            _saveAlarmState(prayer, enabled);
-            _syncAlarms();
-          },
+        return Theme(
+          data: Theme.of(context).copyWith(
+            brightness: _isDarkMode ? Brightness.dark : Brightness.light,
+          ),
+          child: PrayerTab(
+            key: const ValueKey('PrayerTab'),
+            latitude: _latitude,
+            longitude: _longitude,
+            locationName: _locationName,
+            nextPrayerName: _nextPrayerName,
+            liveCountdownStr: _liveCountdownStr,
+            selectedPrayerScene: _selectedPrayerScene,
+            salatCompleted: _salatCompleted,
+            qazaCounts: _qazaCounts,
+            prayerAlarms: _prayerAlarms,
+            qazaCount: _qazaCount,
+            pulseController: _pulseController,
+            cloudsController: _cloudsController,
+            onSceneSelected: (scene) => setState(() => _selectedPrayerScene = scene),
+            onBack: () => setState(() => _currentIndex = 0),
+            onSalatToggle: (salat, done) {
+              setState(() => _salatCompleted[salat] = done);
+              _saveSalatCompleted(salat, done);
+            },
+            onQazaCountChange: (salat, newCount) {
+              setState(() => _qazaCounts[salat] = newCount);
+              _saveQazaCount(salat, newCount);
+            },
+            onAlarmToggle: (prayer, enabled) {
+              setState(() => _prayerAlarms[prayer] = enabled);
+              _saveAlarmState(prayer, enabled);
+              _syncAlarms();
+            },
+          ),
         );
       case 2:
         return CalendarTab(
