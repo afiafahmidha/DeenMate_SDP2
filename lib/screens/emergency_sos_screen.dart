@@ -63,7 +63,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
 
   // Active logs, offline queues, and incident history
   List<String> _activeSosLogs = [];
-  List<Map<String, dynamic>> _offlineQueue = [];
+  final List<Map<String, dynamic>> _offlineQueue = [];
   List<Map<String, dynamic>> _incidentLogs = [];
 
   // ===== DYNAMIC EMERGENCY CONTACTS LIST =====
@@ -72,7 +72,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
   // ===== IN-APP ROUTE PLANNER CONTROLLERS =====
   final _routeOriginController = TextEditingController(text: "Al Mashair, Makkah");
   final _routeDestController = TextEditingController(text: "Kaaba, Al Haram, Makkah");
-  bool _isRouteActive = true;
+  final bool _isRouteActive = true;
 
   // ===== MEDICAL PROFILE DATA (CONTROLLERS) =====
   final _nameController = TextEditingController();
@@ -92,7 +92,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
   final _groupCodeController = TextEditingController(text: "MKK-9981");
 
   // Map variables
-  double _mapZoomScale = 1.0;
+  final double _mapZoomScale = 1.0;
 
   // ===== HAJJ PLACES FOR GPS DISTANCE CALCULATIONS =====
   final List<Map<String, dynamic>> _medicalPoints = [
@@ -1008,7 +1008,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
       child: Material(
         color: Colors.transparent,
         child: SwitchListTile(
-          activeColor: Colors.red[700],
+          activeThumbColor: Colors.red[700],
           contentPadding: EdgeInsets.zero,
           title: Row(
             children: [
@@ -1319,7 +1319,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                   decoration: BoxDecoration(
                     color: _isSilentMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.withOpacity(0.15)),
+                    border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
                   ),
                   child: Row(
                     children: [
@@ -1394,7 +1394,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                        borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       focusedBorder: OutlineInputBorder(
@@ -1442,7 +1442,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                   decoration: InputDecoration(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     focusedBorder: OutlineInputBorder(
@@ -1517,7 +1517,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.midTeal.withOpacity(0.1),
+                      color: AppColors.midTeal.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -1601,7 +1601,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppColors.midTeal.withOpacity(0.08),
+                            color: AppColors.midTeal.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(Icons.local_hospital_rounded, color: AppColors.midTeal, size: 20),
@@ -1748,7 +1748,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         color: _isSilentMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: Material(
@@ -1865,7 +1865,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1901,9 +1901,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.midTeal.withOpacity(0.12),
+                    color: AppColors.midTeal.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.midTeal.withOpacity(0.3)),
+                    border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
@@ -1925,9 +1925,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: _isSilentMode ? const Color(0xFF2B2B2B) : Colors.blue.withOpacity(0.04),
+              color: _isSilentMode ? const Color(0xFF2B2B2B) : Colors.blue.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.midTeal.withOpacity(0.2)),
+              border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.2)),
             ),
             child: Column(
               children: [
@@ -1946,7 +1946,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             filled: true,
                             fillColor: _isSilentMode ? const Color(0xFF3B3B3B) : Colors.white,
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: Colors.grey.withOpacity(0.2))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
                             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.midTeal)),
                           ),
                         ),
@@ -1970,7 +1970,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             filled: true,
                             fillColor: _isSilentMode ? const Color(0xFF3B3B3B) : Colors.white,
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: Colors.grey.withOpacity(0.2))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
                             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.midTeal)),
                           ),
                         ),
@@ -2167,9 +2167,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: AppColors.midTeal.withOpacity(0.08),
+          color: AppColors.midTeal.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.midTeal.withOpacity(0.2)),
+          border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.2)),
         ),
         child: Text(
           label,
@@ -2259,7 +2259,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -2327,7 +2327,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -2392,7 +2392,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                       color: cardBg,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: log['resolved'] ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+                        color: log['resolved'] ? Colors.green.withValues(alpha: 0.2) : Colors.red.withValues(alpha: 0.2),
                         width: 1,
                       ),
                     ),
@@ -2417,7 +2417,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: log['resolved'] ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                            color: log['resolved'] ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -2446,7 +2446,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -2459,7 +2459,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
           const SizedBox(height: 4),
           Text(
             "How Hajj/Umrah groups connect for safety tracking",
-            style: GoogleFonts.inter(fontSize: 11, color: textColor.withOpacity(0.55)),
+            style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: 0.55)),
           ),
           const Divider(height: 24),
           
@@ -2486,7 +2486,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                       hintText: "Enter Code (e.g. MKK-9981)",
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                        borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       focusedBorder: OutlineInputBorder(
@@ -2576,7 +2576,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -2647,7 +2647,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               decoration: BoxDecoration(
                 color: _isSilentMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isOk ? Colors.grey.withOpacity(0.1) : Colors.orange.withOpacity(0.3)),
+                border: Border.all(color: isOk ? Colors.grey.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -2674,7 +2674,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: isOk ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                      color: isOk ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -2689,7 +2689,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                 ],
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -2749,8 +2749,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               side: const BorderSide(color: AppColors.midTeal),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: Text("TRIGGER SIMULATION", style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
             onPressed: onPressed,
+            child: Text("TRIGGER SIMULATION", style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
           ),
         ),
       ],
@@ -2921,9 +2921,9 @@ class _RadarSweepPainter extends CustomPainter {
       ..shader = SweepGradient(
         center: Alignment.center,
         colors: [
-          Colors.blue.withOpacity(0.0),
-          Colors.blue.withOpacity(0.12),
-          Colors.blue.withOpacity(0.0),
+          Colors.blue.withValues(alpha: 0.0),
+          Colors.blue.withValues(alpha: 0.12),
+          Colors.blue.withValues(alpha: 0.0),
         ],
         stops: const [0.0, 0.5, 1.0],
         transform: GradientRotation(progress * 2 * math.pi),
@@ -2958,7 +2958,7 @@ class HajjMapPainter extends CustomPainter {
     final double cy = size.height / 2;
 
     final gridPaint = Paint()
-      ..color = isSilent ? Colors.white10 : Colors.blue.withOpacity(0.05)
+      ..color = isSilent ? Colors.white10 : Colors.blue.withValues(alpha: 0.05)
       ..strokeWidth = 1.0;
     
     for (double i = 0; i < size.width; i += 40) {
@@ -2999,7 +2999,7 @@ class HajjMapPainter extends CustomPainter {
     canvas.drawPath(roadPath, roadPaint);
 
     final siteFillPaint = Paint()
-      ..color = isSilent ? Colors.black26 : Colors.green.withOpacity(0.07)
+      ..color = isSilent ? Colors.black26 : Colors.green.withValues(alpha: 0.07)
       ..style = PaintingStyle.fill;
     
     canvas.drawCircle(makkahPos, 35 * zoomScale, siteFillPaint);
@@ -3058,7 +3058,7 @@ class HajjMapPainter extends CustomPainter {
       canvas.drawCircle(mPos, 5.0 * zoomScale, memberPaint);
 
       final memberPulse = Paint()
-        ..color = memberPaint.color.withOpacity(0.3)
+        ..color = memberPaint.color.withValues(alpha: 0.3)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0;
       canvas.drawCircle(mPos, 9.0 * zoomScale, memberPulse);
@@ -3071,7 +3071,7 @@ class HajjMapPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     
     final pilgrimPulse = Paint()
-      ..color = Colors.blue[400]!.withOpacity(0.4)
+      ..color = Colors.blue[400]!.withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
     

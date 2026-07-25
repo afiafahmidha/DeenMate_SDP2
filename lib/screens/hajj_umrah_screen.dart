@@ -315,7 +315,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         color: cardBg,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
       child: TabBar(
@@ -534,7 +534,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                     width: 2.5,
                   ),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 8, offset: const Offset(0, 3)),
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 8, offset: const Offset(0, 3)),
                   ],
                 ),
                 child: ClipOval(
@@ -621,11 +621,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
           color: cardBg,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isDone ? AppColors.midTeal.withValues(alpha: 0.4) : (_isDarkMode ? Colors.white.withOpacity(0.08) : Colors.transparent),
+            color: isDone ? AppColors.midTeal.withValues(alpha: 0.4) : (_isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
             width: 1.3,
           ),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3)),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 3)),
           ],
         ),
         child: Column(
@@ -728,7 +728,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 3)),
             ],
@@ -789,7 +789,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 16, offset: const Offset(0, 6)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 16, offset: const Offset(0, 6)),
         ],
       ),
       child: Column(
@@ -839,7 +839,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             color: cardBg,
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
+              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2)),
             ],
           ),
           child: Row(
