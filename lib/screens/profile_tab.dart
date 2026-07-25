@@ -235,7 +235,7 @@ class _ProfileTabState extends State<ProfileTab> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
-                          side: BorderSide(color: Colors.red.withOpacity(0.2)),
+                          side: BorderSide(color: Colors.red.withValues(alpha: 0.2)),
                         ),
                       ),
                     ),
@@ -256,7 +256,7 @@ class _ProfileTabState extends State<ProfileTab> {
       decoration: BoxDecoration(
         color: cardBg,
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2)),
         ],
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
@@ -273,7 +273,7 @@ class _ProfileTabState extends State<ProfileTab> {
                     shape: BoxShape.circle,
                     gradient: _avatarGradients[_avatarIndex],
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 8, offset: const Offset(0, 3)),
+                      BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 8, offset: const Offset(0, 3)),
                     ],
                   ),
                   child: Center(
@@ -347,7 +347,7 @@ class _ProfileTabState extends State<ProfileTab> {
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              side: BorderSide(color: Colors.grey.withOpacity(0.3)),
+              side: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
             ),
           ),
         ],
@@ -363,7 +363,7 @@ class _ProfileTabState extends State<ProfileTab> {
         color: cardBg,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -415,7 +415,7 @@ class _ProfileTabState extends State<ProfileTab> {
               Text(_t('theme_mode'), style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
               Switch(
                 value: widget.isDarkMode,
-                activeColor: primaryColor,
+                activeThumbColor: primaryColor,
                 onChanged: (val) {
                   widget.onThemeChanged(val);
                 },
@@ -442,7 +442,7 @@ class _ProfileTabState extends State<ProfileTab> {
         color: cardBg,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -491,7 +491,7 @@ class _ProfileTabState extends State<ProfileTab> {
                     fillColor: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -518,7 +518,7 @@ class _ProfileTabState extends State<ProfileTab> {
           secondary: Icon(icon, color: accentColor, size: 18),
           title: Text(label, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor)),
           value: isPrefEnabled,
-          activeColor: accentColor,
+          activeThumbColor: accentColor,
           onChanged: (val) {
             setStateTile(() {
               isPrefEnabled = val;
