@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Service handling real-life HTTP API calls to the DeenMate Emergency Backend.
 /// Replace [baseUrl] with your production API endpoint.

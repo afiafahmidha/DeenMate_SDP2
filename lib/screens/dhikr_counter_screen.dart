@@ -106,16 +106,21 @@ const List<_DhikrPreset> _tasbihFatimahSequence = [
 ];
 
 // ===== ADHKAR COLLECTION DATA (Morning & Evening) =====
+// Each item now carries a full multi-line Arabic text + a paraphrased
+// English rendering so tapping a card can open a proper reading screen,
+// not just a one-line summary.
 class _AdhkarItem {
-  final String arabic;
-  final String translit;
-  final String meaning;
+  final String title;
+  final String fullArabic;
+  final String transliteration; // English-letter pronunciation guide
+  final String fullMeaning; // paraphrased, own-words rendering — not a verbatim copyrighted translation
   final String virtue;
   final int recommendedCount;
   const _AdhkarItem({
-    required this.arabic,
-    required this.translit,
-    required this.meaning,
+    required this.title,
+    required this.fullArabic,
+    required this.transliteration,
+    required this.fullMeaning,
     required this.virtue,
     required this.recommendedCount,
   });
@@ -123,30 +128,44 @@ class _AdhkarItem {
 
 const List<_AdhkarItem> _morningAdhkar = [
   _AdhkarItem(
-    arabic: 'أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلّٰهِ',
-    translit: 'Asbahna wa asbahal-mulku lillah',
-    meaning: 'We have entered the morning, and the dominion belongs to Allah',
+    title: 'Morning Declaration of Trust',
+    fullArabic: 'أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلّٰهِ، وَالْحَمْدُ لِلّٰهِ، لَا إِلٰهَ إِلَّا اللّٰهُ وَحْدَهُ لَا شَرِيكَ لَهُ',
+    transliteration: 'Asbahna wa asbahal-mulku lillah, walhamdu lillah, la ilaha illallahu wahdahu la sharika lah',
+    fullMeaning:
+        'We have entered a new morning, and with it all dominion belongs to Allah alone. All praise is for Him. There is no god worthy of worship except Allah, who has no partner. This short declaration, recited upon waking, affirms that everything — our day, our sustenance, our safety — rests entirely in Allah\'s hands.',
     virtue: 'A short declaration of trust recited upon waking, affirming Allah\'s complete ownership of all things.',
     recommendedCount: 1,
   ),
   _AdhkarItem(
-    arabic: 'آيَةُ الْكُرْسِيّ',
-    translit: 'Ayat al-Kursi (Surah Al-Baqarah 2:255)',
-    meaning: 'The Verse of the Throne — describing Allah\'s complete knowledge and power',
+    title: 'Ayat al-Kursi',
+    fullArabic:
+        'اللّٰهُ لَا إِلٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ۚ لَهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ ۗ مَن ذَا الَّذِي يَشْفَعُ عِندَهُ إِلَّا بِإِذْنِهِ ۚ يَعْلَمُ مَا بَيْنَ أَيْدِيهِمْ وَمَا خَلْفَهُمْ ۖ وَلَا يُحِيطُونَ بِشَيْءٍ مِّنْ عِلْمِهِ إِلَّا بِمَا شَاءَ ۚ وَسِعَ كُرْسِيُّهُ السَّمَاوَاتِ وَالْأَرْضَ ۖ وَلَا يَئُودُهُ حِفْظُهُمَا ۚ وَهُوَ الْعَلِيُّ الْعَظِيمُ',
+    transliteration:
+        'Allahu la ilaha illa huwal hayyul qayyum, la ta\'khudhuhu sinatuw wala nawm, lahu ma fis-samawati wama fil-ard, man dhal-ladhi yashfa\'u \'indahu illa bi-idhnih, ya\'lamu ma bayna aydihim wama khalfahum, wala yuhituna bishay\'im-min \'ilmihi illa bima sha\', wasi\'a kursiyyuhus-samawati wal-ard, wala ya\'uduhu hifzuhuma, wa huwal \'aliyyul \'azim',
+    fullMeaning:
+        'This is the Verse of the Throne, Surah Al-Baqarah 2:255. It describes Allah as the Ever-Living, the Sustainer of all existence — never overtaken by drowsiness or sleep. Everything in the heavens and the earth belongs to Him, and no one can intercede with Him except by His permission. His knowledge encompasses all that has happened and all that will come, while creation grasps only what He allows them to know. His authority extends over the heavens and the earth without any burden to Him in preserving them, for He is the Most High, the Most Great. It is one of the most frequently recited verses for protection, both morning and evening.',
     virtue: 'Widely reported to offer protection when recited morning and evening.',
     recommendedCount: 1,
   ),
   _AdhkarItem(
-    arabic: 'قُلْ هُوَ اللّٰهُ أَحَدٌ',
-    translit: 'Surah Al-Ikhlas, Al-Falaq, An-Nas (The Three Quls)',
-    meaning: 'Say: He is Allah, the One — and the two chapters of seeking refuge',
+    title: 'The Three Quls',
+    fullArabic:
+        'قُلْ هُوَ اللّٰهُ أَحَدٌ ۝ اللّٰهُ الصَّمَدُ ۝ لَمْ يَلِدْ وَلَمْ يُولَدْ ۝ وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ\n\nقُلْ أَعُوذُ بِرَبِّ الْفَلَقِ ۝ مِن شَرِّ مَا خَلَقَ ۝ وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ ۝ وَمِن شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ ۝ وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ\n\nقُلْ أَعُوذُ بِرَبِّ النَّاسِ ۝ مَلِكِ النَّاسِ ۝ إِلٰهِ النَّاسِ ۝ مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ ۝ الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ ۝ مِنَ الْجِنَّةِ وَالنَّاسِ',
+    transliteration:
+        'Qul huwallahu ahad, Allahus-samad, lam yalid wa lam yulad, wa lam yakul-lahu kufuwan ahad.\n\nQul a\'udhu birabbil-falaq, min sharri ma khalaq, wa min sharri ghasiqin idha waqab, wa min sharrin-naffathati fil-\'uqad, wa min sharri hasidin idha hasad.\n\nQul a\'udhu birabbin-nas, malikin-nas, ilahin-nas, min sharril-waswasil-khannas, alladhi yuwaswisu fi sudurin-nas, minal-jinnati wan-nas',
+    fullMeaning:
+        'These are the three short chapters — Al-Ikhlas, Al-Falaq, and An-Nas. Al-Ikhlas declares Allah\'s complete oneness: He is Allah, the One, the Self-Sufficient, who was not born and does not give birth, and nothing compares to Him. Al-Falaq and An-Nas are both prayers of refuge — asking Allah\'s protection from the evil of what He has created, from the darkness of night, from harmful influences, from envy, and from the whispers that trouble the heart, whether from unseen sources or from people. Reciting these three chapters three times each is a well-known Sunnah practice, especially in the morning and evening.',
     virtue: 'Reciting these three short chapters three times each morning is a well-known Sunnah practice.',
     recommendedCount: 3,
   ),
   _AdhkarItem(
-    arabic: 'سَيِّدُ الِاسْتِغْفَار',
-    translit: 'Sayyid al-Istighfar (The Master of Seeking Forgiveness)',
-    meaning: 'A comprehensive dua acknowledging Allah as Lord and seeking forgiveness for one\'s sins',
+    title: 'Sayyid al-Istighfar (Master of Seeking Forgiveness)',
+    fullArabic:
+        'اللّٰهُمَّ أَنْتَ رَبِّي لَا إِلٰهَ إِلَّا أَنْتَ، خَلَقْتَنِي وَأَنَا عَبْدُكَ، وَأَنَا عَلَىٰ عَهْدِكَ وَوَعْدِكَ مَا اسْتَطَعْتُ، أَعُوذُ بِكَ مِنْ شَرِّ مَا صَنَعْتُ، أَبُوءُ لَكَ بِنِعْمَتِكَ عَلَيَّ وَأَبُوءُ بِذَنْبِي فَاغْفِرْ لِي فَإِنَّهُ لَا يَغْفِرُ الذُّنُوبَ إِلَّا أَنْتَ',
+    transliteration:
+        'Allahumma anta rabbi la ilaha illa ant, khalaqtani wa ana \'abduk, wa ana \'ala \'ahdika wa wa\'dika mastata\'t, a\'udhu bika min sharri ma sana\'t, abu\'u laka bini\'matika \'alayya wa abu\'u bidhanbi faghfir li fa innahu la yaghfirudh-dhunuba illa ant',
+    fullMeaning:
+        'This dua is considered the most comprehensive form of seeking forgiveness. It begins by acknowledging Allah as one\'s Lord, with no god besides Him — the One who created the person, who remains His servant, striving to honor his covenant and promise to the best of his ability. It seeks refuge from the harm of one\'s own actions, openly admits Allah\'s countless favors, confesses one\'s sins, and asks for forgiveness, recognizing that no one forgives sins except Allah. A well-known hadith describes reciting this with full conviction in the morning as granting entry to Paradise if one passes away that same day.',
     virtue: 'Reciting it with certainty in the morning is described as granting entry to Paradise if one passes away that day.',
     recommendedCount: 1,
   ),
@@ -154,30 +173,40 @@ const List<_AdhkarItem> _morningAdhkar = [
 
 const List<_AdhkarItem> _eveningAdhkar = [
   _AdhkarItem(
-    arabic: 'أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلّٰهِ',
-    translit: 'Amsayna wa amsal-mulku lillah',
-    meaning: 'We have entered the evening, and the dominion belongs to Allah',
+    title: 'Evening Declaration of Trust',
+    fullArabic: 'أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلّٰهِ، وَالْحَمْدُ لِلّٰهِ، لَا إِلٰهَ إِلَّا اللّٰهُ وَحْدَهُ لَا شَرِيكَ لَهُ',
+    transliteration: 'Amsayna wa amsal-mulku lillah, walhamdu lillah, la ilaha illallahu wahdahu la sharika lah',
+    fullMeaning:
+        'We have entered the evening, and with it all dominion belongs to Allah alone. All praise is for Him. There is no god worthy of worship except Allah, who has no partner. This is the evening counterpart to the morning declaration, affirming trust in Allah as the day closes.',
     virtue: 'The evening counterpart to the morning declaration of trust in Allah\'s dominion.',
     recommendedCount: 1,
   ),
   _AdhkarItem(
-    arabic: 'آيَةُ الْكُرْسِيّ',
-    translit: 'Ayat al-Kursi (Surah Al-Baqarah 2:255)',
-    meaning: 'The Verse of the Throne — describing Allah\'s complete knowledge and power',
+    title: 'Ayat al-Kursi',
+    fullArabic:
+        'اللّٰهُ لَا إِلٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ۚ لَهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ ۗ مَن ذَا الَّذِي يَشْفَعُ عِندَهُ إِلَّا بِإِذْنِهِ ۚ يَعْلَمُ مَا بَيْنَ أَيْدِيهِمْ وَمَا خَلْفَهُمْ ۖ وَلَا يُحِيطُونَ بِشَيْءٍ مِّنْ عِلْمِهِ إِلَّا بِمَا شَاءَ ۚ وَسِعَ كُرْسِيُّهُ السَّمَاوَاتِ وَالْأَرْضَ ۖ وَلَا يَئُودُهُ حِفْظُهُمَا ۚ وَهُوَ الْعَلِيُّ الْعَظِيمُ',
+    transliteration:
+        'Allahu la ilaha illa huwal hayyul qayyum, la ta\'khudhuhu sinatuw wala nawm, lahu ma fis-samawati wama fil-ard, man dhal-ladhi yashfa\'u \'indahu illa bi-idhnih, ya\'lamu ma bayna aydihim wama khalfahum, wala yuhituna bishay\'im-min \'ilmihi illa bima sha\', wasi\'a kursiyyuhus-samawati wal-ard, wala ya\'uduhu hifzuhuma, wa huwal \'aliyyul \'azim',
+    fullMeaning:
+        'This is the Verse of the Throne, Surah Al-Baqarah 2:255. It describes Allah as the Ever-Living, the Sustainer of all existence — never overtaken by drowsiness or sleep. Everything in the heavens and the earth belongs to Him, and no one can intercede with Him except by His permission. His knowledge encompasses all that has happened and all that will come, while creation grasps only what He allows them to know. His authority extends over the heavens and the earth without any burden to Him in preserving them, for He is the Most High, the Most Great. Recited in the evening, it is a source of protection through the night.',
     virtue: 'Recited in the evening for protection through the night.',
     recommendedCount: 1,
   ),
   _AdhkarItem(
-    arabic: 'بِسْمِ اللّٰهِ الَّذِي لَا يَضُرُّ',
-    translit: 'Bismillahil-ladhi la yadhurru ma\'a ismihi shay\'un',
-    meaning: 'In the name of Allah, with whose name nothing can cause harm',
+    title: 'Protection Dua (Bismillah)',
+    fullArabic: 'بِسْمِ اللّٰهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ',
+    transliteration: 'Bismillahil-ladhi la yadhurru ma\'a ismihi shay\'un fil-ardi wa la fis-sama\'i wa huwas-sami\'ul \'alim',
+    fullMeaning:
+        'In the name of Allah, with whose name nothing on earth or in the heavens can cause harm, and He is the All-Hearing, the All-Knowing. This short but powerful dua is recited three times in the evening as protection through the night, drawing on the completeness of Allah\'s name as a shield against harm.',
     virtue: 'Recited three times in the evening as protection until morning.',
     recommendedCount: 3,
   ),
   _AdhkarItem(
-    arabic: 'أَعُوذُ بِكَلِمَاتِ اللّٰهِ التَّامَّاتِ',
-    translit: 'A\'udhu bikalimatillahit-tammati min sharri ma khalaq',
-    meaning: 'I seek refuge in the perfect words of Allah from the evil of what He has created',
+    title: 'Seeking Refuge from Evil',
+    fullArabic: 'أَعُوذُ بِكَلِمَاتِ اللّٰهِ التَّامَّاتِ مِن شَرِّ مَا خَلَقَ',
+    transliteration: 'A\'udhu bikalimatillahit-tammati min sharri ma khalaq',
+    fullMeaning:
+        'I seek refuge in the perfect, complete words of Allah from the evil of everything He has created. This short protective dua is recommended for evening remembrance, especially when settling in for the night, as a means of seeking Allah\'s protection from any harm in one\'s surroundings.',
     virtue: 'A short protective dua recommended for evening remembrance, especially when settling for the night.',
     recommendedCount: 3,
   ),
@@ -219,9 +248,14 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
 
   bool _showMorningAdhkar = true;
 
+  // Reminder state: enabled flags + customizable times (defaults 7:00 AM / 6:00 PM)
   final Map<String, bool> _reminders = {
     'Morning Adhkar': false,
     'Evening Adhkar': false,
+  };
+  final Map<String, TimeOfDay> _reminderTimes = {
+    'Morning Adhkar': const TimeOfDay(hour: 7, minute: 0),
+    'Evening Adhkar': const TimeOfDay(hour: 18, minute: 0),
   };
 
   late AnimationController _tapPulseController;
@@ -248,6 +282,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     _tapPulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
     _breathController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..repeat(reverse: true);
     _loadStats();
+    _loadReminderSettings();
   }
 
   @override
@@ -286,6 +321,20 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
       _currentStreak = streak;
       _showHint = !hintDismissed;
     });
+  }
+
+  Future<void> _loadReminderSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final type in _reminderTimes.keys) {
+      final key = type.replaceAll(' ', '_');
+      final storedMinutes = prefs.getInt('dhikr_reminder_time_$key');
+      final enabled = prefs.getBool('dhikr_reminder_enabled_$key') ?? false;
+      if (storedMinutes != null) {
+        _reminderTimes[type] = TimeOfDay(hour: storedMinutes ~/ 60, minute: storedMinutes % 60);
+      }
+      _reminders[type] = enabled;
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _dismissHint() async {
@@ -419,24 +468,59 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     );
   }
 
- 
+  // ===== REMINDER TIME CUSTOMIZATION =====
+  Future<void> _pickReminderTime(String type) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _reminderTimes[type] ?? const TimeOfDay(hour: 7, minute: 0),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(colorScheme: Theme.of(context).colorScheme.copyWith(primary: AppColors.navyBlue)),
+        child: child!,
+      ),
+    );
+    if (picked == null) return;
 
-  Future<void> _toggleReminder(String type, String title, String body, TimeOfDay time) async {
-    bool current = _reminders[type] ?? false;
-    setState(() => _reminders[type] = !current);
+    setState(() => _reminderTimes[type] = picked);
+    final prefs = await SharedPreferences.getInstance();
+    final key = type.replaceAll(' ', '_');
+    await prefs.setInt('dhikr_reminder_time_$key', picked.hour * 60 + picked.minute);
+    _showSnack('⏰ Time saved: ${picked.format(context)}. Turn the switch on to activate it.');
 
-    if (!current) {
-      final now = DateTime.now();
-      DateTime scheduled = DateTime(now.year, now.month, now.day, time.hour, time.minute);
-      if (scheduled.isBefore(now)) scheduled = scheduled.add(const Duration(days: 1));
-      final int id = 3000 + type.hashCode % 1000;
-      await NotificationService.instance.scheduleCustomNotification(
-        id: id,
-        title: title,
-        body: body,
-        scheduledTime: scheduled,
-      );
-      _showSnack('🔔 $type reminder set for ${DateFormat('h:mm a').format(scheduled)}');
+    // If the reminder was already active, reschedule it at the new time.
+    if (_reminders[type] == true) {
+      await _scheduleReminder(type);
+    }
+  }
+
+  Future<void> _scheduleReminder(String type) async {
+    final time = _reminderTimes[type]!;
+    final now = DateTime.now();
+    DateTime scheduled = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+    if (scheduled.isBefore(now)) scheduled = scheduled.add(const Duration(days: 1));
+    final int id = 3000 + type.hashCode % 1000;
+    final bool isMorning = type == 'Morning Adhkar';
+    await NotificationService.instance.scheduleCustomNotification(
+      id: id,
+      title: isMorning ? '🌅 Morning Adhkar reminder' : '🌙 Evening Adhkar reminder',
+      body: isMorning
+          ? 'Time for your morning remembrance — a few minutes of dhikr to start the day.'
+          : 'Time for your evening remembrance — close the day with dhikr.',
+      scheduledTime: scheduled,
+    );
+  }
+
+  Future<void> _toggleReminder(String type) async {
+    final bool current = _reminders[type] ?? false;
+    final bool newState = !current;
+    setState(() => _reminders[type] = newState);
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = type.replaceAll(' ', '_');
+    await prefs.setBool('dhikr_reminder_enabled_$key', newState);
+
+    if (newState) {
+      await _scheduleReminder(type);
+      _showSnack('🔔 $type reminder set for ${_reminderTimes[type]!.format(context)}');
     } else {
       _showSnack('🔕 $type reminder disabled');
     }
@@ -642,7 +726,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                   style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white),
                 ),
               ),
-             Icon(preset.icon, color: Colors.white.withValues(alpha: 0.7), size: 20),
+              Icon(preset.icon, color: Colors.white.withValues(alpha: 0.7), size: 20),
             ],
           ),
           const SizedBox(height: 14),
@@ -888,10 +972,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                   onTap: () => setState(() => _showMorningAdhkar = true),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: _showMorningAdhkar ? AppColors.navyBlue : Colors.transparent,
-                      borderRadius: BorderRadius.circular(11),
-                    ),
+                    decoration: BoxDecoration(color: _showMorningAdhkar ? AppColors.navyBlue : Colors.transparent, borderRadius: BorderRadius.circular(11)),
                     alignment: Alignment.center,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -909,10 +990,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                   onTap: () => setState(() => _showMorningAdhkar = false),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: !_showMorningAdhkar ? AppColors.navyBlue : Colors.transparent,
-                      borderRadius: BorderRadius.circular(11),
-                    ),
+                    decoration: BoxDecoration(color: !_showMorningAdhkar ? AppColors.navyBlue : Colors.transparent, borderRadius: BorderRadius.circular(11)),
                     alignment: Alignment.center,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -929,44 +1007,51 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
           ),
         ),
         const SizedBox(height: 18),
-        ...list.map((item) => Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.translit, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                  const SizedBox(height: 10),
-                  Text(item.arabic, textAlign: TextAlign.right, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppColors.navyBlue, height: 1.7)),
-                  const SizedBox(height: 8),
-                  Text(item.meaning, style: GoogleFonts.inter(fontSize: 12, color: AppColors.navyBlue.withValues(alpha: 0.7), height: 1.4)),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: AppColors.coralOrange.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.auto_stories_rounded, size: 12, color: AppColors.coralOrange),
-                        const SizedBox(width: 6),
-                        Expanded(child: Text(item.virtue, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.6), height: 1.4))),
-                      ],
+        ...list.map((item) => GestureDetector(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => _AdhkarDetailPage(item: item)),
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item.title, style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                          const SizedBox(height: 4),
+                          Text(item.transliteration, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(fontSize: 10.5, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600, color: AppColors.midTeal)),
+                          const SizedBox(height: 4),
+                          Text(item.fullMeaning, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.55), height: 1.4)),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.repeat_rounded, size: 12, color: AppColors.navyBlue.withValues(alpha: 0.4)),
+                              const SizedBox(width: 4),
+                              Text('Recommended: ${item.recommendedCount}x', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.navyBlue.withValues(alpha: 0.4))),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.repeat_rounded, size: 13, color: AppColors.navyBlue.withValues(alpha: 0.4)),
-                      const SizedBox(width: 4),
-                      Text('Recommended: ${item.recommendedCount}x', style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.navyBlue.withValues(alpha: 0.45))),
-                    ],
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.1), shape: BoxShape.circle),
+                      child: const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.midTeal, size: 12),
+                    ),
+                  ],
+                ),
               ),
             )),
       ],
@@ -988,7 +1073,55 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
         _sectionLabel('Last 7 Days', Icons.history_rounded),
         const SizedBox(height: 12),
         _buildHistoryList(),
+        const SizedBox(height: 24),
+        _buildRewardCard(),
       ],
+    );
+  }
+
+  // ===== REWARD OF DHIKR CARD =====
+  Widget _buildRewardCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF1C3A27), AppColors.navyBlue]),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), blurRadius: 18, offset: const Offset(0, 8))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: const Icon(Icons.spa_rounded, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Text('The Reward of Dhikr', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Allah says He remembers whoever remembers Him — and that in the gathering of angels, He mentions that person by name.',
+            style: GoogleFonts.inter(fontSize: 13, color: Colors.white.withValues(alpha: 0.9), height: 1.6, fontStyle: FontStyle.italic),
+          ),
+          const SizedBox(height: 8),
+          Text('— based on Surah Al-Baqarah 2:152 and a well-known Hadith Qudsi',
+              style: GoogleFonts.inter(fontSize: 10.5, color: Colors.white.withValues(alpha: 0.6))),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+            child: Text(
+              'Every SubhanAllah, Alhamdulillah, and Allahu Akbar is a small deed with a reward far greater than its size — a gentle, steady way to fill your scale of good deeds each day.',
+              style: GoogleFonts.inter(fontSize: 11.5, color: Colors.white.withValues(alpha: 0.85), height: 1.6),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1090,22 +1223,15 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
         _sectionLabel('Smart Reminders', Icons.notifications_active_rounded),
-        const SizedBox(height: 12),
-        _buildReminderTile(
-          type: 'Morning Adhkar',
-          time: const TimeOfDay(hour: 7, minute: 0),
-          title: '🌅 Morning Adhkar reminder',
-          body: 'Time for your morning remembrance — a few minutes of dhikr to start the day.',
-          icon: Icons.wb_sunny_rounded,
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(left: 12, bottom: 12),
+          child: Text('Tap the time to customize it, then use the switch to turn it on.',
+              style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.45))),
         ),
+        _buildReminderTile(type: 'Morning Adhkar', icon: Icons.wb_sunny_rounded),
         const SizedBox(height: 10),
-        _buildReminderTile(
-          type: 'Evening Adhkar',
-          time: const TimeOfDay(hour: 18, minute: 0),
-          title: '🌙 Evening Adhkar reminder',
-          body: 'Time for your evening remembrance — close the day with dhikr.',
-          icon: Icons.nights_stay_rounded,
-        ),
+        _buildReminderTile(type: 'Evening Adhkar', icon: Icons.nights_stay_rounded),
         const SizedBox(height: 26),
         _sectionLabel('Achievements', Icons.emoji_events_rounded),
         const SizedBox(height: 4),
@@ -1118,8 +1244,9 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     );
   }
 
-  Widget _buildReminderTile({required String type, required TimeOfDay time, required String title, required String body, required IconData icon}) {
+  Widget _buildReminderTile({required String type, required IconData icon}) {
     final bool active = _reminders[type] ?? false;
+    final TimeOfDay time = _reminderTimes[type]!;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))]),
@@ -1137,13 +1264,30 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(type, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                Text('Daily at ${time.format(context)}', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                const SizedBox(height: 3),
+                GestureDetector(
+                  onTap: () => _pickReminderTime(type),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.access_time_rounded, size: 12, color: AppColors.midTeal),
+                        const SizedBox(width: 4),
+                        Text(time.format(context), style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.midTeal)),
+                        const SizedBox(width: 3),
+                        const Icon(Icons.edit_rounded, size: 10, color: AppColors.midTeal),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
           Switch(
             value: active,
-            onChanged: (_) => _toggleReminder(type, title, body, time),
+            onChanged: (_) => _toggleReminder(type),
             activeThumbColor: Colors.white,
             activeTrackColor: AppColors.midTeal,
             inactiveTrackColor: const Color(0xFFE0E0E0),
@@ -1384,6 +1528,132 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
           ),
         );
       },
+    );
+  }
+}
+
+// ===== ADHKAR DETAIL PAGE =====
+// Full-screen reading view for a single adhkar/ayah — shows the complete
+// Arabic text, an own-words English rendering, and the virtue/hadith note.
+class _AdhkarDetailPage extends StatelessWidget {
+  final _AdhkarItem item;
+  const _AdhkarDetailPage({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFE8E8E8),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: Scaffold(
+            backgroundColor: const Color(0xFFF7F7F5),
+            body: SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 20),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        Expanded(
+                          child: Text(item.title, style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                      children: [
+                        // Arabic text card
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(22),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [AppColors.navyBlue, Color(0xFF1D3550)]),
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), blurRadius: 18, offset: const Offset(0, 8))],
+                          ),
+                          child: Text(
+                            item.fullArabic,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white, height: 2.0),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        // Transliteration (English pronunciation guide)
+                        Row(
+                          children: [
+                            const Icon(Icons.record_voice_over_rounded, size: 16, color: AppColors.coralOrange),
+                            const SizedBox(width: 6),
+                            Text('How to Pronounce', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: AppColors.coralOrange.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.coralOrange.withValues(alpha: 0.2))),
+                          child: Text(item.transliteration, style: GoogleFonts.inter(fontSize: 13, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600, color: AppColors.navyBlue.withValues(alpha: 0.8), height: 1.7)),
+                        ),
+                        const SizedBox(height: 20),
+                        // English meaning
+                        Row(
+                          children: [
+                            const Icon(Icons.translate_rounded, size: 16, color: AppColors.midTeal),
+                            const SizedBox(width: 6),
+                            Text('English Meaning', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))]),
+                          child: Text(item.fullMeaning, style: GoogleFonts.inter(fontSize: 13.5, color: AppColors.navyBlue.withValues(alpha: 0.8), height: 1.7)),
+                        ),
+                        const SizedBox(height: 20),
+                        // Virtue
+                        Row(
+                          children: [
+                            const Icon(Icons.auto_stories_rounded, size: 16, color: AppColors.coralOrange),
+                            const SizedBox(width: 6),
+                            Text('Virtue', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: AppColors.coralOrange.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(16)),
+                          child: Text(item.virtue, style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.navyBlue.withValues(alpha: 0.7), height: 1.6)),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.repeat_rounded, size: 13, color: AppColors.navyBlue.withValues(alpha: 0.5)),
+                              const SizedBox(width: 5),
+                              Text('Recommended: ${item.recommendedCount}x', style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.navyBlue.withValues(alpha: 0.6))),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
