@@ -4,16 +4,70 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:adhan/adhan.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import '../widgets/auth_header.dart'; // AppColors
 
-/// The Prayer tab: dynamic sky scene, salat tracker, qaza counter and
-/// prayer time list. All persistent state (salat completion, qaza
-/// counts, alarms) is owned by DashboardScreen and passed in, because
-/// DashboardScreen's real-time timer also needs it (to fire the in-app
-/// alarm overlay and auto-log qaza regardless of which tab is active).
-/// This widget is intentionally "dumb" about persistence — it just
-/// renders state and reports user actions back up via callbacks.
-class PrayerTab extends StatelessWidget {
+/// ─────────────────────────────────────────────────────────────────────
+/// Dark-mode aware color helpers for this tab.
+///
+/// Every card here was originally styled as a fixed light "frosted
+/// glass" surface (white-ish translucent background + navy text/icons).
+/// That's kept exactly as-is in light mode. In dark mode, every one of
+/// those cards instead renders solid black with white text/icons, driven
+/// by Theme.of(context).brightness — so this follows whatever mechanism
+/// the app already uses to switch into dark mode (ThemeMode.system /
+/// light / dark on MaterialApp, or a manual theme swap that sets
+/// ThemeData(brightness: Brightness.dark)).
+bool _isDark(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark;
+
+/// Card / surface background color.
+Color _cardSurface(BuildContext context, {double lightAlpha = 0.72}) {
+  return _isDark(context)
+      ? Colors.black
+      : Colors.white.withValues(alpha: lightAlpha);
+}
+
+/// Primary text/icon color: navy in light mode, white in dark mode.
+Color _onSurface(BuildContext context, {double alpha = 1.0}) {
+  return _isDark(context)
+      ? Colors.white.withValues(alpha: alpha)
+      : AppColors.navyBlue.withValues(alpha: alpha);
+}
+
+/// Faint fill used for pills/rows/unselected chips inside a card.
+Color _subtleFill(
+  BuildContext context, {
+  double lightAlpha = 0.05,
+  double darkAlpha = 0.12,
+}) {
+  return _isDark(context)
+      ? Colors.white.withValues(alpha: darkAlpha)
+      : AppColors.navyBlue.withValues(alpha: lightAlpha);
+}
+
+/// Card border color.
+Color _cardBorder(BuildContext context) {
+  return _isDark(context)
+      ? Colors.white.withValues(alpha: 0.16)
+      : AppColors.navyBlue.withValues(alpha: 0.08);
+}
+
+/// The Prayer tab: full-width looping video hero (mosque landscape), salat
+/// tracker, qaza counter and prayer time list.
+///
+/// Salat completion, qaza counts, and alarms are still owned by
+/// DashboardScreen and passed in (its real-time timer needs them too, to
+/// fire the in-app alarm overlay and auto-log qaza regardless of which tab
+/// is active).
+///
+/// Which prayer's *scene* is currently shown (hero video + highlighted
+/// list card), however, is owned locally by this widget. It always starts
+/// on whichever prayer window we're actually in right now, and only
+/// changes when the user explicitly taps a different prayer in the list —
+/// it deliberately does not trust an externally-provided initial value for
+/// this, so it can never open on the wrong prayer's video.
+class PrayerTab extends StatefulWidget {
   final double latitude;
   final double longitude;
   final String locationName;
@@ -54,13 +108,47 @@ class PrayerTab extends StatelessWidget {
     required this.onAlarmToggle,
   });
 
+  @override
+  State<PrayerTab> createState() => _PrayerTabState();
+}
+
+class _PrayerTabState extends State<PrayerTab> {
+  // Explicit manual scene choice made by the user tapping a prayer card in
+  // this session. Null until they tap something — while null, the hero
+  // video and highlighted card always fall back to the *actual current
+  // prayer*, computed fresh below, regardless of widget.selectedPrayerScene.
+  String? _manualScene;
+
+  static const Map<String, IconData> _sceneIcons = {
+    'Fajr': Icons.nightlight_round,
+    'Sunrise': Icons.wb_twilight_rounded,
+    'Dhuhr': Icons.wb_sunny_rounded,
+    'Asr': Icons.filter_drama_rounded,
+    'Maghrib': Icons.brightness_4_rounded,
+    'Isha': Icons.dark_mode_rounded,
+  };
+
+  void _selectScene(String name) {
+    setState(() => _manualScene = name);
+    widget.onSceneSelected(name);
+  }
+
   // Approximate Hijri date string for display in the header.
   String _getHijriDateString() {
     final today = DateTime.now();
     final hijriMonths = [
-      "Muharram", "Safar", "Rabi' al-Awwal", "Rabi' ath-Thani",
-      "Jumada al-Ula", "Jumada al-Akhirah", "Rajab", "Sha'ban",
-      "Ramadan", "Shawwal", "Dhu al-Qa'dah", "Dhu al-Hijjah"
+      "Muharram",
+      "Safar",
+      "Rabi' al-Awwal",
+      "Rabi' ath-Thani",
+      "Jumada al-Ula",
+      "Jumada al-Akhirah",
+      "Rajab",
+      "Sha'ban",
+      "Ramadan",
+      "Shawwal",
+      "Dhu al-Qa'dah",
+      "Dhu al-Hijjah",
     ];
     int monthIndex = (today.month + 3) % 12;
     int day = (today.day + 12) % 29 + 1;
@@ -68,7 +156,10 @@ class PrayerTab extends StatelessWidget {
     return "$day ${hijriMonths[monthIndex]}, $year AH";
   }
 
-  String _getCurrentPrayerName(Coordinates coordinates, CalculationParameters params) {
+  String _getCurrentPrayerName(
+    Coordinates coordinates,
+    CalculationParameters params,
+  ) {
     final prayerTimes = PrayerTimes.today(coordinates, params);
     final current = prayerTimes.currentPrayer();
     switch (current) {
@@ -90,7 +181,7 @@ class PrayerTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final coordinates = Coordinates(latitude, longitude);
+    final coordinates = Coordinates(widget.latitude, widget.longitude);
     final params = CalculationMethod.karachi.getParameters();
     params.madhab = Madhab.hanafi;
 
@@ -98,19 +189,14 @@ class PrayerTab extends StatelessWidget {
     final formatter = DateFormat('hh:mm a');
     final now = DateTime.now();
 
-    final List<Map<String, dynamic>> prayerItems = [
-      {'name': 'Fajr',    'time': formatter.format(prayerTimes.fajr),    'dt': prayerTimes.fajr},
-      {'name': 'Sunrise', 'time': formatter.format(prayerTimes.sunrise), 'dt': prayerTimes.sunrise},
-      {'name': 'Dhuhr',   'time': formatter.format(prayerTimes.dhuhr),   'dt': prayerTimes.dhuhr},
-      {'name': 'Asr',     'time': formatter.format(prayerTimes.asr),     'dt': prayerTimes.asr},
-      {'name': 'Maghrib', 'time': formatter.format(prayerTimes.maghrib), 'dt': prayerTimes.maghrib},
-      {'name': 'Isha',    'time': formatter.format(prayerTimes.isha),    'dt': prayerTimes.isha},
-    ];
-
     final currentPrayer = _getCurrentPrayerName(coordinates, params);
-    int completedCount = salatCompleted.values.where((v) => v).length;
 
-    final salatNames = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+    // Source of truth for "what's shown" — the actual current prayer until
+    // the user taps something else.
+    final String effectiveScene = _manualScene ?? currentPrayer;
+
+    int completedCount = widget.salatCompleted.values.where((v) => v).length;
+
     final Map<String, DateTime?> salatDts = {
       'Fajr': prayerTimes.fajr,
       'Dhuhr': prayerTimes.dhuhr,
@@ -127,6 +213,44 @@ class PrayerTab extends StatelessWidget {
     );
     final tomorrowFajrTime = tomorrowPrayerTimes.fajr;
 
+    // The prayer "day" isn't over until Isha's own window has closed (i.e.
+    // tomorrow's Fajr arrives) — that's the same boundary already used
+    // below to decide whether Isha itself was missed. Only once we're past
+    // that point do we actually know whether every prayer was completed,
+    // so "All Caught Up" is reserved for that moment.
+    final bool dayEnded = now.isAfter(tomorrowFajrTime);
+
+    // A salat only counts as "missed" once ITS OWN window has closed and
+    // it still isn't marked done — never the moment the window opens.
+    // e.g. Fajr is only missed once sunrise arrives, Dhuhr once Asr
+    // arrives, and so on, with Isha missed only once tomorrow's Fajr
+    // arrives. This is computed locally so the tracker card reflects the
+    // correct timing regardless of how the externally-owned qaza counter
+    // (in DashboardScreen) currently increments.
+    DateTime? expireTimeFor(String salat) {
+      switch (salat) {
+        case 'Fajr':
+          return prayerTimes.sunrise;
+        case 'Dhuhr':
+          return salatDts['Asr'];
+        case 'Asr':
+          return salatDts['Maghrib'];
+        case 'Maghrib':
+          return salatDts['Isha'];
+        case 'Isha':
+          return tomorrowFajrTime;
+        default:
+          return null;
+      }
+    }
+
+    final List<String> todaysMissedPrayers =
+        ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].where((salat) {
+          final expireTime = expireTimeFor(salat);
+          final isDone = widget.salatCompleted[salat] ?? false;
+          return expireTime != null && now.isAfter(expireTime) && !isDone;
+        }).toList();
+
     DateTime getIshaStartTime(DateTime todayIsha) {
       final todayFajr = prayerTimes.fajr;
       if (now.isBefore(todayFajr)) {
@@ -141,262 +265,198 @@ class PrayerTab extends StatelessWidget {
       return todayIsha;
     }
 
-    // === Define sky gradient per prayer scene ===
-    LinearGradient skyGradient;
-    bool showStars;
-    bool showClouds;
-    Color cloudColor;
-
-    switch (selectedPrayerScene) {
-      case 'Fajr':
-        skyGradient = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF0F1E36), Color(0xFF1D3557), Color(0xFF457B9D)],
-        );
-        showStars = true;
-        showClouds = false;
-        cloudColor = Colors.white;
-        break;
-      case 'Sunrise':
-        skyGradient = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFE2E9F3), Color(0xFFFBC490), Color(0xFFFDE4C3)],
-        );
-        showStars = false;
-        showClouds = true;
-        cloudColor = const Color(0xFFCE5C2C).withValues(alpha: 0.4);
-        break;
-      case 'Dhuhr':
-        skyGradient = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB), Color(0xFFE0F7FA)],
-        );
-        showStars = false;
-        showClouds = true;
-        cloudColor = Colors.white;
-        break;
-      case 'Asr':
-        skyGradient = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFD1E8F2), Color(0xFFB3D9EA), Color(0xFFFFF1C5)],
-        );
-        showStars = false;
-        showClouds = true;
-        cloudColor = Colors.white;
-        break;
-      case 'Maghrib':
-        skyGradient = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFE2D4F0), Color(0xFFFFCCD5), Color(0xFFFFDFD3)],
-        );
-        showStars = false;
-        showClouds = true;
-        cloudColor = const Color(0xFFE07040).withValues(alpha: 0.3);
-        break;
-      case 'Isha':
-      default:
-        skyGradient = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF0A1128), Color(0xFF001F54), Color(0xFF034078)],
-        );
-        showStars = true;
-        showClouds = false;
-        cloudColor = Colors.white;
-        break;
-    }
-
     return Column(
       key: const ValueKey('PrayerTab'),
       children: [
-        // ── PINNED SKY SCENE CARD ──────────────────
-        Padding(
-          padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 10),
-          child: Container(
-            height: 240,
-            width: double.infinity,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                )
-              ],
-            ),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 900),
-              curve: Curves.easeInOutCubic,
-              decoration: BoxDecoration(gradient: skyGradient),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = constraints.maxWidth;
-                  final height = constraints.maxHeight;
-
-                  return Stack(
+        // ── FULL-WIDTH VIDEO HERO (no card, no rounding, edge-to-edge) ──
+        SizedBox(
+          width: double.infinity,
+          height: 260 + MediaQuery.of(context).padding.top,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Looping ambient prayer video, muted, crossfades smoothly on scene change.
+              // Always reflects the current prayer unless the user manually
+              // picked a different one to preview.
+              _PrayerVideoBackground(scene: effectiveScene),
+              // Subtle scrim so the header text/icons stay legible over
+              // whatever part of the video is showing.
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.38),
+                      Colors.black.withValues(alpha: 0.05),
+                      Colors.black.withValues(alpha: 0.45),
+                    ],
+                    stops: const [0.0, 0.45, 1.0],
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    18,
+                    MediaQuery.of(context).padding.top + 8,
+                    18,
+                    14,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (showStars)
-                        AnimatedBuilder(
-                          animation: pulseController,
-                          builder: (context, _) {
-                            return CustomPaint(
-                              size: Size(width, height),
-                              painter: PrayerHeaderStarsPainter(pulseVal: pulseController.value),
-                            );
-                          },
-                        ),
-                      if (showClouds)
-                        AnimatedBuilder(
-                          animation: cloudsController,
-                          builder: (context, _) {
-                            return CustomPaint(
-                              size: Size(width, height),
-                              painter: DriftingCloudsPainter(
-                                animVal: cloudsController.value,
-                                cloudColor: cloudColor,
-                              ),
-                            );
-                          },
-                        ),
-                      _buildSunPosition(width),
-                      _buildMoonPosition(width),
-                      Positioned(
-                        bottom: -2,
-                        left: 0,
-                        right: 0,
-                        height: height * 0.45,
-                        child: CustomPaint(
-                          painter: MosqueSilhouettePainter(selectedScene: selectedPrayerScene),
-                        ),
-                      ),
-                      Positioned.fill(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
                             children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white, size: 20),
-                                    onPressed: onBack,
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.25),
+                                    width: 1,
                                   ),
-                                  Column(
-                                    children: [
-                                      Text(
-                                        'Prayer Times',
-                                        style: GoogleFonts.poppins(
-                                          color: Colors.white,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.4,
-                                        ),
-                                      ),
-                                      Text(
-                                        _getHijriDateString(),
-                                        style: GoogleFonts.inter(
-                                          color: Colors.white.withValues(alpha: 0.75),
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Find nearby mosques',
-                                    icon: const Icon(Icons.location_on_rounded, color: Colors.white, size: 20),
-                                    onPressed: () async {
-                                      final lat = latitude;
-                                      final lng = longitude;
-                                      final messenger = ScaffoldMessenger.of(context);
-                                      final geoUri = Uri.parse('geo:$lat,$lng?q=mosque+near+me&z=14');
-                                      final mapsWebUri = Uri.parse(
-                                        'https://www.google.com/maps/search/mosque+near+me/@$lat,$lng,14z',
-                                      );
-                                      if (await canLaunchUrl(geoUri)) {
-                                        await launchUrl(geoUri);
-                                      } else if (await canLaunchUrl(mapsWebUri)) {
-                                        await launchUrl(mapsWebUri, mode: LaunchMode.externalApplication);
-                                      } else {
-                                        messenger.showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'Could not open Maps. Please install Google Maps.',
-                                              style: GoogleFonts.inter(fontSize: 13),
-                                            ),
-                                            backgroundColor: AppColors.navyBlue,
-                                            behavior: SnackBarBehavior.floating,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ],
+                                ),
+                                child: const Icon(
+                                  Icons.schedule_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                               ),
-                              const Spacer(),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                              const SizedBox(width: 12),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Next: $nextPrayerName',
-                                        style: GoogleFonts.inter(
-                                          color: Colors.white.withValues(alpha: 0.80),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          letterSpacing: 0.3,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        liveCountdownStr,
-                                        style: GoogleFonts.poppins(
-                                          color: Colors.white,
-                                          fontSize: 34,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: 1.0,
-                                          height: 1.1,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  const Icon(Icons.location_on_rounded, color: Colors.white54, size: 13),
-                                  const SizedBox(width: 4),
                                   Text(
-                                    locationName.split(',').first,
+                                    'Prayer Times',
+                                    style: GoogleFonts.poppins(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.4,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Daily timings, reminders',
                                     style: GoogleFonts.inter(
-                                      color: Colors.white.withValues(alpha: 0.75),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: 11.5,
+                                      color: Colors.white.withValues(alpha: 0.78),
                                     ),
                                   ),
                                 ],
                               ),
                             ],
                           ),
-                        ),
+                          IconButton(
+                            tooltip: 'Find nearby mosques',
+                            icon: const Icon(
+                              Icons.location_on_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                            onPressed: () async {
+                              final lat = widget.latitude;
+                              final lng = widget.longitude;
+                              final messenger = ScaffoldMessenger.of(context);
+                              final geoUri = Uri.parse(
+                                'geo:$lat,$lng?q=mosque+near+me&z=14',
+                              );
+                              final mapsWebUri = Uri.parse(
+                                'https://www.google.com/maps/search/mosque+near+me/@$lat,$lng,14z',
+                              );
+                              if (await canLaunchUrl(geoUri)) {
+                                await launchUrl(geoUri);
+                              } else if (await canLaunchUrl(mapsWebUri)) {
+                                await launchUrl(
+                                  mapsWebUri,
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              } else {
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Could not open Maps. Please install Google Maps.',
+                                      style: GoogleFonts.inter(fontSize: 13),
+                                    ),
+                                    backgroundColor: AppColors.navyBlue,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Next: ${widget.nextPrayerName}',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.liveCountdownStr,
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.0,
+                                  height: 1.1,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.4,
+                                      ),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_rounded,
+                            color: Colors.white70,
+                            size: 13,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            widget.locationName.split(',').first,
+                            style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  );
-                },
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
 
@@ -406,74 +466,258 @@ class PrayerTab extends StatelessWidget {
             physics: const BouncingScrollPhysics(),
             child: Column(
               children: [
+                const SizedBox(height: 14),
+
+                // Tappable scene strip — tap a prayer to preview its
+                // ambient hero video above. A small red dot flags any
+                // prayer already missed today (Sunrise is never "missed").
+                SizedBox(
+                  height: 72,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: 6,
+                    separatorBuilder: (_, __) => const SizedBox(width: 9),
+                    itemBuilder: (context, index) {
+                      const names = [
+                        'Fajr',
+                        'Sunrise',
+                        'Dhuhr',
+                        'Asr',
+                        'Maghrib',
+                        'Isha',
+                      ];
+                      final String pName = names[index];
+                      final bool isSalat = pName != 'Sunrise';
+
+                      bool isMissed = false;
+                      if (isSalat) {
+                        final expireTime = pName == 'Fajr'
+                            ? prayerTimes.sunrise
+                            : pName == 'Dhuhr'
+                            ? salatDts['Asr']
+                            : pName == 'Asr'
+                            ? salatDts['Maghrib']
+                            : pName == 'Maghrib'
+                            ? salatDts['Isha']
+                            : tomorrowFajrTime;
+                        isMissed =
+                            expireTime != null &&
+                            now.isAfter(expireTime) &&
+                            !(widget.salatCompleted[pName] ?? false);
+                      }
+
+                      final bool isSelected = pName == effectiveScene;
+                      final bool dark = _isDark(context);
+
+                      // The scene icon/text color adapts to the theme —
+                      // navy on light backgrounds, white on dark ones —
+                      // selection is conveyed by weight/opacity, not hue.
+                      final Color accent = dark
+                          ? Colors.white
+                          : AppColors.navyBlue;
+
+                      return GestureDetector(
+                        onTap: () => _selectScene(pName),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOut,
+                          width: 58,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: dark
+                                ? (isSelected
+                                      ? Colors.white.withValues(alpha: 0.15)
+                                      : Colors.black)
+                                : (isSelected
+                                      ? accent.withValues(alpha: 0.10)
+                                      : Colors.white.withValues(alpha: 0.6)),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? accent.withValues(alpha: dark ? 0.55 : 0.4)
+                                  : (dark
+                                        ? Colors.white.withValues(alpha: 0.25)
+                                        : accent.withValues(alpha: 0.08)),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: accent.withValues(
+                                        alpha: isSelected ? 0.18 : 0.1,
+                                      ),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      _sceneIcons[pName],
+                                      color: accent,
+                                      size: 14,
+                                    ),
+                                  ),
+                                  if (isMissed)
+                                    Positioned(
+                                      right: -2,
+                                      top: -2,
+                                      child: Container(
+                                        width: 9,
+                                        height: 9,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE57373),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 1.2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                pName,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 9.5,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                                  color: isMissed
+                                      ? const Color(0xFFEF9A9A)
+                                      : isSelected
+                                      ? accent
+                                      : accent.withValues(
+                                          alpha: dark ? 0.65 : 0.6,
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                // 1. Prayer Overview Summary Card — mirrors the reference
+                // "Prayer Time" mockup (date, next/current highlight cards,
+                // Suhoor/Iftar, mosque/location, compact prayer list, sun
+                // times) restyled with the app's navy / coral / dusty-teal
+                // palette from the splash screen. This is the single
+                // source of truth for the compact per-prayer time list —
+                // it is not repeated anywhere else on this tab.
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _PrayerOverviewCard(
+                    prayerTimes: prayerTimes,
+                    currentPrayer: currentPrayer,
+                    nextPrayerName: widget.nextPrayerName,
+                    liveCountdownStr: widget.liveCountdownStr,
+                    locationName: widget.locationName,
+                    hijriDate: _getHijriDateString(),
+                    formatter: formatter,
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
                 // 2. Daily Salat Count Checklist Tracker
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.navyBlue.withValues(alpha: 0.06),
-                          blurRadius: 12,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: _GlassCard(
                     child: Column(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.stars_rounded, color: AppColors.navyBlue, size: 20),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Daily Salat Tracker',
-                                  style: GoogleFonts.poppins(
-                                    color: AppColors.navyBlue,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
+                        _SectionHeader(
+                          icon: Icons.stars_rounded,
+                          iconColor: AppColors.navyBlue,
+                          title: 'Daily Salat Tracker',
+                          subtitle: 'Mark each prayer as you complete it',
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.navyBlue,
+                                  AppColors.navyBlue.withValues(alpha: 0.72),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.navyBlue.withValues(
+                                    alpha: 0.25,
                                   ),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
                                 ),
                               ],
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppColors.navyBlue.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '$completedCount / 5 Completed',
-                                style: GoogleFonts.inter(
-                                  color: AppColors.navyBlue,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            child: Text(
+                              '$completedCount/5',
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                          ],
+                          ),
                         ),
                         const SizedBox(height: 14),
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                            value: completedCount / 5,
-                            minHeight: 6,
-                            backgroundColor: Colors.white.withValues(alpha: 0.3),
-                            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.navyBlue),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            height: 6,
+                            color: _isDark(context)
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : AppColors.navyBlue.withValues(alpha: 0.08),
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                return Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 500),
+                                    curve: Curves.easeOutCubic,
+                                    width:
+                                        constraints.maxWidth *
+                                        (completedCount / 5),
+                                    height: 6,
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          AppColors.navyBlue,
+                                          Color(0xFF3D6FA0),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: salatCompleted.keys.map((salat) {
-                            final isDone = salatCompleted[salat] ?? false;
+                          children: widget.salatCompleted.keys.map((salat) {
+                            final isDone =
+                                widget.salatCompleted[salat] ?? false;
 
                             final sTime = salat == 'Isha'
                                 ? getIshaStartTime(salatDts['Isha'] ?? now)
@@ -482,83 +726,168 @@ class PrayerTab extends StatelessWidget {
                             final expireTime = salat == 'Fajr'
                                 ? prayerTimes.sunrise
                                 : salat == 'Dhuhr'
-                                    ? salatDts['Asr']
-                                    : salat == 'Asr'
-                                        ? salatDts['Maghrib']
-                                        : salat == 'Maghrib'
-                                            ? salatDts['Isha']
-                                            : tomorrowFajrTime;
+                                ? salatDts['Asr']
+                                : salat == 'Asr'
+                                ? salatDts['Maghrib']
+                                : salat == 'Maghrib'
+                                ? salatDts['Isha']
+                                : tomorrowFajrTime;
 
-                            final bool isFuture = sTime != null && now.isBefore(sTime);
-                            final bool isExpired = expireTime != null && now.isAfter(expireTime);
+                            final bool isFuture =
+                                sTime != null && now.isBefore(sTime);
+                            final bool isExpired =
+                                expireTime != null && now.isAfter(expireTime);
                             final bool isSalatMissed = isExpired && !isDone;
+                            final bool dark = _isDark(context);
 
                             return GestureDetector(
                               onTap: () {
                                 if (isSalatMissed || isFuture) return;
-                                onSalatToggle(salat, !isDone);
+                                widget.onSalatToggle(salat, !isDone);
                               },
                               child: Column(
                                 children: [
                                   AnimatedContainer(
                                     duration: const Duration(milliseconds: 300),
                                     curve: Curves.elasticOut,
-                                    width: 44,
-                                    height: 44,
+                                    width: 38,
+                                    height: 38,
                                     decoration: BoxDecoration(
-                                      color: isSalatMissed
-                                          ? const Color(0xFFFFEBEE)
+                                      color: isDone
+                                          ? null
+                                          : isSalatMissed
+                                          ? (dark
+                                                ? const Color(0xFF3A1618)
+                                                : const Color(0xFFFFEBEE))
                                           : isFuture
-                                              ? Colors.black.withValues(alpha: 0.04)
-                                              : isDone
-                                                  ? AppColors.navyBlue
-                                                  : Colors.white.withValues(alpha: 0.25),
+                                          ? (dark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.06,
+                                                  )
+                                                : Colors.black.withValues(
+                                                    alpha: 0.04,
+                                                  ))
+                                          : (dark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.08,
+                                                  )
+                                                : Colors.white.withValues(
+                                                    alpha: 0.4,
+                                                  )),
+                                      gradient: isDone
+                                          ? const LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: [
+                                                AppColors.navyBlue,
+                                                Color(0xFF23415C),
+                                              ],
+                                            )
+                                          : null,
                                       shape: BoxShape.circle,
                                       border: Border.all(
                                         color: isSalatMissed
                                             ? const Color(0xFFE57373)
                                             : isFuture
-                                                ? Colors.black.withValues(alpha: 0.12)
-                                                : isDone
-                                                    ? AppColors.navyBlue
-                                                    : Colors.white.withValues(alpha: 0.4),
-                                        width: 1.8,
+                                            ? (dark
+                                                  ? Colors.white.withValues(
+                                                      alpha: 0.16,
+                                                    )
+                                                  : Colors.black.withValues(
+                                                      alpha: 0.1,
+                                                    ))
+                                            : isDone
+                                            ? Colors.transparent
+                                            : (dark
+                                                  ? Colors.white.withValues(
+                                                      alpha: 0.35,
+                                                    )
+                                                  : AppColors.navyBlue
+                                                        .withValues(
+                                                          alpha: 0.25,
+                                                        )),
+                                        width: 1.4,
                                       ),
                                       boxShadow: isDone
                                           ? [
                                               BoxShadow(
-                                                color: AppColors.navyBlue.withValues(alpha: 0.2),
+                                                color: AppColors.navyBlue
+                                                    .withValues(alpha: 0.28),
                                                 blurRadius: 8,
-                                                spreadRadius: 1,
-                                              )
+                                                spreadRadius: 0.5,
+                                                offset: const Offset(0, 2),
+                                              ),
                                             ]
                                           : [],
                                     ),
                                     child: Center(
                                       child: isSalatMissed
-                                          ? const Icon(Icons.close_rounded, color: Color(0xFFE57373), size: 22)
+                                          ? const Icon(
+                                              Icons.close_rounded,
+                                              color: Color(0xFFE57373),
+                                              size: 16,
+                                            )
                                           : isFuture
-                                              ? Icon(Icons.lock_outline_rounded,
-                                                  color: Colors.black.withValues(alpha: 0.22), size: 18)
-                                              : isDone
-                                                  ? const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24)
-                                                  : Icon(Icons.circle_outlined,
-                                                      color: AppColors.navyBlue.withValues(alpha: 0.3), size: 20),
+                                          ? Icon(
+                                              Icons.lock_outline_rounded,
+                                              color: dark
+                                                  ? Colors.white.withValues(
+                                                      alpha: 0.4,
+                                                    )
+                                                  : Colors.black.withValues(
+                                                      alpha: 0.22,
+                                                    ),
+                                              size: 14,
+                                            )
+                                          : isDone
+                                          ? const Icon(
+                                              Icons.check_rounded,
+                                              color: Colors.white,
+                                              size: 18,
+                                            )
+                                          : Icon(
+                                              Icons.circle_outlined,
+                                              color: dark
+                                                  ? Colors.white.withValues(
+                                                      alpha: 0.5,
+                                                    )
+                                                  : AppColors.navyBlue
+                                                        .withValues(
+                                                          alpha: 0.28,
+                                                        ),
+                                              size: 16,
+                                            ),
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
+                                  const SizedBox(height: 5),
                                   Text(
                                     salat,
                                     style: GoogleFonts.poppins(
                                       color: isSalatMissed
                                           ? const Color(0xFFE57373)
                                           : isFuture
-                                              ? Colors.black.withValues(alpha: 0.3)
-                                              : isDone
-                                                  ? AppColors.navyBlue
-                                                  : AppColors.navyBlue.withValues(alpha: 0.6),
-                                      fontSize: 11,
-                                      fontWeight: isDone ? FontWeight.bold : FontWeight.w500,
+                                          ? (dark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.4,
+                                                  )
+                                                : Colors.black.withValues(
+                                                    alpha: 0.3,
+                                                  ))
+                                          : isDone
+                                          ? (dark
+                                                ? Colors.white
+                                                : AppColors.navyBlue)
+                                          : (dark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.7,
+                                                  )
+                                                : AppColors.navyBlue.withValues(
+                                                    alpha: 0.6,
+                                                  )),
+                                      fontSize: 10.5,
+                                      fontWeight: isDone
+                                          ? FontWeight.bold
+                                          : FontWeight.w500,
                                     ),
                                   ),
                                 ],
@@ -571,260 +900,217 @@ class PrayerTab extends StatelessWidget {
                   ),
                 ),
 
-                // 3. Scrollable List of Prayer Times
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: prayerItems.length,
-                    itemBuilder: (context, index) {
-                      final item = prayerItems[index];
-                      final String pName = item['name'];
-                      final String pTime = item['time'];
-
-                      final bool isSalat = (pName != 'Sunrise');
-                      bool isMissed = false;
-                      if (isSalat) {
-                        final expireTime = pName == 'Fajr'
-                            ? prayerTimes.sunrise
-                            : pName == 'Dhuhr'
-                                ? salatDts['Asr']
-                                : pName == 'Asr'
-                                    ? salatDts['Maghrib']
-                                    : pName == 'Maghrib'
-                                        ? salatDts['Isha']
-                                        : tomorrowFajrTime;
-
-                        isMissed = expireTime != null &&
-                            now.isAfter(expireTime) &&
-                            !(salatCompleted[pName] ?? false);
-                      }
-
-                      final bool isSceneSelected = (pName == selectedPrayerScene);
-                      final bool isActive = (pName == currentPrayer);
-                      final bool hasAlarm = prayerAlarms[pName] ?? false;
-
-                      Color cardAccent;
-                      Color cardBg;
-                      switch (pName) {
-                        case 'Fajr':
-                          cardAccent = const Color(0xFF1A2E40);
-                          cardBg = const Color(0xFFEBF0F8);
-                          break;
-                        case 'Sunrise':
-                          cardAccent = const Color(0xFFF5A623);
-                          cardBg = const Color(0xFFFFF6E6);
-                          break;
-                        case 'Dhuhr':
-                          cardAccent = const Color(0xFF4AABDB);
-                          cardBg = const Color(0xFFEBF7FF);
-                          break;
-                        case 'Asr':
-                          cardAccent = const Color(0xFF2677A7);
-                          cardBg = const Color(0xFFE5F2F9);
-                          break;
-                        case 'Maghrib':
-                          cardAccent = const Color(0xFF7B3F7E);
-                          cardBg = const Color(0xFFF5EBF8);
-                          break;
-                        case 'Isha':
-                        default:
-                          cardAccent = const Color(0xFF0A1628);
-                          cardBg = const Color(0xFFE8EBF0);
-                          break;
-                      }
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10.0),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => onSceneSelected(pName),
-                            borderRadius: BorderRadius.circular(18),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 350),
-                              curve: Curves.easeInOutCubic,
-                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-                              decoration: BoxDecoration(
-                                color: isMissed
-                                    ? const Color(0xFFFFF0F0)
-                                    : isSceneSelected
-                                        ? cardBg
-                                        : Colors.white.withValues(alpha: 0.55),
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color: isMissed
-                                      ? const Color(0xFFE57373).withValues(alpha: 0.55)
-                                      : isSceneSelected
-                                          ? cardAccent
-                                          : Colors.white.withValues(alpha: 0.4),
-                                  width: isSceneSelected ? 2.0 : 1.0,
-                                ),
-                                boxShadow: isSceneSelected
-                                    ? [
-                                        BoxShadow(
-                                          color: cardAccent.withValues(alpha: 0.12),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 3),
-                                        ),
-                                      ]
-                                    : [
-                                        BoxShadow(
-                                          color: AppColors.navyBlue.withValues(alpha: 0.04),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      AnimatedContainer(
-                                        duration: const Duration(milliseconds: 300),
-                                        width: 10,
-                                        height: 10,
-                                        margin: const EdgeInsets.only(right: 10),
-                                        decoration: BoxDecoration(
-                                          color: isSceneSelected ? cardAccent : cardAccent.withValues(alpha: 0.3),
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      Text(
-                                        pName,
-                                        style: GoogleFonts.poppins(
-                                          color: isMissed
-                                              ? const Color(0xFFD32F2F)
-                                              : isSceneSelected
-                                                  ? cardAccent
-                                                  : AppColors.navyBlue,
-                                          fontSize: 15,
-                                          fontWeight: isSceneSelected ? FontWeight.bold : FontWeight.w600,
-                                          decoration: isMissed ? TextDecoration.lineThrough : null,
-                                          decorationColor: const Color(0xFFD32F2F),
-                                        ),
-                                      ),
-                                      if (isActive) ...[
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                          margin: const EdgeInsets.only(left: 8),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.coralOrange.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            'Now',
-                                            style: GoogleFonts.inter(
-                                              color: AppColors.coralOrange,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                      if (isMissed) ...[
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          margin: const EdgeInsets.only(left: 8),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFE57373).withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(7),
-                                          ),
-                                          child: Text(
-                                            'Missed',
-                                            style: GoogleFonts.inter(
-                                              color: const Color(0xFFD32F2F),
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  Row(
-                                    children: [
-                                      Text(
-                                        pTime,
-                                        style: GoogleFonts.inter(
-                                          color: isSceneSelected ? cardAccent : AppColors.navyBlue.withValues(alpha: 0.75),
-                                          fontSize: 14.5,
-                                          fontWeight: isSceneSelected ? FontWeight.bold : FontWeight.w500,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      GestureDetector(
-                                        onTap: () {
-                                          final newState = !hasAlarm;
-                                          onAlarmToggle(pName, newState);
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).clearSnackBars();
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  newState ? '🔔 $pName alarm set' : '🔕 $pName alarm removed',
-                                                  style: GoogleFonts.inter(fontSize: 13),
-                                                ),
-                                                duration: const Duration(seconds: 2),
-                                                behavior: SnackBarBehavior.floating,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                                width: math.min(MediaQuery.of(context).size.width, 430) - 32,
-                                                backgroundColor: AppColors.navyBlue,
-                                              ),
-                                            );
-                                          }
-                                        },
-                                        child: AnimatedContainer(
-                                          duration: const Duration(milliseconds: 250),
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: BoxDecoration(
-                                            color: hasAlarm
-                                                ? AppColors.coralOrange.withValues(alpha: 0.12)
-                                                : Colors.transparent,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: Icon(
-                                            hasAlarm ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
-                                            color: hasAlarm ? AppColors.coralOrange : AppColors.navyBlue.withValues(alpha: 0.35),
-                                            size: 20,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
                 // ===== TODAY'S MISSED PRAYER STATUS CARD =====
+                // "All Caught Up" only appears once the prayer day is
+                // actually over (past Isha's window). While the day is
+                // still in progress: show the running missed prayers if
+                // there are any, otherwise show nothing — it's premature
+                // to declare the day clean before it's finished.
+                //
+                // Driven by todaysMissedPrayers (computed above from each
+                // prayer's own window closing), not widget.qazaCount —
+                // this guarantees a prayer is only ever flagged missed
+                // once its time has fully passed, never the moment it
+                // starts.
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 400),
-                    child: qazaCount > 0
+                    child: todaysMissedPrayers.isNotEmpty
                         ? Container(
                             key: const ValueKey('MissedWarning'),
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 12,
+                            ),
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [Color(0xFFFFF5F5), Color(0xFFFFEBEB)],
+                              gradient: _isDark(context)
+                                  ? const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFF2A1113),
+                                        Color(0xFF1F0D0E),
+                                      ],
+                                    )
+                                  : const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFFFFF5F5),
+                                        Color(0xFFFFEBEB),
+                                      ],
+                                    ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: const Color(
+                                  0xFFE57373,
+                                ).withValues(alpha: 0.4),
+                                width: 1.2,
                               ),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: const Color(0xFFE57373).withValues(alpha: 0.45), width: 1.2),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFE57373).withValues(alpha: 0.10),
+                                  color: const Color(
+                                    0xFFE57373,
+                                  ).withValues(alpha: 0.12),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 38,
+                                      height: 38,
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFFE57373,
+                                        ).withValues(alpha: 0.14),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.warning_amber_rounded,
+                                          color: Color(0xFFD32F2F),
+                                          size: 19,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            dayEnded
+                                                ? 'Today\'s Missed Prayers'
+                                                : 'Missed So Far Today',
+                                            style: GoogleFonts.poppins(
+                                              color: _isDark(context)
+                                                  ? const Color(0xFFFFCDD2)
+                                                  : const Color(0xFFB71C1C),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'You missed ${todaysMissedPrayers.length} prayer${todaysMissedPrayers.length > 1 ? 's' : ''}${dayEnded ? '' : ' so far'} today.',
+                                            style: GoogleFonts.inter(
+                                              color:
+                                                  (_isDark(context)
+                                                          ? const Color(
+                                                              0xFFFFCDD2,
+                                                            )
+                                                          : const Color(
+                                                              0xFFD32F2F,
+                                                            ))
+                                                      .withValues(alpha: 0.80),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFFE57373,
+                                        ).withValues(alpha: 0.18),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        '${todaysMissedPrayers.length}',
+                                        style: GoogleFonts.poppins(
+                                          color: _isDark(context)
+                                              ? const Color(0xFFFFCDD2)
+                                              : const Color(0xFFB71C1C),
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: todaysMissedPrayers.map((name) {
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 9,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFFE57373,
+                                        ).withValues(alpha: 0.16),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        name,
+                                        style: GoogleFonts.inter(
+                                          color: _isDark(context)
+                                              ? const Color(0xFFFFCDD2)
+                                              : const Color(0xFFB71C1C),
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ),
+                          )
+                        : dayEnded
+                        ? Container(
+                            key: const ValueKey('AllCompleted'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: _isDark(context)
+                                  ? const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFF10251A),
+                                        Color(0xFF0B1D13),
+                                      ],
+                                    )
+                                  : const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFFF4FBF7),
+                                        Color(0xFFEBF7F0),
+                                      ],
+                                    ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: const Color(
+                                  0xFF81C784,
+                                ).withValues(alpha: 0.4),
+                                width: 1.2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF81C784,
+                                  ).withValues(alpha: 0.12),
                                   blurRadius: 10,
                                   offset: const Offset(0, 3),
                                 ),
@@ -833,182 +1119,135 @@ class PrayerTab extends StatelessWidget {
                             child: Row(
                               children: [
                                 Container(
-                                  width: 46,
-                                  height: 46,
+                                  width: 38,
+                                  height: 38,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFE57373).withValues(alpha: 0.14),
+                                    color: const Color(
+                                      0xFF81C784,
+                                    ).withValues(alpha: 0.14),
                                     shape: BoxShape.circle,
                                   ),
                                   child: const Center(
-                                    child: Icon(Icons.warning_amber_rounded, color: Color(0xFFD32F2F), size: 24),
+                                    child: Icon(
+                                      Icons.check_circle_outline_rounded,
+                                      color: Color(0xFF2E7D32),
+                                      size: 19,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(width: 16),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Today\'s Missed Prayers',
+                                        'All Caught Up!',
                                         style: GoogleFonts.poppins(
-                                          color: const Color(0xFFB71C1C),
-                                          fontSize: 13.5,
+                                          color: _isDark(context)
+                                              ? const Color(0xFFA5D6A7)
+                                              : const Color(0xFF1B5E20),
+                                          fontSize: 13,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        'You missed $qazaCount prayer${qazaCount > 1 ? 's' : ''} today.',
+                                        'No missed prayers today.',
                                         style: GoogleFonts.inter(
-                                          color: const Color(0xFFD32F2F).withValues(alpha: 0.80),
-                                          fontSize: 11.5,
+                                          color:
+                                              (_isDark(context)
+                                                      ? const Color(0xFFA5D6A7)
+                                                      : const Color(0xFF2E7D32))
+                                                  .withValues(alpha: 0.80),
+                                          fontSize: 11,
                                           fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                     ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE57373).withValues(alpha: 0.18),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '$qazaCount',
-                                    style: GoogleFonts.poppins(
-                                      color: const Color(0xFFB71C1C),
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w800,
-                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           )
-                        : Container(
-                            key: const ValueKey('AllCompleted'),
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [Color(0xFFF4FBF7), Color(0xFFEBF7F0)],
-                              ),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: const Color(0xFF81C784).withValues(alpha: 0.45), width: 1.2),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF81C784).withValues(alpha: 0.10),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 46,
-                                  height: 46,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF81C784).withValues(alpha: 0.14),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Center(
-                                    child: Icon(Icons.check_circle_outline_rounded, color: Color(0xFF2E7D32), size: 24),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'All Caught Up!',
-                                        style: GoogleFonts.poppins(
-                                          color: const Color(0xFF1B5E20),
-                                          fontSize: 13.5,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'No missed prayers detected today.',
-                                        style: GoogleFonts.inter(
-                                          color: const Color(0xFF2E7D32).withValues(alpha: 0.80),
-                                          fontSize: 11.5,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                        : const SizedBox.shrink(key: ValueKey('DayInProgress')),
                   ),
                 ),
 
                 // ===== INTERACTIVE QAZA COUNTER SECTION =====
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.navyBlue.withValues(alpha: 0.06),
-                          blurRadius: 12,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: _GlassCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.history_toggle_off_rounded, color: AppColors.navyBlue, size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Qaza Prayer Counter',
-                              style: GoogleFonts.poppins(
-                                color: AppColors.navyBlue,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
+                        _SectionHeader(
+                          icon: Icons.history_toggle_off_rounded,
+                          iconColor: AppColors.navyBlue,
+                          title: 'Qaza Prayer Counter',
+                          subtitle:
+                              'Log missed prayers to make them up over time',
+                        ),
+                        const SizedBox(height: 14),
+                        ...['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((
+                          salat,
+                        ) {
+                          final count = widget.qazaCounts[salat] ?? 0;
+                          final bool dark = _isDark(context);
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Manually track and log your missed prayers to make them up over time.',
-                          style: GoogleFonts.inter(color: AppColors.navyBlue.withValues(alpha: 0.6), fontSize: 11),
-                        ),
-                        const SizedBox(height: 16),
-                        ...['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((salat) {
-                          final count = qazaCounts[salat] ?? 0;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6.0),
+                            decoration: BoxDecoration(
+                              color: count > 0
+                                  ? (dark
+                                        ? AppColors.coralOrange.withValues(
+                                            alpha: 0.18,
+                                          )
+                                        : AppColors.coralOrange.withValues(
+                                            alpha: 0.06,
+                                          ))
+                                  : (dark
+                                        ? Colors.black
+                                        : AppColors.navyBlue.withValues(
+                                            alpha: 0.035,
+                                          )),
+                              borderRadius: BorderRadius.circular(16),
+                              border: dark
+                                  ? Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      width: 1,
+                                    )
+                                  : null,
+                            ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Row(
                                   children: [
                                     Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: const BoxDecoration(color: AppColors.coralOrange, shape: BoxShape.circle),
+                                      width: 7,
+                                      height: 7,
+                                      decoration: BoxDecoration(
+                                        color: count > 0
+                                            ? AppColors.coralOrange
+                                            : _onSurface(context, alpha: 0.25),
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    const SizedBox(width: 11),
                                     Text(
                                       salat,
                                       style: GoogleFonts.poppins(
-                                        color: AppColors.navyBlue,
-                                        fontSize: 13,
+                                        color: _onSurface(context),
+                                        fontSize: 12.5,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -1016,44 +1255,33 @@ class PrayerTab extends StatelessWidget {
                                 ),
                                 Row(
                                   children: [
-                                    GestureDetector(
+                                    _QazaStepperButton(
+                                      icon: Icons.remove_rounded,
                                       onTap: () {
-                                        if (count > 0) onQazaCountChange(salat, count - 1);
+                                        if (count > 0)
+                                          widget.onQazaCountChange(
+                                            salat,
+                                            count - 1,
+                                          );
                                       },
-                                      child: Container(
-                                        padding: const EdgeInsets.all(5),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.15)),
-                                        ),
-                                        child: const Icon(Icons.remove, size: 14, color: AppColors.navyBlue),
-                                      ),
                                     ),
-                                    const SizedBox(width: 12),
                                     SizedBox(
-                                      width: 28,
+                                      width: 32,
                                       child: Text(
                                         '$count',
                                         textAlign: TextAlign.center,
                                         style: GoogleFonts.poppins(
-                                          color: AppColors.navyBlue,
-                                          fontSize: 14.5,
+                                          color: _onSurface(context),
+                                          fontSize: 13,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
-                                    GestureDetector(
-                                      onTap: () => onQazaCountChange(salat, count + 1),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(5),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.15)),
-                                        ),
-                                        child: const Icon(Icons.add, size: 14, color: AppColors.navyBlue),
+                                    _QazaStepperButton(
+                                      icon: Icons.add_rounded,
+                                      onTap: () => widget.onQazaCountChange(
+                                        salat,
+                                        count + 1,
                                       ),
                                     ),
                                   ],
@@ -1074,336 +1302,986 @@ class PrayerTab extends StatelessWidget {
       ],
     );
   }
+}
 
-  Widget _buildSunPosition(double width) {
-    double sunTop = 80.0;
-    double sunLeft = width * 0.5 - 25;
-    double opacity = 0.0;
+/// Consistent frosted "glass" surface used for every card in the lower
+/// section — same radius, border, and soft shadow everywhere so the page
+/// reads as one cohesive design instead of a stack of mismatched panels.
+class _GlassCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color? borderColor;
+  final double borderWidth;
 
-    switch (selectedPrayerScene) {
-      case 'Sunrise':
-        sunTop = 150.0;
-        sunLeft = width * 0.5 - 25;
-        opacity = 0.9;
-        break;
-      case 'Dhuhr':
-        sunTop = 38.0;
-        sunLeft = width * 0.5 - 25;
-        opacity = 1.0;
-        break;
-      case 'Asr':
-        sunTop = 72.0;
-        sunLeft = width * 0.72 - 25;
-        opacity = 0.95;
-        break;
-      case 'Maghrib':
-        sunTop = 175.0;
-        sunLeft = width * 0.5 - 25;
-        opacity = 0.85;
-        break;
-      default:
-        opacity = 0.0;
-    }
+  const _GlassCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(14),
+    this.borderColor, // null = theme-appropriate default (see build())
+    this.borderWidth = 1.4,
+  });
 
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 1000),
-      curve: Curves.easeInOutCubic,
-      top: sunTop,
-      left: sunLeft,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 700),
-        opacity: opacity,
-        child: Container(
-          width: 50,
-          height: 50,
+  @override
+  Widget build(BuildContext context) {
+    final bool dark = _isDark(context);
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: dark ? Colors.black : Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color:
+              borderColor ??
+              (dark
+                  ? Colors.white.withValues(alpha: 0.16)
+                  : const Color(0x261A2E40)),
+          width: borderWidth,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: dark
+                ? Colors.black.withValues(alpha: 0.5)
+                : AppColors.navyBlue.withValues(alpha: 0.07),
+            blurRadius: 16,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Shared section title row: a tinted icon chip, title + optional
+/// subtitle, and an optional trailing badge/action.
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  const _SectionHeader({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color effectiveIconColor = _isDark(context)
+        ? Colors.white
+        : iconColor;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF9C4),
+            color: effectiveIconColor.withValues(alpha: 0.14),
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(color: const Color(0xFFFFA000).withValues(alpha: 0.55), blurRadius: 28, spreadRadius: 8),
-              const BoxShadow(color: Colors.white, blurRadius: 10),
+          ),
+          child: Icon(icon, color: effectiveIconColor, size: 16),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  color: _onSurface(context),
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  style: GoogleFonts.inter(
+                    color: _onSurface(context, alpha: 0.6),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
-      ),
+        if (trailing != null) trailing!,
+      ],
     );
   }
+}
 
-  Widget _buildMoonPosition(double width) {
-    double moonTop = 50.0;
-    double moonLeft = width * 0.5 - 25;
-    double opacity = 0.0;
+/// Compact +/- button used in the Qaza counter rows.
+class _QazaStepperButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
 
-    if (selectedPrayerScene == 'Fajr' || selectedPrayerScene == 'Isha') {
-      opacity = 0.95;
-    }
+  const _QazaStepperButton({required this.icon, required this.onTap});
 
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 1000),
-      curve: Curves.easeInOutCubic,
-      top: moonTop,
-      left: moonLeft,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 700),
-        opacity: opacity,
-        child: SizedBox(
-          width: 50,
-          height: 50,
-          child: CustomPaint(painter: CrescentMoonPainter()),
+  @override
+  Widget build(BuildContext context) {
+    final bool dark = _isDark(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: dark ? Colors.black : Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: dark
+                ? Colors.white.withValues(alpha: 0.35)
+                : AppColors.navyBlue.withValues(alpha: 0.14),
+          ),
+          boxShadow: dark
+              ? []
+              : [
+                  BoxShadow(
+                    color: AppColors.navyBlue.withValues(alpha: 0.05),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+        ),
+        child: Icon(
+          icon,
+          size: 14,
+          color: dark ? Colors.white : AppColors.navyBlue,
         ),
       ),
     );
   }
 }
 
-// ===== PRAYER HEADER STARS PAINTER =====
-class PrayerHeaderStarsPainter extends CustomPainter {
-  final double pulseVal;
-  PrayerHeaderStarsPainter({required this.pulseVal});
+/// Full-bleed looping ambient video background. Muted, auto-plays, loops
+/// seamlessly, and crops (BoxFit.cover) to fill the available space.
+///
+/// All scene videos are preloaded and kept "warm" (initialized + paused)
+/// in a controller cache, so switching scenes never has to wait on
+/// [VideoPlayerController.initialize] — the crossfade starts the instant
+/// the user taps a new prayer, instead of stalling on a black/loading
+/// frame while the new asset spins up.
+class _PrayerVideoBackground extends StatefulWidget {
+  final String? scene;
+
+  const _PrayerVideoBackground({this.scene});
+
+  @override
+  State<_PrayerVideoBackground> createState() => _PrayerVideoBackgroundState();
+}
+
+class _PrayerVideoBackgroundState extends State<_PrayerVideoBackground>
+    with SingleTickerProviderStateMixin {
+  static const String _fallbackAsset = 'assets/videos/mosque_ambient.mp4';
+
+  static const Map<String, String> _prayerVideoMap = {
+    'fajr': 'assets/videos/fajr.mp4',
+    'sunrise': 'assets/videos/sunrise.mp4',
+    'dhuhr': 'assets/videos/zuhr.mp4',
+    'zuhr': 'assets/videos/zuhr.mp4',
+    'asr': 'assets/videos/asr.mp4',
+    'maghrib': 'assets/videos/maghrib.mp4',
+    'isha': 'assets/videos/isha.mp4',
+  };
+
+  // Every controller we've ever created for a given asset path, kept alive
+  // (not disposed) so re-selecting a scene is instant on subsequent taps.
+  final Map<String, VideoPlayerController> _controllers = {};
+  final Map<String, bool> _ready = {};
+  final Map<String, Future<void>> _initFutures = {};
+
+  String? _currentPath;
+  String? _previousPath;
+
+  late final AnimationController _fadeController;
+  late final Animation<double> _fadeAnimation;
+
+  String _resolveAssetPath() {
+    if (widget.scene != null && widget.scene!.isNotEmpty) {
+      final key = widget.scene!.toLowerCase();
+      if (_prayerVideoMap.containsKey(key)) {
+        return _prayerVideoMap[key]!;
+      }
+    }
+    return _fallbackAsset;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeInOut,
+    );
+
+    final initialPath = _resolveAssetPath();
+    _showInitial(initialPath);
+
+    // Warm up every other scene's video in the background so the very
+    // first tap on a different prayer is just as instant as later ones.
+    _preloadRemainingScenes(skip: initialPath);
+  }
+
+  /// Ensures a controller exists for [path] and is being initialized.
+  /// Safe to call repeatedly — returns the same in-flight/completed future.
+  Future<void> _ensureController(String path) {
+    final existing = _initFutures[path];
+    if (existing != null) return existing;
+
+    final controller = VideoPlayerController.asset(path);
+    _controllers[path] = controller;
+
+    final future = controller
+        .initialize()
+        .then((_) async {
+          await controller.setLooping(true);
+          await controller.setVolume(0);
+          _ready[path] = true;
+        })
+        .catchError((_) {
+          _ready[path] = false;
+        });
+
+    _initFutures[path] = future;
+    return future;
+  }
+
+  Future<void> _showInitial(String path) async {
+    _currentPath = path;
+    await _ensureController(path);
+    if (!mounted) return;
+
+    if (_ready[path] == true) {
+      _controllers[path]!.play();
+      _fadeController.value = 1.0;
+      setState(() {});
+    } else if (path != _fallbackAsset) {
+      // Asset missing/failed — fall back gracefully.
+      _currentPath = _fallbackAsset;
+      await _showInitial(_fallbackAsset);
+    }
+  }
+
+  void _preloadRemainingScenes({required String skip}) {
+    final allPaths = {..._prayerVideoMap.values, _fallbackAsset};
+    for (final path in allPaths) {
+      if (path == skip) continue;
+      // Fire-and-forget: just gets the controller initialized and cached
+      // ahead of time so a later switch to this scene is instantaneous.
+      _ensureController(path);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PrayerVideoBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final targetPath = _resolveAssetPath();
+    if (targetPath != _currentPath) {
+      _switchVideo(targetPath);
+    }
+  }
+
+  Future<void> _switchVideo(String newPath) async {
+    final oldPath = _currentPath;
+
+    // If it's already preloaded, this resolves on the same frame and the
+    // crossfade begins immediately. If it's somehow not ready yet (e.g. a
+    // very fast double-tap before preload finished), we just await it —
+    // still far faster than starting cold from scratch.
+    await _ensureController(newPath);
+    if (!mounted) return;
+
+    if (_ready[newPath] != true) {
+      if (newPath != _fallbackAsset) {
+        return _switchVideo(_fallbackAsset);
+      }
+      return;
+    }
+
+    _previousPath = oldPath;
+    _currentPath = newPath;
+    _controllers[newPath]!.play();
+
+    _fadeController.forward(from: 0.0).whenCompleteOrCancel(() {
+      if (!mounted) return;
+      setState(() {
+        _previousPath = null;
+      });
+      // Pause the outgoing video once it's fully hidden — keeps it warm
+      // (still initialized, ready to resume instantly) without burning
+      // CPU decoding a layer nobody sees.
+      if (oldPath != null && oldPath != _currentPath) {
+        _controllers[oldPath]?.pause();
+      }
+    });
+
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget _buildPlayer(String? path) {
+    if (path == null) return const SizedBox.expand();
+    final controller = _controllers[path];
+    if (controller == null ||
+        _ready[path] != true ||
+        !controller.value.isInitialized) {
+      return const SizedBox.expand();
+    }
+    final videoSize = controller.value.size;
+    if (videoSize.width == 0 || videoSize.height == 0) {
+      return const SizedBox.expand();
+    }
+    return FittedBox(
+      fit: BoxFit.cover,
+      child: SizedBox(
+        width: videoSize.width,
+        height: videoSize.height,
+        child: VideoPlayer(controller),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: const Color(0xFF1B2A44),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Fading-out previous video layer
+          if (_previousPath != null)
+            FadeTransition(
+              opacity: ReverseAnimation(_fadeAnimation),
+              child: _buildPlayer(_previousPath),
+            ),
+
+          // Fading-in current video layer
+          if (_currentPath != null)
+            FadeTransition(
+              opacity: _fadeAnimation,
+              child: _buildPlayer(_currentPath),
+            ),
+
+          // Dynamic Atmospheric Overlay (flying birds)
+          _AmbientAtmosphericOverlay(scene: widget.scene),
+        ],
+      ),
+    );
+  }
+}
+
+/// Animated atmospheric layer adding flying birds for gentle motion over
+/// the video hero. (Twinkling stars were removed.)
+class _AmbientAtmosphericOverlay extends StatefulWidget {
+  final String? scene;
+  const _AmbientAtmosphericOverlay({this.scene});
+
+  @override
+  State<_AmbientAtmosphericOverlay> createState() =>
+      _AmbientAtmosphericOverlayState();
+}
+
+class _AmbientAtmosphericOverlayState extends State<_AmbientAtmosphericOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animController,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _FlyingBirdsPainter(progress: _animController.value),
+          size: Size.infinite,
+        );
+      },
+    );
+  }
+}
+
+class _FlyingBirdsPainter extends CustomPainter {
+  final double progress;
+
+  _FlyingBirdsPainter({required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final double w = size.width;
-    final double h = size.height;
+    final birdPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
 
-    final List<Offset> positions = [
-      Offset(w * 0.05, h * 0.12), Offset(w * 0.12, h * 0.28),
-      Offset(w * 0.18, h * 0.08), Offset(w * 0.25, h * 0.18),
-      Offset(w * 0.32, h * 0.32), Offset(w * 0.40, h * 0.10),
-      Offset(w * 0.48, h * 0.24), Offset(w * 0.55, h * 0.38),
-      Offset(w * 0.60, h * 0.14), Offset(w * 0.67, h * 0.06),
-      Offset(w * 0.72, h * 0.30), Offset(w * 0.78, h * 0.20),
-      Offset(w * 0.85, h * 0.40), Offset(w * 0.90, h * 0.12),
-      Offset(w * 0.95, h * 0.26), Offset(w * 0.08, h * 0.44),
-      Offset(w * 0.22, h * 0.50), Offset(w * 0.36, h * 0.48),
-      Offset(w * 0.50, h * 0.55), Offset(w * 0.64, h * 0.52),
+    for (int i = 0; i < 3; i++) {
+      final offsetVal = i * 0.18;
+      final birdProgress = (progress + offsetVal) % 1.0;
+
+      final x = (birdProgress * (size.width + 120)) - 60;
+      final y =
+          size.height * 0.18 +
+          math.sin(birdProgress * math.pi * 2) * 10 +
+          (i * 16);
+
+      final flap = math.sin(progress * math.pi * 20 + (i * 2)) * 5;
+
+      final path = Path();
+      path.moveTo(x - 9, y - flap);
+      path.quadraticBezierTo(x - 4, y - 3, x, y);
+      path.quadraticBezierTo(x + 4, y - 3, x + 9, y - flap);
+
+      canvas.drawPath(path, birdPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FlyingBirdsPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+/// Prayer overview summary card shown directly beneath the video hero.
+///
+/// Layout is modeled on the reference "Prayer Time" mockup — a date
+/// header, a "Next" + "Ongoing" highlight pair, a Suhoor/Iftar row, the
+/// mosque/location line, a compact 5-prayer time strip, and a
+/// Sunrise/Mid Day/Sunset row — but restyled entirely with the app's own
+/// navy / coral-orange / dusty-blue-teal palette (see [AppColors] and
+/// splash_screen.dart) instead of the mockup's peach/orange theme.
+///
+/// This card is the ONLY place on the tab that lists every prayer's time
+/// — the type scale used here (13 / 11 / 10.5 / 16 / 12.5 / 9.5) is the
+/// reference scale the rest of the tab's cards are matched against.
+class _PrayerOverviewCard extends StatelessWidget {
+  final PrayerTimes prayerTimes;
+  final String currentPrayer;
+  final String nextPrayerName;
+  final String liveCountdownStr;
+  final String locationName;
+  final String hijriDate;
+  final DateFormat formatter;
+
+  const _PrayerOverviewCard({
+    required this.prayerTimes,
+    required this.currentPrayer,
+    required this.nextPrayerName,
+    required this.liveCountdownStr,
+    required this.locationName,
+    required this.hijriDate,
+    required this.formatter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final suhoorTime = formatter.format(prayerTimes.fajr);
+    final iftarTime = formatter.format(prayerTimes.maghrib);
+    final sunriseTime = formatter.format(prayerTimes.sunrise);
+    final middayTime = formatter.format(prayerTimes.dhuhr);
+    final sunsetTime = formatter.format(prayerTimes.maghrib);
+    final nextPrayerTime = _timeFor(nextPrayerName);
+    final currentPrayerTime = _timeFor(currentPrayer);
+
+    final List<Map<String, String>> compactList = [
+      {'name': 'Fajr', 'time': formatter.format(prayerTimes.fajr)},
+      {'name': 'Dhuhr', 'time': formatter.format(prayerTimes.dhuhr)},
+      {'name': 'Asr', 'time': formatter.format(prayerTimes.asr)},
+      {'name': 'Maghrib', 'time': formatter.format(prayerTimes.maghrib)},
+      {'name': 'Isha', 'time': formatter.format(prayerTimes.isha)},
     ];
 
-    for (int i = 0; i < positions.length; i++) {
-      final double phase = (i * 0.37) % 1.0;
-      final double twinkle = (math.sin((pulseVal + phase) * math.pi) + 1.0) / 2.0;
-      final double alpha = 0.15 + twinkle * 0.7;
-      final double starSize = 2.0 + (i % 3) * 1.5;
+    final bool dark = _isDark(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: dark ? Colors.black : Colors.white.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: dark
+              ? Colors.white.withValues(alpha: 0.14)
+              : AppColors.navyBlue.withValues(alpha: 0.08),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: dark
+                ? Colors.black.withValues(alpha: 0.5)
+                : AppColors.navyBlue.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Date header (mirrors the "7 Ramadan, 1444 / Wed, 29 March" line)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                hijriDate,
+                style: GoogleFonts.poppins(
+                  color: _onSurface(context),
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                DateFormat('EEE, d MMM yyyy').format(DateTime.now()),
+                style: GoogleFonts.inter(
+                  color: _onSurface(context, alpha: 0.6),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
 
-      final paint = Paint()
-        ..color = Colors.white.withValues(alpha: alpha)
-        ..style = PaintingStyle.fill;
+          const SizedBox(height: 14),
 
-      _drawStar(canvas, positions[i], starSize, paint);
-    }
+          // Two highlight cards: Next prayer (dark navy) + Ongoing prayer (light)
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  height: 122,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.navyBlue, Color(0xFF23415C)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.navyBlue.withValues(alpha: 0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        right: -8,
+                        bottom: -8,
+                        child: Icon(
+                          Icons.mosque,
+                          size: 56,
+                          color: Colors.white.withValues(alpha: 0.10),
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Next time',
+                            style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            nextPrayerName,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (nextPrayerTime != null) ...[
+                            const SizedBox(height: 1),
+                            Text(
+                              nextPrayerTime,
+                              style: GoogleFonts.inter(
+                                color: Colors.white.withValues(alpha: 0.65),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                          const Spacer(),
+                          Text(
+                            liveCountdownStr,
+                            style: GoogleFonts.poppins(
+                              color: AppColors.coralOrange,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  height: 122,
+                  decoration: BoxDecoration(
+                    color: dark
+                        ? Colors.black
+                        : AppColors.dustyBlueTeal.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: dark
+                          ? Colors.white.withValues(alpha: 0.30)
+                          : AppColors.dustyBlueTeal.withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        right: -8,
+                        bottom: -8,
+                        child: Icon(
+                          Icons.nightlight_round,
+                          size: 52,
+                          color: _onSurface(context, alpha: 0.1),
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ongoing',
+                            style: GoogleFonts.inter(
+                              color: _onSurface(context, alpha: 0.65),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            currentPrayer,
+                            style: GoogleFonts.poppins(
+                              color: _onSurface(context),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (currentPrayerTime != null) ...[
+                            const SizedBox(height: 1),
+                            Text(
+                              currentPrayerTime,
+                              style: GoogleFonts.inter(
+                                color: _onSurface(context, alpha: 0.6),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.coralOrange.withValues(
+                                alpha: 0.15,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'In progress',
+                              style: GoogleFonts.inter(
+                                color: AppColors.coralOrange,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Suhoor / Iftar row
+          Row(
+            children: [
+              Expanded(
+                child: _MiniTimePill(
+                  icon: Icons.wb_twilight_rounded,
+                  label: 'Suhoor',
+                  time: suhoorTime,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _MiniTimePill(
+                  icon: Icons.brightness_4_rounded,
+                  label: 'Iftar',
+                  time: iftarTime,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Location (mirrors the "Al Masjid an Nabawi" row)
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: _onSurface(context, alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.mosque, color: _onSurface(context), size: 15),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  locationName,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    color: _onSurface(context),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+          Divider(color: _onSurface(context, alpha: 0.1), height: 1),
+          const SizedBox(height: 12),
+
+          // Compact prayer times row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: compactList.map((p) {
+              final bool isCurrent = p['name'] == currentPrayer;
+              return Column(
+                children: [
+                  Text(
+                    p['name']!,
+                    style: GoogleFonts.inter(
+                      color: isCurrent
+                          ? AppColors.coralOrange
+                          : _onSurface(context, alpha: 0.6),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    p['time']!,
+                    style: GoogleFonts.poppins(
+                      color: isCurrent
+                          ? _onSurface(context)
+                          : _onSurface(context, alpha: 0.8),
+                      fontSize: 11.5,
+                      fontWeight: isCurrent ? FontWeight.bold : FontWeight.w600,
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+
+          const SizedBox(height: 14),
+          Divider(color: _onSurface(context, alpha: 0.1), height: 1),
+          const SizedBox(height: 12),
+
+          // Sunrise / Mid Day / Sunset row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _SunTimeItem(
+                icon: Icons.wb_twilight_rounded,
+                label: 'Sunrise',
+                time: sunriseTime,
+              ),
+              _SunTimeItem(
+                icon: Icons.wb_sunny_rounded,
+                label: 'Mid Day',
+                time: middayTime,
+              ),
+              _SunTimeItem(
+                icon: Icons.brightness_4_rounded,
+                label: 'Sunset',
+                time: sunsetTime,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
-  void _drawStar(Canvas canvas, Offset center, double size, Paint paint) {
-    final path = Path();
-    final cx = center.dx;
-    final cy = center.dy;
-    final r = size / 2;
-    path.moveTo(cx, cy - r);
-    path.quadraticBezierTo(cx, cy, cx + r, cy);
-    path.quadraticBezierTo(cx, cy, cx, cy + r);
-    path.quadraticBezierTo(cx, cy, cx - r, cy);
-    path.quadraticBezierTo(cx, cy, cx, cy - r);
-    path.close();
-    canvas.drawPath(path, paint);
-    canvas.drawCircle(center, size * 0.12, Paint()..color = Colors.white..style = PaintingStyle.fill);
-  }
-
-  @override
-  bool shouldRepaint(covariant PrayerHeaderStarsPainter oldDelegate) => oldDelegate.pulseVal != pulseVal;
-}
-
-// ===== DRIFTING CLOUDS PAINTER =====
-class DriftingCloudsPainter extends CustomPainter {
-  final double animVal;
-  final Color cloudColor;
-
-  DriftingCloudsPainter({required this.animVal, required this.cloudColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double w = size.width;
-    final double h = size.height;
-
-    final cloudPaint = Paint()
-      ..color = cloudColor.withValues(alpha: 0.14)
-      ..style = PaintingStyle.fill;
-
-    double x1 = (w * animVal + w * 0.1) % (w + 100) - 50;
-    _drawCloud(canvas, Offset(x1, h * 0.25), 26, cloudPaint);
-
-    double x2 = (w * 1.4 * animVal + w * 0.55) % (w + 120) - 60;
-    _drawCloud(canvas, Offset(x2, h * 0.42), 32, cloudPaint);
-
-    double x3 = (w * 0.7 * animVal + w * 0.3) % (w + 80) - 40;
-    _drawCloud(canvas, Offset(x3, h * 0.60), 16,
-        Paint()..color = cloudColor.withValues(alpha: 0.08)..style = PaintingStyle.fill);
-  }
-
-  void _drawCloud(Canvas canvas, Offset center, double baseSize, Paint paint) {
-    final cx = center.dx;
-    final cy = center.dy;
-    canvas.drawCircle(Offset(cx, cy), baseSize, paint);
-    canvas.drawCircle(Offset(cx - baseSize * 0.6, cy + baseSize * 0.22), baseSize * 0.75, paint);
-    canvas.drawCircle(Offset(cx + baseSize * 0.6, cy + baseSize * 0.22), baseSize * 0.75, paint);
-    canvas.drawCircle(Offset(cx - baseSize * 1.15, cy + baseSize * 0.38), baseSize * 0.55, paint);
-    canvas.drawCircle(Offset(cx + baseSize * 1.15, cy + baseSize * 0.38), baseSize * 0.55, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant DriftingCloudsPainter oldDelegate) =>
-      oldDelegate.animVal != animVal || oldDelegate.cloudColor != cloudColor;
-}
-
-// ===== DYNAMIC CRESCENT MOON PAINTER =====
-class CrescentMoonPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final radius = size.width * 0.4;
-
-    final moonPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.95)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(cx, cy), radius, moonPaint);
-
-    final cutoutPaint = Paint()
-      ..color = Colors.transparent
-      ..blendMode = BlendMode.clear
-      ..style = PaintingStyle.fill;
-
-    canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
-    canvas.drawCircle(Offset(cx, cy), radius, moonPaint);
-    canvas.drawCircle(Offset(cx + radius * 0.35, cy - radius * 0.18), radius * 0.85, cutoutPaint);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ===== FULL RICH MOSQUE SILHOUETTE (matches splash screen style) =====
-class MosqueSilhouettePainter extends CustomPainter {
-  final String selectedScene;
-
-  MosqueSilhouettePainter({required this.selectedScene});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double w = size.width;
-    final double h = size.height;
-
-    Color navyC, tealC, whiteC;
-    switch (selectedScene) {
+  /// Formats the clock time for a given prayer name, used for the small
+  /// caption under the "Next time" / "Ongoing" labels. Returns null for
+  /// names that aren't one of the five salat (e.g. if 'Sunrise' is ever
+  /// passed in).
+  String? _timeFor(String name) {
+    switch (name) {
       case 'Fajr':
-        navyC = const Color(0xFF1D2D44);
-        tealC = const Color(0xFF4A7C74);
-        whiteC = const Color(0xFFB8CEDE);
-        break;
+        return formatter.format(prayerTimes.fajr);
       case 'Sunrise':
-        navyC = const Color(0xFF5D3A1A);
-        tealC = const Color(0xFFD4854A);
-        whiteC = const Color(0xFFFFE9D6);
-        break;
+        return formatter.format(prayerTimes.sunrise);
       case 'Dhuhr':
-        navyC = const Color(0xFF0D47A1);
-        tealC = const Color(0xFF1976D2);
-        whiteC = Colors.white;
-        break;
+        return formatter.format(prayerTimes.dhuhr);
       case 'Asr':
-        navyC = const Color(0xFF1B5E8A);
-        tealC = const Color(0xFF4FA8D2);
-        whiteC = const Color(0xFFE0F7FA);
-        break;
+        return formatter.format(prayerTimes.asr);
       case 'Maghrib':
-        navyC = const Color(0xFF4A1942);
-        tealC = const Color(0xFFB05C8A);
-        whiteC = const Color(0xFFFFD4E8);
-        break;
+        return formatter.format(prayerTimes.maghrib);
       case 'Isha':
+        return formatter.format(prayerTimes.isha);
       default:
-        navyC = const Color(0xFF0A1628);
-        tealC = const Color(0xFF1A3050);
-        whiteC = const Color(0xFF7B93B0);
-        break;
+        return null;
     }
-
-    final paintNavy = Paint()..color = navyC..style = PaintingStyle.fill;
-    final paintTeal = Paint()..color = tealC..style = PaintingStyle.fill;
-    final paintWhite = Paint()..color = whiteC..style = PaintingStyle.fill;
-
-    _drawOnionDome(canvas, w * 0.28, h * 0.68, w * 0.16, h * 0.26, paintTeal);
-    _drawOnionDome(canvas, w * 0.72, h * 0.68, w * 0.16, h * 0.26, paintTeal);
-
-    final wallPath = Path()
-      ..moveTo(w * 0.12, h)
-      ..lineTo(w * 0.12, h * 0.70)
-      ..lineTo(w * 0.88, h * 0.70)
-      ..lineTo(w * 0.88, h)
-      ..close();
-    canvas.drawPath(wallPath, paintWhite);
-
-    _drawOnionDome(canvas, w * 0.50, h * 0.65, w * 0.32, h * 0.42, paintNavy);
-
-    final double spireTop = h * 0.65 - h * 0.42 - 8;
-    final spirePaint = Paint()
-      ..color = whiteC
-      ..strokeWidth = 1.6
-      ..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(w * 0.50, h * 0.65 - h * 0.42), Offset(w * 0.50, spireTop), spirePaint);
-    canvas.drawCircle(Offset(w * 0.50, spireTop), 2.2, paintWhite);
-
-    final double doorCx = w * 0.50;
-    final double doorW = w * 0.12;
-    final double doorH = h * 0.30;
-    final double doorTop = h - doorH;
-    final doorPath = Path()
-      ..moveTo(doorCx - doorW / 2, h)
-      ..lineTo(doorCx - doorW / 2, doorTop + doorW * 0.5)
-      ..quadraticBezierTo(doorCx, doorTop - doorW * 0.3, doorCx + doorW / 2, doorTop + doorW * 0.5)
-      ..lineTo(doorCx + doorW / 2, h)
-      ..close();
-    canvas.drawPath(doorPath, paintNavy);
-
-    for (final wx in [w * 0.35, w * 0.65]) {
-      final winW = w * 0.07;
-      final winH = h * 0.16;
-      final winTop = h - winH - h * 0.06;
-      final winPath = Path()
-        ..moveTo(wx - winW / 2, h - h * 0.06)
-        ..lineTo(wx - winW / 2, winTop + winW * 0.5)
-        ..quadraticBezierTo(wx, winTop - winW * 0.2, wx + winW / 2, winTop + winW * 0.5)
-        ..lineTo(wx + winW / 2, h - h * 0.06)
-        ..close();
-      canvas.drawPath(winPath, paintNavy);
-    }
-
-    canvas.drawRect(Rect.fromLTRB(0, h * 0.92, w, h), paintWhite);
-
-    _drawMinaret(canvas, w * 0.14, h, w * 0.07, h * 0.90, paintWhite, paintTeal);
-    _drawMinaret(canvas, w * 0.86, h, w * 0.07, h * 0.90, paintWhite, paintTeal);
   }
+}
 
-  void _drawOnionDome(Canvas canvas, double cx, double by, double width, double height, Paint paint) {
-    final path = Path();
-    final double w2 = width / 2;
-    final double bulge = width * 0.08;
-    path.moveTo(cx - w2, by);
-    path.cubicTo(cx - w2 - bulge, by - height * 0.35, cx - w2 + bulge * 0.2, by - height * 0.75, cx, by - height);
-    path.cubicTo(cx + w2 - bulge * 0.2, by - height * 0.75, cx + w2 + bulge, by - height * 0.35, cx + w2, by);
-    path.close();
-    canvas.drawPath(path, paint);
-  }
+/// Small icon + label + time pill, used for the Suhoor/Iftar row.
+class _MiniTimePill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String time;
 
-  void _drawMinaret(Canvas canvas, double cx, double by, double width, double height, Paint paintBody, Paint paintCap) {
-    final double colW = width * 0.55;
-    final double balconyW = width * 1.15;
-    canvas.drawRect(Rect.fromLTRB(cx - colW / 2, by - height, cx + colW / 2, by), paintBody);
-    canvas.drawRect(Rect.fromLTRB(cx - balconyW / 2, by - height * 0.72, cx + balconyW / 2, by - height * 0.69), paintBody);
-    canvas.drawRect(Rect.fromLTRB(cx - balconyW / 2, by - height - 2, cx + balconyW / 2, by - height), paintBody);
-    _drawOnionDome(canvas, cx, by - height - 2, width * 0.75, height * 0.13, paintCap);
-  }
+  const _MiniTimePill({
+    required this.icon,
+    required this.label,
+    required this.time,
+  });
 
   @override
-  bool shouldRepaint(covariant MosqueSilhouettePainter oldDelegate) => oldDelegate.selectedScene != selectedScene;
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _isDark(context)
+            ? Colors.black
+            : AppColors.navyBlue.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(14),
+        border: _isDark(context)
+            ? Border.all(color: Colors.white.withValues(alpha: 0.18), width: 1)
+            : null,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: _onSurface(context)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    color: _onSurface(context, alpha: 0.65),
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  time,
+                  style: GoogleFonts.poppins(
+                    color: _onSurface(context),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Icon + label + time column, used for the Sunrise / Mid Day / Sunset row.
+class _SunTimeItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String time;
+
+  const _SunTimeItem({
+    required this.icon,
+    required this.label,
+    required this.time,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, size: 16, color: _onSurface(context, alpha: 0.55)),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            color: _onSurface(context, alpha: 0.6),
+            fontSize: 9.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          time,
+          style: GoogleFonts.poppins(
+            color: _onSurface(context),
+            fontSize: 11.5,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
 }
