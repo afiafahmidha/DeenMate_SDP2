@@ -815,7 +815,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? (_isDarkMode ? Colors.white.withOpacity(0.15) : AppColors.dustyBlueTeal.withValues(alpha: 0.25))
+                    ? (_isDarkMode ? Colors.white.withValues(alpha: 0.15) : AppColors.dustyBlueTeal.withValues(alpha: 0.25))
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
               ),
@@ -2613,13 +2613,13 @@ _buildAnimatedEntry(
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: _isDarkMode ? Colors.black.withOpacity(0.3) : AppColors.navyBlue.withValues(alpha: 0.08),
+                color: _isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.08),
                 blurRadius: 14,
                 offset: const Offset(0, 5),
               ),
             ],
             border: Border.all(
-              color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.navyBlue.withValues(alpha: 0.22),
+              color: _isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.navyBlue.withValues(alpha: 0.22),
               width: 1.6,
             ),
           ),
@@ -2631,10 +2631,10 @@ _buildAnimatedEntry(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.midTeal.withValues(alpha: 0.12),
+                  color: _isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.midTeal.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _isDarkMode ? Colors.white.withOpacity(0.2) : AppColors.midTeal.withValues(alpha: 0.25),
+                    color: _isDarkMode ? Colors.white.withValues(alpha: 0.2) : AppColors.midTeal.withValues(alpha: 0.25),
                     width: 1,
                   ),
                 ),
@@ -2668,13 +2668,13 @@ _buildAnimatedEntry(
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: _isDarkMode ? Colors.black.withOpacity(0.3) : AppColors.navyBlue.withValues(alpha: 0.05),
+              color: _isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.05),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
           ],
           border: Border.all(
-            color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.dustyBlueTeal.withValues(alpha: 0.12),
+            color: _isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.dustyBlueTeal.withValues(alpha: 0.12),
             width: 1,
           ),
         ),
@@ -2865,7 +2865,7 @@ class _DashboardStarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFFFFE082).withOpacity(0.9) // Bright glowing yellow-gold star
+      ..color = const Color(0xFFFFE082).withValues(alpha: 0.9) // Bright glowing yellow-gold star
       ..style = PaintingStyle.fill;
     final path = Path();
     final cx = size.width / 2;
@@ -2883,7 +2883,7 @@ class _DashboardStarPainter extends CustomPainter {
     canvas.drawPath(path, paint);
 
     final corePaint = Paint()
-      ..color = Colors.white.withOpacity(0.95)
+      ..color = Colors.white.withValues(alpha: 0.95)
       ..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(cx, cy), size.width * 0.12, corePaint);
   }
@@ -3418,7 +3418,7 @@ class _ZakatIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round;
@@ -3462,7 +3462,7 @@ class _QurbaniIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round
@@ -3512,7 +3512,7 @@ class _HajjIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round
@@ -3561,7 +3561,7 @@ class _InheritanceIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round;
@@ -3618,7 +3618,7 @@ class _QuranIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round
@@ -3666,7 +3666,7 @@ class _DhikrIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
@@ -3704,7 +3704,7 @@ class _HalalIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round;
@@ -3755,7 +3755,7 @@ class _EmergencyIconPainter extends CustomPainter {
     final s = size.width * 0.16;
 
     final paint = Paint()
-      ..color = isDark ? Colors.white.withOpacity(0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
+      ..color = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round;
