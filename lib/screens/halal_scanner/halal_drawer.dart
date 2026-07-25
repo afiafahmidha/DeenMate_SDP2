@@ -6,7 +6,6 @@ import 'analyze_product_screen.dart';
 import 'daily_tracker_screen.dart';
 import 'seasonal_foods_screen.dart';
 import 'health_tips_screen.dart';
-import 'additives_preferences_screen.dart';
 import 'guides_and_walkthrough.dart';
 import 'sources_screen.dart';
 
