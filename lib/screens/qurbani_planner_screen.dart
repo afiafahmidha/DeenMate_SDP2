@@ -521,7 +521,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           decoration: BoxDecoration(
             color: _isDarkMode ? const Color(0xFF1E1E1E) : AppColors.dustyBlueTeal.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _isDarkMode ? Colors.white.withOpacity(0.12) : AppColors.dustyBlueTeal.withValues(alpha: 0.3)),
+            border: Border.all(color: _isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.dustyBlueTeal.withValues(alpha: 0.3)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -561,7 +561,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),
-              side: _isDarkMode ? BorderSide(color: Colors.white.withOpacity(0.12)) : BorderSide.none),
+              side: _isDarkMode ? BorderSide(color: Colors.white.withValues(alpha: 0.12)) : BorderSide.none),
           elevation: 0,
           child: Padding(
             padding: const EdgeInsets.all(16),
