@@ -19,7 +19,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  String _selectedFiqh = 'Hanafi'; 
 
   final TextEditingController _savingsCtrl = TextEditingController(text: '0');
   final TextEditingController _metalsCtrl = TextEditingController(text: '0');
@@ -164,25 +163,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
     const double nisabLimit = 115000.0;
     setState(() {
       _hasCheckedEligibility = true;
-      if (_selectedFiqh == 'Hanafi') {
-        _isEligible = _netAssets >= nisabLimit;
-        if (_isEligible) {
-          _eligibilityReason =
-              'According to Hanafi Fiqh, Qurbani is WAJIB (mandatory) for you. Your net assets (৳${NumberFormat('#,##,###').format(_netAssets)}) exceed the Silver Nisab threshold of ৳${NumberFormat('#,##,###').format(nisabLimit)}.';
-        } else {
-          _eligibilityReason =
-              'According to Hanafi Fiqh, Qurbani is not mandatory for you. Your net assets (৳${NumberFormat('#,##,###').format(_netAssets)}) are below the Silver Nisab threshold of ৳${NumberFormat('#,##,###').format(nisabLimit)}. You can still perform it voluntarily.';
-        }
+      _isEligible = _netAssets >= nisabLimit;
+      if (_isEligible) {
+        _eligibilityReason =
+            'Qurbani is WAJIB (mandatory) for you. Your net assets (৳${NumberFormat('#,##,###').format(_netAssets)}) exceed the Silver Nisab threshold of ৳${NumberFormat('#,##,###').format(nisabLimit)}.';
       } else {
-        // Shafi'i Fiqh
-        _isEligible = _netAssets > 0;
-        if (_isEligible) {
-          _eligibilityReason =
-              'According to Shafi\'i Fiqh, Qurbani is a SUNNAH MU\'AKKADAH (highly recommended practice) for you, as you possess a surplus of wealth beyond your basic needs for Eid.';
-        } else {
-          _eligibilityReason =
-              'According to Shafi\'i Fiqh, Qurbani is not recommended for you because you do not have surplus financial capabilities beyond basic needs.';
-        }
+        _eligibilityReason =
+            'Qurbani is not mandatory for you. Your net assets (৳${NumberFormat('#,##,###').format(_netAssets)}) are below the Silver Nisab threshold of ৳${NumberFormat('#,##,###').format(nisabLimit)}. You can still perform it voluntarily.';
       }
     });
   }
@@ -400,78 +387,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
           ],
           const SizedBox(height: 16),
           
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[200],
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedFiqh = 'Hanafi';
-                          if (_hasCheckedEligibility) _checkEligibility();
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _selectedFiqh == 'Hanafi' ? (_isDarkMode ? const Color(0xFF1E1E1E) : AppColors.white) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: _selectedFiqh == 'Hanafi'
-                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))]
-                              : null,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'Hanafi Fiqh',
-                          style: GoogleFonts.inter(
-                            color: _selectedFiqh == 'Hanafi' ? textColor : Colors.grey[500],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedFiqh = 'Shafi\'i';
-                          if (_hasCheckedEligibility) _checkEligibility();
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _selectedFiqh == 'Shafi\'i' ? (_isDarkMode ? const Color(0xFF1E1E1E) : AppColors.white) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: _selectedFiqh == 'Shafi\'i'
-                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))]
-                              : null,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'Shafi\'i Fiqh',
-                          style: GoogleFonts.inter(
-                            color: _selectedFiqh == 'Shafi\'i' ? textColor : Colors.grey[500],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
           const SizedBox(height: 16),
         
           TabBar(
@@ -531,7 +446,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
                   Icon(Icons.info_outline_rounded, color: _isDarkMode ? AppColors.midTeal : AppColors.navyBlue, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    'Guidance for $_selectedFiqh Fiqh',
+                    'Qurbani Guidance',
                     style: GoogleFonts.poppins(
                       color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                       fontWeight: FontWeight.bold,
@@ -542,9 +457,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
               ),
               const SizedBox(height: 8),
               Text(
-                _selectedFiqh == 'Hanafi'
-                    ? 'In Hanafi Fiqh, Qurbani is WAJIB (compulsory) for every adult, sane Muslim who owns Nisab threshold of wealth on the days of Eid. It requires sacrificing one goat/sheep per person, or 1 share in a larger animal (like cow/camel).'
-                    : 'In Shafi\'i Fiqh, Qurbani is SUNNAH MU\'AKKADAH (highly recommended, emphasized Sunnah) for those who have financial capabilities. It is not Wajib but holds immense rewards.',
+                'Qurbani is WAJIB (compulsory) for every adult, sane Muslim who owns the Nisab threshold of wealth on the days of Eid. It requires sacrificing one goat/sheep per person, or 1 share in a larger animal (like cow/camel).',
                 style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[800], fontSize: 13, height: 1.4),
               ),
             ],
@@ -1726,7 +1639,3 @@ class _QurbaniPlannerPageState extends State<QurbaniPlannerPage> {
     );
   }
 }
-
-
-
-
