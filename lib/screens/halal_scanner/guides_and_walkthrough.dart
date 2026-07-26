@@ -1,7 +1,30 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'halal_drawer.dart';
 import 'halal_scanner_home.dart';
+
+const tealColor = Color(0xFF55A498);
+
+// Keeps the screen phone-width on desktop/web (Chrome) by centering it on a
+// grey backdrop, same trick used elsewhere in the app (e.g. QurbaniPlannerPage).
+// On an actual Android device the screen width is already <= 430, so this
+// has no visible effect there — it only kicks in on wide desktop windows.
+class MobileFrame extends StatelessWidget {
+  final Widget child;
+  const MobileFrame({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFE8E8E8),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
 
 class GuidesAndWalkthroughScreen extends StatefulWidget {
   const GuidesAndWalkthroughScreen({super.key});
@@ -11,28 +34,18 @@ class GuidesAndWalkthroughScreen extends StatefulWidget {
 }
 
 class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-
   @override
   Widget build(BuildContext context) {
-    const tealColor = Color(0xFF55A498);
-
-    return Scaffold(
-      key: _scaffoldKey,
+    return MobileFrame(
+      child: Scaffold(
       backgroundColor: const Color(0xFFF9F9FA),
-      drawer: const HalalDrawer(activeRoute: 'Guide'),
       appBar: AppBar(
         backgroundColor: tealColor,
         elevation: 0,
-        leading: Navigator.canPop(context)
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
-              )
-            : IconButton(
-                icon: const Icon(Icons.menu, color: Colors.white),
-                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
           'Guide',
           style: TextStyle(
@@ -56,7 +69,7 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const WalkthroughCarousel(initialPage: 0),
+                      builder: (context) => const WalkthroughCarousel(groupIndex: 0),
                     ),
                   );
                 },
@@ -69,7 +82,7 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const WalkthroughCarousel(initialPage: 1),
+                      builder: (context) => const WalkthroughCarousel(groupIndex: 1),
                     ),
                   );
                 },
@@ -77,12 +90,12 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
               const SizedBox(height: 10),
               _buildGuideLinkButton(
                 icon: Icons.tune_rounded,
-                label: 'HOW CAN I CONFIGURE AN ADDITIVE STATUS?',
+                label: 'HOW CAN I CONFIGURE AN ADDITIVE STATUS TO MY PREFERENCE OR BELIEF?',
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const WalkthroughCarousel(initialPage: 2),
+                      builder: (context) => const WalkthroughCarousel(groupIndex: 2),
                     ),
                   );
                 },
@@ -99,7 +112,7 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
               ),
               const SizedBox(height: 8),
               _buildArticleBox(
-                text: 'Term that encompasses everything that is allowed, and therefore is beneficial and healthy for humans, promoting improved quality of life and reducing health risks.\n\nIt could be translated as authorized, recommended, healthy, ethical or not abusive.\n\nMuslims understand the term Halal, as a lifestyle, a global and comprehensive concept that influences and affects everyday issues, such as food, hygiene, health, economy, fashion, commerce and tourism.',
+                text: 'Term that encompasses everything that is allowed, and therefore is beneficial and healthy for humans,promoting improved quality of life and reducing health risks.\n\n It could be translated as authorized, recommended, healthy, ethical or not abusive.\n\n Muslims understand the term Halal, as a lifestyle, a global and comprehensive concept that influences and affects everyday issues, such as food, hygiene, health, economy, fashion, commerce and tourism.',
               ),
               const SizedBox(height: 20),
 
@@ -113,11 +126,79 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
               ),
               const SizedBox(height: 8),
               _buildArticleBox(
-                text: 'Term that refers to anything that is prohibited, not allowed, it is harmful or abusive. Are considered Haram, according to Islamic rules:\n- Pork, blood, animals slaughtered without invoking the name of God.\n- Carnivorous animals and birds of prey.\n- Alcohol, intoxicants, and harmful chemicals.\n- Additives derived from non-halal animal sources.',
+                text: 'Term that refers to anything that is prohibited, not allowed, it is harmful or abusive. Are considered Haram, according to Islamic rules:\n'
+                    '\u25b8 The meat of carrion.\n'
+                    '\u25b8 The blood.\n'
+                    '\u25b8 Pork and wild boar meat, as well as their derivatives.\n'
+                    '\u25b8 Animals slaughtered without invoking the name of God.\n'
+                    '\u25b8 Carnivorous and scavengers animals and birds with claws.\n'
+                    '\u25b8 Alcohol, alcoholic beverages, harmful or poisonous substances and toxic plants or drinks.\n'
+                    '\u25b8 Ingredients from Haram animals or products, such as pork gelatin. Additives, preservatives, colorings, flavorings, etc., produced from Haram ingredients.\n'
+                    '\u25b8 Interest, usury and abusive speculation.\n'
+                    '\u25b8 Wagering on the game.\n'
+                    '\u25b8 Pornography.',
+              ),
+              const SizedBox(height: 20),
+
+              const Text(
+                'What is Musbooh?',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildArticleBox(
+                text: 'A concept that refers to all things for which you can not clearly determine their origin or there are differences in valuation in the different Quranic traditions, in which case every Muslim decides his personal position before them.',
+              ),
+              const SizedBox(height: 24),
+
+              const Text(
+                'Level of toxicity',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _buildIconGridBox(
+                items: const [
+                  _GuideGridItem(label: 'No/little toxic'),
+                  _GuideGridItem(label: 'Do not abuse'),
+                  _GuideGridItem(label: 'Doubtful'),
+                  _GuideGridItem(label: 'Toxic'),
+                  _GuideGridItem(label: 'Very toxic'),
+                ],
+                iconBuilder: (item) => const _GaugeIcon(),
+              ),
+              const SizedBox(height: 24),
+
+              const Text(
+                'Origin of the additive',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _buildIconGridBox(
+                items: const [
+                  _GuideGridItem(label: 'Pork', emoji: '\ud83d\udc16'),
+                  _GuideGridItem(label: 'Vegetable', emoji: '\ud83c\udf43'),
+                  _GuideGridItem(label: 'Petroleum', emoji: '\ud83d\udee2'),
+                  _GuideGridItem(label: 'Insects', emoji: '\ud83d\udc1e'),
+                  _GuideGridItem(label: 'Alcohol', emoji: '\ud83c\udf77'),
+                  _GuideGridItem(label: 'Synthetic', emoji: '\ud83e\uddea'),
+                ],
+                iconBuilder: (item) => Text(item.emoji!, style: const TextStyle(fontSize: 30)),
               ),
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -127,7 +208,6 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
     required String label,
     required VoidCallback onTap,
   }) {
-    const tealColor = Color(0xFF55A498);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -178,12 +258,178 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
       ),
     );
   }
+
+  Widget _buildIconGridBox({
+    required List<_GuideGridItem> items,
+    required Widget Function(_GuideGridItem item) iconBuilder,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[600]!, width: 2),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.start,
+        runSpacing: 24,
+        children: items.map((item) {
+          return SizedBox(
+            width: MediaQuery.of(context).size.width / 2 - 30,
+            child: Row(
+              children: [
+                SizedBox(width: 44, height: 44, child: Center(child: iconBuilder(item))),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    style: const TextStyle(fontSize: 14, color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
 }
 
-// Swipeable Walkthrough Onboarding Carousel
+class _GuideGridItem {
+  final String label;
+  final String? emoji;
+  const _GuideGridItem({required this.label, this.emoji});
+}
+
+// Small flat gauge/speedometer icon used in the "Level of toxicity" grid.
+// Deliberately the SAME icon for every level (matching the reference design,
+// which reuses one generic rainbow gauge glyph for every row).
+class _GaugeIcon extends StatelessWidget {
+  const _GaugeIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(36, 24),
+      painter: _GaugePainter(),
+    );
+  }
+}
+
+class _GaugePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height * 2);
+    const gradientColors = [
+      Color(0xFFE84A3D),
+      Color(0xFFEF8C1F),
+      Color(0xFFF4C430),
+      Color(0xFF9FCB3C),
+      Color(0xFF4CAF50),
+    ];
+    final arcPaint = Paint()
+      ..shader = SweepGradient(
+        colors: gradientColors,
+        startAngle: 3.1416,
+        endAngle: 3.1416 * 2,
+        center: Alignment.center,
+      ).createShader(rect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(rect, 3.1416, 3.1416, false, arcPaint);
+
+    final needlePaint = Paint()
+      ..color = Colors.grey[800]!
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    final center = Offset(size.width / 2, size.height);
+    canvas.drawLine(center, Offset(size.width * 0.72, size.height * 0.35), needlePaint);
+    canvas.drawCircle(center, 2.5, Paint()..color = Colors.grey[800]!);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ============================================================
+// Swipeable Walkthrough Onboarding Carousel (3 groups)
+// ============================================================
+
+class _SlideData {
+  final String title;
+  final String subtitle;
+  final CustomPainter Function() painterBuilder;
+  const _SlideData({required this.title, required this.subtitle, required this.painterBuilder});
+}
+
+final List<List<_SlideData>> _slideGroups = [
+  // Group 0 — "HOW DO I SCAN BY BARCODE?" (3 slides)
+  [
+    _SlideData(
+      title: 'Scan by barcode',
+      subtitle: 'Look for the barcode on the product you want to know if it is Halal.',
+      painterBuilder: () => BarcodeIllustrationPainter(),
+    ),
+    _SlideData(
+      title: 'Scan the barcode',
+      subtitle: 'Click the scan button and point the camera at the barcode.',
+      painterBuilder: () => ScanTargetIllustrationPainter(),
+    ),
+    _SlideData(
+      title: 'Ready!',
+      subtitle: 'The app will tell you if the product is Halal, Haram or Mushbooh (makruh).',
+      painterBuilder: () => ReadyStatusIllustrationPainter(),
+    ),
+  ],
+  // Group 1 — "HOW DO I SCAN BY INGREDIENT TEXT?" (4 slides)
+  [
+    _SlideData(
+      title: 'SEARCH INGREDIENT',
+      subtitle: 'Search the product for the ingredients part.',
+      painterBuilder: () => IngredientIllustrationPainter(),
+    ),
+    _SlideData(
+      title: 'ENSURE',
+      subtitle: 'Make sure the ingredients part of the product.',
+      painterBuilder: () => EnsureLabelIllustrationPainter(),
+    ),
+    _SlideData(
+      title: 'SCAN',
+      subtitle: 'Launch the product scan (Camera Button) and point a few seconds to the ingredients part of the product.',
+      painterBuilder: () => ScanIngredientIllustrationPainter(),
+    ),
+    _SlideData(
+      title: 'ADDITIVES',
+      subtitle: 'It is done! If there are additives in the product, the application will notify you if it is Halal, Haram or Mushbooh. Remember you have the responsibility to decide !!',
+      painterBuilder: () => AdditivesResultIllustrationPainter(),
+    ),
+  ],
+  // Group 2 — "HOW CAN I CONFIGURE AN ADDITIVE STATUS...?" (3 slides)
+  [
+    _SlideData(
+      title: 'Customize your states in each additives',
+      subtitle: 'If you think an additive is not the correct status for you or in your country. You can change the status to Halal, Haram or Mushbooh (makruh).',
+      painterBuilder: () => CustomizeIllustrationPainter(),
+    ),
+    _SlideData(
+      title: 'Access to the list of my states',
+      subtitle: 'From the menu, select "My status additives".',
+      painterBuilder: () => AccessListIllustrationPainter(),
+    ),
+    _SlideData(
+      title: 'Add your state',
+      subtitle: 'From the list you can add all the additives that you consider to be Halal, Haram or Mushbooh (makruh) for you. Your states will be taken into account in all the scans of your products.',
+      painterBuilder: () => AddStateIllustrationPainter(),
+    ),
+  ],
+];
+
 class WalkthroughCarousel extends StatefulWidget {
-  final int initialPage;
-  const WalkthroughCarousel({super.key, this.initialPage = 0});
+  final int groupIndex;
+  const WalkthroughCarousel({super.key, required this.groupIndex});
 
   @override
   State<WalkthroughCarousel> createState() => _WalkthroughCarouselState();
@@ -192,12 +438,13 @@ class WalkthroughCarousel extends StatefulWidget {
 class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
   late PageController _pageController;
   int _currentPage = 0;
+  late List<_SlideData> _slides;
 
   @override
   void initState() {
     super.initState();
-    _currentPage = widget.initialPage;
-    _pageController = PageController(initialPage: widget.initialPage);
+    _slides = _slideGroups[widget.groupIndex];
+    _pageController = PageController();
   }
 
   @override
@@ -208,9 +455,10 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    const tealColor = Color(0xFF55A498);
+    final lastIndex = _slides.length - 1;
 
-    return Scaffold(
+    return MobileFrame(
+      child: Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -233,26 +481,13 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
                   _currentPage = index;
                 });
               },
-              children: [
-                // Slide 1
-                _buildSlide(
-                  title: 'Scan by barcode',
-                  subtitle: 'Look for the barcode on the product you want to know if it is Halal.',
-                  painter: BarcodeIllustrationPainter(),
-                ),
-                // Slide 2
-                _buildSlide(
-                  title: 'SEARCH INGREDIENT',
-                  subtitle: 'Search the product for the ingredients part.',
-                  painter: IngredientIllustrationPainter(),
-                ),
-                // Slide 3
-                _buildSlide(
-                  title: 'Customize your states in each additives',
-                  subtitle: 'If you think an additive is not the correct status for you or in your country. You can change the status to Halal, Haram or Mushbooh (makruh).',
-                  painter: CustomizeIllustrationPainter(),
-                ),
-              ],
+              children: _slides.map((slide) {
+                return _buildSlide(
+                  title: slide.title,
+                  subtitle: slide.subtitle,
+                  painter: slide.painterBuilder(),
+                );
+              }).toList(),
             ),
           ),
 
@@ -283,7 +518,7 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
 
                 // Dot Indicators
                 Row(
-                  children: List.generate(3, (index) {
+                  children: List.generate(_slides.length, (index) {
                     final isSelected = _currentPage == index;
                     return Container(
                       margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -300,7 +535,7 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
                 // Text next / Finish
                 TextButton(
                   onPressed: () {
-                    if (_currentPage == 2) {
+                    if (_currentPage == lastIndex) {
                       Navigator.pop(context);
                     } else {
                       _pageController.nextPage(
@@ -310,7 +545,7 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
                     }
                   },
                   child: Text(
-                    _currentPage == 2 ? 'FINISH' : 'NEXT',
+                    _currentPage == lastIndex ? 'FINISH' : 'NEXT',
                     style: const TextStyle(
                       color: tealColor,
                       fontWeight: FontWeight.bold,
@@ -322,6 +557,7 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -330,7 +566,6 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
     required String subtitle,
     required CustomPainter painter,
   }) {
-    const tealColor = Color(0xFF55A498);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -376,7 +611,31 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
   }
 }
 
+// Shared helper: draws a rounded speech-bubble with bold white text,
+// used by the "Ready!" and "ADDITIVES" slides.
+void _drawSpeechBubble(Canvas canvas, Offset center, String text, Color color, {double fontSize = 12}) {
+  final textPainter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: fontSize),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+
+  final bubbleWidth = textPainter.width + 20;
+  final bubbleHeight = textPainter.height + 12;
+  final rect = Rect.fromCenter(center: center, width: bubbleWidth, height: bubbleHeight);
+
+  final bubblePaint = Paint()..color = color..style = PaintingStyle.fill;
+  canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), bubblePaint);
+
+  textPainter.paint(canvas, Offset(center.dx - textPainter.width / 2, center.dy - textPainter.height / 2));
+}
+
+// ============================================================
 // Simulation/Walkthrough painters
+// ============================================================
+
 class BarcodeIllustrationPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -422,6 +681,89 @@ class BarcodeIllustrationPainter extends CustomPainter {
       Offset(size.width * 0.9, size.height * 0.85),
       handlePaint,
     );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// "Scan the barcode": box + hand-held phone with a barcode on-screen,
+// plus a small dark scan-icon badge.
+class ScanTargetIllustrationPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final boxPaint = Paint()..color = Colors.amber[100]!..style = PaintingStyle.fill;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * 0.12, size.height * 0.3, size.width * 0.4, size.width * 0.4),
+        const Radius.circular(8),
+      ),
+      boxPaint,
+    );
+
+    // Phone
+    final phonePaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final phoneBorder = Paint()..color = Colors.grey[800]!..style = PaintingStyle.stroke..strokeWidth = 3;
+    final phoneRect = Rect.fromLTWH(size.width * 0.42, size.height * 0.28, size.width * 0.32, size.height * 0.42);
+    final phoneRRect = RRect.fromRectAndRadius(phoneRect, const Radius.circular(14));
+    canvas.drawRRect(phoneRRect, phonePaint);
+    canvas.drawRRect(phoneRRect, phoneBorder);
+
+    // Barcode label on phone screen
+    final labelPaint = Paint()..color = Colors.amber[600]!..style = PaintingStyle.fill;
+    final labelRect = Rect.fromLTWH(phoneRect.left + 6, phoneRect.top + phoneRect.height * 0.32, phoneRect.width - 12, phoneRect.height * 0.36);
+    canvas.drawRect(labelRect, labelPaint);
+    final barPaint = Paint()..color = Colors.grey[900]!..style = PaintingStyle.fill;
+    for (int i = 0; i < 7; i++) {
+      double w = (i % 3 == 0) ? 3.0 : 1.2;
+      canvas.drawRect(Rect.fromLTWH(labelRect.left + 4 + (i * 5), labelRect.top + 4, w, labelRect.height - 8), barPaint);
+    }
+
+    // Hand (simple rounded shape below phone)
+    final handPaint = Paint()..color = const Color(0xFFF2C29A)..style = PaintingStyle.fill;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(phoneRect.left - 6, phoneRect.bottom - 10, phoneRect.width + 12, size.height * 0.18),
+        const Radius.circular(18),
+      ),
+      handPaint,
+    );
+
+    // Small scan badge (bottom left)
+    final badgePaint = Paint()..color = const Color(0xFF2B2B2B)..style = PaintingStyle.fill;
+    final badgeCenter = Offset(size.width * 0.22, size.height * 0.78);
+    canvas.drawCircle(badgeCenter, 22, badgePaint);
+    final badgeIconPaint = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.5;
+    canvas.drawRect(Rect.fromCenter(center: badgeCenter, width: 20, height: 16), badgeIconPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// "Ready!": phone with a red/orange/green result strip and 3 speech
+// bubbles (HALAL / HARAM / MUSBOOH) branching off it.
+class ReadyStatusIllustrationPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Phone body
+    final phonePaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final phoneBorder = Paint()..color = Colors.grey[800]!..style = PaintingStyle.stroke..strokeWidth = 3;
+    final phoneRect = Rect.fromLTWH(size.width * 0.36, size.height * 0.32, size.width * 0.3, size.height * 0.46);
+    final phoneRRect = RRect.fromRectAndRadius(phoneRect, const Radius.circular(14));
+    canvas.drawRRect(phoneRRect, phonePaint);
+    canvas.drawRRect(phoneRRect, phoneBorder);
+
+    // Tri-colour result strip inside phone
+    final stripHeight = phoneRect.height / 3;
+    canvas.drawRect(Rect.fromLTWH(phoneRect.left + 4, phoneRect.top + 4, phoneRect.width - 8, stripHeight - 2), Paint()..color = Colors.red);
+    canvas.drawRect(Rect.fromLTWH(phoneRect.left + 4, phoneRect.top + 4 + stripHeight, phoneRect.width - 8, stripHeight - 2), Paint()..color = Colors.orange);
+    canvas.drawRect(Rect.fromLTWH(phoneRect.left + 4, phoneRect.top + 4 + stripHeight * 2, phoneRect.width - 8, stripHeight - 4), Paint()..color = Colors.green);
+
+    // Speech bubbles
+    _drawSpeechBubble(canvas, Offset(size.width * 0.22, size.height * 0.18), 'HALAL', Colors.green);
+    _drawSpeechBubble(canvas, Offset(size.width * 0.78, size.height * 0.18), 'HARAM', Colors.red);
+    _drawSpeechBubble(canvas, Offset(size.width * 0.8, size.height * 0.6), 'MUSBOOH', Colors.orange);
   }
 
   @override
@@ -474,6 +816,102 @@ class IngredientIllustrationPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+// "ENSURE": close-up half of the carton with a green ingredient label
+// showing readable text lines.
+class EnsureLabelIllustrationPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Left grey half + right blue half (close-up carton)
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width * 0.4, size.height), Paint()..color = Colors.grey[300]!);
+    canvas.drawRect(Rect.fromLTWH(size.width * 0.6, 0, size.width * 0.4, size.height), Paint()..color = Colors.blue[400]!);
+
+    // Green ingredient label in the middle
+    final labelRect = Rect.fromLTWH(size.width * 0.32, size.height * 0.32, size.width * 0.36, size.height * 0.36);
+    canvas.drawRRect(RRect.fromRectAndRadius(labelRect, const Radius.circular(4)), Paint()..color = const Color(0xFF55A498));
+
+    final textPainter = TextPainter(
+      text: const TextSpan(
+        text: 'Ingredient:\nCochineal or\nCarminic Acid,\nE140,\nE-150,E161H,\nAstaxanthin....',
+        style: TextStyle(color: Colors.white, fontSize: 6, height: 1.3),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: labelRect.width - 8);
+    textPainter.paint(canvas, Offset(labelRect.left + 4, labelRect.top + 4));
+
+    // Drip drop above
+    canvas.drawCircle(Offset(size.width * 0.3, size.height * 0.12), 4, Paint()..color = Colors.blue[400]!);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// "SCAN": same close-up carton + a phone mirroring the ingredient label,
+// with a small scan badge.
+class ScanIngredientIllustrationPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width * 0.4, size.height), Paint()..color = Colors.grey[300]!);
+    canvas.drawRect(Rect.fromLTWH(size.width * 0.6, 0, size.width * 0.4, size.height), Paint()..color = Colors.blue[400]!);
+    canvas.drawCircle(Offset(size.width * 0.3, size.height * 0.12), 4, Paint()..color = Colors.blue[400]!);
+
+    // Phone showing the label
+    final phonePaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final phoneBorder = Paint()..color = Colors.grey[800]!..style = PaintingStyle.stroke..strokeWidth = 3;
+    final phoneRect = Rect.fromLTWH(size.width * 0.32, size.height * 0.28, size.width * 0.36, size.height * 0.44);
+    final phoneRRect = RRect.fromRectAndRadius(phoneRect, const Radius.circular(14));
+    canvas.drawRRect(phoneRRect, phonePaint);
+    canvas.drawRRect(phoneRRect, phoneBorder);
+
+    final labelRect = Rect.fromLTWH(phoneRect.left + 4, phoneRect.top + 4, phoneRect.width - 8, phoneRect.height - 8);
+    canvas.drawRect(labelRect, Paint()..color = const Color(0xFF55A498));
+    final textPainter = TextPainter(
+      text: const TextSpan(
+        text: 'Ingredient:\nCochineal or\nCarminic A...\nE140,\nE-150,E161H\nAstaxanthin',
+        style: TextStyle(color: Colors.white, fontSize: 6, height: 1.3),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: labelRect.width - 6);
+    textPainter.paint(canvas, Offset(labelRect.left + 3, labelRect.top + 3));
+
+    // Scan badge (bottom left)
+    final badgeCenter = Offset(size.width * 0.16, size.height * 0.78);
+    canvas.drawCircle(badgeCenter, 22, Paint()..color = const Color(0xFF2B2B2B));
+    final iconPaint = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.5;
+    canvas.drawRect(Rect.fromCenter(center: badgeCenter, width: 16, height: 20), iconPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// "ADDITIVES": carton + phone + 3 speech bubbles (HALAL / HARAM / MUSBOOH).
+class AdditivesResultIllustrationPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Rect.fromLTWH(0, size.height * 0.15, size.width * 0.36, size.height * 0.6), Paint()..color = Colors.grey[300]!);
+    canvas.drawRect(Rect.fromLTWH(size.width * 0.56, size.height * 0.15, size.width * 0.36, size.height * 0.6), Paint()..color = Colors.blue[400]!);
+
+    final phonePaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final phoneBorder = Paint()..color = Colors.grey[800]!..style = PaintingStyle.stroke..strokeWidth = 3;
+    final phoneRect = Rect.fromLTWH(size.width * 0.3, size.height * 0.28, size.width * 0.32, size.height * 0.4);
+    final phoneRRect = RRect.fromRectAndRadius(phoneRect, const Radius.circular(12));
+    canvas.drawRRect(phoneRRect, phonePaint);
+    canvas.drawRRect(phoneRRect, phoneBorder);
+    canvas.drawRect(
+      Rect.fromLTWH(phoneRect.left + 3, phoneRect.top + 3, phoneRect.width - 6, phoneRect.height - 6),
+      Paint()..color = const Color(0xFF55A498),
+    );
+
+    _drawSpeechBubble(canvas, Offset(size.width * 0.24, size.height * 0.15), 'HALAL', Colors.green, fontSize: 10);
+    _drawSpeechBubble(canvas, Offset(size.width * 0.76, size.height * 0.13), 'HARAM', Colors.red, fontSize: 10);
+    _drawSpeechBubble(canvas, Offset(size.width * 0.76, size.height * 0.78), 'MUSBOOH', Colors.orange, fontSize: 10);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 class CustomizeIllustrationPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -510,6 +948,128 @@ class CustomizeIllustrationPainter extends CustomPainter {
       ),
       bubblePaint,
     );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// "Access to the list of my states": sliders icon above a phone showing
+// a settings-style list.
+class AccessListIllustrationPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Sliders icon
+    final sliderPaint = Paint()..color = Colors.grey[700]!..style = PaintingStyle.stroke..strokeWidth = 2.5..strokeCap = StrokeCap.round;
+    final knobPaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final knobBorder = Paint()..color = Colors.grey[700]!..style = PaintingStyle.stroke..strokeWidth = 2.5;
+
+    final sliderYs = [size.height * 0.08, size.height * 0.18, size.height * 0.28];
+    final knobXs = [size.width * 0.65, size.width * 0.4, size.width * 0.6];
+    for (int i = 0; i < 3; i++) {
+      canvas.drawLine(Offset(size.width * 0.25, sliderYs[i]), Offset(size.width * 0.75, sliderYs[i]), sliderPaint);
+      canvas.drawCircle(Offset(knobXs[i], sliderYs[i]), 5, knobPaint);
+      canvas.drawCircle(Offset(knobXs[i], sliderYs[i]), 5, knobBorder);
+    }
+
+    // Phone with a small list
+    final phonePaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final phoneBorder = Paint()..color = Colors.grey[800]!..style = PaintingStyle.stroke..strokeWidth = 3;
+    final phoneRect = Rect.fromLTWH(size.width * 0.3, size.height * 0.4, size.width * 0.4, size.height * 0.5);
+    final phoneRRect = RRect.fromRectAndRadius(phoneRect, const Radius.circular(14));
+    canvas.drawRRect(phoneRRect, phonePaint);
+    canvas.drawRRect(phoneRRect, phoneBorder);
+
+    // Header bar
+    canvas.drawRect(
+      Rect.fromLTWH(phoneRect.left + 3, phoneRect.top + 3, phoneRect.width - 6, phoneRect.height * 0.14),
+      Paint()..color = const Color(0xFF55A498),
+    );
+
+    // List rows
+    final rowPaint = Paint()..color = Colors.grey[300]!..style = PaintingStyle.fill;
+    for (int i = 0; i < 4; i++) {
+      canvas.drawRect(
+        Rect.fromLTWH(
+          phoneRect.left + 6,
+          phoneRect.top + phoneRect.height * 0.24 + (i * phoneRect.height * 0.16),
+          phoneRect.width - 12,
+          phoneRect.height * 0.1,
+        ),
+        rowPaint,
+      );
+    }
+
+    // Hand under the phone
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(phoneRect.left - 6, phoneRect.bottom - 10, phoneRect.width + 12, size.height * 0.16),
+        const Radius.circular(18),
+      ),
+      Paint()..color = const Color(0xFFF2C29A),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// "Add your state": phone with a status list + magnifying glass with an
+// "M" (Mushbooh) badge, matching the final onboarding slide.
+class AddStateIllustrationPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final phonePaint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final phoneBorder = Paint()..color = Colors.grey[800]!..style = PaintingStyle.stroke..strokeWidth = 3;
+    final phoneRect = Rect.fromLTWH(size.width * 0.28, size.height * 0.22, size.width * 0.44, size.height * 0.56);
+    final phoneRRect = RRect.fromRectAndRadius(phoneRect, const Radius.circular(14));
+    canvas.drawRRect(phoneRRect, phonePaint);
+    canvas.drawRRect(phoneRRect, phoneBorder);
+
+    canvas.drawRect(
+      Rect.fromLTWH(phoneRect.left + 3, phoneRect.top + 3, phoneRect.width - 6, phoneRect.height * 0.12),
+      Paint()..color = const Color(0xFF55A498),
+    );
+
+    final statusColors = [Colors.green, Colors.red, Colors.orange, Colors.green];
+    for (int i = 0; i < statusColors.length; i++) {
+      final rowTop = phoneRect.top + phoneRect.height * 0.2 + (i * phoneRect.height * 0.18);
+      canvas.drawRect(
+        Rect.fromLTWH(phoneRect.left + 6, rowTop, phoneRect.width * 0.5, 6),
+        Paint()..color = Colors.grey[300]!,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(phoneRect.right - 26, rowTop - 3, 18, 12),
+          const Radius.circular(3),
+        ),
+        Paint()..color = statusColors[i],
+      );
+    }
+
+    // Hand under phone
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(phoneRect.left - 6, phoneRect.bottom - 10, phoneRect.width + 12, size.height * 0.16),
+        const Radius.circular(18),
+      ),
+      Paint()..color = const Color(0xFFF2C29A),
+    );
+
+    // Magnifying glass with "M" badge, overlapping top-right of the phone
+    final glassCenter = Offset(phoneRect.right - 6, phoneRect.top + 4);
+    canvas.drawCircle(glassCenter, 22, Paint()..color = Colors.orange[300]!);
+    canvas.drawCircle(glassCenter, 22, Paint()..color = Colors.grey[700]!..style = PaintingStyle.stroke..strokeWidth = 3);
+    canvas.drawLine(
+      Offset(glassCenter.dx + 15, glassCenter.dy + 15),
+      Offset(glassCenter.dx + 28, glassCenter.dy + 28),
+      Paint()..color = Colors.grey[700]!..strokeWidth = 5..strokeCap = StrokeCap.round,
+    );
+    final mPainter = TextPainter(
+      text: const TextSpan(text: 'M', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    mPainter.paint(canvas, Offset(glassCenter.dx - mPainter.width / 2, glassCenter.dy - mPainter.height / 2));
   }
 
   @override
