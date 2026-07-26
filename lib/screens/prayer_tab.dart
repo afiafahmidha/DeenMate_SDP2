@@ -303,154 +303,176 @@ class _PrayerTabState extends State<PrayerTab> {
                     18,
                     14,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Stack(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.25),
-                                    width: 1,
+                      // Top row: title + location button — pinned to the top.
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(alpha: 0.25),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.schedule_rounded,
+                                    color: Colors.white,
+                                    size: 20,
                                   ),
                                 ),
-                                child: const Icon(
-                                  Icons.schedule_rounded,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Prayer Times',
-                                    style: GoogleFonts.poppins(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.4,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Daily timings, reminders',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11.5,
-                                      color: Colors.white.withValues(alpha: 0.78),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          IconButton(
-                            tooltip: 'Find nearby mosques',
-                            icon: const Icon(
-                              Icons.location_on_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            onPressed: () async {
-                              final lat = widget.latitude;
-                              final lng = widget.longitude;
-                              final messenger = ScaffoldMessenger.of(context);
-                              final geoUri = Uri.parse(
-                                'geo:$lat,$lng?q=mosque+near+me&z=14',
-                              );
-                              final mapsWebUri = Uri.parse(
-                                'https://www.google.com/maps/search/mosque+near+me/@$lat,$lng,14z',
-                              );
-                              if (await canLaunchUrl(geoUri)) {
-                                await launchUrl(geoUri);
-                              } else if (await canLaunchUrl(mapsWebUri)) {
-                                await launchUrl(
-                                  mapsWebUri,
-                                  mode: LaunchMode.externalApplication,
-                                );
-                              } else {
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Could not open Maps. Please install Google Maps.',
-                                      style: GoogleFonts.inter(fontSize: 13),
-                                    ),
-                                    backgroundColor: AppColors.navyBlue,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Next: ${widget.nextPrayerName}',
-                                style: GoogleFonts.inter(
-                                  color: Colors.white.withValues(alpha: 0.85),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.3,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                widget.liveCountdownStr,
-                                style: GoogleFonts.poppins(
-                                  color: Colors.white,
-                                  fontSize: 34,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 1.0,
-                                  height: 1.1,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.4,
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Prayer Times',
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.4,
                                       ),
-                                      blurRadius: 10,
+                                    ),
+                                    Text(
+                                      'Daily timings, reminders',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11.5,
+                                        color: Colors.white.withValues(alpha: 0.78),
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on_rounded,
-                            color: Colors.white70,
-                            size: 13,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            widget.locationName.split(',').first,
-                            style: GoogleFonts.inter(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              ],
                             ),
-                          ),
-                        ],
+                            IconButton(
+                              tooltip: 'Find nearby mosques',
+                              icon: const Icon(
+                                Icons.location_on_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                              onPressed: () async {
+                                final lat = widget.latitude;
+                                final lng = widget.longitude;
+                                final messenger = ScaffoldMessenger.of(context);
+                                final geoUri = Uri.parse(
+                                  'geo:$lat,$lng?q=mosque+near+me&z=14',
+                                );
+                                final mapsWebUri = Uri.parse(
+                                  'https://www.google.com/maps/search/mosque+near+me/@$lat,$lng,14z',
+                                );
+                                if (await canLaunchUrl(geoUri)) {
+                                  await launchUrl(geoUri);
+                                } else if (await canLaunchUrl(mapsWebUri)) {
+                                  await launchUrl(
+                                    mapsWebUri,
+                                    mode: LaunchMode.externalApplication,
+                                  );
+                                } else {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Could not open Maps. Please install Google Maps.',
+                                        style: GoogleFonts.inter(fontSize: 13),
+                                      ),
+                                      backgroundColor: AppColors.navyBlue,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Bottom block: next prayer + countdown + location —
+                      // pinned to the bottom, independent of the top row's
+                      // height, so short (landscape) viewports can never
+                      // force an overflow here.
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Next: ${widget.nextPrayerName}',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white.withValues(alpha: 0.85),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      widget.liveCountdownStr,
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontSize: 34,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1.0,
+                                        height: 1.1,
+                                        shadows: [
+                                          Shadow(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.4,
+                                            ),
+                                            blurRadius: 10,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.location_on_rounded,
+                                  color: Colors.white70,
+                                  size: 13,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  widget.locationName.split(',').first,
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -518,91 +540,155 @@ class _PrayerTabState extends State<PrayerTab> {
                           ? Colors.white
                           : AppColors.navyBlue;
 
-                      return GestureDetector(
-                        onTap: () => _selectScene(pName),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeOut,
-                          width: 58,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            color: dark
-                                ? (isSelected
-                                      ? Colors.white.withValues(alpha: 0.15)
-                                      : Colors.black)
-                                : (isSelected
-                                      ? accent.withValues(alpha: 0.10)
-                                      : Colors.white.withValues(alpha: 0.6)),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isSelected
-                                  ? accent.withValues(alpha: dark ? 0.55 : 0.4)
-                                  : (dark
-                                        ? Colors.white.withValues(alpha: 0.25)
-                                        : accent.withValues(alpha: 0.08)),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  Container(
-                                    width: 28,
-                                    height: 28,
-                                    decoration: BoxDecoration(
-                                      color: accent.withValues(
-                                        alpha: isSelected ? 0.18 : 0.1,
-                                      ),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      _sceneIcons[pName],
-                                      color: accent,
-                                      size: 14,
-                                    ),
-                                  ),
-                                  if (isMissed)
-                                    Positioned(
-                                      right: -2,
-                                      top: -2,
-                                      child: Container(
-                                        width: 9,
-                                        height: 9,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFE57373),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Colors.white,
-                                            width: 1.2,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                pName,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 9.5,
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.w500,
-                                  color: isMissed
-                                      ? const Color(0xFFEF9A9A)
-                                      : isSelected
-                                      ? accent
-                                      : accent.withValues(
-                                          alpha: dark ? 0.65 : 0.6,
-                                        ),
+                     final bool alarmEnabled =
+                          isSalat && (widget.prayerAlarms[pName] ?? false);
+
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: GestureDetector(
+                              onTap: () => _selectScene(pName),
+                              child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOut,
+                              width: 58,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: dark
+                                    ? (isSelected
+                                          ? Colors.white.withValues(alpha: 0.15)
+                                          : Colors.black)
+                                    : (isSelected
+                                          ? accent.withValues(alpha: 0.10)
+                                          : Colors.white.withValues(alpha: 0.6)),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? accent.withValues(alpha: dark ? 0.55 : 0.4)
+                                      : (dark
+                                            ? Colors.white.withValues(alpha: 0.25)
+                                            : accent.withValues(alpha: 0.08)),
+                                  width: 1.2,
                                 ),
                               ),
-                            ],
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: accent.withValues(
+                                            alpha: isSelected ? 0.18 : 0.1,
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          _sceneIcons[pName],
+                                          color: accent,
+                                          size: 14,
+                                        ),
+                                      ),
+                                      if (isMissed)
+                                        Positioned(
+                                          right: -2,
+                                          top: -2,
+                                          child: Container(
+                                            width: 9,
+                                            height: 9,
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE57373),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white,
+                                                width: 1.2,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    pName,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 9.5,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w500,
+                                      color: isMissed
+                                          ? const Color(0xFFEF9A9A)
+                                          : isSelected
+                                          ? accent
+                                          : accent.withValues(
+                                              alpha: dark ? 0.65 : 0.6,
+                                            ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ),
                           ),
-                        ),
+                          // Bell toggle — only for actual salat (not Sunrise).
+                          // Tapping it toggles that prayer's alarm without
+                          // triggering the card's own onTap (scene select).
+                         if (isSalat)
+                            Positioned(
+                              top: 0,
+                              right: -3,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => widget.onAlarmToggle(
+                                  pName,
+                                  !alarmEnabled,
+                                ),
+                                child: Container(
+                                  width: 18,
+                                  height: 18,
+                                  decoration: BoxDecoration(
+                                    color: alarmEnabled
+                                        ? AppColors.coralOrange
+                                        : (dark
+                                              ? Colors.black
+                                              : Colors.white),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: alarmEnabled
+                                          ? AppColors.coralOrange
+                                          : (dark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.35,
+                                                  )
+                                                : accent.withValues(alpha: 0.25)),
+                                      width: 1.2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.18,
+                                        ),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 1),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    alarmEnabled
+                                        ? Icons.notifications_active_rounded
+                                        : Icons.notifications_off_rounded,
+                                    size: 10,
+                                    color: alarmEnabled ? Colors.white : accent,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       );
                     },
                   ),

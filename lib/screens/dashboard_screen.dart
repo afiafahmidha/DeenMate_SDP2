@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -16,6 +16,7 @@ import 'assistant_tab.dart';
 import 'zakat_manager_screen.dart';
 import 'quran_tracker_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/theme_service.dart';
 import 'emergency_sos_screen.dart';
 import 'dhikr_counter_screen.dart';
 import 'profile_tab.dart';
@@ -855,6 +856,7 @@ Widget _buildActiveTabContent() {
         return CalendarTab(
           key: const ValueKey('CalendarTab'),
           onOpenZakatCalculator: _showZakatCalculatorSheet,
+          isDarkMode: _isDarkMode,
         );
       case 3:
         return const AssistantTab();
@@ -869,6 +871,8 @@ Widget _buildActiveTabContent() {
             });
             final prefs = await SharedPreferences.getInstance();
             await prefs.setBool('is_dark_mode', isDark);
+            // update global app theme notifier so top-level MaterialApp updates
+            appThemeNotifier.value = isDark;
           },
         );
       default:
