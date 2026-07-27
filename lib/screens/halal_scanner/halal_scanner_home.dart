@@ -4,8 +4,6 @@ import 'analyze_product_screen.dart';
 import 'guides_and_walkthrough.dart';
 import 'product_detail_screen.dart';
 import 'scanned_history_screen.dart';
-import 'daily_tracker_screen.dart';
-import 'seasonal_foods_screen.dart';
 import 'health_tips_screen.dart';
 import 'additives_list_screen.dart';
 import '../../widgets/auth_header.dart';
@@ -470,30 +468,12 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         ),
       ),
       _QuickAccessItem(
-        title: 'Daily Tracker',
-        icon: Icons.calendar_today_rounded,
-        color: Colors.indigo,
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const DailyTrackerScreen()),
-        ),
-      ),
-      _QuickAccessItem(
         title: 'Guide',
         icon: Icons.menu_book_rounded,
         color: Colors.purple,
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const GuidesAndWalkthroughScreen()),
-        ),
-      ),
-      _QuickAccessItem(
-        title: 'Seasonal Foods',
-        icon: Icons.eco_rounded,
-        color: Colors.green,
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const SeasonalFoodsScreen()),
         ),
       ),
       _QuickAccessItem(
