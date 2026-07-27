@@ -539,12 +539,16 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
                       children: [
                         _buildRiskGauge(),
                         const SizedBox(width: 6),
-                        Text(
-                          additive.riskText,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: riskColor,
-                            fontWeight: FontWeight.w500,
+                        Flexible(
+                          child: Text(
+                            additive.riskText,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: riskColor,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -943,9 +947,13 @@ class _AdditiveDetailScreenState extends State<AdditiveDetailScreen> {
       children: [
         SizedBox(width: 26, height: 15, child: CustomPaint(painter: RainbowGaugePainter())),
         const SizedBox(width: 12),
-        Text(
-          _additive.riskText,
-          style: TextStyle(fontSize: 14, color: riskColor, fontWeight: FontWeight.w600),
+        Flexible(
+          child: Text(
+            _additive.riskText,
+            style: TextStyle(fontSize: 14, color: riskColor, fontWeight: FontWeight.w600),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
@@ -978,7 +986,13 @@ class _AdditiveDetailScreenState extends State<AdditiveDetailScreen> {
           ),
         ),
         const SizedBox(width: 12),
-        Text(label, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 14, color: Colors.black87),
+            maxLines: 2,
+          ),
+        ),
       ],
     );
   }
