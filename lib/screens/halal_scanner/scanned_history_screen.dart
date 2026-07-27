@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'halal_drawer.dart';
 import 'halal_scanner_home.dart';
 import 'product_detail_screen.dart';
+import 'guides_and_walkthrough.dart';
 
 class ScannedHistoryScreen extends StatefulWidget {
   const ScannedHistoryScreen({super.key});
@@ -11,7 +11,6 @@ class ScannedHistoryScreen extends StatefulWidget {
 }
 
 class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   String _searchQuery = '';
 
   List<ScannedProduct> get _filteredHistory {
@@ -62,22 +61,16 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
     const tealColor = Color(0xFF55A498);
     final historyList = _filteredHistory;
 
-    return Scaffold(
-      key: _scaffoldKey,
+    return MobileFrame(
+      child: Scaffold(
       backgroundColor: const Color(0xFFF9F9FA),
-      drawer: const HalalDrawer(activeRoute: 'Scanned history'),
       appBar: AppBar(
         backgroundColor: tealColor,
         elevation: 0,
-        leading: Navigator.canPop(context)
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
-              )
-            : IconButton(
-                icon: const Icon(Icons.menu, color: Colors.white),
-                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
           'Scanned history',
           style: TextStyle(
@@ -136,6 +129,7 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
                   ),
           ),
         ],
+      ),
       ),
     );
   }
