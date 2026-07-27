@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 // ---------------------------------------------------------------------------
 
 const Color kTeal = Color(0xFF55A498);          
-const Color kHalalGreen = Color(0xFFE8F5E9);     // light green
+const Color kHalalGreen = Color(0xFFC8E6C9);     // light green
 const Color kHaramRed = Color(0xFFD4B896);       // balanced almond
 const Color kMushboohOrange = Color(0xFFA9B7C6); // light slate grey
 const Color kBg = Color(0xFFF6F7F8);
