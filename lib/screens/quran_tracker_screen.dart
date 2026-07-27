@@ -28,6 +28,7 @@ class AyahContent {
   final String englishTranslation;
   final String banglaExplanation;
   final String englishExplanation;
+  final int? page;
 
   const AyahContent({
     required this.number,
@@ -36,6 +37,7 @@ class AyahContent {
     required this.englishTranslation,
     required this.banglaExplanation,
     required this.englishExplanation,
+    this.page,
   });
 }
 
@@ -323,8 +325,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   // RESET Default Starting States (0 Completed metrics for a clean starting experience)
   int _currentStreak = 0;
   int _longestStreak = 0;
-  int _targetDailyPages = 5;
-  int _completedPagesToday = 0;
+  int _targetDailyAyahs = 208;
+  int _completedAyahsToday = 0;
   int _khatmTotalJuzCompleted = 0;
   String _khatmEstimatedCompletion = 'Not Configured';
   int _khatmTargetDays = 30; // Planner target
@@ -333,6 +335,213 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   int _continueSurahId = 1; // Al-Fatihah
   int _continuePage = 1;
   int _continueAyah = 1;
+
+  int _getSurahTotalPages(int surahId, int totalAyahs) {
+    if (surahId == 1) return 1;
+    if (surahId == 2) return 48;
+    if (surahId == 3) return 27;
+    if (surahId == 4) return 30;
+    if (surahId == 5) return 22;
+    if (surahId == 6) return 23;
+    if (surahId == 7) return 28;
+    if (surahId == 8) return 10;
+    if (surahId == 9) return 21;
+    if (surahId == 10) return 11;
+    if (surahId == 11) return 12;
+    if (surahId == 12) return 12;
+    if (surahId == 13) return 6;
+    if (surahId == 14) return 7;
+    if (surahId == 15) return 5;
+    if (surahId == 16) return 15;
+    if (surahId == 17) return 12;
+    if (surahId == 18) return 12;
+    if (surahId == 19) return 7;
+    if (surahId == 20) return 10;
+    if (surahId == 21) return 10;
+    if (surahId == 22) return 10;
+    if (surahId == 23) return 8;
+    if (surahId == 24) return 10;
+    if (surahId == 25) return 6;
+    if (surahId == 26) return 11;
+    if (surahId == 27) return 9;
+    if (surahId == 28) return 11;
+    if (surahId == 29) return 7;
+    if (surahId == 30) return 6;
+    if (surahId == 31) return 4;
+    if (surahId == 32) return 3;
+    if (surahId == 33) return 9;
+    if (surahId == 34) return 6;
+    if (surahId == 35) return 6;
+    if (surahId == 36) return 6;
+    if (surahId == 37) return 7;
+    if (surahId == 38) return 5;
+    if (surahId == 39) return 8;
+    if (surahId == 40) return 9;
+    if (surahId == 41) return 6;
+    if (surahId == 42) return 6;
+    if (surahId == 43) return 7;
+    if (surahId == 44) return 3;
+    if (surahId == 45) return 4;
+    if (surahId == 46) return 5;
+    if (surahId == 47) return 4;
+    if (surahId == 48) return 4;
+    if (surahId == 49) return 2;
+    if (surahId == 50) return 3;
+    if (surahId == 51) return 3;
+    if (surahId == 52) return 2;
+    if (surahId == 53) return 3;
+    if (surahId == 54) return 3;
+    if (surahId == 55) return 3;
+    if (surahId == 56) return 3;
+    if (surahId == 57) return 4;
+    if (surahId == 58) return 3;
+    if (surahId == 59) return 3;
+    if (surahId == 60) return 2;
+    if (surahId == 61) return 1;
+    if (surahId == 62) return 1;
+    if (surahId == 63) return 1;
+    if (surahId == 64) return 2;
+    if (surahId == 65) return 2;
+    if (surahId == 66) return 2;
+    if (surahId == 67) return 2;
+    if (surahId == 68) return 2;
+    if (surahId == 69) return 2;
+    if (surahId == 70) return 2;
+    if (surahId == 71) return 1;
+    if (surahId == 72) return 2;
+    if (surahId == 73) return 1;
+    if (surahId == 74) return 2;
+    if (surahId == 75) return 1;
+    if (surahId == 76) return 2;
+    if (surahId == 77) return 2;
+    if (surahId >= 78 && surahId <= 80) return 2;
+    return 1;
+  }
+
+  double _calculatePagesCompleted(int surahId, int currentAyahIndex) {
+    final surah = _surahList.firstWhere((e) => e.id == surahId);
+    final totalPages = _getSurahTotalPages(surahId, surah.totalAyahs);
+    if (surah.totalAyahs <= 0) return 0.0;
+    return (currentAyahIndex / surah.totalAyahs) * totalPages;
+  }
+
+  int _getSurahStartPage(int surahId) {
+    if (surahId == 1) return 1;
+    if (surahId == 2) return 2;
+    if (surahId == 3) return 50;
+    if (surahId == 4) return 77;
+    if (surahId == 5) return 106;
+    if (surahId == 6) return 128;
+    if (surahId == 7) return 151;
+    if (surahId == 8) return 177;
+    if (surahId == 9) return 187;
+    if (surahId == 10) return 208;
+    if (surahId == 11) return 221;
+    if (surahId == 12) return 235;
+    if (surahId == 13) return 249;
+    if (surahId == 14) return 255;
+    if (surahId == 15) return 262;
+    if (surahId == 16) return 267;
+    if (surahId == 17) return 282;
+    if (surahId == 18) return 293;
+    if (surahId == 19) return 305;
+    if (surahId == 20) return 312;
+    if (surahId == 21) return 322;
+    if (surahId == 22) return 332;
+    if (surahId == 23) return 342;
+    if (surahId == 24) return 350;
+    if (surahId == 25) return 359;
+    if (surahId == 26) return 367;
+    if (surahId == 27) return 377;
+    if (surahId == 28) return 385;
+    if (surahId == 29) return 396;
+    if (surahId == 30) return 404;
+    if (surahId == 31) return 411;
+    if (surahId == 32) return 415;
+    if (surahId == 33) return 418;
+    if (surahId == 34) return 428;
+    if (surahId == 35) return 434;
+    if (surahId == 36) return 440;
+    if (surahId == 37) return 446;
+    if (surahId == 38) return 453;
+    if (surahId == 39) return 458;
+    if (surahId == 40) return 467;
+    if (surahId == 41) return 477;
+    if (surahId == 42) return 483;
+    if (surahId == 43) return 489;
+    if (surahId == 44) return 496;
+    if (surahId == 45) return 499;
+    if (surahId == 46) return 502;
+    if (surahId == 47) return 507;
+    if (surahId == 48) return 511;
+    if (surahId == 49) return 515;
+    if (surahId == 50) return 518;
+    if (surahId == 51) return 520;
+    if (surahId == 52) return 523;
+    if (surahId == 53) return 526;
+    if (surahId == 54) return 528;
+    if (surahId == 55) return 531;
+    if (surahId == 56) return 534;
+    if (surahId == 57) return 537;
+    if (surahId == 58) return 542;
+    if (surahId == 59) return 545;
+    if (surahId == 60) return 549;
+    if (surahId == 61) return 551;
+    if (surahId == 62) return 553;
+    if (surahId == 63) return 554;
+    if (surahId == 64) return 556;
+    if (surahId == 65) return 558;
+    if (surahId == 66) return 560;
+    if (surahId == 67) return 562;
+    if (surahId == 68) return 564;
+    if (surahId == 69) return 566;
+    if (surahId == 70) return 568;
+    if (surahId == 71) return 570;
+    if (surahId == 72) return 572;
+    if (surahId == 73) return 574;
+    if (surahId == 74) return 575;
+    if (surahId == 75) return 577;
+    if (surahId == 76) return 578;
+    if (surahId == 77) return 580;
+    if (surahId == 78) return 582;
+    if (surahId == 79) return 583;
+    if (surahId == 80) return 585;
+    if (surahId == 81) return 586;
+    if (surahId == 82) return 587;
+    if (surahId == 83) return 587;
+    if (surahId == 84) return 589;
+    if (surahId == 85) return 590;
+    if (surahId == 86) return 591;
+    if (surahId == 87) return 591;
+    if (surahId == 88) return 592;
+    if (surahId == 89) return 593;
+    if (surahId == 90) return 594;
+    if (surahId == 91) return 595;
+    if (surahId == 92) return 595;
+    if (surahId == 93) return 596;
+    if (surahId == 94) return 596;
+    if (surahId == 95) return 597;
+    if (surahId == 96) return 597;
+    if (surahId == 97) return 598;
+    if (surahId == 98) return 598;
+    if (surahId == 99) return 599;
+    if (surahId == 100) return 599;
+    if (surahId == 101) return 600;
+    if (surahId == 102) return 600;
+    if (surahId == 103) return 601;
+    if (surahId == 104) return 601;
+    if (surahId == 105) return 601;
+    if (surahId == 106) return 602;
+    if (surahId == 107) return 602;
+    if (surahId == 108) return 602;
+    if (surahId == 109) return 603;
+    if (surahId == 110) return 603;
+    if (surahId == 111) return 603;
+    if (surahId == 112) return 604;
+    if (surahId == 113) return 604;
+    if (surahId == 114) return 604;
+    return 1;
+  }
 
   // Search Filter
   String _searchQuery = '';
@@ -372,14 +581,154 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
 
   String _cleanBismillahPrefix(String text, int surahId) {
     if (surahId == 1 || surahId == 9) return text;
-    final endKeywords = ['الرَّحِيمِ', 'ٱلرَّحِيمِ', 'الرَّحِيْمِ', 'الرَّحِيم', 'ٱلرَّحِيم'];
+    
+    // Split text into words and check if first 4 words correspond to Bismillah
+    final words = text.trim().split(RegExp(r'\s+'));
+    if (words.length >= 4) {
+      final joined = words.take(4).join(' ');
+      final cleanJoined = joined.replaceAll(RegExp(r'[\u064B-\u065F\u0670\u0671]'), '');
+      if (cleanJoined.contains('بسم') && (cleanJoined.contains('الرحمن') || cleanJoined.contains('الرحمن')) && cleanJoined.contains('الرحيم')) {
+        return words.skip(4).join(' ').trim();
+      }
+    }
+    
+    // Fallback: search for keywords
+    final endKeywords = ['الرَّحِيمِ', 'ٱلرَّحِيمِ', 'الرَّحِيْمِ', 'الرَّحِيم', 'ٱلرَّحِيم', 'الرحيم'];
     for (final keyword in endKeywords) {
       final idx = text.indexOf(keyword);
-      if (idx != -1 && idx < 65) {
+      if (idx != -1 && idx < 80) {
         return text.substring(idx + keyword.length).trim();
       }
     }
     return text;
+  }
+
+  Future<void> _loadState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _currentStreak = prefs.getInt('quran_tracker_streak') ?? 0;
+        _longestStreak = prefs.getInt('quran_longest_streak') ?? 0;
+        
+        _completedAyahsToday = prefs.getInt('quran_completed_ayahs_today') ?? 0;
+        _targetDailyAyahs = prefs.getInt('quran_target_daily_ayahs') ?? 208;
+
+        _khatmTotalJuzCompleted = prefs.getInt('quran_khatm_juz_completed') ?? 0;
+        _isDarkMode = prefs.getBool('quran_settings_dark') ?? false;
+        
+        final fontVal = prefs.get('quran_settings_font_size');
+        if (fontVal is double) {
+          _arabicFontSize = fontVal;
+        } else if (fontVal is int) {
+          _arabicFontSize = fontVal.toDouble();
+        } else {
+          _arabicFontSize = 24.0;
+        }
+
+        _continueSurahId = prefs.getInt('quran_continue_surah') ?? 1;
+        _continuePage = prefs.getInt('quran_continue_page') ?? 1;
+        _continueAyah = prefs.getInt('quran_continue_ayah') ?? 1;
+
+        // Daily carry-over/deficit rollover logic
+        final String? lastSavedDate = prefs.getString('quran_last_saved_date');
+        final String todayDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+        if (lastSavedDate != null && lastSavedDate != todayDate) {
+          int excess = _completedAyahsToday - _targetDailyAyahs;
+          if (excess > 0) {
+            _completedAyahsToday = excess; // extra ayahs read yesterday carry over as progress today
+          } else {
+            int deficit = _targetDailyAyahs - _completedAyahsToday;
+            _targetDailyAyahs += deficit;  // deficit ayahs yesterday add to target today
+            _completedAyahsToday = 0;
+          }
+          prefs.setInt('quran_completed_ayahs_today', _completedAyahsToday);
+          prefs.setInt('quran_target_daily_ayahs', _targetDailyAyahs);
+        }
+        prefs.setString('quran_last_saved_date', todayDate);
+
+        // Load custom wazifa lists
+        for (final cat in _wazifaSupplications.keys) {
+          final listStr = prefs.getString('quran_wazifa_supps_$cat');
+          if (listStr != null) {
+            final List<dynamic> decoded = jsonDecode(listStr);
+            _wazifaSupplications[cat] = decoded.map((e) => e.toString()).toList();
+          }
+        }
+
+        // Load wazifa check states
+        final checkStr = prefs.getString('quran_wazifa_checks');
+        if (checkStr != null) {
+          final Map<String, dynamic> decoded = jsonDecode(checkStr);
+          decoded.forEach((key, val) {
+            _completedWazifas[key] = val as bool;
+          });
+        }
+
+        final checkHadithStr = prefs.getString('quran_hadith_wazifa_checks');
+        if (checkHadithStr != null) {
+          final Map<String, dynamic> decoded = jsonDecode(checkHadithStr);
+          decoded.forEach((key, val) {
+            _completedHadithWazifas[key] = val as bool;
+          });
+        }
+
+        // Load bookmarks & reflections
+        final bookmarkStr = prefs.getString('quran_bookmarks_json');
+        if (bookmarkStr != null) {
+          final List<dynamic> decoded = jsonDecode(bookmarkStr);
+          _bookmarks.clear();
+          for (final item in decoded) {
+            _bookmarks.add(Map<String, String>.from(item));
+          }
+        }
+
+        final reflectionsStr = prefs.getString('quran_reflections_json');
+        if (reflectionsStr != null) {
+          final List<dynamic> decoded = jsonDecode(reflectionsStr);
+          _reflections.clear();
+          for (final item in decoded) {
+            _reflections.add(Map<String, String>.from(item));
+          }
+        }
+
+        // Load Hifz memorized Surah IDs
+        final hifzStr = prefs.getString('quran_hifz_memorized_ids');
+        if (hifzStr != null) {
+          final List<dynamic> decoded = jsonDecode(hifzStr);
+          _memorizedSurahIds = decoded.map((e) => e as int).toSet();
+        }
+      });
+    } catch (e) {
+      debugPrint("Error loading state from SharedPreferences: $e");
+    }
+  }
+
+  Future<void> _saveState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('quran_tracker_streak', _currentStreak);
+    await prefs.setInt('quran_longest_streak', _longestStreak);
+    await prefs.setInt('quran_completed_ayahs_today', _completedAyahsToday);
+    await prefs.setInt('quran_target_daily_ayahs', _targetDailyAyahs);
+    await prefs.setInt('quran_khatm_juz_completed', _khatmTotalJuzCompleted);
+    await prefs.setBool('quran_settings_dark', _isDarkMode);
+    await prefs.setDouble('quran_settings_font_size', _arabicFontSize);
+
+    await prefs.setInt('quran_continue_surah', _continueSurahId);
+    await prefs.setInt('quran_continue_page', _continuePage);
+    await prefs.setInt('quran_continue_ayah', _continueAyah);
+
+    await prefs.setString('quran_last_saved_date', DateFormat('yyyy-MM-dd').format(DateTime.now()));
+
+    for (final cat in _wazifaSupplications.keys) {
+      await prefs.setString('quran_wazifa_supps_$cat', jsonEncode(_wazifaSupplications[cat]));
+    }
+
+    await prefs.setString('quran_wazifa_checks', jsonEncode(_completedWazifas));
+    await prefs.setString('quran_hadith_wazifa_checks', jsonEncode(_completedHadithWazifas));
+    await prefs.setString('quran_bookmarks_json', jsonEncode(_bookmarks));
+    await prefs.setString('quran_reflections_json', jsonEncode(_reflections));
+    await prefs.setString('quran_hifz_memorized_ids', jsonEncode(_memorizedSurahIds.toList()));
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -391,6 +740,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       if (list.length == totalAyahs) {
         return List.generate(list.length, (idx) {
           final item = list[idx];
+          final startPage = _getSurahStartPage(surahId);
+          final offset = (idx / list.length) * _getSurahTotalPages(surahId, totalAyahs);
+          final pageVal = (startPage + offset.toInt()).clamp(1, 604);
+          
           if (idx == 0) {
             return AyahContent(
               number: item.number,
@@ -399,9 +752,18 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
               englishTranslation: item.englishTranslation,
               banglaExplanation: item.banglaExplanation,
               englishExplanation: item.englishExplanation,
+              page: pageVal,
             );
           }
-          return item;
+          return AyahContent(
+            number: item.number,
+            arabic: item.arabic,
+            banglaTranslation: item.banglaTranslation,
+            englishTranslation: item.englishTranslation,
+            banglaExplanation: item.banglaExplanation,
+            englishExplanation: item.englishExplanation,
+            page: pageVal,
+          );
         });
       }
     }
@@ -409,6 +771,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     final surah = _surahList.firstWhere((e) => e.id == surahId);
     return List.generate(totalAyahs, (i) {
       final ayahNum = i + 1;
+      final startPage = _getSurahStartPage(surahId);
+      final offset = (i / totalAyahs) * _getSurahTotalPages(surahId, totalAyahs);
+      final pageVal = (startPage + offset.toInt()).clamp(1, 604);
+
       return AyahContent(
         number: ayahNum,
         arabic: 'وَإِذْ قَالَ رَبُّكَ لِلْمَلَائِكَةِ إِنِّي جَاعِلٌ فِي الْأَرْضِ خَلِيفَةً ($ayahNum)',
@@ -416,6 +782,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         englishTranslation: 'This is the English translation of Surah ${surah.englishName} Ayah $ayahNum.',
         banglaExplanation: 'আয়াতটির তাফসিরে বর্ণিত হয়েছে যে আল্লাহ মুমিনদের সর্বদা সৎ পথে চলার নির্দেশনা দিয়েছেন।',
         englishExplanation: 'Tafsir confirms Allah\'s call to all believers to remain firm on the path of truth and justice.',
+        page: pageVal,
       );
     });
   }
@@ -463,6 +830,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
             englishTranslation: englishAyahs[i]['text'] ?? '',
             banglaExplanation: 'এই আয়াতের তাফসির আল্লাহর বাণী অনুযায়ী দ্বীনের সঠিক সরল পথের শিক্ষা দান করে।',
             englishExplanation: 'This ayah guides the heart towards absolute righteousness and belief.',
+            page: arabicAyahs[i]['page'],
           ));
         }
 
@@ -484,101 +852,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SHAPED STORAGE PERSISTENCE
-  // ─────────────────────────────────────────────────────────────────────────────
-  Future<void> _loadState() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _currentStreak = prefs.getInt('quran_tracker_streak') ?? 0;
-      _longestStreak = prefs.getInt('quran_longest_streak') ?? 0;
-      _completedPagesToday = prefs.getInt('quran_completed_pages_today') ?? 0;
-      _targetDailyPages = prefs.getInt('quran_target_daily_pages') ?? 5;
-      _khatmTotalJuzCompleted = prefs.getInt('quran_khatm_juz_completed') ?? 0;
-      _isDarkMode = prefs.getBool('quran_settings_dark') ?? false;
-      _arabicFontSize = prefs.getDouble('quran_settings_font_size') ?? 24.0;
 
-      _continueSurahId = prefs.getInt('quran_continue_surah') ?? 1;
-      _continuePage = prefs.getInt('quran_continue_page') ?? 1;
-      _continueAyah = prefs.getInt('quran_continue_ayah') ?? 1;
-
-      // Load custom wazifa lists
-      for (final cat in _wazifaSupplications.keys) {
-        final listStr = prefs.getString('quran_wazifa_supps_$cat');
-        if (listStr != null) {
-          final List<dynamic> decoded = jsonDecode(listStr);
-          _wazifaSupplications[cat] = decoded.map((e) => e.toString()).toList();
-        }
-      }
-
-      // Load wazifa check states
-      final checkStr = prefs.getString('quran_wazifa_checks');
-      if (checkStr != null) {
-        final Map<String, dynamic> decoded = jsonDecode(checkStr);
-        decoded.forEach((key, val) {
-          _completedWazifas[key] = val as bool;
-        });
-      }
-
-      final checkHadithStr = prefs.getString('quran_hadith_wazifa_checks');
-      if (checkHadithStr != null) {
-        final Map<String, dynamic> decoded = jsonDecode(checkHadithStr);
-        decoded.forEach((key, val) {
-          _completedHadithWazifas[key] = val as bool;
-        });
-      }
-
-      // Load bookmarks & reflections
-      final bookmarkStr = prefs.getString('quran_bookmarks_json');
-      if (bookmarkStr != null) {
-        final List<dynamic> decoded = jsonDecode(bookmarkStr);
-        _bookmarks.clear();
-        for (final item in decoded) {
-          _bookmarks.add(Map<String, String>.from(item));
-        }
-      }
-
-      final reflectionsStr = prefs.getString('quran_reflections_json');
-      if (reflectionsStr != null) {
-        final List<dynamic> decoded = jsonDecode(reflectionsStr);
-        _reflections.clear();
-        for (final item in decoded) {
-          _reflections.add(Map<String, String>.from(item));
-        }
-      }
-
-      // Load Hifz memorized Surah IDs
-      final hifzStr = prefs.getString('quran_hifz_memorized_ids');
-      if (hifzStr != null) {
-        final List<dynamic> decoded = jsonDecode(hifzStr);
-        _memorizedSurahIds = decoded.map((e) => e as int).toSet();
-      }
-    });
-  }
-
-  Future<void> _saveState() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('quran_tracker_streak', _currentStreak);
-    await prefs.setInt('quran_longest_streak', _longestStreak);
-    await prefs.setInt('quran_completed_pages_today', _completedPagesToday);
-    await prefs.setInt('quran_target_daily_pages', _targetDailyPages);
-    await prefs.setInt('quran_khatm_juz_completed', _khatmTotalJuzCompleted);
-    await prefs.setBool('quran_settings_dark', _isDarkMode);
-    await prefs.setDouble('quran_settings_font_size', _arabicFontSize);
-
-    await prefs.setInt('quran_continue_surah', _continueSurahId);
-    await prefs.setInt('quran_continue_page', _continuePage);
-    await prefs.setInt('quran_continue_ayah', _continueAyah);
-
-    for (final cat in _wazifaSupplications.keys) {
-      await prefs.setString('quran_wazifa_supps_$cat', jsonEncode(_wazifaSupplications[cat]));
-    }
-
-    await prefs.setString('quran_wazifa_checks', jsonEncode(_completedWazifas));
-    await prefs.setString('quran_hadith_wazifa_checks', jsonEncode(_completedHadithWazifas));
-    await prefs.setString('quran_bookmarks_json', jsonEncode(_bookmarks));
-    await prefs.setString('quran_reflections_json', jsonEncode(_reflections));
-    await prefs.setString('quran_hifz_memorized_ids', jsonEncode(_memorizedSurahIds.toList()));
-  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // BASE STRUCTURE
@@ -605,11 +879,11 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 child: Column(
                   children: [
                     _buildTopHeader(themeText),
+                    _buildBottomNavigationBar(),
                     Expanded(child: _buildActiveTabContent(cardBg, themeText)),
                   ],
                 ),
               ),
-              bottomNavigationBar: _buildBottomNavigationBar(),
             ),
           ),
         ),
@@ -671,37 +945,82 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   }
 
   Widget _buildBottomNavigationBar() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final unselectedColor = _isDarkMode ? Colors.white38 : AppColors.placeholder;
+    final selectedColor = AppColors.midTeal;
+
     return Container(
       decoration: BoxDecoration(
-        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.withValues(alpha: 0.15), width: 1)),
+        color: cardBg,
+        border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.15), width: 1)),
       ),
-      child: BottomNavigationBar(
-        currentIndex: _bottomNavIndex,
-        onTap: (index) {
-          setState(() {
-            _bottomNavIndex = index;
-            if (index != 1) {
-              _activeReaderSurahId = null;
-            }
-            if (index != 4) {
-              _activeMoreSubView = null;
-            }
-          });
-        },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.transparent,
-        selectedItemColor: AppColors.midTeal,
-        unselectedItemColor: AppColors.placeholder,
-        selectedLabelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold),
-        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 10),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.menu_book_rounded), label: 'Quran'),
-          BottomNavigationBarItem(icon: Icon(Icons.track_changes_rounded), label: 'Progress'),
-          BottomNavigationBarItem(icon: Icon(Icons.spa_rounded), label: 'Wazifa'),
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'More'),
-        ],
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: List.generate(5, (index) {
+          final isSelected = _bottomNavIndex == index;
+          String label = '';
+          switch (index) {
+            case 0:
+              label = 'Home';
+              break;
+            case 1:
+              label = 'Quran';
+              break;
+            case 2:
+              label = 'Progress';
+              break;
+            case 3:
+              label = 'Wazifa';
+              break;
+            case 4:
+              label = 'More';
+              break;
+          }
+
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _bottomNavIndex = index;
+                  if (index != 1) {
+                    _activeReaderSurahId = null;
+                  }
+                  if (index != 4) {
+                    _activeMoreSubView = null;
+                  }
+                });
+              },
+              child: Container(
+                color: Colors.transparent,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 11.5,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                        color: isSelected ? selectedColor : unselectedColor,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // Indicator line
+                    Container(
+                      width: 24,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: isSelected ? selectedColor : Colors.transparent,
+                        borderRadius: BorderRadius.circular(1.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -759,6 +1078,30 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
             style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: themeText),
           ),
           const SizedBox(height: 14),
+
+          if (_completedAyahsToday >= _targetDailyAyahs) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.midTeal.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.stars_rounded, color: AppColors.midTeal, size: 24),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'You already completed your daily target! 🌟 Extra verses read will carry over to tomorrow.',
+                      style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
 
           // Continue Reading Banner
           Container(
@@ -822,7 +1165,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                   Icons.star_rounded,
                   AppColors.midTeal,
                   'Target Today',
-                  '$_completedPagesToday / $_targetDailyPages Pages',
+                  '$_completedAyahsToday / $_targetDailyAyahs Ayahs',
                 ),
               ),
             ],
@@ -844,14 +1187,14 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Today\'s Goal Progress', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: themeText)),
-                    Text('${_targetDailyPages > 0 ? ((_completedPagesToday / _targetDailyPages) * 100).toInt().clamp(0, 100) : 0}%', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                    Text('${_targetDailyAyahs > 0 ? ((_completedAyahsToday / _targetDailyAyahs) * 100).toInt().clamp(0, 100) : 0}%', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
                   ],
                 ),
                 const SizedBox(height: 10),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: LinearProgressIndicator(
-                    value: _targetDailyPages > 0 ? (_completedPagesToday / _targetDailyPages).clamp(0.0, 1.0) : 0.0,
+                    value: _targetDailyAyahs > 0 ? (_completedAyahsToday / _targetDailyAyahs).toDouble().clamp(0.0, 1.0) : 0.0,
                     minHeight: 10,
                     backgroundColor: Colors.grey.withValues(alpha: 0.1),
                     valueColor: const AlwaysStoppedAnimation(AppColors.midTeal),
@@ -1343,7 +1686,16 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     _continueSurahId = surah.id;
                     _continueAyah = _activeReaderAyahIndex;
 
-                    _completedPagesToday++;
+                    final currentAyahObj = _loadedAyahs[_activeReaderAyahIndex - 1];
+                    if (currentAyahObj.page != null) {
+                      _continuePage = currentAyahObj.page!;
+                    } else {
+                      final startPage = _getSurahStartPage(surah.id);
+                      final offsetPages = _calculatePagesCompleted(surah.id, _activeReaderAyahIndex);
+                      _continuePage = (startPage + offsetPages.toInt()).clamp(1, 604);
+                    }
+
+                    _completedAyahsToday++;
                     _saveState();
                   });
                 },
@@ -1406,10 +1758,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   // VIEW 4: PROGRESS TAB VIEW WITH MULTI-OPTION DETAILS
   // ─────────────────────────────────────────────────────────────────────────────
   Widget _buildProgressTabView(Color cardBg, Color themeText) {
-    final catchupVal = _targetDailyPages - _completedPagesToday;
+    final catchupVal = _targetDailyAyahs - _completedAyahsToday;
     final progressMsg = catchupVal <= 0
-        ? 'Great job! You have achieved today\'s target reading pages! 🌟'
-        : 'You are $catchupVal pages behind today\'s reading target. Catch up now! 📖';
+        ? 'Great job! You have achieved today\'s target reading verses! 🌟'
+        : 'You are $catchupVal verses behind today\'s reading target. Catch up now! 📖';
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -1438,14 +1790,14 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     fit: StackFit.expand,
                     children: [
                       CircularProgressIndicator(
-                        value: _targetDailyPages > 0 ? (_completedPagesToday / _targetDailyPages).clamp(0.0, 1.0) : 0.0,
+                        value: _targetDailyAyahs > 0 ? (_completedAyahsToday / _targetDailyAyahs).clamp(0.0, 1.0) : 0.0,
                         backgroundColor: Colors.grey.shade100,
                         color: AppColors.midTeal,
                         strokeWidth: 9,
                       ),
                       Center(
                         child: Text(
-                          '${_targetDailyPages > 0 ? ((_completedPagesToday / _targetDailyPages) * 100).toInt().clamp(0, 100) : 0}%',
+                          '${_targetDailyAyahs > 0 ? ((_completedAyahsToday / _targetDailyAyahs) * 100).toInt().clamp(0, 100) : 0}%',
                           style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: themeText),
                         ),
                       ),
@@ -2221,10 +2573,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
               Expanded(
                 child: _buildMetricTile(
                   cardBg,
-                  Icons.pages_rounded,
+                  Icons.layers_rounded,
                   AppColors.midTeal,
-                  'Pages Today',
-                  '$_completedPagesToday Pages',
+                  'Ayahs Today',
+                  '$_completedAyahsToday Verses',
                 ),
               ),
               const SizedBox(width: 12),
@@ -2414,6 +2766,52 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 activeThumbColor: AppColors.midTeal,
                 onChanged: (v) => setState(() => _readingReminderEnabled = v),
               ),
+              const Divider(height: 16),
+
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.refresh_rounded, color: AppColors.coralOrange),
+                title: Text('Reset Progress & Data', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
+                subtitle: Text('Clear reading metrics, streak, and reset to zero', style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder)),
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text('Reset All Data?', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                      content: Text('This will reset your streaks, completed pages, and Hifz logs back to zero.', style: GoogleFonts.inter(fontSize: 12.5)),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                          onPressed: () async {
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.clear();
+                            setState(() {
+                              _currentStreak = 0;
+                              _longestStreak = 0;
+                              _completedAyahsToday = 0;
+                              _targetDailyAyahs = 208;
+                              _khatmTotalJuzCompleted = 0;
+                              _continueSurahId = 1;
+                              _continuePage = 1;
+                              _continueAyah = 1;
+                              _memorizedSurahIds.clear();
+                              _bookmarks.clear();
+                              _reflections.clear();
+                              _completedWazifas.clear();
+                              _completedHadithWazifas.clear();
+                            });
+                            await _saveState();
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('All data has been reset to zero.')));
+                          },
+                          child: const Text('Reset', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -2501,7 +2899,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final dailyRecPages = (604 / planDays).ceil();
+            final dailyRecAyahs = (6236 / planDays).ceil();
             final dailyRecJuz = (30.0 / planDays);
 
             return Container(
@@ -2553,7 +2951,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                       children: [
                         Text('Resulting Reading Requirement:', style: GoogleFonts.poppins(fontSize: 11, color: AppColors.placeholder, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 6),
-                        Text('$dailyRecPages Pages Daily', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                        Text('$dailyRecAyahs Ayahs Daily', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
                         Text('or roughly ${dailyRecJuz.toStringAsFixed(2)} Juz Daily', style: GoogleFonts.inter(fontSize: 12, color: AppColors.placeholder)),
                       ],
                     ),
@@ -2564,7 +2962,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     onPressed: () {
                       setState(() {
                         _khatmTargetDays = planDays;
-                        _targetDailyPages = dailyRecPages;
+                        _targetDailyAyahs = dailyRecAyahs;
                         _khatmEstimatedCompletion = DateFormat('dd MMMM yyyy').format(DateTime.now().add(Duration(days: planDays)));
                         _saveState();
                       });
