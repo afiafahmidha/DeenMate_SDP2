@@ -96,6 +96,7 @@ flutter:
     - assets/images/islamic_events/arafah/
     - assets/images/inheritance/
     - assets/images/hajj_umrah/
+    - assets/images/health_tips/
     - assets/videos/
   # To add assets to your application, add an assets section, like this:
   # assets:
