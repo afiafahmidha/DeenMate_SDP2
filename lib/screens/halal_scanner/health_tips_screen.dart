@@ -141,10 +141,11 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
         appBar: AppBar(
           backgroundColor: tealColor,
           elevation: 0,
+         
           leading: IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white),
-            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-          ),
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+     ),
           title: const Text(
             'Health tips',
             style: TextStyle(
