@@ -3,11 +3,8 @@ import 'halal_scanner_home.dart';
 import 'additives_list_screen.dart';
 import 'scanned_history_screen.dart';
 import 'analyze_product_screen.dart';
-import 'daily_tracker_screen.dart';
-import 'seasonal_foods_screen.dart';
 import 'health_tips_screen.dart';
 import 'guides_and_walkthrough.dart';
-import 'sources_screen.dart';
 
 class HalalDrawer extends StatelessWidget {
   final String activeRoute;
@@ -22,9 +19,12 @@ class HalalDrawer extends StatelessWidget {
     if (activeRoute == routeName) return;
 
     if (routeName == 'Home') {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const HalalScannerHomeScreen()),
+        (route) => route.isFirst,
+      );
     } else {
-      Navigator.of(context).push(
+      Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => screen),
       );
     }
@@ -114,43 +114,12 @@ class HalalDrawer extends StatelessWidget {
 
             _buildDrawerItem(
               context,
-              icon: Icons.calendar_today_outlined,
-              label: 'Daily tracker',
-              routeName: 'Daily tracker',
-              destination: const DailyTrackerScreen(),
-            ),
-            _buildDrawerItem(
-              context,
-              icon: Icons.eco_outlined,
-              label: 'Seasonal foods',
-              routeName: 'Seasonal foods',
-              destination: const SeasonalFoodsScreen(),
-            ),
-            _buildDrawerItem(
-              context,
               icon: Icons.notifications_none_rounded,
               label: 'Health tips',
               routeName: 'Health tips',
               destination: const HealthTipsScreen(),
             ),
 
-            const Divider(),
-            _buildSectionHeader('Personal Settings'),
-
-            _buildActionItem(
-              context,
-              icon: Icons.settings_outlined,
-              label: 'Settings',
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Settings is a premium customizable feature!')),
-                );
-              },
-            ),
-
-            const Divider(),
-            _buildSectionHeader('Help & Info'),
 
             _buildDrawerItem(
               context,
@@ -159,24 +128,7 @@ class HalalDrawer extends StatelessWidget {
               routeName: 'Guide',
               destination: const GuidesAndWalkthroughScreen(),
             ),
-            _buildDrawerItem(
-              context,
-              icon: Icons.menu_book_outlined,
-              label: 'Source',
-              routeName: 'Source',
-              destination: const SourcesScreen(),
-            ),
-            _buildActionItem(
-              context,
-              icon: Icons.privacy_tip_outlined,
-              label: 'Privacy policy',
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Showing Privacy Policy...')),
-                );
-              },
-            ),
+
 
             const SizedBox(height: 20),
           ],
@@ -245,6 +197,45 @@ class HalalDrawer extends StatelessWidget {
         ),
       ),
       onTap: onTap,
+    );
+  }
+
+  void _showPremiumDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.workspace_premium_rounded, color: Colors.amber),
+            SizedBox(width: 8),
+            Text('Go Premium'),
+          ],
+        ),
+        content: const Text(
+          'Unlock unlimited scans, custom additives overrides, ad-free experience, and advanced ingredient AI analysis for only \$1.99/month!',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Maybe Later', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF55A498),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Successfully subscribed to DeenMate Premium!')),
+              );
+            },
+            child: const Text('Subscribe Now'),
+          ),
+        ],
+      ),
     );
   }
 }
