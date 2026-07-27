@@ -330,6 +330,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   int _khatmTotalJuzCompleted = 0;
   String _khatmEstimatedCompletion = 'Not Configured';
   int _khatmTargetDays = 30; // Planner target
+  Set<String> _readAyahsToday = {};
+  Set<String> _readAyahsAllTime = {};
 
   // Continue Reading Reference
   int _continueSurahId = 1; // Al-Fatihah
@@ -613,7 +615,6 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         _completedAyahsToday = prefs.getInt('quran_completed_ayahs_today') ?? 0;
         _targetDailyAyahs = prefs.getInt('quran_target_daily_ayahs') ?? 208;
 
-        _khatmTotalJuzCompleted = prefs.getInt('quran_khatm_juz_completed') ?? 0;
         _isDarkMode = prefs.getBool('quran_settings_dark') ?? false;
         
         final fontVal = prefs.get('quran_settings_font_size');
@@ -629,6 +630,27 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         _continuePage = prefs.getInt('quran_continue_page') ?? 1;
         _continueAyah = prefs.getInt('quran_continue_ayah') ?? 1;
 
+        // Load read sets
+        final todayReadStr = prefs.getString('quran_read_ayahs_today');
+        if (todayReadStr != null) {
+          final List<dynamic> decoded = jsonDecode(todayReadStr);
+          _readAyahsToday = decoded.map((e) => e.toString()).toSet();
+        } else {
+          _readAyahsToday = {};
+        }
+
+        final allTimeReadStr = prefs.getString('quran_read_ayahs_all_time');
+        if (allTimeReadStr != null) {
+          final List<dynamic> decoded = jsonDecode(allTimeReadStr);
+          _readAyahsAllTime = decoded.map((e) => e.toString()).toSet();
+        } else {
+          _readAyahsAllTime = {};
+        }
+
+        // Recalculate Juz completed based on unique all-time read Ayahs
+        _khatmTotalJuzCompleted = ((_readAyahsAllTime.length / 6236.0) * 30).floor();
+        if (_khatmTotalJuzCompleted > 30) _khatmTotalJuzCompleted = 30;
+
         // Daily carry-over/deficit rollover logic
         final String? lastSavedDate = prefs.getString('quran_last_saved_date');
         final String todayDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -642,6 +664,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
             _targetDailyAyahs += deficit;  // deficit ayahs yesterday add to target today
             _completedAyahsToday = 0;
           }
+          _readAyahsToday.clear(); // reset daily read set for the new day
+          prefs.setString('quran_read_ayahs_today', jsonEncode(_readAyahsToday.toList()));
           prefs.setInt('quran_completed_ayahs_today', _completedAyahsToday);
           prefs.setInt('quran_target_daily_ayahs', _targetDailyAyahs);
         }
@@ -717,6 +741,9 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     await prefs.setInt('quran_continue_surah', _continueSurahId);
     await prefs.setInt('quran_continue_page', _continuePage);
     await prefs.setInt('quran_continue_ayah', _continueAyah);
+
+    await prefs.setString('quran_read_ayahs_today', jsonEncode(_readAyahsToday.toList()));
+    await prefs.setString('quran_read_ayahs_all_time', jsonEncode(_readAyahsAllTime.toList()));
 
     await prefs.setString('quran_last_saved_date', DateFormat('yyyy-MM-dd').format(DateTime.now()));
 
@@ -1123,7 +1150,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     Text('Continue Reading', style: GoogleFonts.inter(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
                     Text(continueSurahName, style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('Page $_continuePage • Ayah $_continueAyah', style: GoogleFonts.inter(color: Colors.white60, fontSize: 11)),
+                    Text('Ayah $_continueAyah', style: GoogleFonts.inter(color: Colors.white60, fontSize: 11)),
                   ],
                 ),
                 ElevatedButton(
@@ -1325,7 +1352,6 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                         Text('Daily Verse (Remembrance)', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
                       ],
                     ),
-                    Text(dailyVerse.reference, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1343,6 +1369,11 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 Text(
                   dailyVerse.english,
                   style: GoogleFonts.inter(fontSize: 12, color: AppColors.placeholder, height: 1.4),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  dailyVerse.reference,
+                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.placeholder.withValues(alpha: 0.8)),
                 ),
                 const SizedBox(height: 10),
                 TextButton(
@@ -1695,7 +1726,19 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                       _continuePage = (startPage + offsetPages.toInt()).clamp(1, 604);
                     }
 
-                    _completedAyahsToday++;
+                    final ayahKey = '${surah.id}_$_activeReaderAyahIndex';
+                    final alreadyReadToday = _readAyahsToday.contains(ayahKey);
+                    
+                    if (!alreadyReadToday) {
+                      _readAyahsToday.add(ayahKey);
+                      _completedAyahsToday++;
+                    }
+                    
+                    if (!_readAyahsAllTime.contains(ayahKey)) {
+                      _readAyahsAllTime.add(ayahKey);
+                      _khatmTotalJuzCompleted = ((_readAyahsAllTime.length / 6236.0) * 30).floor();
+                      if (_khatmTotalJuzCompleted > 30) _khatmTotalJuzCompleted = 30;
+                    }
                     _saveState();
                   });
                 },
@@ -2795,6 +2838,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                               _continueSurahId = 1;
                               _continuePage = 1;
                               _continueAyah = 1;
+                              _readAyahsToday.clear();
+                              _readAyahsAllTime.clear();
                               _memorizedSurahIds.clear();
                               _bookmarks.clear();
                               _reflections.clear();
