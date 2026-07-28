@@ -1243,7 +1243,7 @@ class _CalendarTabState extends State<CalendarTab> {
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: _surfaceColor(context),
+                    color: isDark ? Colors.black : Colors.white,   // was _surfaceColor(context)
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: _borderColor(context)),
                     boxShadow: [

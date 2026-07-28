@@ -32,7 +32,9 @@ class EmergencyContact {
 }
 
 class EmergencySosScreen extends StatefulWidget {
-  const EmergencySosScreen({super.key});
+  final bool isDarkMode;
+
+  const EmergencySosScreen({super.key, this.isDarkMode = false});
 
   @override
   State<EmergencySosScreen> createState() => _EmergencySosScreenState();
@@ -50,7 +52,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
   Timer? _cancelTimer;
   int _cancelCountdown = 5;
   bool _isCountingDown = false;
-  bool _isSilentMode = false;
   bool _isOfflineSimulated = false;
   bool _isLowBatterySimulated = false;
 
@@ -89,6 +90,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
 
   // ===== GROUP TRACKING & PROTOCOLS =====
   bool _isGroupJoined = false;
+  bool _isGroupLeader = false;
   final _groupCodeController = TextEditingController(text: "MKK-9981");
 
   // Map variables
@@ -157,7 +159,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
     _holdTimer?.cancel();
     _cancelTimer?.cancel();
     _positionStreamSubscription?.cancel();
-    
+
     _nameController.dispose();
     _passportController.dispose();
     _nationalityController.dispose();
@@ -189,6 +191,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
       _groupNameController.text = prefs.getString('sos_group_name') ?? "Garuda Hajj Cluster 4";
       _hotelController.text = prefs.getString('sos_hotel') ?? "Al Kiswah Towers, Makkah";
       _isGroupJoined = prefs.getBool('sos_is_group_joined') ?? false;
+      _isGroupLeader = prefs.getBool('sos_is_group_leader') ?? false;
 
       // Load contacts json list
       final String? contactsJson = prefs.getString('sos_contacts_json');
@@ -227,6 +230,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
     await prefs.setString('sos_group_name', _groupNameController.text);
     await prefs.setString('sos_hotel', _hotelController.text);
     await prefs.setBool('sos_is_group_joined', _isGroupJoined);
+    await prefs.setBool('sos_is_group_leader', _isGroupLeader);
 
     // Save serialized contacts list
     final List<Map<String, String>> serializedContacts = _contacts.map((c) => c.toMap()).toList();
@@ -289,11 +293,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         debugPrint("Error fetching coordinates: $e");
       }
 
-      // Continuous locations stream
+      // Continuous location stream — keeps GPS card live in real time
       _positionStreamSubscription = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          distanceFilter: 10,
+          distanceFilter: 5,
         ),
       ).listen((Position position) {
         if (mounted) {
@@ -473,14 +477,12 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
     final double lng = _currentPosition?.longitude ?? 39.8262;
     final String locationLink = "https://maps.google.com/?q=$lat,$lng";
 
-    if (!_isSilentMode) {
-      NotificationService.instance.showCustomNotification(
-        id: 9999,
-        title: "🚨 SOS ACTIVATED 🚨",
-        body: "All emergency contacts and group leaders have been notified.",
-        scheduledTime: DateTime.now().add(const Duration(seconds: 1)),
-      );
-    }
+    NotificationService.instance.showCustomNotification(
+      id: 9999,
+      title: "🚨 SOS ACTIVATED 🚨",
+      body: "All emergency contacts and group leaders have been notified.",
+      scheduledTime: DateTime.now().add(const Duration(seconds: 1)),
+    );
 
     _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] Gathering GPS coordinates: $lat, $lng");
     _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] Loading medical profile and ${_contacts.length} emergency contacts...");
@@ -523,7 +525,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         longitude: lng,
         medicalProfile: profile,
         emergencyContacts: contacts,
-        isSilent: _isSilentMode,
+        isSilent: false,
         groupLeaderId: _isGroupJoined ? "LEADER_9981" : null,
       );
 
@@ -538,7 +540,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
     final newIncident = {
       'id': 'INC_${DateTime.now().millisecondsSinceEpoch}',
       'timestamp': DateTime.now().toIso8601String(),
-      'type': _isSilentMode ? 'Silent SOS' : 'Standard SOS',
+      'type': 'Standard SOS',
       'lat': lat,
       'lng': lng,
       'address': _currentAddress,
@@ -642,12 +644,28 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
     }
   }
 
+  // ===== GROUP CODE GENERATION =====
+  void _generateGroupCode() {
+    final rand = math.Random();
+    final String code = 'MKK-${1000 + rand.nextInt(9000)}';
+    setState(() {
+      _groupCodeController.text = code;
+      _isGroupJoined = true;
+      _isGroupLeader = true;
+    });
+    _saveProfileData();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Group "$code" created! Share this code with your group members.')),
+    );
+  }
+
   // ===== UI BUILDING =====
   @override
   Widget build(BuildContext context) {
-    final primaryBg = _isSilentMode ? const Color(0xFF121212) : const Color(0xFFF7F7F5);
-    final textThemeColor = _isSilentMode ? Colors.white70 : AppColors.navyBlue;
-    final cardBg = _isSilentMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final bool isDark = widget.isDarkMode;
+    final primaryBg = isDark ? const Color(0xFF121212) : const Color(0xFFF7F7F5);
+    final textThemeColor = isDark ? Colors.white70 : AppColors.navyBlue;
+    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
     return Container(
       color: const Color(0xFFE8E8E8),
@@ -694,7 +712,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: _isSilentMode ? Colors.grey[900] : const Color(0xFFD32F2F),
+              color: const Color(0xFFD32F2F),
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.health_and_safety_rounded, color: Colors.white, size: 20),
@@ -705,7 +723,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _isSilentMode ? 'Inconspicuous Hub' : 'Emergency SOS',
+                  'Emergency SOS',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -713,7 +731,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                   ),
                 ),
                 Text(
-                  _isSilentMode ? 'Screen dimmed, silent background alerts active' : 'Live panic trigger & critical care',
+                  'Live panic trigger & critical care',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     color: textColor.withValues(alpha: 0.6),
@@ -722,19 +740,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               ],
             ),
           ),
-          if (_isSilentMode)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.red[900]?.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red[900]!, width: 1),
-              ),
-              child: Text(
-                'SILENT',
-                style: GoogleFonts.poppins(fontSize: 10, color: Colors.red[300], fontWeight: FontWeight.bold),
-              ),
-            ),
         ],
       ),
     );
@@ -757,9 +762,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
       ),
       child: TabBar(
         controller: _tabController,
-        labelColor: _isSilentMode ? Colors.white : AppColors.navyBlue,
-        unselectedLabelColor: _isSilentMode ? Colors.white38 : AppColors.placeholder,
-        indicatorColor: _isSilentMode ? Colors.red[800] : AppColors.midTeal,
+        labelColor: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
+        unselectedLabelColor: widget.isDarkMode ? Colors.white38 : AppColors.placeholder,
+        indicatorColor: widget.isDarkMode ? Colors.red[800] : AppColors.midTeal,
         indicatorWeight: 3,
         labelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold),
         unselectedLabelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w500),
@@ -783,8 +788,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         if (!_isCountingDown) ...[
           _buildPanicButtonSection(textColor),
           const SizedBox(height: 20),
-          _buildSilentModeToggleCard(containerBg, textColor),
-          const SizedBox(height: 14),
           _buildLiveLocationCard(containerBg, textColor),
           const SizedBox(height: 14),
           if (_isSosTriggered) _buildSosLogsCard(containerBg, textColor),
@@ -991,62 +994,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
     );
   }
 
-  Widget _buildSilentModeToggleCard(Color containerBg, Color textColor) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: containerBg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: SwitchListTile(
-          activeThumbColor: Colors.red[700],
-          contentPadding: EdgeInsets.zero,
-          title: Row(
-            children: [
-              Icon(
-                _isSilentMode ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                color: _isSilentMode ? Colors.red[700] : AppColors.placeholder,
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Text(
-                "Silent SOS Mode",
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
-              ),
-            ],
-          ),
-          subtitle: Text(
-            "For theft or harassment. Triggers alerts in the background with no sound, vibration, or bright UI triggers.",
-            style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: 0.6), height: 1.3),
-          ),
-          value: _isSilentMode,
-          onChanged: (val) {
-            setState(() {
-              _isSilentMode = val;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(val
-                    ? 'Silent SOS enabled. Screen will dim to black if SOS triggers.'
-                    : 'Silent SOS disabled. Alarm will sound on SOS.'),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
   Widget _buildLiveLocationCard(Color containerBg, Color textColor) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1064,22 +1011,43 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.midTeal.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.my_location_rounded, color: AppColors.midTeal, size: 20),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.midTeal.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const Icon(Icons.my_location_rounded, color: AppColors.midTeal, size: 20),
+            ],
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Real-time GPS Status",
-                  style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+                Row(
+                  children: [
+                    Text(
+                      "Real-time GPS Status",
+                      style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      "LIVE",
+                      style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.green),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -1154,13 +1122,17 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: _isSilentMode
-                  ? [const Color(0xFF303030), const Color(0xFF1E1E1E)]
-                  : [const Color(0xFFE53935), const Color(0xFFC62828)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            gradient: widget.isDarkMode
+                ? const LinearGradient(
+                    colors: [Color(0xFF303030), Color(0xFF1E1E1E)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : const LinearGradient(
+                    colors: [Color(0xFFE53935), Color(0xFFC62828)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -1287,7 +1259,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               _buildEditableField("Current Medications", _medsController),
               _buildEditableField("Hajj/Umrah Group & Agency", _groupNameController),
               _buildEditableField("Makkah/Madinah Hotel Address", _hotelController),
-              
+
               // Emergency Contacts dynamic editor list
               const Divider(height: 1, thickness: 1),
               const SizedBox(height: 12),
@@ -1317,7 +1289,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: _isSilentMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                    color: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
                   ),
@@ -1379,7 +1351,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
             label,
             style: GoogleFonts.inter(
               fontSize: 11,
-              color: _isSilentMode ? Colors.white38 : AppColors.placeholder,
+              color: widget.isDarkMode ? Colors.white38 : AppColors.placeholder,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1390,7 +1362,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                   child: TextField(
                     controller: controller,
                     keyboardType: keyboardType,
-                    style: GoogleFonts.poppins(fontSize: 13, color: _isSilentMode ? Colors.white : AppColors.navyBlue),
+                    style: GoogleFonts.poppins(fontSize: 13, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue),
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       enabledBorder: OutlineInputBorder(
@@ -1402,7 +1374,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                         borderRadius: BorderRadius.circular(8),
                       ),
                       filled: true,
-                      fillColor: _isSilentMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                      fillColor: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
                     ),
                   ),
                 )
@@ -1411,7 +1383,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                   style: GoogleFonts.poppins(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: _isSilentMode ? Colors.white70 : AppColors.navyBlue,
+                    color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue,
                   ),
                 ),
         ],
@@ -1427,7 +1399,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
           label,
           style: GoogleFonts.inter(
             fontSize: 9.5,
-            color: _isSilentMode ? Colors.white38 : AppColors.placeholder,
+            color: widget.isDarkMode ? Colors.white38 : AppColors.placeholder,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -1438,7 +1410,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                 child: TextField(
                   controller: controller,
                   keyboardType: keyboardType,
-                  style: GoogleFonts.poppins(fontSize: 12.5, color: _isSilentMode ? Colors.white : AppColors.navyBlue),
+                  style: GoogleFonts.poppins(fontSize: 12.5, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue),
                   decoration: InputDecoration(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     enabledBorder: OutlineInputBorder(
@@ -1450,7 +1422,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                       borderRadius: BorderRadius.circular(6),
                     ),
                     filled: true,
-                    fillColor: _isSilentMode ? const Color(0xFF333333) : Colors.white,
+                    fillColor: widget.isDarkMode ? const Color(0xFF333333) : Colors.white,
                   ),
                 ),
               )
@@ -1459,7 +1431,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                 style: GoogleFonts.poppins(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
-                  color: _isSilentMode ? Colors.white70 : AppColors.navyBlue,
+                  color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue,
                 ),
               ),
       ],
@@ -1505,7 +1477,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                       children: [
                         Text(
                           "Current Detected Country",
-                          style: GoogleFonts.inter(fontSize: 11, color: _isSilentMode ? Colors.white38 : AppColors.placeholder),
+                          style: GoogleFonts.inter(fontSize: 11, color: widget.isDarkMode ? Colors.white38 : AppColors.placeholder),
                         ),
                         Text(
                           _currentCountry,
@@ -1709,7 +1681,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               children: [
                 Text(
                   label,
-                  style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: _isSilentMode ? Colors.white70 : AppColors.navyBlue),
+                  style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue),
                 ),
                 Text(
                   number,
@@ -1745,7 +1717,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: _isSilentMode ? const Color(0xFF1E1E1E) : Colors.white,
+        color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2)),
@@ -1754,7 +1726,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
       child: Material(
         color: Colors.transparent,
         child: ExpansionTile(
-          collapsedTextColor: _isSilentMode ? Colors.white70 : AppColors.navyBlue,
+          collapsedTextColor: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue,
           textColor: AppColors.midTeal,
           iconColor: AppColors.midTeal,
           title: Row(
@@ -1777,7 +1749,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
               child: Text(
                 content,
-                style: GoogleFonts.inter(fontSize: 11.5, color: _isSilentMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.75), height: 1.4),
+                style: GoogleFonts.inter(fontSize: 11.5, color: widget.isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.75), height: 1.4),
               ),
             ),
           ],
@@ -1925,7 +1897,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: _isSilentMode ? const Color(0xFF2B2B2B) : Colors.blue.withValues(alpha: 0.04),
+              color: widget.isDarkMode ? const Color(0xFF2B2B2B) : Colors.blue.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.2)),
             ),
@@ -1940,12 +1912,12 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                         height: 32,
                         child: TextField(
                           controller: _routeOriginController,
-                          style: GoogleFonts.poppins(fontSize: 11.5, color: _isSilentMode ? Colors.white : AppColors.navyBlue),
+                          style: GoogleFonts.poppins(fontSize: 11.5, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue),
                           decoration: InputDecoration(
                             hintText: "Start (Origin)",
                             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             filled: true,
-                            fillColor: _isSilentMode ? const Color(0xFF3B3B3B) : Colors.white,
+                            fillColor: widget.isDarkMode ? const Color(0xFF3B3B3B) : Colors.white,
                             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
                             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.midTeal)),
                           ),
@@ -1964,12 +1936,12 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                         height: 32,
                         child: TextField(
                           controller: _routeDestController,
-                          style: GoogleFonts.poppins(fontSize: 11.5, color: _isSilentMode ? Colors.white : AppColors.navyBlue),
+                          style: GoogleFonts.poppins(fontSize: 11.5, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue),
                           decoration: InputDecoration(
                             hintText: "Destination (To)",
                             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             filled: true,
-                            fillColor: _isSilentMode ? const Color(0xFF3B3B3B) : Colors.white,
+                            fillColor: widget.isDarkMode ? const Color(0xFF3B3B3B) : Colors.white,
                             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
                             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.midTeal)),
                           ),
@@ -2036,7 +2008,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
             child: Container(
               height: 220,
               width: double.infinity,
-              color: _isSilentMode ? const Color(0xFF151515) : const Color(0xFFE3F2FD),
+              color: widget.isDarkMode ? const Color(0xFF151515) : const Color(0xFFE3F2FD),
               child: _useGoogleMapWidget
                   ? GoogleMap(
                       initialCameraPosition: CameraPosition(
@@ -2057,11 +2029,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                             userLat: userLat,
                             userLng: userLng,
                             zoomScale: _mapZoomScale,
-                            isSilent: _isSilentMode,
+                            isDarkMode: widget.isDarkMode,
                             groupMembers: _isGroupJoined ? _mockGroupMembers : [],
                           ),
                         ),
-                        if (!_isSilentMode)
+                        if (!widget.isDarkMode)
                           const Positioned.fill(
                             child: IgnorePointer(
                               child: RadarSweepWidget(),
@@ -2221,7 +2193,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
     );
   }
 
-
   Widget _buildLegendItem(IconData icon, Color color, String label) {
     return Row(
       children: [
@@ -2229,7 +2200,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         const SizedBox(width: 4),
         Text(
           label,
-          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: _isSilentMode ? Colors.white54 : AppColors.navyBlue),
+          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white54 : AppColors.navyBlue),
         ),
       ],
     );
@@ -2314,55 +2285,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
         ),
         const SizedBox(height: 20),
 
-        // Interactive simulation actions
-        Text(
-          "Simulate External Triggers",
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              _buildSimActionButton(
-                label: "Simulate Leader Safety Check-in Ping",
-                description: "Receives group message query: 'Ahmed requests safe check-in status after Jamarat crowding'",
-                icon: Icons.campaign_rounded,
-                onPressed: () {
-                  NotificationService.instance.showCustomNotification(
-                    id: 8881,
-                    title: "🚨 Group Safety Check-In 🚨",
-                    body: "Leader Ahmed requests your safety status. Tap to respond.",
-                    scheduledTime: DateTime.now().add(const Duration(seconds: 1)),
-                  );
-                  _showCheckInDialog();
-                },
-              ),
-              const Divider(height: 20),
-              _buildSimActionButton(
-                label: "Simulate Geofence Wandering Alert",
-                description: "Simulates pilgrim walking 650m outside the predefined Mina Camp boundary",
-                icon: Icons.map_outlined,
-                onPressed: () {
-                  _triggerGeofenceBreachAlert();
-                },
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
         // Incident Logs History
         Text(
           "Incident History Logs",
@@ -2438,7 +2360,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
     );
   }
 
-  // Group Protocol Guide when NOT joined
+  // Group Protocol Guide when NOT joined — now offers "Create Group" (leader,
+  // generates a code) as well as "Join Group" (enter an existing code).
   Widget _buildGroupSetupGuide(Color cardBg, Color textColor) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -2462,13 +2385,47 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
             style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: 0.55)),
           ),
           const Divider(height: 24),
-          
+
           _buildProtocolStep("1", "Leader Creates Group", "Hajj agency leader logs in, sets up caravan coordinates, and generates a unique code (e.g. MKK-9981)."),
           _buildProtocolStep("2", "Leader Shares Code", "Leader prints the code on wristbands, ID cards, or sends it via text/WhatsApp to members."),
           _buildProtocolStep("3", "Pilgrims Join in App", "Pilgrims enter the code below to sync live coordinates and profiles with the caravan."),
           _buildProtocolStep("4", "Live Safety Layer Active", "Caravan leader can trigger safety pings after big crowd movements (e.g. Jamarat, Arafat)."),
-          
+
           const Divider(height: 24),
+
+          // ===== CREATE GROUP (LEADER) =====
+          Text(
+            "Create a New Group",
+            style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Become the caravan leader and generate a unique code to share with your group.",
+            style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: 0.55)),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.navyBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+              label: Text(
+                "CREATE GROUP & GENERATE CODE",
+                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              onPressed: _generateGroupCode,
+            ),
+          ),
+
+          const Divider(height: 28),
+
+          // ===== JOIN EXISTING GROUP =====
           Text(
             "Join Hajj Caravan Group",
             style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
@@ -2481,7 +2438,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                   height: 44,
                   child: TextField(
                     controller: _groupCodeController,
-                    style: GoogleFonts.poppins(fontSize: 13, color: _isSilentMode ? Colors.white : AppColors.navyBlue),
+                    style: GoogleFonts.poppins(fontSize: 13, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue),
                     decoration: InputDecoration(
                       hintText: "Enter Code (e.g. MKK-9981)",
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -2494,7 +2451,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                         borderRadius: BorderRadius.circular(10),
                       ),
                       filled: true,
-                      fillColor: _isSilentMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                      fillColor: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
                     ),
                   ),
                 ),
@@ -2512,6 +2469,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                   if (_groupCodeController.text.trim().isNotEmpty) {
                     setState(() {
                       _isGroupJoined = true;
+                      _isGroupLeader = false;
                     });
                     _saveProfileData();
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -2553,7 +2511,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               children: [
                 Text(
                   title,
-                  style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: _isSilentMode ? Colors.white70 : AppColors.navyBlue),
+                  style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -2610,6 +2568,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                 onPressed: () {
                   setState(() {
                     _isGroupJoined = false;
+                    _isGroupLeader = false;
                   });
                   _saveProfileData();
                 },
@@ -2617,23 +2576,23 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
             ],
           ),
           const Divider(height: 24),
-          
+
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildGroupMeta("GROUP CODE", _groupCodeController.text.toUpperCase()),
-              _buildGroupMeta("CARAVAN LEADER", "Ahmed Al-Harbi"),
-              _buildGroupMeta("LEADER PHONE", "+966 50 123 4567"),
+              _buildGroupMeta("CARAVAN LEADER", _isGroupLeader ? "You (Leader)" : "Ahmed Al-Harbi"),
+              _buildGroupMeta("LEADER PHONE", _isGroupLeader ? "—" : "+966 50 123 4567"),
             ],
           ),
-          
+
           const Divider(height: 24),
           Text(
             "Group Members Live Tracker",
             style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
           ),
           const SizedBox(height: 8),
-          
+
           ..._mockGroupMembers.map((member) {
             final String name = member['name'];
             final int batt = member['battery'];
@@ -2645,7 +2604,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: _isSilentMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                color: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: isOk ? Colors.grey.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.3)),
               ),
@@ -2707,163 +2666,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
           const SizedBox(height: 2),
           Text(
             val,
-            style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: _isSilentMode ? Colors.white70 : AppColors.navyBlue),
+            style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSimActionButton({
-    required String label,
-    required String description,
-    required IconData icon,
-    required VoidCallback onPressed,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: AppColors.midTeal, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                label,
-                style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: _isSilentMode ? Colors.white70 : AppColors.navyBlue),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          description,
-          style: GoogleFonts.inter(fontSize: 10.5, color: Colors.grey[500], height: 1.3),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          height: 36,
-          child: OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.midTeal),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: onPressed,
-            child: Text("TRIGGER SIMULATION", style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showCheckInDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              const Icon(Icons.campaign_rounded, color: AppColors.midTeal),
-              const SizedBox(width: 8),
-              Text("Group Safety Check-In", style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: Text(
-            "Ahmed (Group Leader) has initiated a safety check-in for 'Garuda Hajj Cluster 4' after Jamarat crowd movements.\n\nPlease declare your current safety status.",
-            style: GoogleFonts.inter(fontSize: 12.5, height: 1.4),
-          ),
-          actions: [
-            TextButton(
-              child: Text("I NEED HELP", style: GoogleFonts.poppins(color: Colors.red, fontWeight: FontWeight.bold)),
-              onPressed: () async {
-                Navigator.of(ctx).pop();
-                await EmergencyApiService.instance.sendGroupCheckInStatus(
-                  checkInId: "CHK_9011",
-                  status: "NEED_HELP",
-                  latitude: _currentPosition?.latitude ?? 21.4225,
-                  longitude: _currentPosition?.longitude ?? 39.8262,
-                );
-                _fireSosAlert();
-              },
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal),
-              child: Text("I AM SAFE", style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
-              onPressed: () async {
-                Navigator.of(ctx).pop();
-                await EmergencyApiService.instance.sendGroupCheckInStatus(
-                  checkInId: "CHK_9011",
-                  status: "SAFE",
-                  latitude: _currentPosition?.latitude ?? 21.4225,
-                  longitude: _currentPosition?.longitude ?? 39.8262,
-                );
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Safety check-in response sent to group leader: 'I AM SAFE'")),
-                );
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _triggerGeofenceBreachAlert() async {
-    final double lat = _currentPosition?.latitude ?? 21.4225;
-    final double lng = _currentPosition?.longitude ?? 39.8262;
-
-    await EmergencyApiService.instance.reportGeofenceViolation(
-      groupLeaderId: "LEADER_9981",
-      latitude: lat,
-      longitude: lng,
-      distanceOut: 650.0,
-    );
-
-    NotificationService.instance.showCustomNotification(
-      id: 7771,
-      title: "⚠️ Geofence Wandering Alert ⚠️",
-      body: "You are 650m outside the Mina Pilgrim Encampment zone. Ahmed (leader) has been flagged.",
-      scheduledTime: DateTime.now().add(const Duration(seconds: 1)),
-    );
-
-    showDialog(
-      context: context,
-      builder: (BuildContext ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: const [
-              Icon(Icons.map_outlined, color: Colors.orange),
-              SizedBox(width: 8),
-              Text("Geofence Boundary Breach", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: Text(
-            "You have wandered 650m outside the expected Mina Encampment Boundary.\n\nYour group leader has been notified automatically to prevent you from getting lost. Please return to the group zone or follow the directions.",
-            style: GoogleFonts.inter(fontSize: 12.5, height: 1.4),
-          ),
-          actions: [
-            TextButton(
-              child: const Text("CLOSE"),
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal),
-              child: const Text("NAVIGATE BACK", style: TextStyle(color: Colors.white)),
-              onPressed: () async {
-                Navigator.of(ctx).pop();
-                final uri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=21.4172,39.8821");
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri);
-                }
-              },
-            ),
-          ],
-        );
-      },
     );
   }
 }
@@ -2941,14 +2747,14 @@ class HajjMapPainter extends CustomPainter {
   final double userLat;
   final double userLng;
   final double zoomScale;
-  final bool isSilent;
+  final bool isDarkMode;
   final List<Map<String, dynamic>> groupMembers;
 
   HajjMapPainter({
     required this.userLat,
     required this.userLng,
     required this.zoomScale,
-    required this.isSilent,
+    required this.isDarkMode,
     required this.groupMembers,
   });
 
@@ -2958,9 +2764,9 @@ class HajjMapPainter extends CustomPainter {
     final double cy = size.height / 2;
 
     final gridPaint = Paint()
-      ..color = isSilent ? Colors.white10 : Colors.blue.withValues(alpha: 0.05)
+      ..color = isDarkMode ? Colors.white10 : Colors.blue.withValues(alpha: 0.05)
       ..strokeWidth = 1.0;
-    
+
     for (double i = 0; i < size.width; i += 40) {
       canvas.drawLine(Offset(i, 0), Offset(i, size.height), gridPaint);
     }
@@ -2968,20 +2774,20 @@ class HajjMapPainter extends CustomPainter {
       canvas.drawLine(Offset(0, i), Offset(size.width, i), gridPaint);
     }
 
-    final double scale = 14000.0 * zoomScale; 
+    final double scale = 14000.0 * zoomScale;
 
     Offset gpsToCanvas(double lat, double lng) {
-      final double dy = (lat - userLat) * scale; 
-      final double dx = (lng - userLng) * scale; 
+      final double dy = (lat - userLat) * scale;
+      final double dx = (lng - userLng) * scale;
       return Offset(cx + dx, cy - dy);
     }
 
     final roadPaint = Paint()
-      ..color = isSilent ? const Color(0xFF252525) : const Color(0xFFCFD8DC)
+      ..color = isDarkMode ? const Color(0xFF252525) : const Color(0xFFCFD8DC)
       ..strokeWidth = 6.0 * zoomScale
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
-    
+
     final makkahPos = gpsToCanvas(21.4225, 39.8262);
     final muzdalifahPos = gpsToCanvas(21.3890, 39.9250);
     final minaPos = gpsToCanvas(21.4172, 39.8821);
@@ -2995,20 +2801,20 @@ class HajjMapPainter extends CustomPainter {
       )
       ..lineTo(muzdalifahPos.dx, muzdalifahPos.dy)
       ..lineTo(arafatPos.dx, arafatPos.dy);
-    
+
     canvas.drawPath(roadPath, roadPaint);
 
     final siteFillPaint = Paint()
-      ..color = isSilent ? Colors.black26 : Colors.green.withValues(alpha: 0.07)
+      ..color = isDarkMode ? Colors.black26 : Colors.green.withValues(alpha: 0.07)
       ..style = PaintingStyle.fill;
-    
+
     canvas.drawCircle(makkahPos, 35 * zoomScale, siteFillPaint);
     canvas.drawCircle(minaPos, 45 * zoomScale, siteFillPaint);
     canvas.drawCircle(arafatPos, 40 * zoomScale, siteFillPaint);
     canvas.drawCircle(muzdalifahPos, 30 * zoomScale, siteFillPaint);
 
     final kaabaPaint = Paint()
-      ..color = const Color(0xFFD84315) 
+      ..color = const Color(0xFFD84315)
       ..style = PaintingStyle.fill;
     canvas.drawRect(Rect.fromCenter(center: makkahPos, width: 14 * zoomScale, height: 14 * zoomScale), kaabaPaint);
     final kaabaCover = Paint()
@@ -3016,7 +2822,7 @@ class HajjMapPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     canvas.drawRect(Rect.fromCenter(center: makkahPos, width: 12 * zoomScale, height: 12 * zoomScale), kaabaCover);
     final kaabaBelt = Paint()
-      ..color = const Color(0xFFFFD54F) 
+      ..color = const Color(0xFFFFD54F)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0 * zoomScale;
     canvas.drawRect(Rect.fromCenter(center: makkahPos, width: 12 * zoomScale, height: 4 * zoomScale), kaabaBelt);
@@ -3031,10 +2837,10 @@ class HajjMapPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     _drawMountain(canvas, arafatPos, 12 * zoomScale, mtPaint);
 
-    _drawText(canvas, "Makkah Haram", makkahPos.dx, makkahPos.dy + 15 * zoomScale, isSilent);
-    _drawText(canvas, "Mina Camps", minaPos.dx, minaPos.dy + 15 * zoomScale, isSilent);
-    _drawText(canvas, "Muzdalifah", muzdalifahPos.dx, muzdalifahPos.dy + 15 * zoomScale, isSilent);
-    _drawText(canvas, "Mount Arafat", arafatPos.dx, arafatPos.dy + 15 * zoomScale, isSilent);
+    _drawText(canvas, "Makkah Haram", makkahPos.dx, makkahPos.dy + 15 * zoomScale, isDarkMode);
+    _drawText(canvas, "Mina Camps", minaPos.dx, minaPos.dy + 15 * zoomScale, isDarkMode);
+    _drawText(canvas, "Muzdalifah", muzdalifahPos.dx, muzdalifahPos.dy + 15 * zoomScale, isDarkMode);
+    _drawText(canvas, "Mount Arafat", arafatPos.dx, arafatPos.dy + 15 * zoomScale, isDarkMode);
 
     final crossPaint = Paint()
       ..color = Colors.green[600]!
@@ -3051,7 +2857,7 @@ class HajjMapPainter extends CustomPainter {
       final String mStatus = member['status'] as String;
 
       final mPos = gpsToCanvas(mLat, mLng);
-      
+
       final memberPaint = Paint()
         ..color = mStatus.contains("BREACH") ? Colors.orange[800]! : Colors.red[800]!
         ..style = PaintingStyle.fill;
@@ -3063,18 +2869,18 @@ class HajjMapPainter extends CustomPainter {
         ..strokeWidth = 1.0;
       canvas.drawCircle(mPos, 9.0 * zoomScale, memberPulse);
 
-      _drawText(canvas, "$mName (${mDist.toStringAsFixed(1)}km)", mPos.dx, mPos.dy - 10 * zoomScale, isSilent);
+      _drawText(canvas, "$mName (${mDist.toStringAsFixed(1)}km)", mPos.dx, mPos.dy - 10 * zoomScale, isDarkMode);
     }
 
     final pilgrimPaint = Paint()
       ..color = Colors.blue[600]!
       ..style = PaintingStyle.fill;
-    
+
     final pilgrimPulse = Paint()
       ..color = Colors.blue[400]!.withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
-    
+
     canvas.drawCircle(Offset(cx, cy), 6.5 * zoomScale, pilgrimPaint);
     canvas.drawCircle(Offset(cx, cy), 12.0 * zoomScale, pilgrimPulse);
 
@@ -3084,7 +2890,7 @@ class HajjMapPainter extends CustomPainter {
       ..strokeWidth = 1.5;
     canvas.drawCircle(Offset(cx, cy), 6.5 * zoomScale, borderPaint);
 
-    _drawText(canvas, "YOU", cx, cy - 12 * zoomScale, isSilent, isBold: true);
+    _drawText(canvas, "YOU", cx, cy - 12 * zoomScale, isDarkMode, isBold: true);
   }
 
   void _drawTent(Canvas canvas, Offset pos, double size, Paint paint) {
@@ -3126,13 +2932,13 @@ class HajjMapPainter extends CustomPainter {
     canvas.drawPath(path, paint);
   }
 
-  void _drawText(Canvas canvas, String text, double x, double y, bool isSilent, {bool isBold = false}) {
+  void _drawText(Canvas canvas, String text, double x, double y, bool isDarkMode, {bool isBold = false}) {
     final span = TextSpan(
       text: text,
       style: GoogleFonts.inter(
         fontSize: 9,
         fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-        color: isSilent ? Colors.white60 : AppColors.navyBlue,
+        color: isDarkMode ? Colors.white60 : AppColors.navyBlue,
         shadows: [
           const Shadow(color: Colors.white70, blurRadius: 2, offset: Offset(0, 1)),
         ],
