@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -16,6 +16,7 @@ import 'assistant_tab.dart';
 import 'zakat_manager_screen.dart';
 import 'quran_tracker_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/theme_service.dart';
 import 'emergency_sos_screen.dart';
 import 'dhikr_counter_screen.dart';
 import 'profile_tab.dart';
@@ -614,16 +615,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                           margin: const EdgeInsets.symmetric(horizontal: 28),
                           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(28),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.navyBlue.withValues(alpha: 0.18),
-                                blurRadius: 40,
-                                offset: const Offset(0, 12),
-                              )
-                            ],
+                          color: _isDarkMode ? Colors.black : Colors.white,           // was Color(0xFF1E1E1E)
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(24),
+                            topRight: Radius.circular(24),
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.navyBlue.withValues(alpha: 0.08),
+                              blurRadius: 20,
+                              offset: const Offset(0, -4),
+                            ),
+                          ],
+                        ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -855,9 +859,10 @@ Widget _buildActiveTabContent() {
         return CalendarTab(
           key: const ValueKey('CalendarTab'),
           onOpenZakatCalculator: _showZakatCalculatorSheet,
+          isDarkMode: _isDarkMode,
         );
       case 3:
-        return const AssistantTab();
+        return AssistantTab(isDarkMode: _isDarkMode);
       case 4:
         return ProfileTab(
           key: const ValueKey('ProfileTab'),
@@ -869,6 +874,8 @@ Widget _buildActiveTabContent() {
             });
             final prefs = await SharedPreferences.getInstance();
             await prefs.setBool('is_dark_mode', isDark);
+            // update global app theme notifier so top-level MaterialApp updates
+            appThemeNotifier.value = isDark;
           },
         );
       default:
@@ -1338,7 +1345,7 @@ _buildAnimatedEntry(
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const DhikrCounterScreen(),
+                        builder: (_) => DhikrCounterScreen(isDarkMode: _isDarkMode),
                       ),
                     );
                   },
@@ -1373,7 +1380,7 @@ _buildAnimatedEntry(
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const EmergencySosScreen(),
+                        builder: (_) => EmergencySosScreen(isDarkMode: _isDarkMode),
                       ),
                     );
                   },
@@ -1388,88 +1395,99 @@ _buildAnimatedEntry(
 
  // ===== FEATURE CARD (Reusable) =====
   Widget _buildFeatureCard({
-    required IconData icon,
-    required String label,
-    CustomPainter? iconPainter,
-    VoidCallback? onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap ?? () {},
-        borderRadius: BorderRadius.circular(18),
-        splashColor: AppColors.midTeal.withValues(alpha: 0.15),
-        highlightColor: AppColors.midTeal.withValues(alpha: 0.08),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: _isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.08),
-                blurRadius: 14,
-                offset: const Offset(0, 5),
-              ),
-            ],
-            border: Border.all(
-              color: _isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.navyBlue.withValues(alpha: 0.22),
-              width: 1.6,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Icon container with custom vector art
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: _isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.midTeal.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _isDarkMode ? Colors.white.withValues(alpha: 0.2) : AppColors.midTeal.withValues(alpha: 0.25),
-                    width: 1,
-                  ),
-                ),
-                child: iconPainter != null
-                    ? CustomPaint(painter: iconPainter)
-                    : Icon(icon, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 22),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                label,
-                style: GoogleFonts.poppins(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.bold,
-                  color: _isDarkMode ? Colors.white : AppColors.navyBlue,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-  // ===== TODAY'S GUIDANCE =====
-  Widget _buildTodaysGuidance() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22),
+  required IconData icon,
+  required String label,
+  CustomPainter? iconPainter,
+  VoidCallback? onTap,
+}) {
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap ?? () {},
+      borderRadius: BorderRadius.circular(18),
+      splashColor: AppColors.midTeal.withValues(alpha: 0.15),
+      highlightColor: AppColors.midTeal.withValues(alpha: 0.08),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          color: _isDarkMode ? Colors.black : Colors.white,   // was Color(0xFF1E1E1E)
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: _isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+              color: _isDarkMode
+                  ? Colors.black.withValues(alpha: 0.5)
+                  : AppColors.navyBlue.withValues(alpha: 0.08),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
             ),
           ],
           border: Border.all(
-            color: _isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.dustyBlueTeal.withValues(alpha: 0.12),
-            width: 1,
+            color: _isDarkMode
+                ? Colors.white.withValues(alpha: 0.16)        // was 0.12 — a bit brighter
+                : AppColors.navyBlue.withValues(alpha: 0.22),
+            width: 1.6,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _isDarkMode
+                    ? Colors.white.withValues(alpha: 0.16)    // was 0.12 — icon chip pops more
+                    : AppColors.midTeal.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _isDarkMode
+                      ? Colors.white.withValues(alpha: 0.30)  // was 0.2
+                      : AppColors.midTeal.withValues(alpha: 0.25),
+                  width: 1,
+                ),
+              ),
+              child: iconPainter != null
+                  ? CustomPaint(painter: iconPainter)
+                  : Icon(icon, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 22),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 13.5,
+                fontWeight: FontWeight.bold,
+                color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+  // ===== TODAY'S GUIDANCE =====
+ Widget _buildTodaysGuidance() {
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 22),
+    child: Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? Colors.black : Colors.white,     // was Color(0xFF1E1E1E)
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: _isDarkMode
+                ? Colors.black.withValues(alpha: 0.5)
+                : AppColors.navyBlue.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: _isDarkMode
+              ? Colors.white.withValues(alpha: 0.16)          // was 0.12
+              : AppColors.dustyBlueTeal.withValues(alpha: 0.12),
+          width: 1,
           ),
         ),
         child: Column(
@@ -1991,7 +2009,9 @@ class _QurbaniIconPainter extends CustomPainter {
     );
 
     final legPaint = Paint()
-      ..color = AppColors.navyBlue.withValues(alpha: 0.6)
+      ..color = isDark
+          ? Colors.white.withValues(alpha: 0.6)          // was AppColors.navyBlue.withValues(alpha: 0.6)
+          : AppColors.navyBlue.withValues(alpha: 0.6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
@@ -2166,7 +2186,6 @@ class _DhikrIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
@@ -2175,6 +2194,8 @@ class _DhikrIconPainter extends CustomPainter {
     final cy = size.height / 2;
     final r = size.width * 0.24;
 
+    final Color baseColor = isDark ? Colors.white : AppColors.navyBlue;
+
     for (int i = 0; i < 4; i++) {
       final arcR = r * (0.4 + i * 0.22);
       canvas.drawArc(
@@ -2182,7 +2203,7 @@ class _DhikrIconPainter extends CustomPainter {
         -math.pi * 0.7,
         math.pi * 1.4,
         false,
-        paint..color = AppColors.navyBlue.withValues(alpha: 0.65 - i * 0.1),
+        paint..color = baseColor.withValues(alpha: 0.65 - i * 0.1),   // was hardcoded navyBlue
       );
     }
 

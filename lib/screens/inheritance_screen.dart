@@ -1,981 +1,2794 @@
+import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; 
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart'; // AppColors
 
-/// ===== ISLAMIC INHERITANCE (FARAID) MODULE =====
-/// Entry point — shows two cards: Calculate by Share, and Rules.
-/// Push like the other planner pages:
-///   Navigator.of(context).push(
-///     MaterialPageRoute(builder: (_) => const InheritanceGuideScreen()),
-///   );
+const Color kLinkGreen = Color(0xFF6FE6A8);
+
+// ============================================================
+// ENTRY POINT
+// ============================================================
 class InheritanceGuideScreen extends StatelessWidget {
   const InheritanceGuideScreen({super.key});
 
   @override
+  Widget build(BuildContext context) => const InheritanceScreen();
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+enum Gender { male, female }
+
+class RelativeNode {
+  final String id;
+  final String label;
+  final String? customName;
+  final Gender gender;
+  final int level;
+  final String relationKey;
+  final String? parentId; // nephew→brother, son/daughter→wife
+
+  RelativeNode({
+    required this.id,
+    required this.label,
+    this.customName,
+    required this.gender,
+    required this.level,
+    required this.relationKey,
+    this.parentId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'customName': customName,
+        'gender': gender == Gender.male ? 'male' : 'female',
+        'level': level,
+        'relationKey': relationKey,
+        'parentId': parentId,
+      };
+
+  factory RelativeNode.fromJson(Map<String, dynamic> json) => RelativeNode(
+        id: json['id'] as String,
+        label: json['label'] as String,
+        customName: json['customName'] as String?,
+        gender: json['gender'] == 'male' ? Gender.male : Gender.female,
+        level: json['level'] as int,
+        relationKey: json['relationKey'] as String,
+        parentId: json['parentId'] as String?,
+      );
+}
+
+class FaraidShareResult {
+  final String heirKey;
+  final String label;
+  final double fraction;
+  final String fractionReadable;
+  final double percentage;
+  final String note;
+  final bool excluded;
+  final int level;
+
+  FaraidShareResult({
+    required this.heirKey,
+    required this.label,
+    required this.fraction,
+    required this.fractionReadable,
+    required this.percentage,
+    required this.note,
+    this.excluded = false,
+    this.level = 0,
+  });
+}
+
+// ============================================================
+// FARAID ENGINE (Hanafi-style, with exclusion notes)
+// ============================================================
+class FaraidEngine {
+  static const Map<String, int> heirLevel = {
+    'husband': 0, 'wife': 0,
+    'son': 1, 'daughter': 1, 'grandson': 2, 'granddaughter': 2,
+    'father': -1, 'mother': -1,
+    'pGrandfather': -2, 'pGrandmother': -2, 'mGrandmother': -2,
+    'fullBrother': 0, 'fullSister': 0, 'paternalBrother': 0,
+    'paternalSister': 0, 'maternalSibling': 0,
+    'fullNephew': 1, 'paternalNephew': 1,
+    'fullUncle': -1, 'paternalUncle': -1,
+    'fullCousin': 0, 'paternalCousin': 0,
+  };
+
+  static const Map<String, int> displayOrder = {
+    'pGrandfather': 0, 'pGrandmother': 1, 'mGrandmother': 2,
+    'father': 3, 'mother': 4, 'husband': 5, 'wife': 6,
+    'fullBrother': 7, 'fullSister': 8, 'paternalBrother': 9,
+    'paternalSister': 10, 'maternalSibling': 11,
+    'fullUncle': 12, 'paternalUncle': 13, 'fullCousin': 14, 'paternalCousin': 15,
+    'son': 16, 'daughter': 17, 'grandson': 18, 'granddaughter': 19,
+    'fullNephew': 20, 'paternalNephew': 21,
+  };
+
+  static List<FaraidShareResult> calculate({
+    required Gender meGender,
+    required Map<String, int> heirCounts,
+  }) {
+    final results = <FaraidShareResult>[];
+    int cnt(String k) => heirCounts[k] ?? 0;
+    String plural(int n, String one, String many) => n > 1 ? '$n $many' : one;
+
+    final sons = cnt('son');
+    final daughters = cnt('daughter');
+    final grandsons = cnt('grandson');
+    final granddaughters = cnt('granddaughter');
+    final father = cnt('father') > 0;
+    final mother = cnt('mother') > 0;
+    final pgf = cnt('pGrandfather') > 0;
+    final pgm = cnt('pGrandmother') > 0;
+    final mgm = cnt('mGrandmother') > 0;
+    final wives = cnt('wife');
+    final husband = cnt('husband') > 0;
+    final fb = cnt('fullBrother');
+    final fs = cnt('fullSister');
+    final pb = cnt('paternalBrother');
+    final ps = cnt('paternalSister');
+    final ms = cnt('maternalSibling');
+    final fn = cnt('fullNephew');
+    final pn = cnt('paternalNephew');
+    final fu = cnt('fullUncle');
+    final pu = cnt('paternalUncle');
+    final fcz = cnt('fullCousin');
+    final pcz = cnt('paternalCousin');
+
+    final hasMaleDesc = sons > 0 || grandsons > 0;
+    final hasFemDesc = daughters > 0 || granddaughters > 0;
+    final hasDesc = hasMaleDesc || hasFemDesc;
+    final gfActs = !father && pgf;
+    final sibTotal = fb + fs + pb + ps + ms;
+
+    void add(String key, String label, double f, String note) {
+      results.add(FaraidShareResult(
+        heirKey: key,
+        label: label,
+        fraction: f,
+        fractionReadable: _toReadableFraction(f),
+        percentage: f * 100,
+        note: note,
+        level: heirLevel[key] ?? 0,
+      ));
+    }
+
+    void exclude(String key, String label, String note) {
+      results.add(FaraidShareResult(
+        heirKey: key,
+        label: label,
+        fraction: 0,
+        fractionReadable: '0',
+        percentage: 0,
+        note: note,
+        excluded: true,
+        level: heirLevel[key] ?? 0,
+      ));
+    }
+
+    bool has(String key) => results.any((r) => r.heirKey == key);
+    double used() =>
+        results.where((r) => !r.excluded).fold(0.0, (s, r) => s + r.fraction);
+
+    void boost(String key, double extra, String note) {
+      final i = results.indexWhere((r) => r.heirKey == key && !r.excluded);
+      if (i == -1) return;
+      final e = results[i];
+      final nf = e.fraction + extra;
+      results[i] = FaraidShareResult(
+        heirKey: e.heirKey,
+        label: e.label,
+        fraction: nf,
+        fractionReadable: _toReadableFraction(nf),
+        percentage: nf * 100,
+        note: note,
+        level: e.level,
+      );
+    }
+
+    // ---------- 1. SPOUSE ----------
+    if (meGender == Gender.male && wives > 0) {
+      final f = hasDesc ? 1 / 8 : 1 / 4;
+      add(
+        'wife',
+        plural(wives, 'Wife', 'Wives'),
+        f,
+        hasDesc
+            ? 'Fixed 1/8 (children exist)${wives > 1 ? ' — shared, each ${_toReadableFraction(f / wives)}' : ''}'
+            : 'Fixed 1/4 (no children)${wives > 1 ? ' — shared, each ${_toReadableFraction(f / wives)}' : ''}',
+      );
+    }
+    if (meGender == Gender.female && husband) {
+      final f = hasDesc ? 1 / 4 : 1 / 2;
+      add('husband', 'Husband', f,
+          hasDesc ? 'Fixed 1/4 (children exist)' : 'Fixed 1/2 (no children)');
+    }
+
+    // ---------- 2. FATHER / GRANDFATHER ----------
+    bool fatherResiduary = false;
+    bool gfResiduary = false;
+
+    if (father) {
+      if (hasMaleDesc) {
+        add('father', 'Father', 1 / 6, 'Fixed 1/6 — male descendant present');
+      } else if (hasDesc) {
+        add('father', 'Father', 1 / 6, 'Fixed 1/6 + remainder (daughters only)');
+        fatherResiduary = true;
+      } else {
+        fatherResiduary = true;
+      }
+    }
+    if (pgf) {
+      if (father) {
+        exclude('pGrandfather', 'Paternal Grandfather', 'Excluded — father is alive');
+      } else if (hasMaleDesc) {
+        add('pGrandfather', 'Paternal Grandfather', 1 / 6,
+            'Fixed 1/6 — stands in for the father');
+      } else if (hasDesc) {
+        add('pGrandfather', 'Paternal Grandfather', 1 / 6,
+            'Fixed 1/6 + remainder (in father\'s place)');
+        gfResiduary = true;
+      } else {
+        gfResiduary = true;
+      }
+    }
+
+    // ---------- 3. MOTHER & GRANDMOTHERS ----------
+    if (mother) {
+      final oneSixth = hasDesc || sibTotal >= 2;
+      add('mother', 'Mother', oneSixth ? 1 / 6 : 1 / 3,
+          oneSixth ? 'Fixed 1/6 (children or 2+ siblings)' : 'Fixed 1/3');
+    }
+    final pgmEligible = pgm && !father && !mother;
+    final mgmEligible = mgm && !mother;
+    final bothGm = pgmEligible && mgmEligible;
+    if (pgm) {
+      if (!pgmEligible) {
+        exclude('pGrandmother', 'Paternal Grandmother',
+            'Excluded — ${mother ? 'mother' : 'father'} is alive');
+      } else {
+        add('pGrandmother', 'Paternal Grandmother', bothGm ? 1 / 12 : 1 / 6,
+            bothGm ? '1/6 shared with maternal grandmother' : 'Fixed 1/6');
+      }
+    }
+    if (mgm) {
+      if (!mgmEligible) {
+        exclude('mGrandmother', 'Maternal Grandmother', 'Excluded — mother is alive');
+      } else {
+        add('mGrandmother', 'Maternal Grandmother', bothGm ? 1 / 12 : 1 / 6,
+            bothGm ? '1/6 shared with paternal grandmother' : 'Fixed 1/6');
+      }
+    }
+
+    // ---------- 4. MATERNAL SIBLINGS ----------
+    if (ms > 0) {
+      if (hasDesc || father || pgf) {
+        exclude(
+            'maternalSibling',
+            plural(ms, 'Maternal Sibling', 'Maternal Siblings'),
+            'Excluded — blocked by ${hasDesc ? 'a descendant' : father ? 'the father' : 'the grandfather'}');
+      } else {
+        add(
+            'maternalSibling',
+            plural(ms, 'Maternal Sibling', 'Maternal Siblings'),
+            ms == 1 ? 1 / 6 : 1 / 3,
+            ms == 1
+                ? 'Fixed 1/6 (Kalalah case)'
+                : 'Fixed 1/3 shared equally — male & female alike');
+      }
+    }
+
+    // ---------- 5. DAUGHTERS / GRANDCHILDREN ----------
+    if (sons == 0 && daughters > 0) {
+      add('daughter', plural(daughters, 'Daughter', 'Daughters'),
+          daughters == 1 ? 1 / 2 : 2 / 3,
+          daughters == 1 ? 'Fixed 1/2 (only daughter)' : 'Fixed 2/3 shared');
+    }
+    if (sons > 0) {
+      if (grandsons > 0) {
+        exclude('grandson', plural(grandsons, 'Grandson', 'Grandsons'),
+            'Excluded — son is alive');
+      }
+      if (granddaughters > 0) {
+        exclude('granddaughter',
+            plural(granddaughters, 'Granddaughter', 'Granddaughters'),
+            'Excluded — son is alive');
+      }
+    } else if (grandsons == 0 && granddaughters > 0) {
+      if (daughters == 0) {
+        add('granddaughter',
+            plural(granddaughters, 'Granddaughter', 'Granddaughters'),
+            granddaughters == 1 ? 1 / 2 : 2 / 3,
+            'Fixed share — stands in place of daughters');
+      } else if (daughters == 1) {
+        add('granddaughter',
+            plural(granddaughters, 'Granddaughter', 'Granddaughters'), 1 / 6,
+            'Fixed 1/6 — completes 2/3 with the daughter');
+      } else {
+        exclude('granddaughter',
+            plural(granddaughters, 'Granddaughter', 'Granddaughters'),
+            'Excluded — daughters already took the full 2/3');
+      }
+    }
+
+    // ---------- 6. FULL & PATERNAL SISTERS (fard paths) ----------
+    bool fsMaaGhayr = false;
+    if (fs > 0 && fb == 0) {
+      if (hasMaleDesc || father || gfActs) {
+        exclude('fullSister', plural(fs, 'Full Sister', 'Full Sisters'),
+            'Excluded — blocked by ${hasMaleDesc ? 'a son/grandson' : father ? 'the father' : 'the grandfather'}');
+      } else if (hasFemDesc) {
+        fsMaaGhayr = true;
+      } else {
+        add('fullSister', plural(fs, 'Full Sister', 'Full Sisters'),
+            fs == 1 ? 1 / 2 : 2 / 3,
+            fs == 1 ? 'Fixed 1/2 (Kalalah case)' : 'Fixed 2/3 shared');
+      }
+    }
+    bool psMaaGhayr = false;
+    if (ps > 0 && pb == 0) {
+      if (hasMaleDesc || father || gfActs || fb > 0) {
+        exclude('paternalSister', plural(ps, 'Paternal Sister', 'Paternal Sisters'),
+            'Excluded — blocked by ${fb > 0 ? 'a full brother' : hasMaleDesc ? 'a son/grandson' : 'the father/grandfather'}');
+      } else if (fsMaaGhayr) {
+        exclude('paternalSister', plural(ps, 'Paternal Sister', 'Paternal Sisters'),
+            'Excluded — full sister takes the residue with the daughters');
+      } else if (fs >= 2) {
+        exclude('paternalSister', plural(ps, 'Paternal Sister', 'Paternal Sisters'),
+            'Excluded — full sisters completed the 2/3 maximum');
+      } else if (fs == 1) {
+        add('paternalSister', plural(ps, 'Paternal Sister', 'Paternal Sisters'),
+            1 / 6, 'Fixed 1/6 — completes 2/3 with the full sister');
+      } else if (hasFemDesc) {
+        psMaaGhayr = true;
+      } else {
+        add('paternalSister', plural(ps, 'Paternal Sister', 'Paternal Sisters'),
+            ps == 1 ? 1 / 2 : 2 / 3,
+            ps == 1 ? 'Fixed 1/2 (no full siblings)' : 'Fixed 2/3 shared');
+      }
+    }
+
+    // ---------- 7. RESIDUE (ASABA CHAIN) ----------
+    double remainder = math.max(0.0, 1.0 - used());
+    bool claimed = false;
+    String blocker = '';
+
+    if (sons > 0) {
+      final units = (sons * 2 + daughters).toDouble();
+      add('son', plural(sons, 'Son', 'Sons'), remainder * sons * 2 / units,
+          'Residuary (Asaba) — double a daughter\'s share');
+      if (daughters > 0) {
+        add('daughter', plural(daughters, 'Daughter', 'Daughters'),
+            remainder * daughters / units, 'Residuary with sons (2:1 ratio)');
+      }
+      claimed = true;
+      blocker = 'son';
+    } else if (grandsons > 0) {
+      final units = (grandsons * 2 + granddaughters).toDouble();
+      add('grandson', plural(grandsons, 'Grandson', 'Grandsons'),
+          remainder * grandsons * 2 / units, 'Residuary (Asaba) — in sons\' place');
+      if (granddaughters > 0) {
+        add('granddaughter',
+            plural(granddaughters, 'Granddaughter', 'Granddaughters'),
+            remainder * granddaughters / units,
+            'Residuary with grandsons (2:1 ratio)');
+      }
+      claimed = true;
+      blocker = 'grandson';
+    } else if (fatherResiduary) {
+      if (has('father')) {
+        boost('father', remainder, 'Fixed 1/6 + remainder (Asaba)');
+      } else {
+        add('father', 'Father', remainder, 'Residuary (Asaba) — no descendants');
+      }
+      claimed = true;
+      blocker = 'father';
+    } else if (gfResiduary) {
+      if (has('pGrandfather')) {
+        boost('pGrandfather', remainder, 'Fixed 1/6 + remainder (Asaba)');
+      } else {
+        add('pGrandfather', 'Paternal Grandfather', remainder,
+            'Residuary (Asaba) — in father\'s place');
+      }
+      claimed = true;
+      blocker = 'grandfather';
+    } else if (fb > 0) {
+      final units = (fb * 2 + fs).toDouble();
+      add('fullBrother', plural(fb, 'Full Brother', 'Full Brothers'),
+          remainder * fb * 2 / units, 'Residuary (Asaba)');
+      if (fs > 0) {
+        add('fullSister', plural(fs, 'Full Sister', 'Full Sisters'),
+            remainder * fs / units, 'Residuary with brothers (2:1 ratio)');
+      }
+      claimed = true;
+      blocker = 'full brother';
+    } else if (fsMaaGhayr) {
+      add('fullSister', plural(fs, 'Full Sister', 'Full Sisters'), remainder,
+          'Residuary with daughters (Asaba ma\'a al-ghayr)');
+      claimed = true;
+      blocker = 'full sister';
+    } else if (pb > 0) {
+      final units = (pb * 2 + ps).toDouble();
+      add('paternalBrother', plural(pb, 'Paternal Brother', 'Paternal Brothers'),
+          remainder * pb * 2 / units, 'Residuary (Asaba)');
+      if (ps > 0) {
+        add('paternalSister', plural(ps, 'Paternal Sister', 'Paternal Sisters'),
+            remainder * ps / units, 'Residuary with brothers (2:1 ratio)');
+      }
+      claimed = true;
+      blocker = 'paternal brother';
+    } else if (psMaaGhayr) {
+      add('paternalSister', plural(ps, 'Paternal Sister', 'Paternal Sisters'),
+          remainder, 'Residuary with daughters (Asaba ma\'a al-ghayr)');
+      claimed = true;
+      blocker = 'paternal sister';
+    } else if (fn > 0) {
+      add('fullNephew', plural(fn, 'Full Nephew', 'Full Nephews'), remainder,
+          'Residuary (Asaba)');
+      claimed = true;
+      blocker = 'full nephew';
+    } else if (pn > 0) {
+      add('paternalNephew', plural(pn, 'Paternal Nephew', 'Paternal Nephews'),
+          remainder, 'Residuary (Asaba)');
+      claimed = true;
+      blocker = 'paternal nephew';
+    } else if (fu > 0) {
+      add('fullUncle', plural(fu, 'Full Uncle', 'Full Uncles'), remainder,
+          'Residuary (Asaba)');
+      claimed = true;
+      blocker = 'full uncle';
+    } else if (pu > 0) {
+      add('paternalUncle', plural(pu, 'Paternal Uncle', 'Paternal Uncles'),
+          remainder, 'Residuary (Asaba)');
+      claimed = true;
+      blocker = 'paternal uncle';
+    } else if (fcz > 0) {
+      add('fullCousin', plural(fcz, 'Full Cousin', 'Full Cousins'), remainder,
+          'Residuary (Asaba)');
+      claimed = true;
+      blocker = 'full cousin';
+    } else if (pcz > 0) {
+      add('paternalCousin', plural(pcz, 'Paternal Cousin', 'Paternal Cousins'),
+          remainder, 'Residuary (Asaba)');
+      claimed = true;
+      blocker = 'paternal cousin';
+    }
+
+    // ---------- 8. EXCLUSION SWEEP ----------
+    final sweep = <List<dynamic>>[
+      ['fullBrother', fb, 'Full Brother', 'Full Brothers'],
+      ['fullSister', fs, 'Full Sister', 'Full Sisters'],
+      ['paternalBrother', pb, 'Paternal Brother', 'Paternal Brothers'],
+      ['paternalSister', ps, 'Paternal Sister', 'Paternal Sisters'],
+      ['fullNephew', fn, 'Full Nephew', 'Full Nephews'],
+      ['paternalNephew', pn, 'Paternal Nephew', 'Paternal Nephews'],
+      ['fullUncle', fu, 'Full Uncle', 'Full Uncles'],
+      ['paternalUncle', pu, 'Paternal Uncle', 'Paternal Uncles'],
+      ['fullCousin', fcz, 'Full Cousin', 'Full Cousins'],
+      ['paternalCousin', pcz, 'Paternal Cousin', 'Paternal Cousins'],
+    ];
+    for (final s in sweep) {
+      final key = s[0] as String;
+      final n = s[1] as int;
+      if (n > 0 && !has(key)) {
+        exclude(key, plural(n, s[2] as String, s[3] as String),
+            claimed
+                ? 'Excluded — the $blocker is nearer in line (Asaba)'
+                : 'Excluded — blocked by nearer relatives');
+      }
+    }
+
+    // ---------- 9. AWL (over-subscription) ----------
+    double total = used();
+    if (total > 1.001) {
+      final scale = 1.0 / total;
+      for (int i = 0; i < results.length; i++) {
+        if (results[i].excluded) continue;
+        final e = results[i];
+        final nf = e.fraction * scale;
+        results[i] = FaraidShareResult(
+          heirKey: e.heirKey,
+          label: e.label,
+          fraction: nf,
+          fractionReadable: _toReadableFraction(nf),
+          percentage: nf * 100,
+          note: '${e.note} [Awl — proportionally reduced]',
+          level: e.level,
+        );
+      }
+    }
+    // ---------- 10. RADD (surplus returned) ----------
+    else if (!claimed) {
+      total = used();
+      if (total > 0 && total < 0.999) {
+        final radd = 1.0 - total;
+        final nonSpouse = results
+            .where((r) =>
+                !r.excluded && r.heirKey != 'wife' && r.heirKey != 'husband')
+            .fold(0.0, (s, r) => s + r.fraction);
+        if (nonSpouse > 0) {
+          for (int i = 0; i < results.length; i++) {
+            final e = results[i];
+            if (e.excluded || e.heirKey == 'wife' || e.heirKey == 'husband') {
+              continue;
+            }
+            final nf = e.fraction + radd * (e.fraction / nonSpouse);
+            results[i] = FaraidShareResult(
+              heirKey: e.heirKey,
+              label: e.label,
+              fraction: nf,
+              fractionReadable: _toReadableFraction(nf),
+              percentage: nf * 100,
+              note: '${e.note} [Radd — increased]',
+              level: e.level,
+            );
+          }
+        } else {
+          final i = results.indexWhere((r) =>
+              !r.excluded && (r.heirKey == 'wife' || r.heirKey == 'husband'));
+          if (i != -1) {
+            final e = results[i];
+            final nf = e.fraction + radd;
+            results[i] = FaraidShareResult(
+              heirKey: e.heirKey,
+              label: e.label,
+              fraction: nf,
+              fractionReadable: _toReadableFraction(nf),
+              percentage: nf * 100,
+              note: 'Sole heir — remainder returned [Radd]',
+              level: e.level,
+            );
+          }
+        }
+      }
+    }
+
+    results.sort((a, b) => (displayOrder[a.heirKey] ?? 99)
+        .compareTo(displayOrder[b.heirKey] ?? 99));
+    return results;
+  }
+
+  static String _toReadableFraction(double f) {
+    if (f <= 0) return '0';
+    const common = <String, double>{
+      '1/2': 0.5, '1/3': 1 / 3, '2/3': 2 / 3, '1/4': 0.25, '3/4': 0.75,
+      '1/6': 1 / 6, '1/8': 0.125, '1/12': 1 / 12, '1/16': 1 / 16,
+      '1/24': 1 / 24, '5/24': 5 / 24, '7/24': 7 / 24,
+    };
+    for (final e in common.entries) {
+      if ((f - e.value).abs() < 0.004) return e.key;
+    }
+    return '${(f * 100).toStringAsFixed(1)}%';
+  }
+}
+
+// ============================================================
+// FAMILY TREE LAYOUT ENGINE
+// ============================================================
+class TreeLayoutResult {
+  final double width;
+  final double height;
+  final Map<String, Offset> centers;
+  final List<List<Offset>> edges;
+
+  TreeLayoutResult({
+    required this.width,
+    required this.height,
+    required this.centers,
+    required this.edges,
+  });
+}
+
+class FamilyTreeLayout {
+  static const double cardW = 128;
+  static const double cardH = 46;
+
+  static const Map<int, List<String>> _order = {
+    -2: ['pGrandfather', 'pGrandmother', 'mGrandmother'],
+    -1: ['fullUncle', 'paternalUncle', 'father', 'mother'],
+    0: [
+      'fullCousin', 'paternalCousin', 'fullBrother', 'fullSister',
+      'me', 'wife', 'husband',
+      'paternalBrother', 'paternalSister', 'maternalSibling',
+    ],
+    1: ['fullNephew', 'paternalNephew', 'son', 'daughter'],
+    2: ['grandson', 'granddaughter'],
+  };
+
+  static TreeLayoutResult compute(
+    List<RelativeNode> relatives,
+    double minWidth, {
+    Map<String, Offset>? nodeOverrides,
+  }) {
+    const levelY = <int, double>{-2: 80, -1: 205, 0: 330, 1: 455, 2: 575};
+    const spacing = 152.0;
+    const half = cardH / 2;
+
+    final byLevel = <int, List<RelativeNode>>{-2: [], -1: [], 0: [], 1: [], 2: []};
+    for (final r in relatives) {
+      (byLevel[r.level] ?? byLevel[0]!).add(r);
+    }
+    byLevel.forEach((lvl, list) {
+      final ord = _order[lvl] ?? const <String>[];
+      list.sort((a, b) {
+        int ia = ord.indexOf(a.relationKey);
+        int ib = ord.indexOf(b.relationKey);
+        if (ia < 0) ia = 99;
+        if (ib < 0) ib = 99;
+        return ia != ib ? ia - ib : a.id.compareTo(b.id);
+      });
+    });
+
+    int maxCount = 1;
+    for (final l in byLevel.values) {
+      if (l.length > maxCount) maxCount = l.length;
+    }
+    final width = math.max(minWidth, maxCount * spacing + 90);
+
+    final centers = <String, Offset>{};
+    byLevel.forEach((lvl, list) {
+      final startX = (width - list.length * spacing) / 2 + spacing / 2;
+      for (int i = 0; i < list.length; i++) {
+        centers[list[i].id] = Offset(startX + i * spacing, levelY[lvl]!);
+      }
+    });
+
+    if (nodeOverrides != null) {
+      for (final entry in nodeOverrides.entries) {
+        if (centers.containsKey(entry.key)) {
+          centers[entry.key] = entry.value;
+        }
+      }
+    }
+
+    // ---- helpers ----
+    Offset? one(String key) {
+      for (final r in relatives) {
+        if (r.relationKey == key && centers.containsKey(r.id)) {
+          return centers[r.id];
+        }
+      }
+      return null;
+    }
+
+    List<Offset> all(String key) => [
+          for (final r in relatives)
+            if (r.relationKey == key && centers.containsKey(r.id))
+              centers[r.id]!,
+        ];
+
+    List<RelativeNode> allNodes(String key) => [
+          for (final r in relatives)
+            if (r.relationKey == key && centers.containsKey(r.id)) r,
+        ];
+
+    Offset top(Offset c) => Offset(c.dx, c.dy - half);
+    Offset bottom(Offset c) => Offset(c.dx, c.dy + half);
+
+    final edges = <List<Offset>>[];
+
+    // Where a line from `center` toward `toward` crosses the card's own
+    // rectangle border — lets a link attach to ANY side of a card
+    // (left/right/top/bottom), whichever faces the other end.
+    Offset borderPoint(Offset center, Offset toward) {
+      final dx = toward.dx - center.dx;
+      final dy = toward.dy - center.dy;
+      if (dx == 0 && dy == 0) return center;
+      final halfW = cardW / 2;
+      final halfH = cardH / 2;
+      final scaleX = dx != 0 ? halfW / dx.abs() : double.infinity;
+      final scaleY = dy != 0 ? halfH / dy.abs() : double.infinity;
+      final scale = math.min(scaleX, scaleY);
+      return Offset(center.dx + dx * scale, center.dy + dy * scale);
+    }
+
+    List<Offset> quadBezier(Offset p0, Offset p1, Offset p2, {int segments = 16}) {
+      final pts = <Offset>[];
+      for (int i = 0; i <= segments; i++) {
+        final t = i / segments;
+        final mt = 1 - t;
+        final x = mt * mt * p0.dx + 2 * mt * t * p1.dx + t * t * p2.dx;
+        final y = mt * mt * p0.dy + 2 * mt * t * p1.dy + t * t * p2.dy;
+        pts.add(Offset(x, y));
+      }
+      return pts;
+    }
+
+    // Bows a link into a gentle curve whenever the two ends aren't roughly
+    // aligned — this is what keeps it from slicing straight through a card
+    // that's ended up sitting between them after dragging.
+    List<Offset> bow(Offset start, Offset end) {
+      final dx = end.dx - start.dx;
+      final dy = end.dy - start.dy;
+      if (dx.abs() < 6 || dy.abs() < 6) return [start, end];
+      final length = math.sqrt(dx * dx + dy * dy);
+      final midX = (start.dx + end.dx) / 2;
+      final midY = (start.dy + end.dy) / 2;
+      final perpX = -dy / length;
+      final perpY = dx / length;
+      final amount = math.min(46.0, length * 0.2);
+      final control = Offset(midX + perpX * amount, midY + perpY * amount);
+      return quadBezier(start, control, end);
+    }
+
+    // Card-to-card link: attaches to whichever side of each card faces
+    // the other, wherever that card currently is.
+    List<Offset> connector(Offset aCenter, Offset bCenter) {
+      final start = borderPoint(aCenter, bCenter);
+      final end = borderPoint(bCenter, aCenter);
+      return bow(start, end);
+    }
+
+    // Anchor-to-card link: the anchor is a plain point (e.g. the midpoint
+    // of a couple's connecting bar), the other end is a real card.
+    List<Offset> connectFromAnchor(Offset anchor, Offset childCenter) {
+      final end = borderPoint(childCenter, anchor);
+      return bow(anchor, end);
+    }
+
+    void coupleBar(Offset a, Offset b) {
+      final l = a.dx < b.dx ? a : b;
+      final r = a.dx < b.dx ? b : a;
+      edges.add([Offset(l.dx + cardW / 2, l.dy), Offset(r.dx - cardW / 2, r.dy)]);
+    }
+
+    // ---- 1. Paternal grandparents ----
+    final gpf = one('pGrandfather');
+    final gpm = one('pGrandmother');
+    Offset? grandAnchor;
+    if (gpf != null && gpm != null) {
+      coupleBar(gpf, gpm);
+      grandAnchor = Offset((gpf.dx + gpm.dx) / 2, gpf.dy + half);
+    } else if (gpf != null) {
+      grandAnchor = bottom(gpf);
+    } else if (gpm != null) {
+      grandAnchor = bottom(gpm);
+    }
+
+    final f = one('father');
+    final m = one('mother');
+    if (grandAnchor != null && f != null) {
+      edges.add(connectFromAnchor(grandAnchor, f));
+    }
+    for (final u in [...all('fullUncle'), ...all('paternalUncle')]) {
+      if (grandAnchor != null) {
+        edges.add(connectFromAnchor(grandAnchor, u));
+      } else if (f != null) {
+        edges.add(connector(f, u));
+      }
+    }
+
+    // ---- 2. Maternal grandmother → mother ----
+    final mgmC = one('mGrandmother');
+    if (mgmC != null && m != null) edges.add(connector(mgmC, m));
+
+    // ---- 3. Parents couple → me & full siblings ----
+    Offset? parentAnchor;
+    if (f != null && m != null) {
+      coupleBar(f, m);
+      parentAnchor = Offset((f.dx + m.dx) / 2, f.dy + half);
+    } else if (f != null) {
+      parentAnchor = bottom(f);
+    } else if (m != null) {
+      parentAnchor = bottom(m);
+    }
+
+    Offset meC = const Offset(0, 0);
+    for (final r in relatives) {
+      if (r.id == 'me') meC = centers[r.id]!;
+    }
+    if (parentAnchor != null) edges.add(connectFromAnchor(parentAnchor, meC));
+
+    for (final s in [...all('fullBrother'), ...all('fullSister')]) {
+      if (parentAnchor != null) {
+        edges.add(connectFromAnchor(parentAnchor, s));
+      } else {
+        edges.add(connector(meC, s));
+      }
+    }
+    for (final s in [...all('paternalBrother'), ...all('paternalSister')]) {
+      if (f != null) {
+        edges.add(connector(f, s));
+      } else if (parentAnchor != null) {
+        edges.add(connectFromAnchor(parentAnchor, s));
+      } else {
+        edges.add(connector(meC, s));
+      }
+    }
+    for (final s in all('maternalSibling')) {
+      if (m != null) {
+        edges.add(connector(m, s));
+      } else if (parentAnchor != null) {
+        edges.add(connectFromAnchor(parentAnchor, s));
+      } else {
+        edges.add(connector(meC, s));
+      }
+    }
+
+    // ---- 4. Me ↔ each spouse ----
+    final spouseNodes = allNodes('wife') + allNodes('husband');
+    final Map<String, Offset> wifeAnchors = {};
+    for (final sp in spouseNodes) {
+      final spC = centers[sp.id]!;
+      coupleBar(meC, spC);
+      wifeAnchors[sp.id] = Offset((meC.dx + spC.dx) / 2, meC.dy + half);
+    }
+    final Offset defaultCoupleAnchor = spouseNodes.isNotEmpty
+        ? wifeAnchors[spouseNodes.first.id]!
+        : bottom(meC);
+
+    // Children: connect from specific wife midpoint or default couple anchor
+    for (final child in allNodes('son') + allNodes('daughter')) {
+      final childC = centers[child.id];
+      if (childC == null) continue;
+      Offset anchor;
+      if (child.parentId != null && wifeAnchors.containsKey(child.parentId)) {
+        anchor = wifeAnchors[child.parentId!]!;
+      } else {
+        anchor = defaultCoupleAnchor;
+      }
+      edges.add(connectFromAnchor(anchor, childC));
+    }
+
+    // ---- 5. Son → grandchildren ----
+    final sonC = one('son');
+    final grandAnchorC = sonC != null ? bottom(sonC) : bottom(meC);
+    for (final g in [...all('grandson'), ...all('granddaughter')]) {
+      edges.add(connectFromAnchor(grandAnchorC, g));
+    }
+
+    // ---- 6. Brothers → nephews using parentId ----
+    for (final nephew in allNodes('fullNephew')) {
+      final nC = centers[nephew.id];
+      if (nC == null) continue;
+      Offset brotherAnchor;
+      if (nephew.parentId != null && centers.containsKey(nephew.parentId)) {
+        brotherAnchor = bottom(centers[nephew.parentId!]!);
+      } else if (one('fullBrother') != null) {
+        brotherAnchor = bottom(one('fullBrother')!);
+      } else {
+        brotherAnchor = bottom(meC);
+      }
+      edges.add(connectFromAnchor(brotherAnchor, nC));
+    }
+    for (final nephew in allNodes('paternalNephew')) {
+      final nC = centers[nephew.id];
+      if (nC == null) continue;
+      Offset brotherAnchor;
+      if (nephew.parentId != null && centers.containsKey(nephew.parentId)) {
+        brotherAnchor = bottom(centers[nephew.parentId!]!);
+      } else if (one('paternalBrother') != null) {
+        brotherAnchor = bottom(one('paternalBrother')!);
+      } else {
+        brotherAnchor = bottom(meC);
+      }
+      edges.add(connectFromAnchor(brotherAnchor, nC));
+    }
+
+    // ---- 7. Uncles → cousins ----
+    final fuC = one('fullUncle');
+    if (fuC != null) {
+      for (final c in all('fullCousin')) {
+        edges.add(connector(fuC, c));
+      }
+    }
+    final puC = one('paternalUncle');
+    if (puC != null) {
+      for (final c in all('paternalCousin')) {
+        edges.add(connector(puC, c));
+      }
+    }
+
+    return TreeLayoutResult(
+      width: width,
+      height: 655,
+      centers: centers,
+      edges: edges,
+    );
+  }
+}
+
+// ============================================================
+// MAIN SCREEN
+// ============================================================
+class InheritanceScreen extends StatefulWidget {
+  const InheritanceScreen({super.key});
+
+  @override
+  State<InheritanceScreen> createState() => _InheritanceScreenState();
+}
+
+class _InheritanceScreenState extends State<InheritanceScreen>
+    with TickerProviderStateMixin {
+  late TabController _tabController;
+  late AnimationController _lineAnimationController;
+  bool _isDarkMode = false;
+  bool _boardLocked = false;
+  final TransformationController _treeTransformController = TransformationController();
+
+  // Drag-to-reposition: stores user-moved node positions
+  final Map<String, Offset> _nodeOffsets = {};
+  String? _draggingNodeId; // which node is currently being dragged
+  Offset? _dragStartPos;
+  bool _editLayoutMode = false; // when true, one-finger drag moves cards; when false, it pans the board
+
+  Offset _clampNodePosition(Offset pos, double maxWidth, double maxHeight) {
+    const margin = 40.0;
+    // Extra room so nodes can be dragged well past the auto-computed
+    // layout box in any direction — left of "me", above the top row,
+    // below the bottom row, etc.
+    const extraRoom = 700.0;
+    final minX = -extraRoom + FamilyTreeLayout.cardW / 2 + margin;
+    final maxX = maxWidth + extraRoom - FamilyTreeLayout.cardW / 2 - margin;
+    final minY = -extraRoom + FamilyTreeLayout.cardH / 2 + margin;
+    final maxY = maxHeight + extraRoom - FamilyTreeLayout.cardH / 2 - margin;
+    return Offset(pos.dx.clamp(minX, maxX), pos.dy.clamp(minY, maxY));
+  }
+
+  Gender _myGender = Gender.male;
+  List<RelativeNode> _familyRelatives = [];
+  List<FaraidShareResult> _familyResults = [];
+
+  final Map<String, int> _scenarioHeirCounts = {
+    'husband': 0, 'wife': 0, 'son': 0, 'daughter': 0,
+    'grandson': 0, 'granddaughter': 0, 'father': 0, 'mother': 0,
+    'pGrandfather': 0, 'pGrandmother': 0, 'mGrandmother': 0,
+    'fullBrother': 0, 'fullSister': 0, 'paternalBrother': 0,
+    'paternalSister': 0, 'maternalSibling': 0, 'fullNephew': 0,
+    'paternalNephew': 0, 'fullUncle': 0, 'paternalUncle': 0,
+    'fullCousin': 0, 'paternalCousin': 0,
+  };
+  Gender _scenarioDeceasedGender = Gender.male;
+  List<FaraidShareResult>? _scenarioResults;
+  List<Map<String, dynamic>> _savedScenarios = [];
+
+  // Singleton relations — can only appear once
+  static const Set<String> _singletonKeys = {
+    'father', 'mother', 'pGrandfather', 'pGrandmother', 'mGrandmother', 'husband',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+    _lineAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..forward();
+    _loadState();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _lineAnimationController.dispose();
+    _treeTransformController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadState() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
+    });
+
+    // Load board lock state & saved transform matrix
+    _boardLocked = prefs.getBool('inheritance_board_locked') ?? false;
+    final matrixJson = prefs.getString('inheritance_locked_matrix');
+    if (matrixJson != null) {
+      try {
+        final List list = jsonDecode(matrixJson);
+        final storage = List<double>.from(list.cast<double>());
+        _treeTransformController.value = Matrix4.fromList(storage);
+      } catch (_) {}
+    }
+
+    // Load saved family tree from prefs
+    final genderStr = prefs.getString('inheritance_my_gender');
+    if (genderStr != null) {
+      _myGender = genderStr == 'female' ? Gender.female : Gender.male;
+    }
+
+    final treeJson = prefs.getString('inheritance_family_tree');
+    if (treeJson != null) {
+      try {
+        final list = jsonDecode(treeJson) as List;
+        final loaded = list
+            .map((e) => RelativeNode.fromJson(e as Map<String, dynamic>))
+            .toList();
+        setState(() {
+          _familyRelatives = loaded;
+          _recalculateFamilyShares();
+        });
+      } catch (_) {
+        // If parse fails, start fresh
+        _initEmptyTree();
+      }
+    } else {
+      // First launch — just "Me", no auto Father/Mother
+      _initEmptyTree();
+    }
+
+    final jsonStr = prefs.getString('inheritance_saved_scenarios');
+    if (jsonStr != null) {
+      try {
+        final list = jsonDecode(jsonStr) as List;
+        setState(() => _savedScenarios = list.cast<Map<String, dynamic>>());
+      } catch (_) {}
+    }
+
+    // Load saved node positions (for drag-to-reposition)
+    final offsetsJson = prefs.getString('inheritance_node_offsets');
+    if (offsetsJson != null) {
+      try {
+        final raw = jsonDecode(offsetsJson) as Map<String, dynamic>;
+        raw.forEach((k, v) {
+          final entry = v as Map<String, dynamic>;
+          _nodeOffsets[k] =
+              Offset((entry['x'] as num).toDouble(), (entry['y'] as num).toDouble());
+        });
+      } catch (_) {}
+    }
+  }
+
+  void _initEmptyTree() {
+    setState(() {
+      _familyRelatives = [
+        RelativeNode(id: 'me', label: 'Me', gender: _myGender, level: 0, relationKey: 'me'),
+      ];
+      _recalculateFamilyShares();
+    });
+  }
+
+  Future<void> _saveFamilyTree() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'inheritance_family_tree',
+        jsonEncode(_familyRelatives.map((r) => r.toJson()).toList()));
+    await prefs.setString(
+        'inheritance_my_gender', _myGender == Gender.male ? 'male' : 'female');
+    // Save dragged node positions
+    final offsetMap = _nodeOffsets.map(
+        (k, v) => MapEntry(k, <String, double>{'x': v.dx, 'y': v.dy}));
+    await prefs.setString('inheritance_node_offsets', jsonEncode(offsetMap));
+  }
+
+  Future<void> _saveScenariosToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('inheritance_saved_scenarios', jsonEncode(_savedScenarios));
+  }
+
+  void _recalculateFamilyShares() {
+    final counts = <String, int>{};
+    for (final r in _familyRelatives) {
+      if (r.id == 'me') continue;
+      counts[r.relationKey] = (counts[r.relationKey] ?? 0) + 1;
+    }
+    _familyResults = FaraidEngine.calculate(meGender: _myGender, heirCounts: counts);
+  }
+
+  void _addFamilyMember(String key, String label, Gender gender, int level,
+      {String? customName, String? parentId}) {
+    final existing = _familyRelatives.where((r) => r.relationKey == key).length;
+    if (_singletonKeys.contains(key) && existing >= 1) {
+      _snack('$label is already in the tree');
+      return;
+    }
+    if (key == 'wife' && existing >= 4) {
+      _snack('Maximum 4 wives allowed in Islam');
+      return;
+    }
+    // Generate distinct auto-label like "Wife 2" or "Full Brother 2" if no custom name
+    final displayLabel = existing >= 1 ? '$label ${existing + 1}' : label;
+    setState(() {
+      _familyRelatives.add(RelativeNode(
+        id: '${key}_${DateTime.now().millisecondsSinceEpoch}',
+        label: displayLabel,
+        customName: customName,
+        gender: gender,
+        level: level,
+        relationKey: key,
+        parentId: parentId,
+      ));
+      _lineAnimationController.forward(from: 0);
+      _recalculateFamilyShares();
+    });
+    _saveFamilyTree();
+  }
+
+  void _removeFamilyMember(String id) {
+    if (id == 'me') return;
+    setState(() {
+      _familyRelatives.removeWhere((r) => r.id == id);
+      // Also remove children/nephews whose parentId references this node
+      _familyRelatives.removeWhere(
+          (r) => r.parentId == id && r.id != 'me');
+      _lineAnimationController.forward(from: 0);
+      _recalculateFamilyShares();
+    });
+    _saveFamilyTree();
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: GoogleFonts.inter(fontSize: 12.5)),
+      backgroundColor: AppColors.coralOrange,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 2),
+    ));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final bgColor = _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F7F5);
+    final outerBg = _isDarkMode ? const Color(0xFF000000) : const Color(0xFFE8E8E8);
+
     return Container(
-      color: const Color(0xFFE8E8E8),
+      color: outerBg,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
           child: Scaffold(
-            backgroundColor: const Color(0xFFF7F7F5),
+            backgroundColor: bgColor,
             body: SafeArea(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  _buildTabBar(),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildFamilyTreeTab(),
+                        _buildCalculationTab(),
+                        _buildScenariosTab(),
+                        _buildRulesTab(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // HEADER & TABS
+  // ============================================================
+  Widget _buildHeader() {
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final subtextColor =
+        _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Inheritance (Faraid)',
+                    style: GoogleFonts.poppins(
+                        fontSize: 15.5, fontWeight: FontWeight.bold, color: textColor)),
+                Text('Estate distribution & family tree',
+                    style: GoogleFonts.inter(fontSize: 11, color: subtextColor)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabBar() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: TabBar(
+        controller: _tabController,
+        labelColor: _isDarkMode ? Colors.white : AppColors.navyBlue,
+        unselectedLabelColor: _isDarkMode ? Colors.white38 : AppColors.placeholder,
+        indicatorColor: AppColors.midTeal,
+        indicatorWeight: 3,
+        labelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w700),
+        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w500),
+        tabs: const [
+          Tab(text: 'Family Tree'),
+          Tab(text: 'Calculation'),
+          Tab(text: 'Scenarios'),
+          Tab(text: 'Rules'),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // TAB 1: FAMILY TREE
+  // ============================================================
+  Widget _buildFamilyTreeTab() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final hasOnlyMe = _familyRelatives.length == 1 && _familyRelatives.first.id == 'me';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Clean empty-state banner (above board, never covers canvas)
+          if (hasOnlyMe)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _isDarkMode ? const Color(0xFF1B2A22) : const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kLinkGreen.withValues(alpha: 0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 20),
-                        onPressed: () => Navigator.pop(context),
+                      const Icon(Icons.info_outline_rounded, size: 16, color: kLinkGreen),
+                      const SizedBox(width: 8),
+                      Text('How to build your Family Tree:',
+                          style: GoogleFonts.poppins(
+                              fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '• Tap "Add Family Member" below to start adding relatives.\n'
+                    '• When adding children or nephews, pick which wife or brother they belong to.\n'
+                    '• Touch and drag any box to move it anywhere on the board canvas.',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        height: 1.4,
+                        color: _isDarkMode ? Colors.white70 : AppColors.navyBlue),
+                  ),
+                ],
+              ),
+            ),
+          // Gender selector
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)],
+            ),
+            child: Row(
+              children: [
+                Text('My Gender:',
+                    style: GoogleFonts.poppins(
+                        fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
+                const Spacer(),
+                _genderChip('Male', Gender.male),
+                const SizedBox(width: 8),
+                _genderChip('Female', Gender.female),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // ── THE TREE BOARD ──
+          Container(
+            height: 520,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: _isDarkMode
+                    ? const [Color(0xFF10151C), Color(0xFF0C1A16)]
+                    : const [Color(0xFFF0F7F3), Color(0xFFE6EFF8)],
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: _isDarkMode
+                    ? kLinkGreen.withValues(alpha: 0.18)
+                    : AppColors.navyBlue.withValues(alpha: 0.10),
+              ),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Stack(
+                children: [
+                  // Light dot-grid pattern (FIX: visible when close)
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: DotGridPainter(
+                        color: _isDarkMode
+                            ? Colors.white.withValues(alpha: 0.07)
+                            : AppColors.navyBlue.withValues(alpha: 0.06),
                       ),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: AppColors.navyBlue, borderRadius: BorderRadius.circular(14)),
-                        child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
+                    ),
+                  ),
+
+                  // Zoomable / pannable canvas — or static if locked
+                  Positioned.fill(
+                    child: LayoutBuilder(
+                      builder: (context, cons) {
+                        final layout = FamilyTreeLayout.compute(
+                            _familyRelatives, cons.maxWidth,
+                            nodeOverrides: _nodeOffsets);
+                        final canvasH = math.max(layout.height, cons.maxHeight);
+
+                        final treeContent = SizedBox(
+                          width: layout.width,
+                          height: canvasH,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned.fill(
+                                child: AnimatedBuilder(
+                                  animation: _lineAnimationController,
+                                  builder: (context, _) => CustomPaint(
+                                    painter: FamilyTreeLinkPainter(
+                                      edges: layout.edges,
+                                      progress: Curves.easeOutCubic
+                                          .transform(_lineAnimationController.value),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              for (final node in _familyRelatives)
+                                if (layout.centers.containsKey(node.id))
+                                  Positioned(
+                                    left: layout.centers[node.id]!.dx -
+                                        FamilyTreeLayout.cardW / 2,
+                                    top: layout.centers[node.id]!.dy -
+                                        FamilyTreeLayout.cardH / 2,
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      // In Edit Layout mode: plain one-finger drag moves the card.
+                                      // Outside Edit Layout mode: long-press still works as a
+                                      // quick way to nudge a single card without leaving pan/zoom mode.
+                                      onPanStart: _editLayoutMode
+                                          ? (_) {
+                                              _dragStartPos = _nodeOffsets[node.id] ??
+                                                  layout.centers[node.id]!;
+                                              setState(() => _draggingNodeId = node.id);
+                                            }
+                                          : null,
+                                      onPanUpdate: _editLayoutMode
+                                          ? (details) {
+                                              if (_dragStartPos == null) return;
+                                              final scale = _treeTransformController
+                                                  .value
+                                                  .getMaxScaleOnAxis();
+                                              final delta = Offset(
+                                                details.delta.dx / scale,
+                                                details.delta.dy / scale,
+                                              );
+                                              final base =
+                                                  _nodeOffsets[node.id] ?? layout.centers[node.id]!;
+                                              final newPos = _clampNodePosition(
+                                                base + delta,
+                                                layout.width,
+                                                canvasH,
+                                              );
+                                              setState(() => _nodeOffsets[node.id] = newPos);
+                                            }
+                                          : null,
+                                      onPanEnd: _editLayoutMode
+                                          ? (_) {
+                                              setState(() => _draggingNodeId = null);
+                                              _dragStartPos = null;
+                                              _saveFamilyTree();
+                                            }
+                                          : null,
+                                      onLongPressStart: _editLayoutMode
+                                          ? null
+                                          : (_) {
+                                              HapticFeedback.mediumImpact();
+                                              _dragStartPos = _nodeOffsets[node.id] ??
+                                                  layout.centers[node.id]!;
+                                              setState(() => _draggingNodeId = node.id);
+                                            },
+                                      onLongPressMoveUpdate: _editLayoutMode
+                                          ? null
+                                          : (details) {
+                                              if (_dragStartPos == null) return;
+                                              final scale = _treeTransformController
+                                                  .value
+                                                  .getMaxScaleOnAxis();
+                                              final delta = details.offsetFromOrigin / scale;
+                                              final newPos = _clampNodePosition(
+                                                _dragStartPos! + delta,
+                                                layout.width,
+                                                canvasH,
+                                              );
+                                              setState(() => _nodeOffsets[node.id] = newPos);
+                                            },
+                                      onLongPressEnd: _editLayoutMode
+                                          ? null
+                                          : (_) {
+                                              setState(() => _draggingNodeId = null);
+                                              _dragStartPos = null;
+                                              _saveFamilyTree();
+                                            },
+                                      onLongPressCancel: _editLayoutMode
+                                          ? null
+                                          : () {
+                                              setState(() => _draggingNodeId = null);
+                                              _dragStartPos = null;
+                                            },
+                                      child: _buildFamilyCard(node),
+                                    ),
+                                  ),
+                            ],
+                          ),
+                        );
+
+                        // InteractiveViewer: pan disabled while dragging a node
+                        return InteractiveViewer(
+                          transformationController: _treeTransformController,
+                          constrained: false,
+                          boundaryMargin: const EdgeInsets.all(double.infinity),
+                          minScale: 0.2,
+                          maxScale: 5,
+                          panEnabled: !_boardLocked && !_editLayoutMode && _draggingNodeId == null,
+                          scaleEnabled: !_boardLocked && !_editLayoutMode && _draggingNodeId == null,
+                          child: treeContent,
+                        );
+                      },
+                    ),
+                  ),
+
+                  // Decorative title
+                  Positioned(
+                    top: 14,
+                    left: 18,
+                    child: IgnorePointer(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ShaderMask(
+                            shaderCallback: (r) => LinearGradient(
+                              colors: _isDarkMode
+                                  ? [kLinkGreen, AppColors.midTeal]
+                                  : [AppColors.navyBlue, AppColors.midTeal],
+                            ).createShader(r),
+                            child: Text(
+                              'My Family Tree',
+                              style: GoogleFonts.poppins(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.4,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Container(
+                            width: 64,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                  colors: [kLinkGreen, Colors.transparent]),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                  ),
+
+                  // Lock button (top-right)
+                  Positioned(
+                    top: 10,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: () async {
+                        setState(() => _boardLocked = !_boardLocked);
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('inheritance_board_locked', _boardLocked);
+                        // Save matrix transform when locking
+                        if (_boardLocked) {
+                          final storage = _treeTransformController.value.storage.toList();
+                          await prefs.setString('inheritance_locked_matrix', jsonEncode(storage));
+                        }
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _boardLocked
+                              ? kLinkGreen.withValues(alpha: 0.25)
+                              : (_isDarkMode ? Colors.black38 : Colors.white38),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _boardLocked
+                                ? kLinkGreen
+                                : (_isDarkMode ? Colors.white24 : Colors.black12),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('Inheritance (Faraid)', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                            Text('Islamic estate distribution guide', style: GoogleFonts.inter(fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.55))),
+                            Icon(
+                              _boardLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
+                              size: 13,
+                              color: _boardLocked
+                                  ? kLinkGreen
+                                  : (_isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.6)),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _boardLocked ? 'Locked' : 'Lock',
+                              style: GoogleFonts.inter(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: _boardLocked
+                                    ? kLinkGreen
+                                    : (_isDarkMode
+                                        ? Colors.white60
+                                        : AppColors.navyBlue.withValues(alpha: 0.6)),
+                              ),
+                            ),
                           ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+
+                  // Edit Layout toggle — lets user freely drag cards anywhere
+                  Positioned(
+                    top: 46,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _editLayoutMode = !_editLayoutMode),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _editLayoutMode
+                              ? kLinkGreen.withValues(alpha: 0.25)
+                              : (_isDarkMode ? Colors.black38 : Colors.white38),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _editLayoutMode
+                                ? kLinkGreen
+                                : (_isDarkMode ? Colors.white24 : Colors.black12),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _editLayoutMode
+                                  ? Icons.open_with_rounded
+                                  : Icons.pan_tool_alt_outlined,
+                              size: 13,
+                              color: _editLayoutMode
+                                  ? kLinkGreen
+                                  : (_isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.6)),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _editLayoutMode ? 'Arranging' : 'Arrange',
+                              style: GoogleFonts.inter(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: _editLayoutMode
+                                    ? kLinkGreen
+                                    : (_isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.6)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+
+                  // Manual zoom controls — easier than pinch on mobile
+                  Positioned(
+                    bottom: 10,
+                    left: 14,
+                    child: Column(
+                      children: [
+                        _zoomButton(Icons.add_rounded, () => _zoomBy(1.25)),
+                        const SizedBox(height: 6),
+                        _zoomButton(Icons.remove_rounded, () => _zoomBy(0.8)),
+                        const SizedBox(height: 6),
+                        _zoomButton(Icons.center_focus_strong_rounded, _resetZoom),
+                      ],
+                    ),
+                  ),
+
+                  // Hint text bottom — navy when unlocked, green when locked
+                  Positioned(
+                    bottom: 10,
+                    right: 14,
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: (_isDarkMode ? Colors.black : Colors.white)
+                              .withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: (_boardLocked ? kLinkGreen : AppColors.navyBlue)
+                                  .withValues(alpha: 0.35),
+                              width: 1),
+                        ),
+                        child: Text(
+                          _boardLocked
+                              ? 'Locked — tap 🔒 to pan/zoom'
+                              : _editLayoutMode
+                                  ? 'Drag any card to move it'
+                                  : 'Pinch to zoom · drag to pan · tap Arrange to move cards',
+                          style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: _boardLocked
+                                ? kLinkGreen
+                                : AppColors.navyBlue,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── PREMIUM ADD BUTTON ──
+          _buildAddFamilyMemberButton(),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _zoomButton(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: (_isDarkMode ? Colors.black : Colors.white).withValues(alpha: 0.55),
+          shape: BoxShape.circle,
+          border: Border.all(
+              color: (_boardLocked ? kLinkGreen : AppColors.navyBlue).withValues(alpha: 0.35)),
+        ),
+        child: Icon(icon, size: 17, color: _boardLocked ? kLinkGreen : AppColors.navyBlue),
+      ),
+    );
+  }
+
+  void _zoomBy(double factor) {
+    final currentScale = _treeTransformController.value.getMaxScaleOnAxis();
+    final targetScale = (currentScale * factor).clamp(0.2, 5.0);
+    final adjust = targetScale / currentScale;
+    final matrix = _treeTransformController.value.clone()..scale(adjust);
+    setState(() => _treeTransformController.value = matrix);
+  }
+
+  void _resetZoom() {
+    setState(() => _treeTransformController.value = Matrix4.identity());
+  }
+
+
+  // Premium gradient Add button
+  Widget _buildAddFamilyMemberButton() {
+    return GestureDetector(
+      onTap: _showAddRelativeDialog,
+      child: Container(
+        width: double.infinity,
+        height: 56,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [Color(0xFF1E3A8A), Color(0xFF17605A), Color(0xFF1E8A4A)],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: kLinkGreen.withValues(alpha: 0.35),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+            BoxShadow(
+              color: const Color(0xFF1E3A8A).withValues(alpha: 0.25),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // Subtle shine overlay
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.08),
+                      Colors.transparent,
+                    ],
+                  ),
+                ), // end Column
+              ), // end Container
+            ), // end ConstrainedBox
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.person_add_alt_1_rounded,
+                        color: Colors.white, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Add Family Member',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Icon(Icons.arrow_forward_ios_rounded,
+                      color: Colors.white.withValues(alpha: 0.6), size: 13),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _genderChip(String label, Gender g) {
+    final selected = _myGender == g;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _myGender = g;
+          final idx = _familyRelatives.indexWhere((r) => r.id == 'me');
+          if (idx != -1) {
+            _familyRelatives[idx] = RelativeNode(
+                id: 'me', label: 'Me', gender: g, level: 0, relationKey: 'me');
+          }
+          _familyRelatives.removeWhere(
+              (r) => r.relationKey == (g == Gender.male ? 'husband' : 'wife'));
+          _recalculateFamilyShares();
+        });
+        _saveFamilyTree();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.navyBlue
+              : (_isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFE0E0E0)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(label,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selected
+                  ? Colors.white
+                  : (_isDarkMode ? Colors.white70 : AppColors.navyBlue),
+            )),
+      ),
+    );
+  }
+
+  Widget _buildFamilyCard(RelativeNode node) {
+    final isMe = node.id == 'me';
+    const w = FamilyTreeLayout.cardW;
+    const h = FamilyTreeLayout.cardH;
+
+    final borderColor = isMe
+        ? kLinkGreen
+        : (_isDarkMode ? Colors.white24 : const Color(0xFF9DB8D6));
+    final textColor =
+        isMe ? Colors.white : (_isDarkMode ? Colors.white : AppColors.navyBlue);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        GestureDetector(
+          onTap: () => _showNodeOptions(node),
+          child: Container(
+            width: w,
+            height: h,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              gradient: isMe
+                  ? const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1E3A8A), Color(0xFF17605A)],
+                    )
+                  : null,
+              color: isMe
+                  ? null
+                  : (_isDarkMode ? const Color(0xFF232A26) : Colors.white),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor, width: isMe ? 2 : 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: isMe
+                      ? kLinkGreen.withValues(alpha: 0.25)
+                      : Colors.black.withValues(alpha: 0.07),
+                  blurRadius: isMe ? 10 : 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: isMe
+                        ? AppColors.midTeal
+                        : (node.gender == Gender.female
+                            ? AppColors.coralOrange
+                            : AppColors.navyBlue),
+                    shape: BoxShape.circle,
+                  ),
+                  child: CustomPaint(
+                      painter: AvatarPainter(gender: node.gender, isMe: isMe)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        node.customName ?? node.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                            fontSize: 10.5, fontWeight: FontWeight.bold, color: textColor),
+                      ),
+                      Text(
+                        isMe ? 'Self' : node.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 8.5,
+                          color: isMe
+                              ? Colors.white70
+                              : (_isDarkMode ? Colors.white60 : AppColors.placeholder),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  _homeCard(
-                    context: context,
-                    icon: Icons.calculate_rounded,
-                    title: 'Calculate by Share',
-                    subtitle: 'Select surviving heirs to see each share as a fraction and percentage',
-                    color: AppColors.navyBlue,
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CalculateByShareScreen())),
-                  ),
-                  const SizedBox(height: 14),
-                  _homeCard(
-                    context: context,
-                    icon: Icons.menu_book_rounded,
-                    title: 'Rules of Inheritance',
-                    subtitle: 'Learn the eligibility, share, and exclusion rules for every heir',
-                    color: AppColors.midTeal,
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InheritanceRulesScreen())),
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.08)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.warning_amber_rounded, color: AppColors.coralOrange, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'This calculator follows standard Hanafi fiqh rules, including the full priority order of extended heirs and adjustments for Awl (proportional reduction) and Radd (return of residue). For actual estate distribution, please have the result verified by a qualified Islamic scholar or Faraid expert.',
-                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.6), height: 1.5),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
-      ),
+        if (!isMe)
+          Positioned(
+            top: -10,
+            right: -10,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _removeFamilyMember(node.id),
+              child: Container(
+                padding: const EdgeInsets.all(8), // bigger invisible touch area
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(
+                      color: Colors.redAccent, shape: BoxShape.circle),
+                  child: const Icon(Icons.close_rounded, size: 12, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
-  Widget _homeCard({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
-          boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.05), blurRadius: 12, offset: const Offset(0, 4))],
+  void _showNodeOptions(RelativeNode node) {
+    if (node.id == 'me') return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20, 20, 20, 20 + MediaQuery.of(context).padding.bottom,
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
-              child: Icon(icon, color: color, size: 26),
+            Container(width: 40, height: 4,
+                decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Text('Manage ${node.customName ?? node.label}',
+                style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+              title: Text('Remove from Family Tree',
+                  style: GoogleFonts.poppins(
+                      fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(context);
+                _removeFamilyMember(node.id);
+              },
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                  const SizedBox(height: 4),
-                  Text(subtitle, style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.55), height: 1.4)),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right_rounded, color: color.withValues(alpha: 0.4)),
           ],
         ),
       ),
     );
   }
-}
 
-// ============================================================
-// FARAID CALCULATION ENGINE
-// ============================================================
 
-class FaraidShare {
-  final String label;
-  final double fraction; // 0.0 - 1.0
-  final String note;
-  final bool excluded;
-  FaraidShare({required this.label, required this.fraction, required this.note, this.excluded = false});
-}
+  // REDESIGNED ADD RELATIVE DIALOG
+  
+  void _showAddRelativeDialog() {
+    String? selectedKey;
+    String? customNameInput;
+    String searchQuery = '';
+    String? selectedParentId; // for nephew or child-with-wife
 
-class HeirCounts {
-  String deceasedGender = 'Male';
-  bool spouseAlive = false;
-  int wivesCount = 1;
-  int son = 0;
-  int daughter = 0;
-  int grandson = 0; // son's son
-  int granddaughter = 0; // son's daughter
-  bool father = false;
-  bool mother = false;
-  bool paternalGrandfather = false;
-  bool paternalGrandmother = false;
-  bool maternalGrandmother = false;
-  int fullBrother = 0;
-  int fullSister = 0;
-  int paternalBrother = 0;
-  int paternalSister = 0;
-  int maternalSibling = 0;
-  int fullNephew = 0;
-  int paternalNephew = 0;
-  int fullUncle = 0;
-  int paternalUncle = 0;
-  int fullCousin = 0;
-  int paternalCousin = 0;
-}
+    // Determine which singletons are already in tree
+    Set<String> existingKeys = _familyRelatives.map((r) => r.relationKey).toSet();
 
-class FaraidCalculator {
-  static List<FaraidShare> calculate(HeirCounts h) {
-    final List<FaraidShare> results = [];
-    double usedFraction = 0.0;
-    bool residueClaimed = false;
+    // Build grouped option list
+    final List<Map<String, dynamic>> allOptions = [
+      // --- Parents ---
+      {'group': 'Parents', 'key': 'father', 'label': 'Father', 'desc': 'Biological father', 'gender': Gender.male, 'level': -1, 'singleton': true},
+      {'group': 'Parents', 'key': 'mother', 'label': 'Mother', 'desc': 'Biological mother', 'gender': Gender.female, 'level': -1, 'singleton': true},
+      // --- Grandparents ---
+      {'group': 'Grandparents', 'key': 'pGrandfather', 'label': 'Paternal Grandfather', 'desc': 'Father\'s father', 'gender': Gender.male, 'level': -2, 'singleton': true},
+      {'group': 'Grandparents', 'key': 'pGrandmother', 'label': 'Paternal Grandmother', 'desc': 'Father\'s mother', 'gender': Gender.female, 'level': -2, 'singleton': true},
+      {'group': 'Grandparents', 'key': 'mGrandmother', 'label': 'Maternal Grandmother', 'desc': 'Mother\'s mother', 'gender': Gender.female, 'level': -2, 'singleton': true},
+      // --- Spouse ---
+      {
+        'group': 'Spouse',
+        'key': _myGender == Gender.male ? 'wife' : 'husband',
+        'label': _myGender == Gender.male ? 'Wife' : 'Husband',
+        'desc': _myGender == Gender.male ? 'Up to 4 wives allowed' : 'Husband',
+        'gender': _myGender == Gender.male ? Gender.female : Gender.male,
+        'level': 0,
+        'singleton': _myGender == Gender.female, // husband is singleton
+      },
+      // --- Children ---
+      {'group': 'Children', 'key': 'son', 'label': 'Son', 'desc': 'Biological son', 'gender': Gender.male, 'level': 1, 'singleton': false, 'needsWife': true},
+      {'group': 'Children', 'key': 'daughter', 'label': 'Daughter', 'desc': 'Biological daughter', 'gender': Gender.female, 'level': 1, 'singleton': false, 'needsWife': true},
+      {'group': 'Children', 'key': 'grandson', 'label': 'Grandson (Son\'s Son)', 'desc': 'Son\'s son', 'gender': Gender.male, 'level': 2, 'singleton': false},
+      {'group': 'Children', 'key': 'granddaughter', 'label': 'Granddaughter (Son\'s Daughter)', 'desc': 'Son\'s daughter', 'gender': Gender.female, 'level': 2, 'singleton': false},
+      // --- Siblings ---
+      {'group': 'Siblings', 'key': 'fullBrother', 'label': 'Full Brother', 'desc': 'Same father & mother', 'gender': Gender.male, 'level': 0, 'singleton': false},
+      {'group': 'Siblings', 'key': 'fullSister', 'label': 'Full Sister', 'desc': 'Same father & mother', 'gender': Gender.female, 'level': 0, 'singleton': false},
+      {'group': 'Siblings', 'key': 'paternalBrother', 'label': 'Paternal Brother', 'desc': 'Same father only', 'gender': Gender.male, 'level': 0, 'singleton': false},
+      {'group': 'Siblings', 'key': 'paternalSister', 'label': 'Paternal Sister', 'desc': 'Same father only', 'gender': Gender.female, 'level': 0, 'singleton': false},
+      {'group': 'Siblings', 'key': 'maternalSibling', 'label': 'Maternal Sibling', 'desc': 'Same mother only', 'gender': Gender.male, 'level': 0, 'singleton': false},
+      // --- Extended ---
+      {'group': 'Extended', 'key': 'fullNephew', 'label': 'Full Nephew', 'desc': 'Full brother\'s son', 'gender': Gender.male, 'level': 1, 'singleton': false, 'needsBrother': 'fullBrother'},
+      {'group': 'Extended', 'key': 'paternalNephew', 'label': 'Paternal Nephew', 'desc': 'Paternal brother\'s son', 'gender': Gender.male, 'level': 1, 'singleton': false, 'needsBrother': 'paternalBrother'},
+      {'group': 'Extended', 'key': 'fullUncle', 'label': 'Full Paternal Uncle', 'desc': 'Father\'s full brother', 'gender': Gender.male, 'level': -1, 'singleton': false},
+      {'group': 'Extended', 'key': 'paternalUncle', 'label': 'Paternal Uncle', 'desc': 'Father\'s paternal brother', 'gender': Gender.male, 'level': -1, 'singleton': false},
+      {'group': 'Extended', 'key': 'fullCousin', 'label': 'Full Cousin', 'desc': 'Full uncle\'s son', 'gender': Gender.male, 'level': 0, 'singleton': false},
+      {'group': 'Extended', 'key': 'paternalCousin', 'label': 'Paternal Cousin', 'desc': 'Paternal uncle\'s son', 'gender': Gender.male, 'level': 0, 'singleton': false},
+    ];
 
-    final bool hasSon = h.son > 0;
-    final bool hasRealDaughter = h.daughter > 0;
-    final bool hasGrandson = !hasSon && h.grandson > 0;
-    final bool hasGranddaughterRaw = !hasSon && h.granddaughter > 0;
-    final bool hasMaleDescendant = hasSon || hasGrandson;
-    final bool hasAnyDescendant = hasSon || hasRealDaughter || hasGrandson || hasGranddaughterRaw;
+    final groups = ['Parents', 'Grandparents', 'Spouse', 'Children', 'Siblings', 'Extended'];
 
-    // ---- 1. SPOUSE (Fard) ----
-    double spouseFraction = 0.0;
-    if (h.spouseAlive) {
-      if (h.deceasedGender == 'Male') {
-        spouseFraction = hasAnyDescendant ? (1 / 8) : (1 / 4);
-        final perWife = spouseFraction / h.wivesCount;
-        for (int i = 0; i < h.wivesCount; i++) {
-          results.add(FaraidShare(
-            label: h.wivesCount > 1 ? 'Wife ${i + 1}' : 'Wife',
-            fraction: perWife,
-            note: hasAnyDescendant ? 'Fard: 1/8 (shared, descendant present)' : 'Fard: 1/4 (shared)',
-          ));
-        }
-      } else {
-        spouseFraction = hasAnyDescendant ? (1 / 4) : (1 / 2);
-        results.add(FaraidShare(label: 'Husband', fraction: spouseFraction, note: hasAnyDescendant ? 'Fard: 1/4 (descendant present)' : 'Fard: 1/2'));
-      }
-      usedFraction += spouseFraction;
-    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtered = searchQuery.isEmpty
+                ? allOptions
+                : allOptions
+                    .where((o) => (o['label'] as String)
+                        .toLowerCase()
+                        .contains(searchQuery.toLowerCase()) ||
+                        (o['desc'] as String)
+                        .toLowerCase()
+                        .contains(searchQuery.toLowerCase()))
+                    .toList();
 
-    // ---- 2. DESCENDANTS: Fard portions for daughters/granddaughters, Asaba residue tracked separately ----
-    double childrenFardUsed = 0.0;
-    bool sonsTakeAsaba = false;
-    bool grandsonsTakeAsaba = false;
+            // Brothers/wives available for parent selection
+            final fullBrothers = _familyRelatives
+                .where((r) => r.relationKey == 'fullBrother')
+                .toList();
+            final paternalBrothers = _familyRelatives
+                .where((r) => r.relationKey == 'paternalBrother')
+                .toList();
+            final wives = _familyRelatives
+                .where((r) => r.relationKey == 'wife')
+                .toList();
 
-    if (hasSon) {
-      sonsTakeAsaba = true; // sons + daughters split residue together later
-    } else if (hasRealDaughter) {
-      final double daughterFraction = h.daughter == 1 ? (1 / 2) : (2 / 3);
-      results.add(FaraidShare(
-        label: h.daughter > 1 ? '${h.daughter} Daughters (combined)' : 'Daughter',
-        fraction: daughterFraction,
-        note: h.daughter == 1 ? 'Fard: 1/2 (only daughter)' : 'Fard: 2/3 (shared, no son present)',
-      ));
-      childrenFardUsed += daughterFraction;
-      usedFraction += daughterFraction;
+            final needsBrother =
+                selectedKey == 'fullNephew' || selectedKey == 'paternalNephew';
+            // Show wife picker whenever adding son/daughter AND at least 1 wife exists
+            final needsWife = (selectedKey == 'son' || selectedKey == 'daughter') &&
+                wives.isNotEmpty;
 
-      if (hasGrandson) {
-        grandsonsTakeAsaba = true; // grandsons + granddaughters take residue together
-      } else if (hasGranddaughterRaw) {
-        if (h.daughter == 1) {
-          results.add(FaraidShare(
-            label: h.granddaughter > 1 ? '${h.granddaughter} Paternal Granddaughters (combined)' : 'Paternal Granddaughter',
-            fraction: 1 / 6,
-            note: 'Fard: 1/6 (completes 2/3 with the one daughter)',
-          ));
-          usedFraction += 1 / 6;
-        } else {
-          results.add(FaraidShare(
-            label: h.granddaughter > 1 ? '${h.granddaughter} Paternal Granddaughters (combined)' : 'Paternal Granddaughter',
-            fraction: 0,
-            note: 'Excluded — two or more real daughters already reached the 2/3 maximum, and no grandson is present to make her residuary.',
-            excluded: true,
-          ));
-        }
-      }
-    } else if (hasGrandson) {
-      grandsonsTakeAsaba = true;
-    } else if (hasGranddaughterRaw) {
-      final double gdFraction = h.granddaughter == 1 ? (1 / 2) : (2 / 3);
-      results.add(FaraidShare(
-        label: h.granddaughter > 1 ? '${h.granddaughter} Paternal Granddaughters (combined)' : 'Paternal Granddaughter',
-        fraction: gdFraction,
-        note: 'Fard: standing in as daughter\'s share (no real daughter present)',
-      ));
-      childrenFardUsed += gdFraction;
-      usedFraction += gdFraction;
-    }
+            final availableBrothers = selectedKey == 'fullNephew'
+                ? fullBrothers
+                : paternalBrothers;
 
-    // ---- 3. FATHER / PATERNAL GRANDFATHER (Fard 1/6 + possible Asaba) ----
-    bool fatherIsAsabaCandidate = false;
-    if (h.father) {
-      if (hasAnyDescendant) {
-        final double fatherFraction = 1 / 6;
-        results.add(FaraidShare(label: 'Father', fraction: fatherFraction, note: 'Fard: 1/6 (descendant present)'));
-        usedFraction += fatherFraction;
-        if (!hasMaleDescendant) fatherIsAsabaCandidate = true; // gets residue too, on top of 1/6
-      } else {
-        fatherIsAsabaCandidate = true; // pure Asaba, no descendant at all
-      }
-    }
-    final bool grandfatherEligible = !h.father && h.paternalGrandfather;
-    bool grandfatherIsAsabaCandidate = false;
-    if (grandfatherEligible) {
-      if (hasAnyDescendant) {
-        final double grandfatherFraction = 1 / 6;
-        results.add(FaraidShare(label: 'Paternal Grandfather', fraction: grandfatherFraction, note: 'Fard: 1/6 (descendant present, no father)'));
-        usedFraction += grandfatherFraction;
-        if (!hasMaleDescendant) grandfatherIsAsabaCandidate = true;
-      } else {
-        grandfatherIsAsabaCandidate = true;
-      }
-    } else if (h.paternalGrandfather && h.father) {
-      results.add(FaraidShare(label: 'Paternal Grandfather', fraction: 0, note: 'Excluded — father is alive.', excluded: true));
-    }
-
-    // ---- 4. MOTHER (Fard 1/6 or 1/3, with Umariyyatain exception) ----
-    final int siblingCountForHijab = h.fullBrother + h.fullSister + h.paternalBrother + h.paternalSister + h.maternalSibling;
-    if (h.mother) {
-      double motherFraction;
-      String motherNote;
-      final bool onlySpouseAndParents = h.spouseAlive && h.father && !hasAnyDescendant && siblingCountForHijab == 0;
-      if (hasAnyDescendant || siblingCountForHijab >= 2) {
-        motherFraction = 1 / 6;
-        motherNote = hasAnyDescendant ? 'Fard: 1/6 (descendant present)' : 'Fard: 1/6 (2+ siblings present, even if they don\'t inherit)';
-      } else if (onlySpouseAndParents) {
-        final double remainderAfterSpouse = 1.0 - spouseFraction;
-        motherFraction = remainderAfterSpouse / 3;
-        motherNote = 'Fard: 1/3 of the remainder after spouse\'s share (special "Umariyyatain" case — spouse + both parents only)';
-      } else {
-        motherFraction = 1 / 3;
-        motherNote = 'Fard: 1/3 (no descendants, fewer than 2 siblings)';
-      }
-      results.add(FaraidShare(label: 'Mother', fraction: motherFraction, note: motherNote));
-      usedFraction += motherFraction;
-    }
-
-    // ---- 5. GRANDMOTHERS (blocked by mother) ----
-    final bool paternalGmBlocked = h.mother || h.father;
-    final bool maternalGmBlocked = h.mother;
-    final bool paternalGmEligible = h.paternalGrandmother && !paternalGmBlocked;
-    final bool maternalGmEligible = h.maternalGrandmother && !maternalGmBlocked;
-    if (h.paternalGrandmother && paternalGmBlocked) {
-      results.add(FaraidShare(label: 'Paternal Grandmother', fraction: 0, note: 'Excluded — blocked by ${h.mother ? 'mother' : 'father'} being alive.', excluded: true));
-    }
-    if (h.maternalGrandmother && maternalGmBlocked) {
-      results.add(FaraidShare(label: 'Maternal Grandmother', fraction: 0, note: 'Excluded — blocked by mother being alive.', excluded: true));
-    }
-    if (paternalGmEligible || maternalGmEligible) {
-      final int gmCount = (paternalGmEligible ? 1 : 0) + (maternalGmEligible ? 1 : 0);
-      final double each = (1 / 6) / gmCount;
-      if (paternalGmEligible) {
-        results.add(FaraidShare(label: 'Paternal Grandmother', fraction: each, note: gmCount > 1 ? 'Fard: shares 1/6 with maternal grandmother' : 'Fard: 1/6'));
-        usedFraction += each;
-      }
-      if (maternalGmEligible) {
-        results.add(FaraidShare(label: 'Maternal Grandmother', fraction: each, note: gmCount > 1 ? 'Fard: shares 1/6 with paternal grandmother' : 'Fard: 1/6'));
-        usedFraction += each;
-      }
-    }
-
-    // ---- 6. SIBLINGS ----
-    final bool siblingsBlockedByAscendantOrMale = h.father || grandfatherEligible || hasMaleDescendant;
-    final bool maternalSiblingsBlocked = siblingsBlockedByAscendantOrMale || hasAnyDescendant;
-
-    bool fullSiblingsTakeAsaba = false;
-    bool fullSisterAsabaMaaGhayr = false;
-    bool paternalSiblingsExcludedByFull = false;
-
-    if (siblingsBlockedByAscendantOrMale) {
-      if (h.fullBrother + h.fullSister > 0) {
-        results.add(FaraidShare(label: 'Full Siblings', fraction: 0, note: 'Excluded — blocked by father, paternal grandfather, or a male descendant.', excluded: true));
-      }
-      if (h.paternalBrother + h.paternalSister > 0) {
-        results.add(FaraidShare(label: 'Paternal Siblings', fraction: 0, note: 'Excluded — blocked by father, paternal grandfather, or a male descendant.', excluded: true));
-      }
-    } else {
-      // Full siblings
-      if (h.fullBrother > 0) {
-        fullSiblingsTakeAsaba = true; // resolved later with residue
-      } else if (h.fullSister > 0) {
-        if (childrenFardUsed > 0 && !hasMaleDescendant) {
-          fullSisterAsabaMaaGhayr = true; // becomes residuary alongside daughters
-        } else {
-          final double fsFraction = h.fullSister == 1 ? (1 / 2) : (2 / 3);
-          results.add(FaraidShare(
-            label: h.fullSister > 1 ? '${h.fullSister} Full Sisters (combined)' : 'Full Sister',
-            fraction: fsFraction,
-            note: h.fullSister == 1 ? 'Fard: 1/2 (only full sister, no full brother)' : 'Fard: 2/3 (shared, no full brother)',
-          ));
-          usedFraction += fsFraction;
-        }
-      }
-
-      // Paternal siblings — only relevant if full brother absent
-      if (h.fullBrother > 0) {
-        paternalSiblingsExcludedByFull = true;
-        if (h.paternalBrother + h.paternalSister > 0) {
-          results.add(FaraidShare(label: 'Paternal Siblings', fraction: 0, note: 'Excluded — a full brother is present.', excluded: true));
-        }
-      } else if (h.fullSister >= 2 && h.paternalBrother == 0) {
-        paternalSiblingsExcludedByFull = true;
-        if (h.paternalSister > 0) {
-          results.add(FaraidShare(label: 'Paternal Sister', fraction: 0, note: 'Excluded — two or more full sisters already reached 2/3, and no paternal brother is present to make her residuary.', excluded: true));
-        }
-      } else {
-        if (h.paternalBrother > 0) {
-          // paternal brothers (+sisters) become asaba, handled with residue below
-        } else if (h.paternalSister > 0) {
-          if (h.fullSister == 1) {
-            results.add(FaraidShare(
-              label: h.paternalSister > 1 ? '${h.paternalSister} Paternal Sisters (combined)' : 'Paternal Sister',
-              fraction: 1 / 6,
-              note: 'Fard: 1/6 (completes 2/3 with the one full sister)',
-            ));
-            usedFraction += 1 / 6;
-          } else if (childrenFardUsed > 0 && !hasMaleDescendant && h.fullSister == 0) {
-            // asaba ma'a ghayr with daughters, handled below via flag
-          } else if (h.fullSister == 0) {
-            final double psFraction = h.paternalSister == 1 ? (1 / 2) : (2 / 3);
-            results.add(FaraidShare(
-              label: h.paternalSister > 1 ? '${h.paternalSister} Paternal Sisters (combined)' : 'Paternal Sister',
-              fraction: psFraction,
-              note: h.paternalSister == 1 ? 'Fard: 1/2 (only paternal sister)' : 'Fard: 2/3 (shared)',
-            ));
-            usedFraction += psFraction;
-          }
-        }
-      }
-
-      // Maternal siblings
-      if (maternalSiblingsBlocked) {
-        if (h.maternalSibling > 0) {
-          results.add(FaraidShare(label: 'Maternal Sibling(s)', fraction: 0, note: 'Excluded — blocked by father, paternal grandfather, or any descendant.', excluded: true));
-        }
-      } else if (h.maternalSibling > 0) {
-        final double msFraction = h.maternalSibling == 1 ? (1 / 6) : (1 / 3);
-        results.add(FaraidShare(
-          label: h.maternalSibling > 1 ? '${h.maternalSibling} Maternal Siblings (combined)' : 'Maternal Sibling',
-          fraction: msFraction,
-          note: h.maternalSibling == 1 ? 'Fard: 1/6' : 'Fard: 1/3 (shared equally, regardless of gender)',
-        ));
-        usedFraction += msFraction;
-      }
-    }
-    if (maternalSiblingsBlocked && !siblingsBlockedByAscendantOrMale && h.maternalSibling > 0) {
-      results.add(FaraidShare(label: 'Maternal Sibling(s)', fraction: 0, note: 'Excluded — blocked by a descendant being present.', excluded: true));
-    }
-
-    // ---- 7. RESIDUE (ASABA) — priority chain ----
-    final double remainder = (1.0 - usedFraction).clamp(0.0, 1.0);
-
-    if (sonsTakeAsaba) {
-      final double units = (h.son * 2 + h.daughter).toDouble();
-      final double perUnit = units > 0 ? remainder / units : 0;
-      results.add(FaraidShare(label: h.son > 1 ? '${h.son} Sons (combined)' : 'Son', fraction: perUnit * 2 * h.son, note: 'Residuary (Asaba) — each son gets 2x a daughter\'s share'));
-      if (h.daughter > 0) {
-        results.add(FaraidShare(label: h.daughter > 1 ? '${h.daughter} Daughters (combined, as residuary with sons)' : 'Daughter (as residuary with son)', fraction: perUnit * h.daughter, note: 'Residuary (Asaba) — shares with son(s), half a son\'s portion each'));
-      }
-      residueClaimed = true;
-    } else if (grandsonsTakeAsaba) {
-      final double units = (h.grandson * 2 + h.granddaughter).toDouble();
-      final double perUnit = units > 0 ? remainder / units : 0;
-      results.add(FaraidShare(label: h.grandson > 1 ? '${h.grandson} Paternal Grandsons (combined)' : 'Paternal Grandson', fraction: perUnit * 2 * h.grandson, note: 'Residuary (Asaba) — takes remainder as closest male descendant'));
-      if (h.granddaughter > 0) {
-        results.add(FaraidShare(label: h.granddaughter > 1 ? '${h.granddaughter} Paternal Granddaughters (combined, residuary)' : 'Paternal Granddaughter (residuary)', fraction: perUnit * h.granddaughter, note: 'Residuary (Asaba) — shares with grandson(s)'));
-      }
-      residueClaimed = true;
-    } else if (fatherIsAsabaCandidate) {
-      final int fIdx = results.indexWhere((e) => e.label == 'Father');
-      if (fIdx != -1) {
-        results[fIdx] = FaraidShare(label: 'Father', fraction: results[fIdx].fraction + remainder, note: 'Fard 1/6 + residue as Asaba (no male descendant present)');
-      } else {
-        results.add(FaraidShare(label: 'Father', fraction: remainder, note: 'Residuary (Asaba) — takes remaining estate as nearest male ascendant'));
-      }
-      residueClaimed = true;
-    } else if (grandfatherIsAsabaCandidate) {
-      final int gIdx = results.indexWhere((e) => e.label == 'Paternal Grandfather');
-      if (gIdx != -1) {
-        results[gIdx] = FaraidShare(label: 'Paternal Grandfather', fraction: results[gIdx].fraction + remainder, note: 'Fard 1/6 + residue as Asaba (no male descendant, father absent)');
-      } else {
-        results.add(FaraidShare(label: 'Paternal Grandfather', fraction: remainder, note: 'Residuary (Asaba) — takes remaining estate (father absent)'));
-      }
-      residueClaimed = true;
-    } else if (fullSiblingsTakeAsaba) {
-      final double units = (h.fullBrother * 2 + h.fullSister).toDouble();
-      final double perUnit = units > 0 ? remainder / units : 0;
-      results.add(FaraidShare(label: h.fullBrother > 1 ? '${h.fullBrother} Full Brothers (combined)' : 'Full Brother', fraction: perUnit * 2 * h.fullBrother, note: 'Residuary (Asaba) — takes remainder, no closer heir present'));
-      if (h.fullSister > 0) {
-        results.add(FaraidShare(label: h.fullSister > 1 ? '${h.fullSister} Full Sisters (combined, with brother)' : 'Full Sister (with brother)', fraction: perUnit * h.fullSister, note: 'Residuary (Asaba) — shares with full brother(s), 2:1 ratio'));
-      }
-      residueClaimed = true;
-    } else if (fullSisterAsabaMaaGhayr) {
-      results.add(FaraidShare(label: h.fullSister > 1 ? '${h.fullSister} Full Sisters (combined)' : 'Full Sister', fraction: remainder, note: 'Residuary "Asaba ma\'a ghayr" — inherits alongside daughters/granddaughters since no father, grandfather, or male descendant is present'));
-      residueClaimed = true;
-    } else if (!paternalSiblingsExcludedByFull && h.paternalBrother > 0) {
-      final double units = (h.paternalBrother * 2 + h.paternalSister).toDouble();
-      final double perUnit = units > 0 ? remainder / units : 0;
-      results.add(FaraidShare(label: h.paternalBrother > 1 ? '${h.paternalBrother} Paternal Brothers (combined)' : 'Paternal Brother', fraction: perUnit * 2 * h.paternalBrother, note: 'Residuary (Asaba) — no full brother present'));
-      if (h.paternalSister > 0) {
-        results.add(FaraidShare(label: h.paternalSister > 1 ? '${h.paternalSister} Paternal Sisters (combined, with brother)' : 'Paternal Sister (with brother)', fraction: perUnit * h.paternalSister, note: 'Residuary (Asaba) — shares with paternal brother(s)'));
-      }
-      residueClaimed = true;
-    } else if (!paternalSiblingsExcludedByFull && h.paternalSister > 0 && childrenFardUsed > 0 && !hasMaleDescendant && h.fullSister == 0) {
-      results.add(FaraidShare(label: h.paternalSister > 1 ? '${h.paternalSister} Paternal Sisters (combined)' : 'Paternal Sister', fraction: remainder, note: 'Residuary "Asaba ma\'a ghayr" — inherits alongside daughters/granddaughters'));
-      residueClaimed = true;
-    } else if (h.fullNephew > 0) {
-      results.add(FaraidShare(label: h.fullNephew > 1 ? '${h.fullNephew} Full Nephews (combined)' : 'Full Nephew', fraction: remainder, note: 'Residuary (Asaba) — closer heirs absent, inherits as full brother\'s son(s)'));
-      residueClaimed = true;
-    } else if (h.paternalNephew > 0) {
-      results.add(FaraidShare(label: h.paternalNephew > 1 ? '${h.paternalNephew} Paternal Nephews (combined)' : 'Paternal Nephew', fraction: remainder, note: 'Residuary (Asaba) — closer heirs absent, inherits as paternal brother\'s son(s)'));
-      residueClaimed = true;
-    } else if (h.fullUncle > 0) {
-      results.add(FaraidShare(label: h.fullUncle > 1 ? '${h.fullUncle} Full Paternal Uncles (combined)' : 'Full Paternal Uncle', fraction: remainder, note: 'Residuary (Asaba) — closer heirs absent, inherits as father\'s full brother'));
-      residueClaimed = true;
-    } else if (h.paternalUncle > 0) {
-      results.add(FaraidShare(label: h.paternalUncle > 1 ? '${h.paternalUncle} Paternal Uncles (combined)' : 'Paternal Paternal Uncle', fraction: remainder, note: 'Residuary (Asaba) — closer heirs absent, inherits as father\'s paternal brother'));
-      residueClaimed = true;
-    } else if (h.fullCousin > 0) {
-      results.add(FaraidShare(label: h.fullCousin > 1 ? '${h.fullCousin} Full Cousins (combined)' : 'Full Cousin', fraction: remainder, note: 'Residuary (Asaba) — closer heirs absent, inherits as full uncle\'s son(s)'));
-      residueClaimed = true;
-    } else if (h.paternalCousin > 0) {
-      results.add(FaraidShare(label: h.paternalCousin > 1 ? '${h.paternalCousin} Paternal Cousins (combined)' : 'Paternal Cousin', fraction: remainder, note: 'Residuary (Asaba) — closer heirs absent, inherits as paternal uncle\'s son(s)'));
-      residueClaimed = true;
-    }
-
-    if (residueClaimed) {
-      _markExcludedIfPresentButUnclaimed(results, h);
-    }
-
-    // ---- 8. AWL (proportional reduction if Fard shares exceed the whole estate) ----
-    final double totalFard = results.where((r) => !r.excluded).fold(0.0, (sum, r) => sum + r.fraction);
-    if (totalFard > 1.0001) {
-      final double scale = 1.0 / totalFard;
-      for (int i = 0; i < results.length; i++) {
-        if (!results[i].excluded) {
-          results[i] = FaraidShare(
-            label: results[i].label,
-            fraction: results[i].fraction * scale,
-            note: '${results[i].note} (adjusted under Awl — shares proportionally reduced as total exceeded the estate)',
-          );
-        }
-      }
-    } else if (!residueClaimed && totalFard < 0.9999 && totalFard > 0) {
-      // ---- 9. RADD (return of unclaimed residue to Fard heirs, excluding spouse) ----
-      final double leftover = 1.0 - totalFard;
-      final bool onlySpouseRemains = results.where((r) => !r.excluded).every((r) => r.label.contains('Wife') || r.label == 'Husband');
-      if (onlySpouseRemains && results.any((r) => !r.excluded)) {
-        final int count = results.where((r) => !r.excluded).length;
-        for (int i = 0; i < results.length; i++) {
-          if (!results[i].excluded) {
-            final double share = leftover / count;
-            results[i] = FaraidShare(label: results[i].label, fraction: results[i].fraction + share, note: '${results[i].note} (Radd — sole heir receives full remainder)');
-          }
-        }
-      } else {
-        final double nonSpouseFard = results.where((r) => !r.excluded && !r.label.contains('Wife') && r.label != 'Husband').fold(0.0, (sum, r) => sum + r.fraction);
-        if (nonSpouseFard > 0) {
-          for (int i = 0; i < results.length; i++) {
-            final r = results[i];
-            if (!r.excluded && !r.label.contains('Wife') && r.label != 'Husband') {
-              final double addOn = leftover * (r.fraction / nonSpouseFard);
-              results[i] = FaraidShare(label: r.label, fraction: r.fraction + addOn, note: '${r.note} (Radd — receives a proportional share of the unclaimed residue)');
-            }
-          }
-        }
-      }
-    }
-
-    return results;
-  }
-
-  static void _markExcludedIfPresentButUnclaimed(List<FaraidShare> results, HeirCounts h) {
-    void addExcludedIfMissing(String label, int count, String reason) {
-      if (count > 0 && !results.any((r) => r.label.contains(label))) {
-        results.add(FaraidShare(label: label, fraction: 0, note: reason, excluded: true));
-      }
-    }
-
-    final claimedLabels = results.where((r) => !r.excluded).map((r) => r.label).join('|');
-    final bool higherAsabaClaimed = claimedLabels.contains('Son') ||
-        claimedLabels.contains('Grandson') ||
-        claimedLabels.contains('Father') ||
-        claimedLabels.contains('Grandfather') ||
-        claimedLabels.contains('Full Brother') ||
-        claimedLabels.contains('Full Sister');
-
-    if (higherAsabaClaimed) {
-      addExcludedIfMissing('Paternal Brother', h.paternalBrother, 'Excluded — a closer Asaba (residuary) heir already claimed the estate.');
-      addExcludedIfMissing('Paternal Sister', h.paternalSister, 'Excluded — a closer Asaba (residuary) heir already claimed the estate.');
-      addExcludedIfMissing('Full Nephew', h.fullNephew, 'Excluded — a closer Asaba (residuary) heir already claimed the estate.');
-      addExcludedIfMissing('Paternal Nephew', h.paternalNephew, 'Excluded — a closer Asaba (residuary) heir already claimed the estate.');
-      addExcludedIfMissing('Full Paternal Uncle', h.fullUncle, 'Excluded — a closer Asaba (residuary) heir already claimed the estate.');
-      addExcludedIfMissing('Paternal Paternal Uncle', h.paternalUncle, 'Excluded — a closer Asaba (residuary) heir already claimed the estate.');
-      addExcludedIfMissing('Full Cousin', h.fullCousin, 'Excluded — a closer Asaba (residuary) heir already claimed the estate.');
-      addExcludedIfMissing('Paternal Cousin', h.paternalCousin, 'Excluded — a closer Asaba (residuary) heir already claimed the estate.');
-    }
-    if (claimedLabels.contains('Nephew')) {
-      addExcludedIfMissing('Full Paternal Uncle', h.fullUncle, 'Excluded — a nephew already claimed the estate as a closer Asaba heir.');
-      addExcludedIfMissing('Paternal Paternal Uncle', h.paternalUncle, 'Excluded — a nephew already claimed the estate as a closer Asaba heir.');
-      addExcludedIfMissing('Full Cousin', h.fullCousin, 'Excluded — a nephew already claimed the estate as a closer Asaba heir.');
-      addExcludedIfMissing('Paternal Cousin', h.paternalCousin, 'Excluded — a nephew already claimed the estate as a closer Asaba heir.');
-    }
-    if (claimedLabels.contains('Uncle')) {
-      addExcludedIfMissing('Full Cousin', h.fullCousin, 'Excluded — an uncle already claimed the estate as a closer Asaba heir.');
-      addExcludedIfMissing('Paternal Cousin', h.paternalCousin, 'Excluded — an uncle already claimed the estate as a closer Asaba heir.');
-    }
-  }
-}
-
-// ============================================================
-// CALCULATE BY SHARE SCREEN
-// ============================================================
-
-class _HeirField {
-  final String key;
-  final String label;
-  final bool isBoolean; // true = existence toggle, false = quantity counter
-  const _HeirField({required this.key, required this.label, this.isBoolean = false});
-}
-
-const List<_HeirField> _heirFields = [
-  _HeirField(key: 'son', label: 'Son'),
-  _HeirField(key: 'daughter', label: 'Daughter'),
-  _HeirField(key: 'grandson', label: 'Paternal Grandson'),
-  _HeirField(key: 'granddaughter', label: 'Paternal Granddaughter'),
-  _HeirField(key: 'father', label: 'Father', isBoolean: true),
-  _HeirField(key: 'mother', label: 'Mother', isBoolean: true),
-  _HeirField(key: 'paternalGrandfather', label: 'Paternal Grandfather', isBoolean: true),
-  _HeirField(key: 'paternalGrandmother', label: 'Paternal Grandmother', isBoolean: true),
-  _HeirField(key: 'maternalGrandmother', label: 'Maternal Grandmother', isBoolean: true),
-  _HeirField(key: 'fullBrother', label: 'Full Brother'),
-  _HeirField(key: 'fullSister', label: 'Full Sister'),
-  _HeirField(key: 'paternalBrother', label: 'Paternal Brother'),
-  _HeirField(key: 'paternalSister', label: 'Paternal Sister'),
-  _HeirField(key: 'maternalSibling', label: 'Maternal Sibling'),
-  _HeirField(key: 'fullNephew', label: 'Full Nephew'),
-  _HeirField(key: 'paternalNephew', label: 'Paternal Nephew'),
-  _HeirField(key: 'fullUncle', label: 'Full Paternal Uncle'),
-  _HeirField(key: 'paternalUncle', label: 'Paternal Paternal Uncle'),
-  _HeirField(key: 'fullCousin', label: 'Full Cousin'),
-  _HeirField(key: 'paternalCousin', label: 'Paternal Cousin'),
-];
-
-class CalculateByShareScreen extends StatefulWidget {
-  const CalculateByShareScreen({super.key});
-
-  @override
-  State<CalculateByShareScreen> createState() => _CalculateByShareScreenState();
-}
-
-class _CalculateByShareScreenState extends State<CalculateByShareScreen> {
-  final HeirCounts _heirs = HeirCounts();
-  List<FaraidShare>? _results;
-
-  int _getCount(String key) {
-    switch (key) {
-      case 'son': return _heirs.son;
-      case 'daughter': return _heirs.daughter;
-      case 'grandson': return _heirs.grandson;
-      case 'granddaughter': return _heirs.granddaughter;
-      case 'fullBrother': return _heirs.fullBrother;
-      case 'fullSister': return _heirs.fullSister;
-      case 'paternalBrother': return _heirs.paternalBrother;
-      case 'paternalSister': return _heirs.paternalSister;
-      case 'maternalSibling': return _heirs.maternalSibling;
-      case 'fullNephew': return _heirs.fullNephew;
-      case 'paternalNephew': return _heirs.paternalNephew;
-      case 'fullUncle': return _heirs.fullUncle;
-      case 'paternalUncle': return _heirs.paternalUncle;
-      case 'fullCousin': return _heirs.fullCousin;
-      case 'paternalCousin': return _heirs.paternalCousin;
-      default: return 0;
-    }
-  }
-
-  void _setCount(String key, int value) {
-    setState(() {
-      switch (key) {
-        case 'son': _heirs.son = value; break;
-        case 'daughter': _heirs.daughter = value; break;
-        case 'grandson': _heirs.grandson = value; break;
-        case 'granddaughter': _heirs.granddaughter = value; break;
-        case 'fullBrother': _heirs.fullBrother = value; break;
-        case 'fullSister': _heirs.fullSister = value; break;
-        case 'paternalBrother': _heirs.paternalBrother = value; break;
-        case 'paternalSister': _heirs.paternalSister = value; break;
-        case 'maternalSibling': _heirs.maternalSibling = value; break;
-        case 'fullNephew': _heirs.fullNephew = value; break;
-        case 'paternalNephew': _heirs.paternalNephew = value; break;
-        case 'fullUncle': _heirs.fullUncle = value; break;
-        case 'paternalUncle': _heirs.paternalUncle = value; break;
-        case 'fullCousin': _heirs.fullCousin = value; break;
-        case 'paternalCousin': _heirs.paternalCousin = value; break;
-      }
-      _results = null;
-    });
-  }
-
-  bool _getBool(String key) {
-    switch (key) {
-      case 'father': return _heirs.father;
-      case 'mother': return _heirs.mother;
-      case 'paternalGrandfather': return _heirs.paternalGrandfather;
-      case 'paternalGrandmother': return _heirs.paternalGrandmother;
-      case 'maternalGrandmother': return _heirs.maternalGrandmother;
-      default: return false;
-    }
-  }
-
-  void _setBool(String key, bool value) {
-    setState(() {
-      switch (key) {
-        case 'father': _heirs.father = value; break;
-        case 'mother': _heirs.mother = value; break;
-        case 'paternalGrandfather': _heirs.paternalGrandfather = value; break;
-        case 'paternalGrandmother': _heirs.paternalGrandmother = value; break;
-        case 'maternalGrandmother': _heirs.maternalGrandmother = value; break;
-      }
-      _results = null;
-    });
-  }
-
-  void _calculate() {
-    setState(() => _results = FaraidCalculator.calculate(_heirs));
-  }
-
-  void _resetAll() {
-    setState(() {
-      _heirs.spouseAlive = false;
-      _heirs.wivesCount = 1;
-      _heirs.son = 0;
-      _heirs.daughter = 0;
-      _heirs.grandson = 0;
-      _heirs.granddaughter = 0;
-      _heirs.father = false;
-      _heirs.mother = false;
-      _heirs.paternalGrandfather = false;
-      _heirs.paternalGrandmother = false;
-      _heirs.maternalGrandmother = false;
-      _heirs.fullBrother = 0;
-      _heirs.fullSister = 0;
-      _heirs.paternalBrother = 0;
-      _heirs.paternalSister = 0;
-      _heirs.maternalSibling = 0;
-      _heirs.fullNephew = 0;
-      _heirs.paternalNephew = 0;
-      _heirs.fullUncle = 0;
-      _heirs.paternalUncle = 0;
-      _heirs.fullCousin = 0;
-      _heirs.paternalCousin = 0;
-      _results = null;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFE8E8E8),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 430),
-          child: Scaffold(
-            backgroundColor: const Color(0xFFF7F7F5),
-            body: SafeArea(
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 430,
+                  maxHeight: MediaQuery.of(context).size.height * 0.88,
+                ),
+                child: Container(
+              decoration: BoxDecoration(
+                color: _isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              padding: EdgeInsets.fromLTRB(
+                  0, 0, 0, MediaQuery.of(context).viewInsets.bottom),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Handle
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
-                    child: Row(
+                    padding: const EdgeInsets.only(top: 12, bottom: 6),
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 20), onPressed: () => Navigator.pop(context)),
-                        Expanded(child: Text('Calculate by Share', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.navyBlue))),
-                        TextButton(onPressed: _resetAll, child: Text('Reset', style: GoogleFonts.inter(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.coralOrange))),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF1E3A8A), Color(0xFF17605A)],
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.person_add_alt_1_rounded,
+                                  color: Colors.white, size: 16),
+                            ),
+                            const SizedBox(width: 10),
+                            Text('Add Family Member',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        // Name input
+                        TextField(
+                          onChanged: (val) => customNameInput = val,
+                          decoration: InputDecoration(
+                            hintText: 'Enter Name (Optional, e.g. "Abbu")',
+                            prefixIcon: Icon(Icons.person_outline,
+                                size: 18,
+                                color: _isDarkMode ? Colors.white38 : AppColors.placeholder),
+                            filled: true,
+                            fillColor: _isDarkMode
+                                ? const Color(0xFF2C2C2C)
+                                : const Color(0xFFF5F7FA),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          ),
+                          style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: _isDarkMode ? Colors.white : Colors.black),
+                        ),
+                        const SizedBox(height: 10),
+                        // PROMINENT PARENT PICKER (Placed right below search bar at top)
+                        if (needsBrother && availableBrothers.isNotEmpty) ...[
+                          Container(
+                            margin: const EdgeInsets.only(top: 10, bottom: 6),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: _isDarkMode
+                                  ? const Color(0xFF252530)
+                                  : const Color(0xFFF0F4FF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: AppColors.midTeal.withValues(alpha: 0.4), width: 1.5),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Which brother is this nephew\'s father?',
+                                    style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                                const SizedBox(height: 8),
+                                ...availableBrothers.asMap().entries.map((entry) {
+                                  final br = entry.value;
+                                  final isSelected = selectedParentId == br.id;
+                                  final label = br.customName != null && br.customName!.isNotEmpty
+                                      ? br.customName!
+                                      : br.label;
+                                  return GestureDetector(
+                                    onTap: () =>
+                                        setModalState(() => selectedParentId = br.id),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 9),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? AppColors.navyBlue
+                                            : (_isDarkMode
+                                                ? const Color(0xFF2C2C2C)
+                                                : Colors.white),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: isSelected
+                                                ? AppColors.navyBlue
+                                                : Colors.grey.withValues(alpha: 0.2)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.person_rounded,
+                                              size: 14,
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : AppColors.midTeal),
+                                          const SizedBox(width: 8),
+                                          Text(label,
+                                              style: GoogleFonts.inter(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : (_isDarkMode
+                                                          ? Colors.white
+                                                          : AppColors.navyBlue))),
+                                          if (isSelected) ...[
+                                            const Spacer(),
+                                            const Icon(Icons.check_circle_rounded,
+                                                color: kLinkGreen, size: 14),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        if (needsWife) ...[
+                          Container(
+                            margin: const EdgeInsets.only(top: 10, bottom: 6),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: _isDarkMode
+                                  ? const Color(0xFF252530)
+                                  : const Color(0xFFF0F4FF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: AppColors.midTeal.withValues(alpha: 0.4), width: 1.5),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Which wife is this child\'s mother?',
+                                    style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                                const SizedBox(height: 8),
+                                ...wives.asMap().entries.map((entry) {
+                                  final wife = entry.value;
+                                  final isSelected = selectedParentId == wife.id;
+                                  final label = wife.customName != null && wife.customName!.isNotEmpty
+                                      ? wife.customName!
+                                      : wife.label;
+                                  return GestureDetector(
+                                    onTap: () =>
+                                        setModalState(() => selectedParentId = wife.id),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 9),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? AppColors.navyBlue
+                                            : (_isDarkMode
+                                                ? const Color(0xFF2C2C2C)
+                                                : Colors.white),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: isSelected
+                                                ? AppColors.navyBlue
+                                                : Colors.grey.withValues(alpha: 0.2)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.person_rounded,
+                                              size: 14,
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : AppColors.coralOrange),
+                                          const SizedBox(width: 8),
+                                          Text(label,
+                                              style: GoogleFonts.inter(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : (_isDarkMode
+                                                          ? Colors.white
+                                                          : AppColors.navyBlue))),
+                                          if (isSelected) ...[
+                                            const Spacer(),
+                                            const Icon(Icons.check_circle_rounded,
+                                                color: kLinkGreen, size: 14),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        // Search bar
+                        TextField(
+                          onChanged: (val) =>
+                              setModalState(() => searchQuery = val),
+                          decoration: InputDecoration(
+                            hintText: 'Search relation…',
+                            prefixIcon: Icon(Icons.search_rounded,
+                                size: 18,
+                                color: _isDarkMode ? Colors.white38 : AppColors.placeholder),
+                            filled: true,
+                            fillColor: _isDarkMode
+                                ? const Color(0xFF252525)
+                                : const Color(0xFFF0F4F8),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                    color: AppColors.midTeal.withValues(alpha: 0.3))),
+                            focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                    color: AppColors.midTeal, width: 1.5)),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                          ),
+                          style: GoogleFonts.inter(fontSize: 13,
+                              color: _isDarkMode ? Colors.white : Colors.black),
+                        ),
                       ],
                     ),
                   ),
-                  Expanded(
+                  Flexible(
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      shrinkWrap: true,
                       children: [
-                        _buildGenderCard(),
-                        const SizedBox(height: 14),
-                        _buildSpouseCard(),
-                        const SizedBox(height: 14),
-                        _buildHeirListCard(),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _calculate,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.navyBlue,
-                              padding: const EdgeInsets.symmetric(vertical: 15),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        if (searchQuery.isEmpty)
+                          ...groups.map((group) {
+                            final groupItems = filtered
+                                .where((o) => o['group'] == group)
+                                .toList();
+                            if (groupItems.isEmpty) return const SizedBox.shrink();
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: 10, bottom: 6, left: 4),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                          width: 3,
+                                          height: 14,
+                                          decoration: BoxDecoration(
+                                              color: AppColors.midTeal,
+                                              borderRadius: BorderRadius.circular(2))),
+                                      const SizedBox(width: 6),
+                                      Text(group,
+                                          style: GoogleFonts.poppins(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: _isDarkMode
+                                                  ? Colors.white54
+                                                  : AppColors.navyBlue
+                                                      .withValues(alpha: 0.5))),
+                                    ],
+                                  ),
+                                ),
+                                ...groupItems.map((opt) =>
+                                    _buildRelationCard(opt, selectedKey, existingKeys, (key) {
+                                      setModalState(() {
+                                        selectedKey = key;
+                                        if ((key == 'son' || key == 'daughter') &&
+                                            wives.isNotEmpty) {
+                                          selectedParentId = wives.first.id;
+                                        } else if (key == 'fullNephew' &&
+                                            fullBrothers.isNotEmpty) {
+                                          selectedParentId = fullBrothers.first.id;
+                                        } else if (key == 'paternalNephew' &&
+                                            paternalBrothers.isNotEmpty) {
+                                          selectedParentId = paternalBrothers.first.id;
+                                        } else {
+                                          selectedParentId = null;
+                                        }
+                                      });
+                                    })),
+                              ],
+                            );
+                          })
+                        else
+                          ...filtered.map((opt) => _buildRelationCard(
+                              opt, selectedKey, existingKeys, (key) {
+                            setModalState(() {
+                              selectedKey = key;
+                              if ((key == 'son' || key == 'daughter') &&
+                                  wives.isNotEmpty) {
+                                selectedParentId = wives.first.id;
+                              } else if (key == 'fullNephew' &&
+                                  fullBrothers.isNotEmpty) {
+                                selectedParentId = fullBrothers.first.id;
+                              } else if (key == 'paternalNephew' &&
+                                  paternalBrothers.isNotEmpty) {
+                                selectedParentId = paternalBrothers.first.id;
+                              } else {
+                                selectedParentId = null;
+                              }
+                            });
+                          })),
+
+
+                      ],
+                    ),
+                  ),
+
+                  // Add button
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                    child: GestureDetector(
+                      onTap: selectedKey == null
+                          ? null
+                          : () {
+                              final sel = allOptions
+                                  .firstWhere((o) => o['key'] == selectedKey);
+                              final singleton = sel['singleton'] as bool? ?? false;
+                              if (singleton &&
+                                  existingKeys.contains(selectedKey)) {
+                                _snack(
+                                    '${sel['label']} is already in the tree');
+                                return;
+                              }
+                              _addFamilyMember(
+                                sel['key'] as String,
+                                sel['label'] as String,
+                                sel['gender'] as Gender,
+                                sel['level'] as int,
+                                customName: (customNameInput?.trim().isEmpty ?? true)
+                                    ? null
+                                    : customNameInput!.trim(),
+                                parentId: selectedParentId,
+                              );
+                              Navigator.pop(context);
+                            },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: double.infinity,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          gradient: selectedKey != null
+                              ? const LinearGradient(
+                                  colors: [Color(0xFF1E3A8A), Color(0xFF17605A)],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                )
+                              : null,
+                          color: selectedKey == null
+                              ? (_isDarkMode
+                                  ? const Color(0xFF2C2C2C)
+                                  : const Color(0xFFE0E0E0))
+                              : null,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: selectedKey != null
+                              ? [
+                                  BoxShadow(
+                                      color: kLinkGreen.withValues(alpha: 0.25),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4)),
+                                ]
+                              : null,
+                        ),
+                        child: Center(
+                          child: Text(
+                            selectedKey == null
+                                ? 'Select a Relation First'
+                                : 'Add to Tree',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: selectedKey == null
+                                  ? (_isDarkMode ? Colors.white38 : Colors.black38)
+                                  : Colors.white,
                             ),
-                            child: Text('Calculate', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14.5)),
                           ),
                         ),
-                        if (_results != null) ...[
-                          const SizedBox(height: 24),
-                          _buildResultsSection(),
-                        ],
-                      ],
+                      ),
                     ),
                   ),
                 ],
+              ), // end Column
+            ), // end Container
+            ), // end ConstrainedBox
+          ); // end Center
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildRelationCard(
+      Map<String, dynamic> opt,
+      String? selectedKey,
+      Set<String> existingKeys,
+      void Function(String?) onSelect) {
+    final key = opt['key'] as String;
+    final singleton = opt['singleton'] as bool? ?? false;
+    final alreadyAdded = singleton && existingKeys.contains(key);
+    final isSelected = selectedKey == key;
+    final gender = opt['gender'] as Gender;
+
+    return GestureDetector(
+      onTap: alreadyAdded
+          ? null
+          : () => onSelect(isSelected ? null : key),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.navyBlue
+              : alreadyAdded
+                  ? (_isDarkMode
+                      ? const Color(0xFF1E1E1E)
+                      : const Color(0xFFF5F5F5))
+                  : (_isDarkMode ? const Color(0xFF252525) : Colors.white),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.navyBlue
+                : alreadyAdded
+                    ? Colors.grey.withValues(alpha: 0.15)
+                    : (_isDarkMode
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.grey.withValues(alpha: 0.12)),
+            width: isSelected ? 1.5 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                      color: AppColors.navyBlue.withValues(alpha: 0.2),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2)),
+                ]
+              : null,
+        ),
+        child: Opacity(
+          opacity: alreadyAdded ? 0.4 : 1.0,
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.15)
+                      : (gender == Gender.female
+                              ? AppColors.coralOrange
+                              : AppColors.navyBlue)
+                          .withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  gender == Gender.female
+                      ? Icons.person_rounded
+                      : Icons.person_rounded,
+                  size: 16,
+                  color: isSelected
+                      ? Colors.white
+                      : (gender == Gender.female
+                          ? AppColors.coralOrange
+                          : AppColors.navyBlue),
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(opt['label'] as String,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: isSelected
+                              ? Colors.white
+                              : (_isDarkMode ? Colors.white : AppColors.navyBlue),
+                        )),
+                    Text(alreadyAdded ? 'Already added' : opt['desc'] as String,
+                        style: GoogleFonts.inter(
+                          fontSize: 10.5,
+                          color: isSelected
+                              ? Colors.white.withValues(alpha: 0.75)
+                              : (_isDarkMode
+                                  ? Colors.white38
+                                  : AppColors.placeholder),
+                        )),
+                  ],
+                ),
+              ),
+              if (alreadyAdded)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.midTeal.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text('Added',
+                      style: GoogleFonts.inter(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.midTeal)),
+                )
+              else if (isSelected)
+                const Icon(Icons.check_circle_rounded,
+                    color: kLinkGreen, size: 18),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildGenderCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Deceased Person', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navyBlue)),
-          const SizedBox(height: 10),
-          Row(
-            children: ['Male', 'Female'].map((g) {
-              final selected = _heirs.deceasedGender == g;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() {
-                    _heirs.deceasedGender = g;
-                    _heirs.spouseAlive = false;
-                    _results = null;
-                  }),
-                  child: Container(
-                    margin: EdgeInsets.only(right: g == 'Male' ? 8 : 0, left: g == 'Female' ? 8 : 0),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(color: selected ? AppColors.navyBlue : const Color(0xFFF5F7FA), borderRadius: BorderRadius.circular(12)),
-                    child: Text(g, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w700, color: selected ? Colors.white : AppColors.navyBlue.withValues(alpha: 0.55))),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
+  
+  // TAB 2: CALCULATION 
+  
+  Widget _buildCalculationTab() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final validResults =
+        _familyResults.where((r) => !r.excluded && r.fraction > 0).toList();
 
-  Widget _buildSpouseCard() {
-    return Container(
+    // Sort breakdown high → low
+    final sortedBreakdown = List<FaraidShareResult>.from(_familyResults)
+      ..sort((a, b) => b.percentage.compareTo(a.percentage));
+
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Chart card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Estate Distribution Chart (%)',
+                    style: GoogleFonts.poppins(
+                        fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor)),
+                const SizedBox(height: 14),
+                if (validResults.isNotEmpty) ...[
+                  SizedBox(
+                    height: 200,
+                    width: double.infinity,
+                    child: CustomPaint(
+                      painter: FaraidDonutChartPainter(
+                          results: validResults, isDarkMode: _isDarkMode),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    children: validResults.map((r) {
+                      final colors = [
+                        AppColors.navyBlue, AppColors.midTeal,
+                        AppColors.coralOrange, Colors.indigo,
+                        Colors.teal, Colors.amber.shade700,
+                      ];
+                      final c = colors[validResults.indexOf(r) % colors.length];
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                              width: 10, height: 10,
+                              decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+                          const SizedBox(width: 6),
+                          Text('${r.label}: ${r.percentage.toStringAsFixed(1)}%',
+                              style: GoogleFonts.inter(
+                                  fontSize: 11, fontWeight: FontWeight.w600, color: textColor)),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ] else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                          'Add surviving relatives in Family Tree to view the chart.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: AppColors.placeholder)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(_heirs.deceasedGender == 'Male' ? 'Wife/Wives alive' : 'Husband alive', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.navyBlue)),
-              Switch(
-                value: _heirs.spouseAlive,
-                onChanged: (v) => setState(() { _heirs.spouseAlive = v; _results = null; }),
-                activeThumbColor: Colors.white,
-                activeTrackColor: AppColors.midTeal,
-                inactiveTrackColor: const Color(0xFFE0E0E0),
+              Container(
+                  width: 4, height: 16,
+                  decoration: BoxDecoration(
+                      color: AppColors.midTeal, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(width: 8),
+              Text('Distribution Breakdown',
+                  style: GoogleFonts.poppins(
+                      fontSize: 14, fontWeight: FontWeight.bold, color: textColor)),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.midTeal.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('High → Low',
+                    style: GoogleFonts.inter(
+                        fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.midTeal)),
               ),
             ],
           ),
-          if (_heirs.spouseAlive && _heirs.deceasedGender == 'Male') ...[
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Number of wives', style: GoogleFonts.inter(fontSize: 13, color: AppColors.navyBlue)),
-                _counterRow(_heirs.wivesCount, 1, 4, (v) => setState(() { _heirs.wivesCount = v; _results = null; })),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeirListCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Surviving Family Members', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navyBlue)),
-          const SizedBox(height: 6),
-          Text('Toggle who is alive, or set how many.', style: GoogleFonts.inter(fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.45))),
           const SizedBox(height: 12),
-          ..._heirFields.map((field) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: Text(field.label, style: GoogleFonts.inter(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppColors.navyBlue))),
-                  field.isBoolean
-                      ? Switch(
-                          value: _getBool(field.key),
-                          onChanged: (v) => _setBool(field.key, v),
-                          activeThumbColor: Colors.white,
-                          activeTrackColor: AppColors.midTeal,
-                          inactiveTrackColor: const Color(0xFFE0E0E0),
-                        )
-                      : _counterRow(_getCount(field.key), 0, 10, (v) => _setCount(field.key, v)),
-                ],
-              ),
-            );
-          }),
+
+          // Sorted high → low
+          ...sortedBreakdown.map(_buildPercentageResultCard),
+
+          const SizedBox(height: 8),
+          Text(
+            'Based on common Hanafi Faraid rules. For an actual estate division, consult a qualified scholar.',
+            style: GoogleFonts.inter(
+                fontSize: 10,
+                fontStyle: FontStyle.italic,
+                color: _isDarkMode ? Colors.white38 : AppColors.placeholder),
+          ),
         ],
       ),
     );
   }
 
-  Widget _counterRow(int value, int min, int max, ValueChanged<int> onChanged) {
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: value > min ? () => onChanged(value - 1) : null,
-          child: Container(width: 26, height: 26, decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.08), shape: BoxShape.circle), child: Icon(Icons.remove_rounded, size: 14, color: AppColors.navyBlue.withValues(alpha: value > min ? 1 : 0.3))),
-        ),
-        SizedBox(width: 28, child: Text('$value', textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue))),
-        GestureDetector(
-          onTap: value < max ? () => onChanged(value + 1) : null,
-          child: Container(width: 26, height: 26, decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.08), shape: BoxShape.circle), child: Icon(Icons.add_rounded, size: 14, color: AppColors.navyBlue)),
-        ),
-      ],
-    );
-  }
+  Widget _buildPercentageResultCard(FaraidShareResult share) {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
 
-  Widget _buildResultsSection() {
-    final eligible = _results!.where((r) => !r.excluded).toList();
-    final excluded = _results!.where((r) => r.excluded).toList();
-
-    if (_results!.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
-        child: Column(
-          children: [
-            Icon(Icons.family_restroom_rounded, size: 36, color: AppColors.navyBlue.withValues(alpha: 0.25)),
-            const SizedBox(height: 10),
-            Text('Select at least one surviving heir above to see results.', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 12, color: AppColors.navyBlue.withValues(alpha: 0.5))),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _resultsSectionLabel('Eligible Heirs'),
-        const SizedBox(height: 10),
-        ...eligible.map(_shareCard),
-        if (excluded.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          _resultsSectionLabel('Excluded Heirs'),
-          const SizedBox(height: 10),
-          ...excluded.map(_shareCard),
-        ],
-      ],
-    );
-  }
-
-  Widget _resultsSectionLabel(String title) {
-    return Row(
-      children: [
-        Container(width: 4, height: 16, decoration: BoxDecoration(color: AppColors.navyBlue, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 8),
-        Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-      ],
-    );
-  }
-
-  Widget _shareCard(FaraidShare share) {
-    final fractionStr = share.excluded ? '—' : _fractionToReadable(share.fraction);
-    final pctStr = share.excluded ? '0%' : '${(share.fraction * 100).toStringAsFixed(1)}%';
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: share.excluded ? Border.all(color: AppColors.coralOrange.withValues(alpha: 0.2)) : null,
-        boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+        color: cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: share.excluded
+            ? Border.all(color: AppColors.coralOrange.withValues(alpha: 0.3))
+            : null,
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(color: (share.excluded ? AppColors.coralOrange : AppColors.midTeal).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: (share.excluded ? AppColors.coralOrange : AppColors.midTeal)
+                  .withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
             alignment: Alignment.center,
-            child: Text(fractionStr, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: share.excluded ? AppColors.coralOrange : AppColors.midTeal)),
+            child: Text(
+              share.excluded ? '—' : share.fractionReadable,
+              style: GoogleFonts.poppins(
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+                color: share.excluded ? AppColors.coralOrange : AppColors.midTeal,
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -985,12 +2798,29 @@ class _CalculateByShareScreenState extends State<CalculateByShareScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(child: Text(share.label, style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue))),
-                    if (!share.excluded) Text(pctStr, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                    Expanded(
+                        child: Text(share.label,
+                            style: GoogleFonts.poppins(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.bold,
+                                color: textColor))),
+                    if (!share.excluded)
+                      Text('${share.percentage.toStringAsFixed(1)}%',
+                          style: GoogleFonts.poppins(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.midTeal)),
                   ],
                 ),
-                const SizedBox(height: 3),
-                Text(share.note, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.55), height: 1.4)),
+                const SizedBox(height: 2),
+                Text(share.note,
+                    style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        color: share.excluded
+                            ? AppColors.coralOrange.withValues(alpha: 0.9)
+                            : (_isDarkMode
+                                ? Colors.white60
+                                : AppColors.navyBlue.withValues(alpha: 0.55)))),
               ],
             ),
           ),
@@ -999,391 +2829,1175 @@ class _CalculateByShareScreenState extends State<CalculateByShareScreen> {
     );
   }
 
-  String _fractionToReadable(double f) {
-    if (f <= 0) return '0';
-    const Map<String, double> common = {
-      '1/2': 0.5, '1/3': 1 / 3, '1/4': 0.25, '1/6': 1 / 6,
-      '1/8': 0.125, '2/3': 2 / 3, '1/12': 1 / 12, '1/24': 1 / 24,
-      '1/16': 1 / 16, '1/32': 1 / 32,
-    };
-    for (final entry in common.entries) {
-      if ((f - entry.value).abs() < 0.004) return entry.key;
-    }
-    return '${(f * 100).toStringAsFixed(1)}%';
-  }
-}
+  // ============================================================
+  // TAB 3: SCENARIOS
+  // ============================================================
+  Widget _buildScenariosTab() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
 
-// ============================================================
-// RULES OF INHERITANCE SCREEN (accordion reference)
-// ============================================================
+    final heirDefinitions = <Map<String, dynamic>>[
+      {'key': 'husband', 'label': 'Husband', 'isBool': true},
+      {'key': 'wife', 'label': 'Wife / Wives', 'isBool': false, 'max': 4},
+      {'key': 'son', 'label': 'Son', 'isBool': false},
+      {'key': 'daughter', 'label': 'Daughter', 'isBool': false},
+      {'key': 'grandson', 'label': 'Paternal Grandson', 'isBool': false},
+      {'key': 'granddaughter', 'label': 'Paternal Granddaughter', 'isBool': false},
+      {'key': 'father', 'label': 'Father', 'isBool': true},
+      {'key': 'mother', 'label': 'Mother', 'isBool': true},
+      {'key': 'pGrandfather', 'label': 'Paternal Grandfather', 'isBool': true},
+      {'key': 'pGrandmother', 'label': 'Paternal Grandmother', 'isBool': true},
+      {'key': 'mGrandmother', 'label': 'Maternal Grandmother', 'isBool': true},
+      {'key': 'fullBrother', 'label': 'Full Brother', 'isBool': false},
+      {'key': 'fullSister', 'label': 'Full Sister', 'isBool': false},
+      {'key': 'paternalBrother', 'label': 'Paternal Brother', 'isBool': false},
+      {'key': 'paternalSister', 'label': 'Paternal Sister', 'isBool': false},
+      {'key': 'maternalSibling', 'label': 'Maternal Sibling', 'isBool': false},
+      {'key': 'fullNephew', 'label': 'Full Nephew', 'isBool': false},
+      {'key': 'paternalNephew', 'label': 'Paternal Nephew', 'isBool': false},
+      {'key': 'fullUncle', 'label': 'Full Paternal Uncle', 'isBool': false},
+      {'key': 'paternalUncle', 'label': 'Paternal Paternal Uncle', 'isBool': false},
+      {'key': 'fullCousin', 'label': 'Full Cousin', 'isBool': false},
+      {'key': 'paternalCousin', 'label': 'Paternal Cousin', 'isBool': false},
+    ];
 
-class _HeirRule {
-  final String heir;
-  final String reference;
-  final String eligibility;
-  final String share;
-  final String changes;
-  final String exclusion;
-  final String explanation;
-  const _HeirRule({
-    required this.heir,
-    required this.reference,
-    required this.eligibility,
-    required this.share,
-    required this.changes,
-    required this.exclusion,
-    required this.explanation,
-  });
-}
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)
+                ]),
+            child: Row(
+              children: [
+                Text('Deceased Gender:',
+                    style: GoogleFonts.poppins(
+                        fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+                const Spacer(),
+                ...['Male', 'Female'].map((g) {
+                  final sel = (_scenarioDeceasedGender == Gender.male && g == 'Male') ||
+                      (_scenarioDeceasedGender == Gender.female && g == 'Female');
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      _scenarioDeceasedGender =
+                          g == 'Male' ? Gender.male : Gender.female;
+                      if (_scenarioDeceasedGender == Gender.male) {
+                        _scenarioHeirCounts['husband'] = 0;
+                      } else {
+                        _scenarioHeirCounts['wife'] = 0;
+                      }
+                    }),
+                    child: Container(
+                      margin: const EdgeInsets.only(left: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                          color: sel
+                              ? AppColors.navyBlue
+                              : (_isDarkMode
+                                  ? const Color(0xFF2C2C2C)
+                                  : const Color(0xFFE0E0E0)),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: Text(g,
+                          style: GoogleFonts.poppins(
+                              fontSize: 11.5,
+                              color: sel ? Colors.white : textColor,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
 
-const List<_HeirRule> _heirRules = [
-  _HeirRule(
-    heir: 'Husband',
-    reference: 'Surah An-Nisa 4:12',
-    eligibility: 'Surviving spouse of the deceased wife.',
-    share: '1/2 if she left no children; 1/4 if she left children or grandchildren.',
-    changes: 'Reduced from 1/2 to 1/4 when any descendant (child or grandchild) exists.',
-    exclusion: 'Never fully excluded — always inherits as a Quranic (Fard) heir.',
-    explanation: 'The husband\'s share is fixed and does not change based on other relatives except descendants.',
-  ),
-  _HeirRule(
-    heir: 'Wife',
-    reference: 'Surah An-Nisa 4:12',
-    eligibility: 'Surviving spouse (or spouses) of the deceased husband.',
-    share: '1/4 if he left no children; 1/8 if he left children or grandchildren. Split equally if multiple wives.',
-    changes: 'Reduced from 1/4 to 1/8 when any descendant exists; divided among all surviving wives.',
-    exclusion: 'Never fully excluded — always inherits as a Quranic (Fard) heir.',
-    explanation: 'Multiple wives share the same total fraction (1/4 or 1/8) equally between them.',
-  ),
-  _HeirRule(
-    heir: 'Son',
-    reference: 'Surah An-Nisa 4:11',
-    eligibility: 'Biological son of the deceased.',
-    share: 'Residuary (Asaba) — takes the remainder after Fard heirs, double a daughter\'s portion.',
-    changes: 'If both sons and daughters exist, the residue is split with sons getting twice what daughters get.',
-    exclusion: 'Never excluded — a son always inherits.',
-    explanation: 'Sons are never given a fixed fraction; they inherit whatever remains after fixed-share heirs are paid, which is often the largest portion of the estate.',
-  ),
-  _HeirRule(
-    heir: 'Daughter',
-    reference: 'Surah An-Nisa 4:11',
-    eligibility: 'Biological daughter of the deceased.',
-    share: '1/2 if she is the only child; 2/3 shared if two or more; becomes residuary (with sons) if any son is present.',
-    changes: 'Her role changes from a fixed Fard share to a residuary share the moment a son also exists.',
-    exclusion: 'Never fully excluded — always inherits, either as Fard or as residuary.',
-    explanation: 'A single daughter never gets less than 1/2 of the estate on her own share, but that portion can be reduced if brothers are present sharing the residue.',
-  ),
-  _HeirRule(
-    heir: 'Paternal Grandson (Son\'s Son)',
-    reference: 'Surah An-Nisa 4:11 (by analogy to sons)',
-    eligibility: 'Son of a deceased or absent son.',
-    share: 'Stands in for an absent son — residuary (Asaba), double a granddaughter\'s portion.',
-    changes: 'Only inherits when there is no surviving son of the deceased.',
-    exclusion: 'Fully excluded if any son of the deceased is alive.',
-    explanation: 'Grandsons through a son act exactly like sons when the son himself has passed away or is otherwise absent.',
-  ),
-  _HeirRule(
-    heir: 'Paternal Granddaughter (Son\'s Daughter)',
-    reference: 'Surah An-Nisa 4:11 (by analogy to daughters)',
-    eligibility: 'Daughter of a deceased or absent son.',
-    share: '1/6 (completing 2/3) if exactly one real daughter exists; standard daughter share (1/2 or 2/3) if no real daughter; residuary with a grandson if one is present.',
-    changes: 'Her share depends heavily on how many real daughters and grandsons exist alongside her.',
-    exclusion: 'Excluded entirely if there is a surviving son, or if two or more real daughters exist with no grandson present.',
-    explanation: 'This is one of the more nuanced shares — her portion shifts depending on exactly which other descendants are present.',
-  ),
-  _HeirRule(
-    heir: 'Father',
-    reference: 'Surah An-Nisa 4:11',
-    eligibility: 'Biological father of the deceased.',
-    share: '1/6 if any descendant exists; also takes the residue as Asaba if no male descendant exists; pure residuary (no fixed portion) if there are no descendants at all.',
-    changes: 'Gains an additional residuary share whenever there is no son or grandson.',
-    exclusion: 'Never excluded — the father always inherits in some form.',
-    explanation: 'The father can end up with much more than 1/6 when the deceased left only daughters, since he then also takes what remains as the closest male relative.',
-  ),
-  _HeirRule(
-    heir: 'Mother',
-    reference: 'Surah An-Nisa 4:11',
-    eligibility: 'Biological mother of the deceased.',
-    share: '1/3 if there are no children and fewer than two siblings; 1/6 if there are children, grandchildren, or two or more siblings.',
-    changes: 'A special exception ("Umariyyatain") applies when only the spouse and both parents survive: the mother then gets 1/3 of what remains after the spouse\'s share, not 1/3 of the whole estate.',
-    exclusion: 'Never excluded — the mother always inherits.',
-    explanation: 'Even siblings who are themselves blocked from inheriting (for example, by the father\'s presence) still reduce the mother\'s share from 1/3 to 1/6 if there are two or more of them.',
-  ),
-  _HeirRule(
-    heir: 'Paternal Grandfather',
-    reference: 'Surah An-Nisa 4:11 (by analogy to the father)',
-    eligibility: 'Father\'s father, when the father himself has passed away.',
-    share: 'Same structure as the father: 1/6 with descendants, plus residue if no male descendant, or pure residue if no descendants at all.',
-    changes: 'Steps into the father\'s exact role and share pattern.',
-    exclusion: 'Fully excluded if the father is alive.',
-    explanation: 'The paternal grandfather essentially substitutes for an absent father in every respect under Hanafi fiqh.',
-  ),
-  _HeirRule(
-    heir: 'Paternal Grandmother',
-    reference: 'Hadith-based ruling (not explicit in the Quran)',
-    eligibility: 'Father\'s mother.',
-    share: '1/6, shared equally with the maternal grandmother if both are present and eligible.',
-    changes: 'None beyond sharing 1/6 with another eligible grandmother.',
-    exclusion: 'Excluded if the mother or father is alive.',
-    explanation: 'Grandmothers only inherit through a well-established hadith ruling, since the Quran does not mention their share directly.',
-  ),
-  _HeirRule(
-    heir: 'Maternal Grandmother',
-    reference: 'Hadith-based ruling (not explicit in the Quran)',
-    eligibility: 'Mother\'s mother.',
-    share: '1/6, shared equally with the paternal grandmother if both are present and eligible.',
-    changes: 'None beyond sharing 1/6 with another eligible grandmother.',
-    exclusion: 'Excluded if the mother is alive.',
-    explanation: 'Unlike the paternal grandmother, the maternal grandmother is not affected by whether the father is alive — only by the mother.',
-  ),
-  _HeirRule(
-    heir: 'Full Brother',
-    reference: 'Surah An-Nisa 4:176',
-    eligibility: 'Brother sharing both parents with the deceased.',
-    share: 'Residuary (Asaba) — takes the remainder, double a full sister\'s portion if she is also present.',
-    changes: 'Only inherits when there are no descendants and no father or paternal grandfather.',
-    exclusion: 'Fully excluded by a son, grandson, father, or paternal grandfather.',
-    explanation: 'Full brothers are the strongest sibling class and block paternal (consanguine) siblings from inheriting alongside them.',
-  ),
-  _HeirRule(
-    heir: 'Full Sister',
-    reference: 'Surah An-Nisa 4:176',
-    eligibility: 'Sister sharing both parents with the deceased.',
-    share: '1/2 alone, 2/3 shared if two or more, residuary with a full brother if present, or residuary alongside daughters if there is no full brother but daughters exist.',
-    changes: 'Her role shifts between a fixed share and a residuary share depending on which other heirs are present.',
-    exclusion: 'Fully excluded by a son, grandson, father, or paternal grandfather.',
-    explanation: 'This is the classic case cited alongside the daughter\'s share — the surah addresses "Kalalah" (a person with no parent or child) directly for siblings.',
-  ),
-  _HeirRule(
-    heir: 'Paternal Brother',
-    reference: 'Surah An-Nisa 4:176 (by analogy)',
-    eligibility: 'Brother sharing only the father with the deceased (consanguine).',
-    share: 'Same structure as a full brother, but only inherits when full siblings are absent or do not exhaust the estate.',
-    changes: 'Blocked or reduced whenever a full brother, or two or more full sisters, are present.',
-    exclusion: 'Excluded by a full brother, by two or more full sisters (unless he can inherit as residuary), or by the same ascendant/descendant blockers as full siblings.',
-    explanation: 'Paternal siblings share the father but not the mother with the deceased, placing them one step below full siblings in priority.',
-  ),
-  _HeirRule(
-    heir: 'Paternal Sister',
-    reference: 'Surah An-Nisa 4:176 (by analogy)',
-    eligibility: 'Sister sharing only the father with the deceased (consanguine).',
-    share: '1/6 if exactly one full sister exists (completing 2/3); standard sister share if no full sister; residuary with a paternal brother if present.',
-    changes: 'Her exact share depends on the mix of full siblings and paternal brothers present.',
-    exclusion: 'Excluded by a full brother, by two or more full sisters with no paternal brother present, or by the usual ascendant/descendant blockers.',
-    explanation: 'This mirrors the granddaughter\'s relationship to the daughter — a "junior" version of the closer relative\'s share.',
-  ),
-  _HeirRule(
-    heir: 'Maternal Sibling',
-    reference: 'Surah An-Nisa 4:12',
-    eligibility: 'Sibling sharing only the mother with the deceased (uterine).',
-    share: '1/6 if only one; 1/3 shared equally (regardless of gender) if two or more.',
-    changes: 'Unlike full/paternal siblings, maternal siblings never become residuary and always split equally between brothers and sisters.',
-    exclusion: 'Excluded by any descendant (son, daughter, grandchild) or by the father or paternal grandfather.',
-    explanation: 'The Quran addresses maternal siblings in a separate verse from full/paternal siblings, giving them a simpler, purely fixed share.',
-  ),
-  _HeirRule(
-    heir: 'Full Nephew',
-    reference: 'Standard Hanafi Asaba priority order',
-    eligibility: 'Son of a full brother.',
-    share: 'Residuary (Asaba) — takes the full remainder if he is the closest eligible heir.',
-    changes: 'None — either fully inherits the residue or is fully excluded.',
-    exclusion: 'Excluded by any descendant, father, paternal grandfather, full brother, or paternal brother.',
-    explanation: 'Nephews only inherit as residuary heirs and never receive a fixed Quranic share.',
-  ),
-  _HeirRule(
-    heir: 'Paternal Nephew',
-    reference: 'Standard Hanafi Asaba priority order',
-    eligibility: 'Son of a paternal (consanguine) brother.',
-    share: 'Residuary (Asaba) — takes the full remainder if he is the closest eligible heir.',
-    changes: 'None — either fully inherits the residue or is fully excluded.',
-    exclusion: 'Excluded by everything that excludes a full nephew, plus by a full nephew himself.',
-    explanation: 'One step below the full nephew in the Asaba priority chain.',
-  ),
-  _HeirRule(
-    heir: 'Full Paternal Uncle',
-    reference: 'Standard Hanafi Asaba priority order',
-    eligibility: 'Father\'s full brother.',
-    share: 'Residuary (Asaba) — takes the full remainder if he is the closest eligible heir.',
-    changes: 'None — either fully inherits the residue or is fully excluded.',
-    exclusion: 'Excluded by any closer heir, including nephews.',
-    explanation: 'Uncles only enter the picture when no closer relatives (down to nephews) survive.',
-  ),
-  _HeirRule(
-    heir: 'Paternal Paternal Uncle',
-    reference: 'Standard Hanafi Asaba priority order',
-    eligibility: 'Father\'s paternal (consanguine) brother.',
-    share: 'Residuary (Asaba) — takes the full remainder if he is the closest eligible heir.',
-    changes: 'None — either fully inherits the residue or is fully excluded.',
-    exclusion: 'Excluded by a full paternal uncle and everything that excludes him.',
-    explanation: 'One step below the full paternal uncle in the priority chain.',
-  ),
-  _HeirRule(
-    heir: 'Full Cousin',
-    reference: 'Standard Hanafi Asaba priority order',
-    eligibility: 'Son of a full paternal uncle.',
-    share: 'Residuary (Asaba) — takes the full remainder if he is the closest eligible heir.',
-    changes: 'None — either fully inherits the residue or is fully excluded.',
-    exclusion: 'Excluded by any closer heir in the chain, including uncles.',
-    explanation: 'One of the most distant relatives who can still inherit under Hanafi fiqh, only relevant when no closer relative survives at all.',
-  ),
-  _HeirRule(
-    heir: 'Paternal Cousin',
-    reference: 'Standard Hanafi Asaba priority order',
-    eligibility: 'Son of a paternal (consanguine) uncle.',
-    share: 'Residuary (Asaba) — takes the full remainder if he is the closest eligible heir.',
-    changes: 'None — either fully inherits the residue or is fully excluded.',
-    exclusion: 'Excluded by a full cousin and everything that excludes him.',
-    explanation: 'The final and most distant class in the standard Hanafi Asaba priority chain covered by this guide.',
-  ),
-];
-
-class InheritanceRulesScreen extends StatefulWidget {
-  const InheritanceRulesScreen({super.key});
-
-  @override
-  State<InheritanceRulesScreen> createState() => _InheritanceRulesScreenState();
-}
-
-class _InheritanceRulesScreenState extends State<InheritanceRulesScreen> {
-  int? _expandedIndex;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFE8E8E8),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 430),
-          child: Scaffold(
-            backgroundColor: const Color(0xFFF7F7F5),
-            body: SafeArea(
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)
+                ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Configure Scenario Heirs',
+                    style: GoogleFonts.poppins(
+                        fontSize: 14, fontWeight: FontWeight.bold, color: textColor)),
+                const SizedBox(height: 4),
+                Text('Select quantity or presence for each relative:',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: _isDarkMode ? Colors.white60 : AppColors.placeholder)),
+                const SizedBox(height: 12),
+                ...heirDefinitions.map((def) {
+                  final key = def['key'] as String;
+                  final isBool = def['isBool'] as bool;
+                  if (_scenarioDeceasedGender == Gender.male && key == 'husband') {
+                    return const SizedBox.shrink();
+                  }
+                  if (_scenarioDeceasedGender == Gender.female && key == 'wife') {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 20), onPressed: () => Navigator.pop(context)),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: AppColors.midTeal, borderRadius: BorderRadius.circular(14)),
-                          child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 20),
-                        ),
-                        const SizedBox(width: 12),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Rules of Inheritance', style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                              Text('Tap a heir to see the full rules', style: GoogleFonts.inter(fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.55))),
-                            ],
-                          ),
-                        ),
+                            child: Text(def['label'] as String,
+                                style: GoogleFonts.inter(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: textColor))),
+                        isBool
+                            ? Switch(
+                                value: (_scenarioHeirCounts[key] ?? 0) > 0,
+                                onChanged: (v) =>
+                                    setState(() => _scenarioHeirCounts[key] = v ? 1 : 0),
+                                activeTrackColor: AppColors.midTeal,
+                              )
+                            : Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove_circle_outline, size: 18),
+                                    onPressed: () {
+                                      final cur = _scenarioHeirCounts[key] ?? 0;
+                                      if (cur > 0) {
+                                        setState(() => _scenarioHeirCounts[key] = cur - 1);
+                                      }
+                                    },
+                                  ),
+                                  Text('${_scenarioHeirCounts[key] ?? 0}',
+                                      style: GoogleFonts.poppins(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: textColor)),
+                                  IconButton(
+                                    icon: const Icon(Icons.add_circle_outline, size: 18),
+                                    onPressed: () {
+                                      final cur = _scenarioHeirCounts[key] ?? 0;
+                                      final maxVal = (def['max'] as int?) ?? 10;
+                                      if (cur < maxVal) {
+                                        setState(() => _scenarioHeirCounts[key] = cur + 1);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
                       ],
                     ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                      itemCount: _heirRules.length,
-                      itemBuilder: (context, index) {
-                        final rule = _heirRules[index];
-                        final expanded = _expandedIndex == index;
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
-                          ),
-                          child: Column(
-                            children: [
-                              InkWell(
-                                borderRadius: BorderRadius.circular(16),
-                                onTap: () => setState(() => _expandedIndex = expanded ? null : index),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(rule.heir, style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                                            const SizedBox(height: 3),
-                                            Text(rule.reference, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.midTeal, fontWeight: FontWeight.w600)),
-                                          ],
-                                        ),
-                                      ),
-                                      AnimatedRotation(
-                                        turns: expanded ? 0.5 : 0,
-                                        duration: const Duration(milliseconds: 200),
-                                        child: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.navyBlue.withValues(alpha: 0.5)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              AnimatedCrossFade(
-                                duration: const Duration(milliseconds: 200),
-                                crossFadeState: expanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-                                firstChild: Padding(
-                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Divider(height: 1),
-                                      const SizedBox(height: 12),
-                                      _ruleRow('Eligibility', rule.eligibility, Icons.check_circle_outline_rounded, AppColors.midTeal),
-                                      _ruleRow('Prescribed Share', rule.share, Icons.pie_chart_outline_rounded, AppColors.navyBlue),
-                                      _ruleRow('When It Changes', rule.changes, Icons.swap_horiz_rounded, AppColors.coralOrange),
-                                      _ruleRow('When Excluded', rule.exclusion, Icons.block_rounded, Colors.redAccent),
-                                      const SizedBox(height: 6),
-                                      Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(12)),
-                                        child: Text(rule.explanation, style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.7), height: 1.5)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                secondChild: const SizedBox.shrink(),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
+                  );
+                }),
+              ],
             ),
+          ),
+          const SizedBox(height: 14),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => setState(() {
+                _scenarioResults = FaraidEngine.calculate(
+                  meGender: _scenarioDeceasedGender,
+                  heirCounts: _scenarioHeirCounts,
+                );
+              }),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.navyBlue,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: Text('Calculate Scenario Shares',
+                  style: GoogleFonts.poppins(
+                      color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (_scenarioResults != null) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Scenario Distribution Result',
+                    style: GoogleFonts.poppins(
+                        fontSize: 14, fontWeight: FontWeight.bold, color: textColor)),
+                ElevatedButton.icon(
+                  onPressed: _promptSaveScenario,
+                  icon: const Icon(Icons.bookmark_add_rounded, size: 16, color: Colors.white),
+                  label: Text('Save',
+                      style: GoogleFonts.poppins(
+                          fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...(_scenarioResults!
+                .toList()
+                ..sort((a, b) => b.percentage.compareTo(a.percentage)))
+                .map(_buildPercentageResultCard),
+            Text(
+              'Based on common Hanafi Faraid rules. Consult a qualified scholar for a real estate division.',
+              style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontStyle: FontStyle.italic,
+                  color: _isDarkMode ? Colors.white38 : AppColors.placeholder),
+            ),
+          ],
+
+          if (_savedScenarios.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('Saved Scenario Snapshots',
+                style: GoogleFonts.poppins(
+                    fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor)),
+            const SizedBox(height: 8),
+            ..._savedScenarios.map((sc) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04), blurRadius: 4)
+                      ]),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.bookmark_rounded,
+                          color: AppColors.midTeal, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(sc['name'] ?? 'Unnamed Scenario',
+                            style: GoogleFonts.poppins(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: textColor)),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            size: 18, color: Colors.redAccent),
+                        onPressed: () => setState(() {
+                          _savedScenarios.remove(sc);
+                          _saveScenariosToPrefs();
+                        }),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _promptSaveScenario() {
+    String name = '';
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        title: Text('Save Scenario Snapshot',
+            style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+        content: TextField(
+          onChanged: (val) => name = val,
+          decoration: const InputDecoration(hintText: 'e.g. Grandpa\'s Estate'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (name.trim().isNotEmpty) {
+                setState(() {
+                  _savedScenarios.add({
+                    'name': name.trim(),
+                    'date': DateTime.now().toIso8601String(),
+                  });
+                  _saveScenariosToPrefs();
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  
+  // TAB 4: RULES 
+  
+  Widget _buildRulesTab() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+
+    // Awl / Radd explanation card
+    final principlesCard = _buildPrinciplesCard(cardBg, textColor);
+
+    final rules = _ruleData();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Intro banner
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF1E3A8A), Color(0xFF17605A)],
+              ),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Faraid Rules Reference',
+                    style: GoogleFonts.poppins(
+                        fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 4),
+                Text('22 heirs · Fixed shares, Residue & Exclusion · Hanafi School',
+                    style: GoogleFonts.inter(fontSize: 10.5, color: Colors.white70)),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'وَلِكُلٍّ جَعَلْنَا مَوَالِيَ مِمَّا تَرَكَ الْوَالِدَانِ وَالْأَقْرَبُونَ',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.amiriQuran(fontSize: 13, color: Colors.white, height: 1.6),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '"And for all, We have appointed heirs to what is left by parents and relatives." — An-Nisa 4:33',
+                  style: GoogleFonts.inter(
+                      fontSize: 10, color: Colors.white70, fontStyle: FontStyle.italic, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          principlesCard,
+          const SizedBox(height: 12),
+          ...rules.map((r) => _buildRuleCard(r, cardBg, textColor)),
+          const SizedBox(height: 4),
+          Text(
+            'This reference summarizes common Hanafi positions. For an actual estate division, consult a qualified scholar.',
+            style: GoogleFonts.inter(
+                fontSize: 10,
+                fontStyle: FontStyle.italic,
+                color: _isDarkMode ? Colors.white38 : AppColors.placeholder),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrinciplesCard(Color cardBg, Color textColor) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          iconColor: AppColors.midTeal,
+          collapsedIconColor: _isDarkMode ? Colors.white38 : AppColors.placeholder,
+          title: Text('Key Principles: Awl & Radd',
+              style: GoogleFonts.poppins(
+                  fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+          subtitle: Text('Over-subscription & Surplus return',
+              style: GoogleFonts.inter(
+                  fontSize: 10, color: AppColors.midTeal, fontWeight: FontWeight.w600)),
+          children: [
+            _sectionBlock(
+              'Awl (عَوْل) — Proportional Reduction',
+              'When the sum of all fixed Quranic shares exceeds 100%, each heir\'s share is reduced proportionally so the total remains exactly 100%. '
+              'This applies, for example, when a husband (1/2), two daughters (2/3), and a mother (1/6) all survive — their shares total more than 1.\n\n'
+              'Classical example: Husband (1/2) + two daughters (2/3) + mother (1/6) → sum = 9/6. Under Awl each is scaled by 6/9.',
+              textColor,
+            ),
+            const SizedBox(height: 10),
+            _sectionBlock(
+              'Radd (رَدّ) — Surplus Returned',
+              'When no residuary (Asaba) heir exists and the fixed shares do not exhaust the estate, the surplus is returned to the fixed-share heirs '
+              'in proportion to their shares (excluding the spouse). '
+              'If the spouse is the only heir, the entire estate goes to them.\n\n'
+              'Example: Mother alone (1/3) → Radd gives her the remaining 2/3, so she inherits the full estate.',
+              textColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionBlock(String title, String body, Color textColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: GoogleFonts.poppins(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.midTeal)),
+        const SizedBox(height: 4),
+        Text(body,
+            style: GoogleFonts.inter(
+                fontSize: 11,
+                height: 1.5,
+                color: _isDarkMode
+                    ? Colors.white70
+                    : AppColors.navyBlue.withValues(alpha: 0.75))),
+      ],
+    );
+  }
+
+  Widget _buildRuleCard(Map<String, dynamic> rule, Color cardBg, Color textColor) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6),
+        ],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          iconColor: AppColors.midTeal,
+          collapsedIconColor: _isDarkMode ? Colors.white38 : AppColors.placeholder,
+          title: Text(rule['heir'] as String,
+              style: GoogleFonts.poppins(
+                  fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(rule['refShort'] as String,
+                style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.midTeal)),
+          ),
+          children: [
+            // Quran reference
+            if ((rule['quranAyat'] as String).isNotEmpty) ...[
+              _labeledSection('Quranic Reference', AppColors.midTeal, textColor),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: _isDarkMode
+                        ? [const Color(0xFF0D1B14), const Color(0xFF0A1520)]
+                        : [const Color(0xFFEFFAF4), const Color(0xFFEAF3FF)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: AppColors.midTeal.withValues(alpha: 0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(rule['quranAyat'] as String,
+                            textAlign: TextAlign.right,
+                            style: GoogleFonts.amiriQuran(
+                                fontSize: 14,
+                                color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                                height: 1.8)),
+                    const SizedBox(height: 6),
+                    Text(rule['quranTranslation'] as String,
+                        style: GoogleFonts.inter(
+                            fontSize: 10.5,
+                            fontStyle: FontStyle.italic,
+                            height: 1.4,
+                            color: _isDarkMode
+                                ? Colors.white70
+                                : AppColors.navyBlue.withValues(alpha: 0.7))),
+                    const SizedBox(height: 4),
+                    Text('— ${rule['quranRef'] as String}',
+                        style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.midTeal)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+
+            // Hadith reference
+            if ((rule['hadith'] as String).isNotEmpty) ...[
+              _labeledSection('Hadith Reference', const Color(0xFFD4A017), textColor),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _isDarkMode
+                      ? const Color(0xFF1A1600)
+                      : const Color(0xFFFDF8E1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: const Color(0xFFD4A017).withValues(alpha: 0.25)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('"${rule['hadith'] as String}"',
+                        style: GoogleFonts.inter(
+                            fontSize: 10.5,
+                            fontStyle: FontStyle.italic,
+                            height: 1.5,
+                            color: _isDarkMode
+                                ? Colors.white70
+                                : AppColors.navyBlue.withValues(alpha: 0.75))),
+                    const SizedBox(height: 4),
+                    Text('— ${rule['hadithRef'] as String}',
+                        style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFFD4A017))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+
+            // Details
+            _textRow('Who qualifies', rule['eligibility'] as String, textColor),
+            _textRow('Share', rule['share'] as String, textColor),
+            _textRow('How it changes', rule['changes'] as String, textColor),
+            _textRow('Exclusion', rule['exclusion'] as String, textColor,
+                labelColor: AppColors.coralOrange),
+            _textRow('In short', rule['explanation'] as String, textColor),
+
+            if ((rule['awlNote'] as String).isNotEmpty)
+              _textRow('Awl effect', rule['awlNote'] as String, textColor,
+                  labelColor: const Color(0xFF9C27B0)),
+            if ((rule['raddNote'] as String).isNotEmpty)
+              _textRow('Radd effect', rule['raddNote'] as String, textColor,
+                  labelColor: const Color(0xFF2196F3)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _labeledSection(String label, Color color, Color textColor) {
+    return Row(
+      children: [
+        Container(
+            width: 3, height: 12,
+            decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 6),
+        Text(label,
+            style: GoogleFonts.poppins(
+                fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+      ],
+    );
+  }
+
+  Widget _textRow(String title, String value, Color textColor,
+      {Color? labelColor}) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: RichText(
+          textAlign: TextAlign.left,
+          text: TextSpan(
+            children: [
+              TextSpan(
+                  text: '$title:  ',
+                  style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.navyBlue)),
+              TextSpan(
+                  text: value,
+                  style: GoogleFonts.inter(
+                      fontSize: 11,
+                      height: 1.4,
+                      color: _isDarkMode
+                          ? Colors.white70
+                          : AppColors.navyBlue.withValues(alpha: 0.85))),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _ruleRow(String label, String value, IconData icon, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  // ============================================================
+  // RULE DATA with Quran + Hadith references
+  // ============================================================
+  List<Map<String, dynamic>> _ruleData() => [
+    {
+      'heir': 'Husband',
+      'refShort': 'Surah An-Nisa 4:12',
+      'quranAyat': 'وَلَكُمْ نِصْفُ مَا تَرَكَ أَزْوَاجُكُمْ إِن لَّمْ يَكُن لَّهُنَّ وَلَدٌ ۚ فَإِن كَانَ لَهُنَّ وَلَدٌ فَلَكُمُ الرُّبُعُ مِمَّا تَرَكْنَ',
+      'quranTranslation': '"And for you is half of what your wives leave if they have no child. But if they have a child, then for you is one fourth of what they leave."',
+      'quranRef': 'Surah An-Nisa (4:12)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Surviving husband of the deceased wife.',
+      'share': '1/2 if no descendants; 1/4 if any child or grandchild exists.',
+      'changes': 'Reduces from 1/2 to 1/4 the moment any descendant exists.',
+      'exclusion': 'Never excluded.',
+      'explanation': 'The husband is a fixed-share (Fard) heir; only descendants change his portion.',
+      'awlNote': 'If total shares exceed 1, husband\'s share is reduced proportionally alongside others.',
+      'raddNote': 'If husband is the sole heir and no residuary exists, the surplus is returned to him.',
+    },
+    {
+      'heir': 'Wife / Wives',
+      'refShort': 'Surah An-Nisa 4:12',
+      'quranAyat': 'وَلَهُنَّ الرُّبُعُ مِمَّا تَرَكْتُمْ إِن لَّمْ يَكُن لَّكُمْ وَلَدٌ ۚ فَإِن كَانَ لَكُمْ وَلَدٌ فَلَهُنَّ الثُّمُنُ مِمَّا تَرَكْتُم',
+      'quranTranslation': '"And for the wives is one fourth of what you leave if you have no child. But if you have a child, then for them is an eighth of what you leave."',
+      'quranRef': 'Surah An-Nisa (4:12)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Surviving wife (or up to 4 wives) of the deceased husband.',
+      'share': '1/4 if no descendants; 1/8 if descendants exist — divided equally among all wives.',
+      'changes': 'Multiple wives share the single 1/4 or 1/8 equally.',
+      'exclusion': 'Never excluded.',
+      'explanation': 'The wives\' portion is one collective Quranic share, not one share per wife.',
+      'awlNote': 'Under Awl, the collective wife share is reduced proportionally.',
+      'raddNote': 'Wives do not receive Radd; any surplus goes to other heirs first.',
+    },
+    {
+      'heir': 'Son',
+      'refShort': 'Surah An-Nisa 4:11',
+      'quranAyat': 'يُوصِيكُمُ اللَّهُ فِي أَوْلَادِكُمْ ۖ لِلذَّكَرِ مِثْلُ حَظِّ الْأُنثَيَيْنِ',
+      'quranTranslation': '"Allah instructs you concerning your children: for the male, what is equal to the share of two females."',
+      'quranRef': 'Surah An-Nisa (4:11)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Biological son of the deceased.',
+      'share': 'Residuary (Asaba) — takes all that remains after fixed shares, at double each daughter\'s share.',
+      'changes': 'Shares the residue with daughters at a 2:1 ratio.',
+      'exclusion': 'Never excluded.',
+      'explanation': 'The son is the strongest residuary; he blocks grandchildren, all siblings, nephews, uncles and cousins.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Daughter',
+      'refShort': 'Surah An-Nisa 4:11',
+      'quranAyat': 'فَإِن كُنَّ نِسَاءً فَوْقَ اثْنَتَيْنِ فَلَهُنَّ ثُلُثَا مَا تَرَكَ ۖ وَإِن كَانَتْ وَاحِدَةً فَلَهَا النِّصْفُ',
+      'quranTranslation': '"If there are more than two daughters, they shall have two thirds of what he left. If there is only one, she shall have half."',
+      'quranRef': 'Surah An-Nisa (4:11)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Biological daughter of the deceased.',
+      'share': '1/2 if alone; 2/3 shared if two or more; residuary with a son (2:1).',
+      'changes': 'Turns from fixed-share heir into residuary whenever a son exists.',
+      'exclusion': 'Never excluded.',
+      'explanation': 'A brother converts her Quranic share into a proportional residuary share.',
+      'awlNote': 'Under Awl, daughters\' share is reduced proportionally.',
+      'raddNote': 'Daughters receive Radd when no residuary heir and estate is not fully distributed.',
+    },
+    {
+      'heir': 'Paternal Grandson (Son\'s Son)',
+      'refShort': 'Surah An-Nisa 4:11 (by analogy)',
+      'quranAyat': 'يُوصِيكُمُ اللَّهُ فِي أَوْلَادِكُمْ',
+      'quranTranslation': '"Allah instructs you concerning your children." — Scholars extend this by analogy to grandchildren through sons.',
+      'quranRef': 'Surah An-Nisa (4:11) — extended by scholarly consensus (Ijma\')',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Son of the deceased\'s son.',
+      'share': 'Residuary — stands fully in the son\'s place when no son is alive.',
+      'changes': 'Takes 2:1 with granddaughters, exactly as sons do with daughters.',
+      'exclusion': 'Fully excluded by a living son.',
+      'explanation': 'Descendants through sons substitute for their fathers, generation by generation.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Paternal Granddaughter (Son\'s Daughter)',
+      'refShort': 'Surah An-Nisa 4:11 (by analogy)',
+      'quranAyat': 'فَإِن كُنَّ نِسَاءً فَوْقَ اثْنَتَيْنِ فَلَهُنَّ ثُلُثَا مَا تَرَكَ',
+      'quranTranslation': '"If there are more than two daughters, they shall have two thirds of what he left." — Extended to granddaughters by analogy.',
+      'quranRef': 'Surah An-Nisa (4:11) — extended by scholarly consensus',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Daughter of the deceased\'s son.',
+      'share': '1/2 alone or 2/3 shared if no daughters; 1/6 alongside one daughter (completing 2/3).',
+      'changes': 'Becomes residuary with a grandson; drops to 1/6 with one daughter.',
+      'exclusion': 'Excluded by a son, or by two or more daughters (unless a grandson exists).',
+      'explanation': 'She fills whatever room is left of the daughters\' collective 2/3 maximum.',
+      'awlNote': '',
+      'raddNote': 'May receive Radd if she is the only surviving heir.',
+    },
+    {
+      'heir': 'Father',
+      'refShort': 'Surah An-Nisa 4:11',
+      'quranAyat': 'وَلِأَبَوَيْهِ لِكُلِّ وَاحِدٍ مِّنْهُمَا السُّدُسُ مِمَّا تَرَكَ إِن كَانَ لَهُ وَلَدٌ',
+      'quranTranslation': '"And for one\'s parents, to each of them is a sixth of what he left if he had a child."',
+      'quranRef': 'Surah An-Nisa (4:11)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Biological father of the deceased.',
+      'share': '1/6 fixed with a male descendant; 1/6 + remainder with only female descendants; pure residuary with no descendants.',
+      'changes': 'His role shifts between fixed-share and residuary depending on descendants.',
+      'exclusion': 'Never excluded.',
+      'explanation': 'The father is unique — he can inherit as Fard, as Asaba, or as both at once.',
+      'awlNote': 'Under Awl his 1/6 is reduced proportionally.',
+      'raddNote': 'Father receives Radd when there are no other residuary heirs.',
+    },
+    {
+      'heir': 'Mother',
+      'refShort': 'Surah An-Nisa 4:11',
+      'quranAyat': 'فَإِن لَّمْ يَكُن لَّهُ وَلَدٌ وَوَرِثَهُ أَبَوَاهُ فَلِأُمِّهِ الثُّلُثُ ۚ فَإِن كَانَ لَهُ إِخْوَةٌ فَلِأُمِّهِ السُّدُسُ',
+      'quranTranslation': '"If he had no child and his parents are his heirs, then for his mother is one third. But if he had brothers, then for his mother is one sixth."',
+      'quranRef': 'Surah An-Nisa (4:11)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Biological mother of the deceased.',
+      'share': '1/3 if no children and fewer than two siblings; 1/6 otherwise.',
+      'changes': 'Even siblings who are themselves blocked still reduce her to 1/6.',
+      'exclusion': 'Never excluded.',
+      'explanation': 'The mother always inherits; only the size of her fixed share changes.',
+      'awlNote': 'Under Awl her share is reduced proportionally with others.',
+      'raddNote': 'Mother receives Radd when there are no residuary heirs.',
+    },
+    {
+      'heir': 'Paternal Grandfather',
+      'refShort': 'Surah An-Nisa 4:11 (by analogy)',
+      'quranAyat': 'وَلِأَبَوَيْهِ لِكُلِّ وَاحِدٍ مِّنْهُمَا السُّدُسُ',
+      'quranTranslation': '"And for one\'s parents, to each of them is one sixth." — Extended by scholars to the grandfather in the father\'s absence.',
+      'quranRef': 'Surah An-Nisa (4:11) — Hanafi extension by analogy',
+      'hadith': 'The Prophet (ﷺ) granted the grandfather a sixth when he stood in for the father.',
+      'hadithRef': 'Sunan Abi Dawud, Book of Inheritance (hadith on grandfather\'s share)',
+      'eligibility': 'Father\'s father, when the father has already passed away.',
+      'share': 'Acts exactly like the father: 1/6, 1/6 + remainder, or full residuary.',
+      'changes': 'Also blocks maternal siblings, like the father does.',
+      'exclusion': 'Fully excluded by a living father.',
+      'explanation': 'Under Hanafi fiqh the grandfather steps into the father\'s position.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Paternal Grandmother',
+      'refShort': 'Sunnah — Hadith ruling',
+      'quranAyat': '',
+      'quranTranslation': '',
+      'quranRef': '',
+      'hadith': 'The Messenger of Allah (ﷺ) gave the grandmother one sixth when there was no mother.',
+      'hadithRef': 'Sunan Abi Dawud, Kitab al-Fara\'id, No. 2894; Jami\' al-Tirmidhi, No. 2100 (authenticated)',
+      'eligibility': 'Father\'s mother.',
+      'share': '1/6 — shared equally (1/12 each) if the maternal grandmother also inherits.',
+      'changes': 'Splits the 1/6 whenever both grandmothers qualify.',
+      'exclusion': 'Excluded by the mother AND by the father.',
+      'explanation': 'The grandmothers\' 1/6 comes from the Sunnah, not directly from the Quran.',
+      'awlNote': '',
+      'raddNote': 'Paternal grandmother may receive Radd if she is the sole heir.',
+    },
+    {
+      'heir': 'Maternal Grandmother',
+      'refShort': 'Sunnah — Hadith ruling',
+      'quranAyat': '',
+      'quranTranslation': '',
+      'quranRef': '',
+      'hadith': 'The Prophet (ﷺ) assigned the grandmother one sixth, and when two grandmothers were present they shared it equally.',
+      'hadithRef': 'Sunan Abi Dawud, Kitab al-Fara\'id, No. 2894; authenticated by al-Albani',
+      'eligibility': 'Mother\'s mother.',
+      'share': '1/6 — shared equally with the paternal grandmother if both qualify.',
+      'changes': 'Splits the 1/6 when both grandmothers inherit.',
+      'exclusion': 'Excluded only by the mother.',
+      'explanation': 'She is blocked by her own daughter (the mother) but not by the father.',
+      'awlNote': '',
+      'raddNote': 'May receive Radd if sole surviving heir.',
+    },
+    {
+      'heir': 'Full Brother',
+      'refShort': 'Surah An-Nisa 4:176',
+      'quranAyat': 'وَهُوَ يَرِثُهَا إِن لَّمْ يَكُن لَّهَا وَلَدٌ ۚ فَإِن كَانَتَا اثْنَتَيْنِ فَلَهُمَا الثُّلُثَانِ مِمَّا تَرَكَ',
+      'quranTranslation': '"And he inherits from her if she has no child. But if there are two sisters, they have two thirds of what he left." (Kalalah verse — applied to siblings by scholars)',
+      'quranRef': 'Surah An-Nisa (4:176)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Brother sharing both parents, in a Kalalah case (no male descendant, no father).',
+      'share': 'Residuary (Asaba) — takes the remainder, double each full sister\'s share.',
+      'changes': 'Shares 2:1 with full sisters.',
+      'exclusion': 'Excluded by a son, grandson, father, or (Hanafi) grandfather.',
+      'explanation': 'Full siblings only inherit when the deceased leaves neither a male descendant nor a father.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Full Sister',
+      'refShort': 'Surah An-Nisa 4:176',
+      'quranAyat': 'إِنِ امْرُؤٌ هَلَكَ لَيْسَ لَهُ وَلَدٌ وَلَهُ أُخْتٌ فَلَهَا نِصْفُ مَا تَرَكَ',
+      'quranTranslation': '"If a man dies, leaving no child but a sister, she will have half of what he left."',
+      'quranRef': 'Surah An-Nisa (4:176)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Sister sharing both parents, in a Kalalah case.',
+      'share': '1/2 alone; 2/3 if two or more; residuary with a full brother (2:1) or with daughters.',
+      'changes': 'With daughters she becomes Asaba ma\'a al-ghayr and takes the remainder.',
+      'exclusion': 'Excluded by a son, grandson, father, or grandfather.',
+      'explanation': 'Her three possible roles — Fard, Asaba with brothers, Asaba with daughters.',
+      'awlNote': 'Under Awl her fixed share is reduced proportionally.',
+      'raddNote': 'Full sister may receive Radd when no residuary heir exists.',
+    },
+    {
+      'heir': 'Paternal Brother',
+      'refShort': 'Surah An-Nisa 4:176 (by analogy)',
+      'quranAyat': 'يَسْتَفْتُونَكَ قُلِ اللَّهُ يُفْتِيكُمْ فِي الْكَلَالَةِ',
+      'quranTranslation': '"They ask you for a ruling. Say: Allah gives you a ruling concerning Kalalah (one with no lineal heirs)."',
+      'quranRef': 'Surah An-Nisa (4:176)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Brother through the father only.',
+      'share': 'Residuary (Asaba), double each paternal sister\'s share.',
+      'changes': 'Only inherits when no full brother (or full sister taking the residue) exists.',
+      'exclusion': 'Excluded by descendants (male), father, grandfather, and full brother.',
+      'explanation': 'He ranks one step below full siblings in the residuary chain.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Paternal Sister',
+      'refShort': 'Surah An-Nisa 4:176 (by analogy)',
+      'quranAyat': 'يَسْتَفْتُونَكَ قُلِ اللَّهُ يُفْتِيكُمْ فِي الْكَلَالَةِ',
+      'quranTranslation': '"They ask you for a ruling. Say: Allah gives you a ruling concerning Kalalah."',
+      'quranRef': 'Surah An-Nisa (4:176)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Sister through the father only.',
+      'share': '1/2 alone or 2/3 shared if no full sisters; 1/6 completing 2/3 alongside one full sister.',
+      'changes': 'Residuary with a paternal brother (2:1) or with daughters.',
+      'exclusion': 'Excluded by male descendants, father, grandfather, a full brother, or two+ full sisters (unless a paternal brother exists).',
+      'explanation': 'She mirrors the full sister\'s roles, one tier lower in priority.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Maternal Sibling',
+      'refShort': 'Surah An-Nisa 4:12',
+      'quranAyat': 'وَإِن كَانَ رَجُلٌ يُورَثُ كَلَالَةً أَوِ امْرَأَةٌ وَلَهُ أَخٌ أَوْ أُخْتٌ فَلِكُلِّ وَاحِدٍ مِّنْهُمَا السُّدُسُ',
+      'quranTranslation': '"And if a man or woman leaves neither parents nor children, but has a brother or sister (maternal), then each one of them shall have a sixth."',
+      'quranRef': 'Surah An-Nisa (4:12)',
+      'hadith': '',
+      'hadithRef': '',
+      'eligibility': 'Brother or sister through the mother only, in a Kalalah case.',
+      'share': '1/6 if one; 1/3 shared equally if two or more.',
+      'changes': 'Unique rule: males and females take perfectly equal parts — no 2:1 ratio.',
+      'exclusion': 'Excluded by any descendant, the father, or the grandfather.',
+      'explanation': 'Maternal siblings are the only heirs whose gender never affects their share.',
+      'awlNote': 'Under Awl their share is reduced proportionally.',
+      'raddNote': 'They may receive Radd if no other heir exists.',
+    },
+    {
+      'heir': 'Full Nephew (Full Brother\'s Son)',
+      'refShort': 'Asaba chain — Fiqh consensus',
+      'quranAyat': '',
+      'quranTranslation': '',
+      'quranRef': '',
+      'hadith': 'The Prophet (ﷺ) said: "Give the obligatory shares to those entitled, and whatever is left is for the nearest male agnate (Asaba)."',
+      'hadithRef': 'Sahih al-Bukhari, Kitab al-Fara\'id, No. 6732; Sahih Muslim, No. 1615',
+      'eligibility': 'Son of the deceased\'s full brother.',
+      'share': 'Residuary — takes the entire remainder when he is the nearest agnate.',
+      'changes': 'Multiple nephews split the residue equally.',
+      'exclusion': 'Excluded by descendants, father, grandfather, and any brother or residuary sister.',
+      'explanation': 'The residuary line passes from brothers down to their sons before moving to uncles.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Paternal Nephew',
+      'refShort': 'Asaba chain — Fiqh consensus',
+      'quranAyat': '',
+      'quranTranslation': '',
+      'quranRef': '',
+      'hadith': '"Give the obligatory shares to those entitled, and whatever is left is for the nearest male agnate."',
+      'hadithRef': 'Sahih al-Bukhari, Kitab al-Fara\'id, No. 6732',
+      'eligibility': 'Son of the deceased\'s paternal half-brother.',
+      'share': 'Residuary — same rule as the full nephew, one tier lower.',
+      'changes': 'Multiple nephews split the residue equally.',
+      'exclusion': 'Excluded by everyone above, including the full nephew.',
+      'explanation': 'Within each degree, full-blood relatives always outrank half-blood ones.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Full Paternal Uncle',
+      'refShort': 'Asaba chain — Fiqh consensus',
+      'quranAyat': '',
+      'quranTranslation': '',
+      'quranRef': '',
+      'hadith': '"Give the obligatory shares to those entitled, and whatever is left is for the nearest male agnate."',
+      'hadithRef': 'Sahih al-Bukhari, Kitab al-Fara\'id, No. 6732',
+      'eligibility': 'Full brother of the deceased\'s father.',
+      'share': 'Residuary — takes the remainder when no nearer agnate exists.',
+      'changes': 'Multiple uncles split the residue equally.',
+      'exclusion': 'Excluded by descendants, father, grandfather, brothers, and nephews.',
+      'explanation': 'Uncles inherit only after the deceased\'s own line and the brothers\' line are exhausted.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Paternal Uncle',
+      'refShort': 'Asaba chain — Fiqh consensus',
+      'quranAyat': '',
+      'quranTranslation': '',
+      'quranRef': '',
+      'hadith': '"Give the obligatory shares to those entitled, and whatever is left is for the nearest male agnate."',
+      'hadithRef': 'Sahih al-Bukhari, Kitab al-Fara\'id, No. 6732',
+      'eligibility': 'Paternal half-brother of the deceased\'s father.',
+      'share': 'Residuary — same as the full uncle, one tier lower.',
+      'changes': 'Multiple uncles split the residue equally.',
+      'exclusion': 'Excluded by everyone above, including the full uncle.',
+      'explanation': 'Again, full blood outranks half blood at the same degree.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Full Cousin (Full Uncle\'s Son)',
+      'refShort': 'Asaba chain — Fiqh consensus',
+      'quranAyat': '',
+      'quranTranslation': '',
+      'quranRef': '',
+      'hadith': '"Give the obligatory shares to those entitled, and whatever is left is for the nearest male agnate."',
+      'hadithRef': 'Sahih al-Bukhari, Kitab al-Fara\'id, No. 6732',
+      'eligibility': 'Son of the deceased\'s full paternal uncle.',
+      'share': 'Residuary — inherits the remainder when he is the nearest surviving agnate.',
+      'changes': 'Multiple cousins split the residue equally.',
+      'exclusion': 'Excluded by all nearer agnates, including both uncles.',
+      'explanation': 'Cousins sit near the end of the Asaba chain and rarely inherit in practice.',
+      'awlNote': '',
+      'raddNote': '',
+    },
+    {
+      'heir': 'Paternal Cousin',
+      'refShort': 'Asaba chain — Fiqh consensus',
+      'quranAyat': '',
+      'quranTranslation': '',
+      'quranRef': '',
+      'hadith': '"Give the obligatory shares to those entitled, and whatever is left is for the nearest male agnate."',
+      'hadithRef': 'Sahih al-Bukhari, Kitab al-Fara\'id, No. 6732',
+      'eligibility': 'Son of the deceased\'s paternal half-uncle.',
+      'share': 'Residuary — the last male agnate in the standard chain.',
+      'changes': 'Multiple cousins split the residue equally.',
+      'exclusion': 'Excluded by everyone above, including the full cousin.',
+      'explanation': 'If even he is absent, the surplus returns to fixed-share heirs (Radd) or the treasury.',
+      'awlNote': '',
+      'raddNote': 'If he is the only heir and estate is not fully distributed, Radd may apply.',
+    },
+  ];
+}
+
+// ============================================================
+// PAINTERS
+// ============================================================
+
+/// Subtle dot-grid pattern for the tree background.
+class DotGridPainter extends CustomPainter {
+  final Color color;
+  DotGridPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    const step = 24.0;
+    const dotRadius = 1.1;
+    for (double x = step; x < size.width; x += step) {
+      for (double y = step; y < size.height; y += step) {
+        canvas.drawCircle(Offset(x, y), dotRadius, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant DotGridPainter old) => old.color != color;
+}
+
+/// Draws the animated family-tree connector lines.
+class FamilyTreeLinkPainter extends CustomPainter {
+  final List<List<Offset>> edges;
+  final double progress;
+  FamilyTreeLinkPainter({required this.edges, required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = kLinkGreen
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    for (final pts in edges) {
+      if (pts.length < 2) continue;
+      final path = Path()..moveTo(pts.first.dx, pts.first.dy);
+      for (int i = 1; i < pts.length; i++) {
+        path.lineTo(pts[i].dx, pts[i].dy);
+      }
+      if (progress >= 1.0) {
+        canvas.drawPath(path, paint);
+      } else {
+        for (final metric in path.computeMetrics()) {
+          canvas.drawPath(
+              metric.extractPath(0, metric.length * progress), paint);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant FamilyTreeLinkPainter old) =>
+      old.progress != progress || old.edges != edges;
+}
+
+/// Minimal person silhouette inside the card avatar circle.
+class AvatarPainter extends CustomPainter {
+  final Gender gender;
+  final bool isMe;
+  AvatarPainter({required this.gender, required this.isMe});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = Paint()..color = Colors.white;
+    final cx = size.width / 2;
+
+    canvas.drawCircle(Offset(cx, size.height * 0.36), size.width * 0.16, fill);
+    canvas.drawArc(
+      Rect.fromCircle(
+          center: Offset(cx, size.height * 0.86), radius: size.width * 0.28),
+      math.pi,
+      math.pi,
+      true,
+      fill,
+    );
+
+    if (gender == Gender.female) {
+      final stroke = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(
+        Rect.fromCircle(
+            center: Offset(cx, size.height * 0.37), radius: size.width * 0.23),
+        math.pi * 0.8,
+        math.pi * 1.4,
+        false,
+        stroke,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant AvatarPainter old) =>
+      old.gender != gender || old.isMe != isMe;
+}
+
+/// Donut chart for the estate distribution.
+class FaraidDonutChartPainter extends CustomPainter {
+  final List<FaraidShareResult> results;
+  final bool isDarkMode;
+  FaraidDonutChartPainter({required this.results, required this.isDarkMode});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final colors = <Color>[
+      AppColors.navyBlue,
+      AppColors.midTeal,
+      AppColors.coralOrange,
+      Colors.indigo,
+      Colors.teal,
+      Colors.amber.shade700,
+    ];
+
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2 - 6;
+    const stroke = 30.0;
+    final rect = Rect.fromCircle(center: center, radius: radius - stroke / 2);
+
+    final total = results.fold(0.0, (s, r) => s + r.fraction);
+    if (total <= 0) return;
+
+    double start = -math.pi / 2;
+    for (int i = 0; i < results.length; i++) {
+      final sweep = results[i].fraction / total * 2 * math.pi;
+      final paint = Paint()
+        ..color = colors[i % colors.length]
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke;
+      canvas.drawArc(rect, start, math.max(0.0, sweep - 0.03), false, paint);
+
+      if (sweep > 0.45) {
+        final mid = start + sweep / 2;
+        final labelPos = Offset(
+          center.dx + (radius - stroke / 2) * math.cos(mid),
+          center.dy + (radius - stroke / 2) * math.sin(mid),
+        );
+        final tp = TextPainter(
+          text: TextSpan(
+            text: '${results[i].percentage.toStringAsFixed(0)}%',
+            style: const TextStyle(
+                fontSize: 9.5, fontWeight: FontWeight.w700, color: Colors.white),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, labelPos - Offset(tp.width / 2, tp.height / 2));
+      }
+      start += sweep;
+    }
+
+    final centerTp = TextPainter(
+      text: TextSpan(
         children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                const SizedBox(height: 2),
-                Text(value, style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.65), height: 1.5)),
-              ],
-            ),
+          TextSpan(
+            text: '${results.length}\n',
+            style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: isDarkMode ? Colors.white : AppColors.navyBlue),
+          ),
+          TextSpan(
+            text: results.length == 1 ? 'Heir' : 'Heirs',
+            style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: isDarkMode ? Colors.white54 : Colors.black45),
           ),
         ],
       ),
-    );
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    centerTp.paint(canvas, center - Offset(centerTp.width / 2, centerTp.height / 2));
   }
+
+  @override
+  bool shouldRepaint(covariant FaraidDonutChartPainter old) =>
+      old.results != results || old.isDarkMode != isDarkMode;
 }

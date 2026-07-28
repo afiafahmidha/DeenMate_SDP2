@@ -1,9 +1,38 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:adhan/adhan.dart';
 import '../widgets/auth_header.dart'; // Import AppColors
+
+// File-level theme helpers so widgets in this file can share logic.
+bool _isDarkModeCtx(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
+
+Color _surfaceColor(BuildContext context) {
+  final isDark = _isDarkModeCtx(context);
+  return isDark ? const Color(0xFF161D26) : Colors.white;
+}
+
+Color _surfaceElevatedColor(BuildContext context) {
+  final isDark = _isDarkModeCtx(context);
+  return isDark ? const Color(0xFF1E2733) : const Color(0xFFF7FAFC);
+}
+
+Color _borderColor(BuildContext context) {
+  final isDark = _isDarkModeCtx(context);
+  return isDark ? Colors.white.withOpacity(0.12) : AppColors.dustyBlueTeal.withValues(alpha: 0.15);
+}
+
+Color _primaryTextColor(BuildContext context) {
+  final isDark = _isDarkModeCtx(context);
+  return isDark ? Colors.white : AppColors.navyBlue;
+}
+
+Color _secondaryTextColor(BuildContext context) {
+  final isDark = _isDarkModeCtx(context);
+  return isDark ? Colors.white.withOpacity(0.75) : AppColors.navyBlue.withValues(alpha: 0.7);
+}
 
 // ===== HIJRI DATE MODEL =====
 class HijriDate {
@@ -59,6 +88,122 @@ class HijriDate {
     }
     return result;
   }
+}
+
+// ===== STAR CONFIG =====
+class _CalendarStarConfig {
+  final double topFraction;
+  final double leftFraction;
+  final double size;
+  final int delayMs;
+
+  _CalendarStarConfig({required this.topFraction, required this.leftFraction, required this.size, required this.delayMs});
+}
+
+// ===== TWINKLING STAR WIDGET =====
+class _CalendarTwinklingStar extends StatefulWidget {
+  final double topFraction;
+  final double leftFraction;
+  final double size;
+  final int delayMs;
+
+  const _CalendarTwinklingStar({required this.topFraction, required this.leftFraction, required this.size, required this.delayMs});
+
+  @override
+  State<_CalendarTwinklingStar> createState() => _CalendarTwinklingStarState();
+}
+
+class _CalendarTwinklingStarState extends State<_CalendarTwinklingStar> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _opacity;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+    _opacity = Tween<double>(begin: 0.25, end: 1.0).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _timer = Timer(Duration(milliseconds: widget.delayMs), () {
+      if (mounted) _controller.repeat(reverse: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: FractionalOffset(widget.leftFraction, widget.topFraction),
+      child: AnimatedBuilder(
+        animation: _opacity,
+        builder: (context, child) {
+          return Opacity(
+            opacity: _opacity.value,
+            child: CustomPaint(
+              size: Size(widget.size, widget.size),
+              painter: _CalendarStarPainter(),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+class _CalendarStarPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFFFFE082).withValues(alpha: 0.9)..style = PaintingStyle.fill;
+    final path = Path();
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final rx = size.width / 2;
+    final ry = size.height / 2;
+    path.moveTo(cx, cy - ry);
+    path.quadraticBezierTo(cx, cy, cx + rx, cy);
+    path.quadraticBezierTo(cx, cy, cx, cy + ry);
+    path.quadraticBezierTo(cx, cy, cx - rx, cy);
+    path.quadraticBezierTo(cx, cy, cx, cy - ry);
+    path.close();
+    canvas.drawPath(path, paint);
+    final corePaint = Paint()..color = Colors.white.withValues(alpha: 0.95)..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(cx, cy), size.width * 0.12, corePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ===== VERY SMALL TEXTURE PAINTER =====
+class _CalendarTexturePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = AppColors.navyBlue.withValues(alpha: 0.015)..strokeWidth = 0.4..style = PaintingStyle.stroke;
+    final double gridWidth = 16.0;
+    final int rows = (size.height / gridWidth).ceil() + 1;
+    final int cols = (size.width / gridWidth).ceil() + 1;
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        double x = c * gridWidth;
+        double y = r * gridWidth;
+        canvas.drawRect(Rect.fromLTWH(x - gridWidth / 2, y - gridWidth / 2, gridWidth, gridWidth), paint);
+        canvas.save();
+        canvas.translate(x, y);
+        canvas.rotate(math.pi / 4);
+        canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: gridWidth, height: gridWidth), paint);
+        canvas.restore();
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ===== HIJRI CONVERTER =====
@@ -644,9 +789,11 @@ class PrayerTimeEntry {
 // ===== INTERACTIVE CALENDAR TAB WIDGET =====
 class CalendarTab extends StatefulWidget {
   final VoidCallback onOpenZakatCalculator;
+  final bool isDarkMode;
   const CalendarTab({
     super.key,
     required this.onOpenZakatCalculator,
+    this.isDarkMode = false,
   });
   @override
   State<CalendarTab> createState() => _CalendarTabState();
@@ -669,6 +816,15 @@ class _CalendarTabState extends State<CalendarTab> {
     }
   }
 
+  // Sparkling star config for background
+  final List<_CalendarStarConfig> _stars = [
+    _CalendarStarConfig(topFraction: 0.07, leftFraction: 0.12, size: 6, delayMs: 100),
+    _CalendarStarConfig(topFraction: 0.18, leftFraction: 0.35, size: 5, delayMs: 400),
+    _CalendarStarConfig(topFraction: 0.26, leftFraction: 0.62, size: 7, delayMs: 800),
+    _CalendarStarConfig(topFraction: 0.12, leftFraction: 0.82, size: 5, delayMs: 1200),
+    _CalendarStarConfig(topFraction: 0.40, leftFraction: 0.25, size: 6, delayMs: 600),
+  ];
+
   void _nextMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
@@ -689,6 +845,31 @@ class _CalendarTabState extends State<CalendarTab> {
     return hijri.day == 13 || hijri.day == 14 || hijri.day == 15;
   }
 
+  Color _surfaceColor(BuildContext context) {
+    final isDark = widget.isDarkMode || Theme.of(context).brightness == Brightness.dark;
+    return isDark ? const Color(0xFF1E1E1E) : Colors.white;
+  }
+
+  Color _surfaceElevatedColor(BuildContext context) {
+    final isDark = widget.isDarkMode || Theme.of(context).brightness == Brightness.dark;
+    return isDark ? const Color(0xFF1E2733) : const Color(0xFFF7FAFC);
+  }
+
+  Color _borderColor(BuildContext context) {
+    final isDark = widget.isDarkMode || Theme.of(context).brightness == Brightness.dark;
+    return isDark ? Colors.white.withValues(alpha: 0.12) : AppColors.dustyBlueTeal.withValues(alpha: 0.15);
+  }
+
+  Color _primaryTextColor(BuildContext context) {
+    final isDark = widget.isDarkMode || Theme.of(context).brightness == Brightness.dark;
+    return isDark ? Colors.white : AppColors.navyBlue;
+  }
+
+  Color _secondaryTextColor(BuildContext context) {
+    final isDark = widget.isDarkMode || Theme.of(context).brightness == Brightness.dark;
+    return isDark ? Colors.white.withValues(alpha: 0.75) : AppColors.navyBlue.withValues(alpha: 0.7);
+  }
+
   // Pushes the dedicated, full-bleed detail page for a significant day.
   // This is the ONLY place a background image ever renders — the month
   // grid itself never shows imagery, only small dot markers (see the grid
@@ -698,23 +879,23 @@ class _CalendarTabState extends State<CalendarTab> {
   // of "deliberate moment" worth spending a hero image on.
   void _openEventDetail(IslamicEvent event, DateTime date, HijriDate hijri) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => EventDetailPage(
-          event: event,
-          date: date,
-          hijri: hijri,
-          isBengali: _isBengali,
-          activityStatus: _activityStatus,
-          onToggleActivity: (key, val) => setState(() => _activityStatus[key] = val),
-        ),
-      ),
+          MaterialPageRoute(
+            builder: (_) => EventDetailPage(
+              event: event,
+              date: date,
+              hijri: hijri,
+              isBengali: _isBengali,
+              activityStatus: _activityStatus,
+              onToggleActivity: (key, val) => setState(() => _activityStatus[key] = val),
+            ),
+          ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final daysInMonthString =
-        DateFormat('d').format(DateTime(_currentMonth.year, _currentMonth.month + 1, 0));
+          DateFormat('d').format(DateTime(_currentMonth.year, _currentMonth.month + 1, 0));
     final daysCount = int.parse(daysInMonthString);
     final firstDayOfWeek = DateTime(_currentMonth.year, _currentMonth.month, 1).weekday % 7;
     final currentHijriMonthStart =
@@ -734,30 +915,94 @@ class _CalendarTabState extends State<CalendarTab> {
     final selectedEvent = CalendarDatabase.getEvent(_selectedDate, selectedHijri);
     final selectedIsFasting = _isMondayOrThursday(_selectedDate) || _isWhiteDay(selectedHijri);
 
+    final theme = Theme.of(context);
+    final isDark = widget.isDarkMode || theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
-          child: Column(
+      backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+      body: Stack(
+        children: [
+          // Texture background
+          Positioned.fill(
+            child: CustomPaint(painter: _CalendarTexturePainter()),
+          ),
+          // Twinkling stars
+          ..._stars.map((star) {
+            return _CalendarTwinklingStar(
+              topFraction: star.topFraction,
+              leftFraction: star.leftFraction,
+              size: star.size,
+              delayMs: star.delayMs,
+            );
+          }).toList(),
+          Positioned.fill(
+            child: SafeArea(
+              bottom: false,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
+                child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    _isBengali ? 'ইসলামিক ক্যালেন্ডার' : 'Islamic Calendar',
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.navyBlue,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.dustyBlueTeal.withValues(alpha: 0.18)
+                                : AppColors.navyBlue.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isDark
+                                  ? AppColors.dustyBlueTeal.withValues(alpha: 0.4)
+                                  : AppColors.navyBlue.withValues(alpha: 0.25),
+                              width: 1,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.calendar_month_rounded,
+                            color: _primaryTextColor(context),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _isBengali ? 'ইসলামিক ক্যালেন্ডার' : 'Islamic Calendar',
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: _primaryTextColor(context),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _isBengali ? 'ক্যালেন্ডার ও বিশেষ দিন' : 'Hijri calendar & Islamic events',
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: GoogleFonts.poppins(fontSize: 12, color: _secondaryTextColor(context)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Container(
                     decoration: BoxDecoration(
-                      color: AppColors.dustyBlueTeal.withValues(alpha: 0.15),
+                      color: isDark ? const Color(0xFF22313F) : AppColors.dustyBlueTeal.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     padding: const EdgeInsets.all(2),
@@ -776,7 +1021,7 @@ class _CalendarTabState extends State<CalendarTab> {
                               style: GoogleFonts.poppins(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: !_isBengali ? Colors.white : AppColors.navyBlue,
+                                color: !_isBengali ? Colors.white : _primaryTextColor(context),
                               ),
                             ),
                           ),
@@ -794,7 +1039,7 @@ class _CalendarTabState extends State<CalendarTab> {
                               style: GoogleFonts.poppins(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: _isBengali ? Colors.white : AppColors.navyBlue,
+                                color: _isBengali ? Colors.white : _primaryTextColor(context),
                               ),
                             ),
                           ),
@@ -817,7 +1062,7 @@ class _CalendarTabState extends State<CalendarTab> {
                         decoration: BoxDecoration(
                           color: _showCalendarGridTab
                               ? AppColors.navyBlue
-                              : const Color(0xFFF3F7F9),
+                              : _surfaceElevatedColor(context),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: _showCalendarGridTab
                               ? [
@@ -835,7 +1080,7 @@ class _CalendarTabState extends State<CalendarTab> {
                             Icon(
                               Icons.calendar_view_month_rounded,
                               size: 16,
-                              color: _showCalendarGridTab ? Colors.white : AppColors.navyBlue,
+                              color: _showCalendarGridTab ? Colors.white : _primaryTextColor(context),
                             ),
                             const SizedBox(width: 8),
                             Text(
@@ -843,7 +1088,7 @@ class _CalendarTabState extends State<CalendarTab> {
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
-                                color: _showCalendarGridTab ? Colors.white : AppColors.navyBlue,
+                                color: _showCalendarGridTab ? Colors.white : _primaryTextColor(context),
                               ),
                             ),
                           ],
@@ -861,7 +1106,7 @@ class _CalendarTabState extends State<CalendarTab> {
                         decoration: BoxDecoration(
                           color: !_showCalendarGridTab
                               ? AppColors.navyBlue
-                              : const Color(0xFFF3F7F9),
+                              : _surfaceElevatedColor(context),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: !_showCalendarGridTab
                               ? [
@@ -879,7 +1124,7 @@ class _CalendarTabState extends State<CalendarTab> {
                             Icon(
                               Icons.event_note_rounded,
                               size: 16,
-                              color: !_showCalendarGridTab ? Colors.white : AppColors.navyBlue,
+                              color: !_showCalendarGridTab ? Colors.white : _primaryTextColor(context),
                             ),
                             const SizedBox(width: 8),
                             Text(
@@ -887,7 +1132,7 @@ class _CalendarTabState extends State<CalendarTab> {
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
-                                color: !_showCalendarGridTab ? Colors.white : AppColors.navyBlue,
+                                color: !_showCalendarGridTab ? Colors.white : _primaryTextColor(context),
                               ),
                             ),
                           ],
@@ -976,7 +1221,7 @@ class _CalendarTabState extends State<CalendarTab> {
                         style: GoogleFonts.poppins(
                           fontSize: 12.5,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.navyBlue.withValues(alpha: 0.5),
+                          color: _secondaryTextColor(context),
                         ),
                       ),
                     );
@@ -998,9 +1243,9 @@ class _CalendarTabState extends State<CalendarTab> {
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? Colors.black : Colors.white,   // was _surfaceColor(context)
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
+                    border: Border.all(color: _borderColor(context)),
                     boxShadow: [
                       BoxShadow(
                         color: AppColors.navyBlue.withValues(alpha: 0.04),
@@ -1018,7 +1263,7 @@ class _CalendarTabState extends State<CalendarTab> {
                         style: GoogleFonts.poppins(
                           fontSize: 14.5,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.navyBlue,
+                          color: _primaryTextColor(context),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -1054,34 +1299,55 @@ class _CalendarTabState extends State<CalendarTab> {
           ),
         ),
       ),
+    ),
+        ],
+      ),
     );
   }
 
   Widget _buildSpecialEventsList() {
     final year = _currentMonth.year;
     final events = _getEventsForYear(year);
+    // Sort so that this month's upcoming events appear first, then other upcoming, then past events.
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+    final currentMonth = _currentMonth.month;
+    final currentYear = _currentMonth.year;
+    events.sort((a, b) {
+      final da = a.key;
+      final db = b.key;
+      int pri(DateTime d) {
+        if (d.isBefore(todayStart)) return 2; // past
+        if (d.year == currentYear && d.month == currentMonth) return 0; // this month upcoming
+        return 1; // other upcoming
+      }
+      final pa = pri(da);
+      final pb = pri(db);
+      if (pa != pb) return pa - pb;
+      return da.compareTo(db);
+    });
 
     if (events.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(30),
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _surfaceColor(context),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
+          border: Border.all(color: _borderColor(context)),
         ),
         child: Column(
           children: [
             const Icon(Icons.event_busy_rounded, size: 40, color: Colors.grey),
             const SizedBox(height: 12),
-            Text(
-              _isBengali ? 'কোন বিশেষ দিন পাওয়া যায়নি' : 'No special events found',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppColors.navyBlue,
-              ),
-            ),
+                    Text(
+                      _isBengali ? 'কোন বিশেষ দিন পাওয়া যায়নি' : 'No special events found',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: _primaryTextColor(context),
+                      ),
+                    ),
           ],
         ),
       );
@@ -1097,7 +1363,7 @@ class _CalendarTabState extends State<CalendarTab> {
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.bold,
-              color: AppColors.navyBlue,
+              color: _primaryTextColor(context),
             ),
           ),
         ),
@@ -1125,12 +1391,12 @@ class _CalendarTabState extends State<CalendarTab> {
               decoration: BoxDecoration(
                 color: isCurrentMonth
                     ? color.withValues(alpha: 0.05)
-                    : Colors.white,
+                    : _surfaceColor(context),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isCurrentMonth
                       ? color.withValues(alpha: 0.25)
-                      : AppColors.dustyBlueTeal.withValues(alpha: 0.15),
+                      : _borderColor(context),
                   width: isCurrentMonth ? 1.5 : 1,
                 ),
                 boxShadow: [
@@ -1147,7 +1413,7 @@ class _CalendarTabState extends State<CalendarTab> {
                   child: Row(
                     children: [
                       Container(
-                        width: 6,
+                        width: 4,
                         color: color,
                       ),
                       Expanded(
@@ -1165,7 +1431,7 @@ class _CalendarTabState extends State<CalendarTab> {
                                       style: GoogleFonts.poppins(
                                         fontSize: 14.5,
                                         fontWeight: FontWeight.bold,
-                                        color: AppColors.navyBlue,
+                                        color: _primaryTextColor(context),
                                       ),
                                     ),
                                   ),
@@ -1199,9 +1465,9 @@ class _CalendarTabState extends State<CalendarTab> {
                               Text(
                                 hijriStr,
                                 style: GoogleFonts.poppins(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.navyBlue.withValues(alpha: 0.5),
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: _primaryTextColor(context),
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -1211,7 +1477,7 @@ class _CalendarTabState extends State<CalendarTab> {
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
-                                  color: AppColors.navyBlue.withValues(alpha: 0.7),
+                                  color: _secondaryTextColor(context),
                                   height: 1.4,
                                 ),
                               ),
@@ -1350,7 +1616,7 @@ class _CalendarTabState extends State<CalendarTab> {
                     style: GoogleFonts.poppins(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : AppColors.navyBlue,
+                      color: isSelected ? Colors.white : _primaryTextColor(context),
                     ),
                   ),
                 ),
@@ -1363,7 +1629,7 @@ class _CalendarTabState extends State<CalendarTab> {
                       fontWeight: FontWeight.w600,
                       color: isSelected
                           ? AppColors.dustyBlueTeal
-                          : AppColors.navyBlue.withValues(alpha: 0.45),
+                          : _secondaryTextColor(context),
                     ),
                   ),
                 ),
@@ -1404,7 +1670,7 @@ class _CalendarTabState extends State<CalendarTab> {
           style: GoogleFonts.poppins(
             fontSize: 10.5,
             fontWeight: FontWeight.w500,
-            color: AppColors.navyBlue.withValues(alpha: 0.55),
+            color: _secondaryTextColor(context),
           ),
         ),
       ],
@@ -1428,13 +1694,13 @@ class _CalendarTabState extends State<CalendarTab> {
     }
   }
 
-  Widget _buildPrayerCard(PrayerTimeEntry entry) {
+ Widget _buildPrayerCard(PrayerTimeEntry entry) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
+        border: Border.all(color: _borderColor(context)),
         boxShadow: [
           BoxShadow(
             color: AppColors.navyBlue.withValues(alpha: 0.02),
@@ -1452,7 +1718,7 @@ class _CalendarTabState extends State<CalendarTab> {
                 Icon(
                   _getPrayerIcon(entry.name),
                   size: 13,
-                  color: AppColors.navyBlue.withValues(alpha: 0.65),
+                  color: _secondaryTextColor(context),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -1461,7 +1727,7 @@ class _CalendarTabState extends State<CalendarTab> {
                     style: GoogleFonts.poppins(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.navyBlue,
+                      color: _primaryTextColor(context),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1488,9 +1754,9 @@ class _CalendarTabState extends State<CalendarTab> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
+        border: Border.all(color: _borderColor(context)),
         boxShadow: [
           BoxShadow(
             color: AppColors.navyBlue.withValues(alpha: 0.02),
@@ -1505,7 +1771,7 @@ class _CalendarTabState extends State<CalendarTab> {
           Icon(
             _getPrayerIcon(entry.name),
             size: 13,
-            color: AppColors.navyBlue.withValues(alpha: 0.65),
+            color: _secondaryTextColor(context),
           ),
           const SizedBox(width: 6),
           Text(
@@ -1513,7 +1779,7 @@ class _CalendarTabState extends State<CalendarTab> {
             style: GoogleFonts.poppins(
               fontSize: 11.5,
               fontWeight: FontWeight.bold,
-              color: AppColors.navyBlue,
+              color: _primaryTextColor(context),
             ),
           ),
           const SizedBox(width: 12),
@@ -1535,20 +1801,20 @@ class _CalendarTabState extends State<CalendarTab> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.navyBlue.withValues(alpha: 0.04),
+        color: _surfaceElevatedColor(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.2)),
+        border: Border.all(color: _borderColor(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.access_time_filled_rounded, color: AppColors.navyBlue, size: 16),
+              Icon(Icons.access_time_filled_rounded, color: _secondaryTextColor(context), size: 16),
               const SizedBox(width: 8),
               Text(
                 _isBengali ? 'এই দিনের নামাজের সময়' : 'Prayer Times for This Day',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
               ),
             ],
           ),
@@ -1594,11 +1860,11 @@ class _CalendarTabState extends State<CalendarTab> {
         children: [
           Row(
             children: [
-              const Icon(Icons.menu_book_rounded, color: AppColors.coralOrange, size: 16),
+              Icon(Icons.menu_book_rounded, color: AppColors.coralOrange, size: 16),
               const SizedBox(width: 8),
               Text(
                 _isBengali ? 'আজকের প্রাসঙ্গিক আয়াত' : 'Related Ayah for Today',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
               ),
             ],
           ),
@@ -1610,7 +1876,7 @@ class _CalendarTabState extends State<CalendarTab> {
           const SizedBox(height: 6),
           Text(
             _isBengali ? ayah.reflectionBengali : ayah.reflection,
-            style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.5),
+            style: GoogleFonts.inter(fontSize: 12.5, color: _secondaryTextColor(context), height: 1.5),
           ),
         ],
       ),
@@ -1749,27 +2015,27 @@ class _CalendarTabState extends State<CalendarTab> {
         const SizedBox(height: 16),
         Text(
           _isBengali ? 'বিবরণ' : 'Description',
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
         ),
         const SizedBox(height: 6),
         Text(
           description,
-          style: GoogleFonts.inter(fontSize: 13, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.5),
+          style: GoogleFonts.inter(fontSize: 13, color: _secondaryTextColor(context), height: 1.5),
         ),
         const SizedBox(height: 18),
         Text(
           _isBengali ? 'ইতিহাস ও গুরুত্ব' : 'History & Significance',
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
         ),
         const SizedBox(height: 6),
         Text(
           history,
-          style: GoogleFonts.inter(fontSize: 13, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.5),
+          style: GoogleFonts.inter(fontSize: 13, color: _secondaryTextColor(context), height: 1.5),
         ),
         const SizedBox(height: 20),
         Text(
           _isBengali ? 'আমল ও করণীয়' : 'Spiritual Activities',
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
         ),
         const SizedBox(height: 10),
         Column(
@@ -1778,23 +2044,26 @@ class _CalendarTabState extends State<CalendarTab> {
             final isChecked = _activityStatus[key] ?? false;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: CheckboxListTile(
-                value: isChecked,
-                onChanged: (val) => setState(() => _activityStatus[key] = val ?? false),
-                title: Text(
-                  activities[index],
-                  style: GoogleFonts.inter(
-                    fontSize: 12.5,
-                    color: isChecked
-                        ? const Color(0xFF4CAF50).withValues(alpha: 0.85)
-                        : AppColors.navyBlue.withValues(alpha: 0.8),
-                    decoration: TextDecoration.none,
+              child: Material(
+                color: Colors.transparent,
+                child: CheckboxListTile(
+                  value: isChecked,
+                  onChanged: (val) => setState(() => _activityStatus[key] = val ?? false),
+                  title: Text(
+                    activities[index],
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                        color: isChecked
+                          ? const Color(0xFF4CAF50).withOpacity(0.85)
+                          : _primaryTextColor(context).withOpacity(0.8),
+                      decoration: TextDecoration.none,
+                    ),
                   ),
+                  activeColor: AppColors.midTeal,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
                 ),
-                activeColor: AppColors.midTeal,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                controlAffinity: ListTileControlAffinity.leading,
               ),
             );
           }),
@@ -1825,11 +2094,11 @@ class _CalendarTabState extends State<CalendarTab> {
       children: [
         Row(
           children: [
-            const Icon(Icons.wb_sunny_outlined, color: AppColors.navyBlue, size: 20),
+            Icon(Icons.wb_sunny_outlined, color: _secondaryTextColor(context), size: 20),
             const SizedBox(width: 8),
             Text(
               title,
-              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
             ),
           ],
         ),
@@ -1838,7 +2107,7 @@ class _CalendarTabState extends State<CalendarTab> {
           _isBengali
               ? 'একটি নিয়মিত আধ্যাত্মিক রুটিন বজায় রাখা ঈমান মজবুত করতে সাহায্য করে। নিচের তালিকাটি ব্যবহার করে আজকের আমলগুলো ট্র্যাক করুন:'
               : 'Maintaining a structured daily spiritual routine strengthens your faith. Check off today\'s actions as you complete them:',
-          style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.navyBlue.withValues(alpha: 0.65), height: 1.4),
+          style: GoogleFonts.inter(fontSize: 12.5, color: _secondaryTextColor(context).withOpacity(0.65), height: 1.4),
         ),
         const SizedBox(height: 12),
         Column(
@@ -1847,23 +2116,26 @@ class _CalendarTabState extends State<CalendarTab> {
             final isChecked = _activityStatus[key] ?? false;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: CheckboxListTile(
-                value: isChecked,
-                onChanged: (val) => setState(() => _activityStatus[key] = val ?? false),
-                title: Text(
-                  activities[index],
-                  style: GoogleFonts.inter(
-                    fontSize: 12.5,
-                    color: isChecked
-                        ? const Color(0xFF4CAF50).withValues(alpha: 0.85)
-                        : AppColors.navyBlue.withValues(alpha: 0.8),
-                    decoration: TextDecoration.none,
+              child: Material(
+                color: Colors.transparent,
+                child: CheckboxListTile(
+                  value: isChecked,
+                  onChanged: (val) => setState(() => _activityStatus[key] = val ?? false),
+                  title: Text(
+                    activities[index],
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                        color: isChecked
+                          ? const Color(0xFF4CAF50).withOpacity(0.85)
+                          : _primaryTextColor(context).withOpacity(0.8),
+                      decoration: TextDecoration.none,
+                    ),
                   ),
+                  activeColor: AppColors.midTeal,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
                 ),
-                activeColor: AppColors.midTeal,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                controlAffinity: ListTileControlAffinity.leading,
               ),
             );
           }),
@@ -2026,15 +2298,17 @@ class EventDetailPage extends StatelessWidget {
     final gregorianStr = DateFormat('EEEE, MMMM d, yyyy').format(date);
     final hijriStr = hijri.format(isBengali);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       // Grey letterbox background — only visible on screens wider than
       // the mobile frame (i.e. desktop/laptop browsers).
-      color: const Color(0xFFE8E8E8),
+      color: isDark ? const Color(0xFF0F1216) : const Color(0xFFE8E8E8),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: _mobileFrameWidth),
           child: Scaffold(
-            backgroundColor: Colors.white,
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             body: CustomScrollView(
               physics: const BouncingScrollPhysics(),
               slivers: [
@@ -2117,33 +2391,33 @@ class EventDetailPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildPrayerTimesSection(),
+                        _buildPrayerTimesSection(context),
                         const SizedBox(height: 18),
-                        _buildAyahSection(),
+                        _buildAyahSection(context),
                         const SizedBox(height: 20),
                         Text(
                           isBengali ? 'বিবরণ' : 'Description',
-                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           description,
-                          style: GoogleFonts.inter(fontSize: 13.5, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.6),
+                          style: GoogleFonts.inter(fontSize: 13.5, color: _secondaryTextColor(context), height: 1.6),
                         ),
                         const SizedBox(height: 20),
                         Text(
                           isBengali ? 'ইতিহাস ও গুরুত্ব' : 'History & Significance',
-                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           history,
-                          style: GoogleFonts.inter(fontSize: 13.5, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.6),
+                          style: GoogleFonts.inter(fontSize: 13.5, color: _secondaryTextColor(context), height: 1.6),
                         ),
                         const SizedBox(height: 22),
                         Text(
                           isBengali ? 'করণীয় আমলসমূহ' : 'Recommended Activities',
-                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
                         ),
                         const SizedBox(height: 10),
                         Column(
@@ -2152,23 +2426,26 @@ class EventDetailPage extends StatelessWidget {
                             final isChecked = activityStatus[key] ?? false;
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 4.0),
-                              child: CheckboxListTile(
-                                value: isChecked,
-                                onChanged: (val) => onToggleActivity(key, val ?? false),
-                                title: Text(
-                                  activities[index],
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    color: isChecked
-                                        ? const Color(0xFF4CAF50).withValues(alpha: 0.85)
-                                        : AppColors.navyBlue.withValues(alpha: 0.8),
-                                    decoration: TextDecoration.none,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: CheckboxListTile(
+                                  value: isChecked,
+                                  onChanged: (val) => onToggleActivity(key, val ?? false),
+                                  title: Text(
+                                    activities[index],
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                        color: isChecked
+                                          ? const Color(0xFF4CAF50).withOpacity(0.85)
+                                          : _primaryTextColor(context).withOpacity(0.8),
+                                      decoration: TextDecoration.none,
+                                    ),
                                   ),
+                                  activeColor: AppColors.midTeal,
+                                  contentPadding: EdgeInsets.zero,
+                                  dense: true,
+                                  controlAffinity: ListTileControlAffinity.leading,
                                 ),
-                                activeColor: AppColors.midTeal,
-                                contentPadding: EdgeInsets.zero,
-                                dense: true,
-                                controlAffinity: ListTileControlAffinity.leading,
                               ),
                             );
                           }),
@@ -2186,12 +2463,12 @@ class EventDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildPrayerTimesSection() {
+  Widget _buildPrayerTimesSection(BuildContext context) {
     final times = CalendarDatabase.getPrayerTimesForDate(date);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.navyBlue.withValues(alpha: 0.04),
+        color: _surfaceElevatedColor(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.2)),
       ),
@@ -2200,11 +2477,11 @@ class EventDetailPage extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.access_time_filled_rounded, color: AppColors.navyBlue, size: 16),
+              Icon(Icons.access_time_filled_rounded, color: _secondaryTextColor(context), size: 16),
               const SizedBox(width: 8),
               Text(
                 isBengali ? 'এই দিনের নামাজের সময়' : 'Prayer Times for This Day',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
               ),
             ],
           ),
@@ -2220,7 +2497,7 @@ class EventDetailPage extends StatelessWidget {
                       style: GoogleFonts.poppins(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.navyBlue.withValues(alpha: 0.6),
+                        color: _secondaryTextColor(context).withOpacity(0.6),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -2240,7 +2517,7 @@ class EventDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildAyahSection() {
+  Widget _buildAyahSection(BuildContext context) {
     final ayah = CalendarDatabase.getAyahForDate(date, hijri, event);
     return Container(
       padding: const EdgeInsets.all(14),
@@ -2254,11 +2531,11 @@ class EventDetailPage extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.menu_book_rounded, color: AppColors.coralOrange, size: 16),
+              Icon(Icons.menu_book_rounded, color: AppColors.coralOrange, size: 16),
               const SizedBox(width: 8),
               Text(
                 isBengali ? 'আজকের প্রাসঙ্গিক আয়াত' : 'Related Ayah for Today',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: _primaryTextColor(context)),
               ),
             ],
           ),
@@ -2270,7 +2547,7 @@ class EventDetailPage extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             isBengali ? ayah.reflectionBengali : ayah.reflection,
-            style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.5),
+            style: GoogleFonts.inter(fontSize: 12.5, color: _secondaryTextColor(context), height: 1.5),
           ),
         ],
       ),

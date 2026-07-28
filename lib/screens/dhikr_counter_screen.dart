@@ -10,10 +10,11 @@ import '../services/notification_service.dart';
 /// ===== DHIKR COUNTER SCREEN (full tabbed app) =====
 /// Push like the other planner pages:
 ///   Navigator.of(context).push(
-///     MaterialPageRoute(builder: (_) => const DhikrCounterScreen()),
+///     MaterialPageRoute(builder: (_) => DhikrCounterScreen(isDarkMode: _isDarkMode)),
 ///   );
 class DhikrCounterScreen extends StatefulWidget {
-  const DhikrCounterScreen({super.key});
+  final bool isDarkMode;
+  const DhikrCounterScreen({super.key, this.isDarkMode = false});
 
   @override
   State<DhikrCounterScreen> createState() => _DhikrCounterScreenState();
@@ -106,14 +107,11 @@ const List<_DhikrPreset> _tasbihFatimahSequence = [
 ];
 
 // ===== ADHKAR COLLECTION DATA (Morning & Evening) =====
-// Each item now carries a full multi-line Arabic text + a paraphrased
-// English rendering so tapping a card can open a proper reading screen,
-// not just a one-line summary.
 class _AdhkarItem {
   final String title;
   final String fullArabic;
-  final String transliteration; // English-letter pronunciation guide
-  final String fullMeaning; // paraphrased, own-words rendering — not a verbatim copyrighted translation
+  final String transliteration;
+  final String fullMeaning;
   final String virtue;
   final int recommendedCount;
   const _AdhkarItem({
@@ -218,7 +216,7 @@ class _Badge {
   final String description;
   final IconData icon;
   final int threshold;
-  final String type; // 'lifetime' or 'streak'
+  final String type;
   const _Badge({required this.title, required this.description, required this.icon, required this.threshold, required this.type});
 }
 
@@ -248,7 +246,6 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
 
   bool _showMorningAdhkar = true;
 
-  // Reminder state: enabled flags + customizable times (defaults 7:00 AM / 6:00 PM)
   final Map<String, bool> _reminders = {
     'Morning Adhkar': false,
     'Evening Adhkar': false,
@@ -260,6 +257,18 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
 
   late AnimationController _tapPulseController;
   late AnimationController _breathController;
+
+  // ===== THEME HELPERS =====
+  bool get _dark => widget.isDarkMode || Theme.of(context).brightness == Brightness.dark;
+  Color _pageBg() => _dark ? Colors.black : const Color(0xFFF4F6F7);
+  Color _letterboxBg() => _dark ? Colors.black : const Color(0xFFE8E8E8);
+  Color _cardBg() => _dark ? Colors.black : Colors.white;
+  Color _cardBorder() => _dark ? Colors.white.withValues(alpha: 0.16) : AppColors.navyBlue.withValues(alpha: 0.08);
+  Color _primaryText() => _dark ? Colors.white : AppColors.navyBlue;
+  Color _secondaryText({double alpha = 0.55}) =>
+      _dark ? Colors.white.withValues(alpha: alpha + 0.05) : AppColors.navyBlue.withValues(alpha: alpha);
+  Color _iconTint() => _dark ? Colors.white.withValues(alpha: 0.6) : AppColors.navyBlue.withValues(alpha: 0.6);
+  Color _tabBarBg() => _dark ? const Color(0xFF14181D) : Colors.white;
 
   _DhikrPreset get _activePreset {
     if (_isSequenceMode) return _tasbihFatimahSequence[_sequencePhase];
@@ -437,13 +446,19 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: _cardBg(),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Set Custom Target', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+        title: Text('Set Custom Target', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _primaryText())),
         content: TextField(
           controller: ctrl,
           keyboardType: TextInputType.number,
           autofocus: true,
-          decoration: InputDecoration(hintText: 'e.g. 500', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          style: GoogleFonts.inter(color: _primaryText()),
+          decoration: InputDecoration(
+            hintText: 'e.g. 500',
+            hintStyle: GoogleFonts.inter(color: _secondaryText()),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.placeholder))),
@@ -486,7 +501,6 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     await prefs.setInt('dhikr_reminder_time_$key', picked.hour * 60 + picked.minute);
     _showSnack('⏰ Time saved: ${picked.format(context)}. Turn the switch on to activate it.');
 
-    // If the reminder was already active, reschedule it at the new time.
     if (_reminders[type] == true) {
       await _scheduleReminder(type);
     }
@@ -529,12 +543,12 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFE8E8E8),
+      color: _letterboxBg(),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
           child: Scaffold(
-            backgroundColor: const Color(0xFFF4F6F7),
+            backgroundColor: _pageBg(),
             body: SafeArea(
               child: Column(
                 children: [
@@ -567,14 +581,18 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 20),
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: _primaryText(), size: 20),
             onPressed: () => Navigator.pop(context),
           ),
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [AppColors.navyBlue, Color(0xFF1D3550)]),
+              gradient: _dark
+                  ? null
+                  : const LinearGradient(colors: [AppColors.navyBlue, Color(0xFF1D3550)]),
+              color: _dark ? Colors.white.withValues(alpha: 0.15) : null,
               borderRadius: BorderRadius.circular(14),
+              border: _dark ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) : null,
             ),
             child: const Icon(Icons.fingerprint_rounded, color: Colors.white, size: 20),
           ),
@@ -583,14 +601,14 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Dhikr Counter', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                Text('Remember Allah, in every moment', style: GoogleFonts.inter(fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.55))),
+                Text('Dhikr Counter', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: _primaryText())),
+                Text('Remember Allah, in every moment', style: GoogleFonts.inter(fontSize: 11, color: _secondaryText())),
               ],
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-            decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: _dark ? 0.18 : 0.1), borderRadius: BorderRadius.circular(20)),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -609,16 +627,19 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _tabBarBg(),
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        border: _dark ? Border.all(color: Colors.white.withValues(alpha: 0.14), width: 1) : null,
+        boxShadow: _dark
+            ? []
+            : [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: TabBar(
         controller: _tabController,
         isScrollable: true,
         tabAlignment: TabAlignment.start,
-        labelColor: AppColors.navyBlue,
-        unselectedLabelColor: AppColors.placeholder,
+        labelColor: _primaryText(),
+        unselectedLabelColor: _dark ? Colors.white.withValues(alpha: 0.4) : AppColors.placeholder,
         indicatorColor: AppColors.midTeal,
         indicatorWeight: 3,
         labelStyle: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.w700),
@@ -638,9 +659,9 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
       children: [
         Container(width: 4, height: 16, decoration: BoxDecoration(color: AppColors.navyBlue, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 8),
-        Icon(icon, size: 15, color: AppColors.navyBlue.withValues(alpha: 0.6)),
+        Icon(icon, size: 15, color: _iconTint()),
         const SizedBox(width: 5),
-        Text(title, style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+        Text(title, style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: _primaryText())),
       ],
     );
   }
@@ -661,7 +682,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
         const SizedBox(height: 8),
         Center(
           child: Text('👆 Tap the circle above to count',
-              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.navyBlue.withValues(alpha: 0.4))),
+              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: _secondaryText(alpha: 0.4))),
         ),
         const SizedBox(height: 18),
         _buildCounterActions(),
@@ -671,7 +692,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
         Padding(
           padding: const EdgeInsets.only(left: 12, bottom: 12),
           child: Text('Tap a card below to switch what you\'re counting.',
-              style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.45))),
+              style: GoogleFonts.inter(fontSize: 11.5, color: _secondaryText(alpha: 0.45))),
         ),
         _buildPresetList(),
       ],
@@ -682,7 +703,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.midTeal.withValues(alpha: 0.1),
+        color: AppColors.midTeal.withValues(alpha: _dark ? 0.15 : 0.1),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.3)),
       ),
@@ -694,10 +715,10 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
           Expanded(
             child: Text(
               'How it works: pick a Dhikr below, then tap the big circle once per repetition. It fills up as you go and celebrates when you hit the target!',
-              style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.75), height: 1.5),
+              style: GoogleFonts.inter(fontSize: 11.5, color: _secondaryText(alpha: 0.75), height: 1.5),
             ),
           ),
-          GestureDetector(onTap: _dismissHint, child: Icon(Icons.close_rounded, size: 16, color: AppColors.navyBlue.withValues(alpha: 0.4))),
+          GestureDetector(onTap: _dismissHint, child: Icon(Icons.close_rounded, size: 16, color: _secondaryText(alpha: 0.4))),
         ],
       ),
     );
@@ -791,7 +812,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                   child: CircularProgressIndicator(
                     value: progress,
                     strokeWidth: 11,
-                    backgroundColor: AppColors.navyBlue.withValues(alpha: 0.07),
+                    backgroundColor: _dark ? Colors.white.withValues(alpha: 0.10) : AppColors.navyBlue.withValues(alpha: 0.07),
                     valueColor: const AlwaysStoppedAnimation<Color>(AppColors.midTeal),
                   ),
                 ),
@@ -799,17 +820,24 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                   width: 178,
                   height: 178,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: _cardBg(),
                     shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.1), blurRadius: 22, offset: const Offset(0, 10))],
+                    border: _dark ? Border.all(color: Colors.white.withValues(alpha: 0.16), width: 1.2) : null,
+                    boxShadow: [
+                      BoxShadow(
+                        color: _dark ? Colors.black.withValues(alpha: 0.5) : AppColors.navyBlue.withValues(alpha: 0.1),
+                        blurRadius: 22,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.touch_app_rounded, size: 16, color: AppColors.midTeal.withValues(alpha: 0.5)),
                       const SizedBox(height: 4),
-                      Text('$_count', style: GoogleFonts.poppins(fontSize: 46, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                      Text('of $target', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.navyBlue.withValues(alpha: 0.45))),
+                      Text('$_count', style: GoogleFonts.poppins(fontSize: 46, fontWeight: FontWeight.bold, color: _primaryText())),
+                      Text('of $target', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: _secondaryText(alpha: 0.45))),
                     ],
                   ),
                 ),
@@ -840,17 +868,19 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
         decoration: BoxDecoration(
-          color: highlighted ? AppColors.midTeal.withValues(alpha: 0.15) : Colors.white,
+          color: highlighted ? AppColors.midTeal.withValues(alpha: 0.15) : _cardBg(),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: highlighted ? AppColors.midTeal : AppColors.navyBlue.withValues(alpha: 0.15)),
-          boxShadow: highlighted ? [] : [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))],
+          border: Border.all(color: highlighted ? AppColors.midTeal : _cardBorder()),
+          boxShadow: highlighted || _dark
+              ? []
+              : [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: highlighted ? AppColors.midTeal : AppColors.navyBlue.withValues(alpha: 0.6)),
+            Icon(icon, size: 14, color: highlighted ? AppColors.midTeal : _iconTint()),
             const SizedBox(width: 5),
-            Text(label, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: highlighted ? AppColors.midTeal : AppColors.navyBlue.withValues(alpha: 0.7))),
+            Text(label, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: highlighted ? AppColors.midTeal : _secondaryText(alpha: 0.7))),
           ],
         ),
       ),
@@ -872,10 +902,18 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.navyBlue : Colors.white,
+                  color: selected ? AppColors.navyBlue : _cardBg(),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: selected ? AppColors.navyBlue : AppColors.navyBlue.withValues(alpha: 0.1), width: selected ? 2 : 1),
-                  boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: selected ? 0.15 : 0.04), blurRadius: 10, offset: const Offset(0, 3))],
+                  border: Border.all(color: selected ? AppColors.navyBlue : _cardBorder(), width: selected ? 2 : 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _dark
+                          ? Colors.black.withValues(alpha: selected ? 0.3 : 0.4)
+                          : AppColors.navyBlue.withValues(alpha: selected ? 0.15 : 0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
@@ -890,16 +928,16 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(preset.name, style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: selected ? Colors.white : AppColors.navyBlue)),
+                          Text(preset.name, style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: selected ? Colors.white : _primaryText())),
                           const SizedBox(height: 2),
-                          Text(preset.meaning, style: GoogleFonts.inter(fontSize: 10.5, color: selected ? Colors.white.withValues(alpha: 0.65) : AppColors.navyBlue.withValues(alpha: 0.45))),
+                          Text(preset.meaning, style: GoogleFonts.inter(fontSize: 10.5, color: selected ? Colors.white.withValues(alpha: 0.65) : _secondaryText(alpha: 0.45))),
                         ],
                       ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(color: selected ? Colors.white.withValues(alpha: 0.15) : AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
-                      child: Text('${preset.target}x', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: selected ? Colors.white : AppColors.navyBlue)),
+                      decoration: BoxDecoration(color: selected ? Colors.white.withValues(alpha: 0.15) : (_dark ? Colors.white.withValues(alpha: 0.1) : AppColors.navyBlue.withValues(alpha: 0.06)), borderRadius: BorderRadius.circular(10)),
+                      child: Text('${preset.target}x', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: selected ? Colors.white : _primaryText())),
                     ),
                     if (selected) ...[const SizedBox(width: 8), const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20)],
                   ],
@@ -914,10 +952,18 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: customSelected ? AppColors.navyBlue : Colors.white,
+              color: customSelected ? AppColors.navyBlue : _cardBg(),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: customSelected ? AppColors.navyBlue : AppColors.navyBlue.withValues(alpha: 0.1), width: customSelected ? 2 : 1),
-              boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: customSelected ? 0.15 : 0.04), blurRadius: 10, offset: const Offset(0, 3))],
+              border: Border.all(color: customSelected ? AppColors.navyBlue : _cardBorder(), width: customSelected ? 2 : 1),
+              boxShadow: [
+                BoxShadow(
+                  color: _dark
+                      ? Colors.black.withValues(alpha: customSelected ? 0.3 : 0.4)
+                      : AppColors.navyBlue.withValues(alpha: customSelected ? 0.15 : 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -932,17 +978,17 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Custom Target', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: customSelected ? Colors.white : AppColors.navyBlue)),
+                      Text('Custom Target', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: customSelected ? Colors.white : _primaryText())),
                       const SizedBox(height: 2),
                       Text(customSelected ? 'Currently active — tap to change' : 'Set your own count target',
-                          style: GoogleFonts.inter(fontSize: 10.5, color: customSelected ? Colors.white.withValues(alpha: 0.65) : AppColors.navyBlue.withValues(alpha: 0.45))),
+                          style: GoogleFonts.inter(fontSize: 10.5, color: customSelected ? Colors.white.withValues(alpha: 0.65) : _secondaryText(alpha: 0.45))),
                     ],
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(color: customSelected ? Colors.white.withValues(alpha: 0.15) : AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
-                  child: Text('${_customTarget}x', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: customSelected ? Colors.white : AppColors.navyBlue)),
+                  decoration: BoxDecoration(color: customSelected ? Colors.white.withValues(alpha: 0.15) : (_dark ? Colors.white.withValues(alpha: 0.1) : AppColors.navyBlue.withValues(alpha: 0.06)), borderRadius: BorderRadius.circular(10)),
+                  child: Text('${_customTarget}x', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: customSelected ? Colors.white : _primaryText())),
                 ),
                 if (customSelected) ...[const SizedBox(width: 8), const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20)],
               ],
@@ -964,7 +1010,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
       children: [
         Container(
           padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(14)),
+          decoration: BoxDecoration(color: _dark ? Colors.white.withValues(alpha: 0.08) : AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(14)),
           child: Row(
             children: [
               Expanded(
@@ -977,9 +1023,9 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.wb_sunny_rounded, size: 15, color: _showMorningAdhkar ? Colors.white : AppColors.navyBlue.withValues(alpha: 0.5)),
+                        Icon(Icons.wb_sunny_rounded, size: 15, color: _showMorningAdhkar ? Colors.white : _secondaryText(alpha: 0.5)),
                         const SizedBox(width: 6),
-                        Text('Morning', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w700, color: _showMorningAdhkar ? Colors.white : AppColors.navyBlue.withValues(alpha: 0.5))),
+                        Text('Morning', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w700, color: _showMorningAdhkar ? Colors.white : _secondaryText(alpha: 0.5))),
                       ],
                     ),
                   ),
@@ -995,9 +1041,9 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.nights_stay_rounded, size: 15, color: !_showMorningAdhkar ? Colors.white : AppColors.navyBlue.withValues(alpha: 0.5)),
+                        Icon(Icons.nights_stay_rounded, size: 15, color: !_showMorningAdhkar ? Colors.white : _secondaryText(alpha: 0.5)),
                         const SizedBox(width: 6),
-                        Text('Evening', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w700, color: !_showMorningAdhkar ? Colors.white : AppColors.navyBlue.withValues(alpha: 0.5))),
+                        Text('Evening', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w700, color: !_showMorningAdhkar ? Colors.white : _secondaryText(alpha: 0.5))),
                       ],
                     ),
                   ),
@@ -1010,16 +1056,19 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
         ...list.map((item) => GestureDetector(
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => _AdhkarDetailPage(item: item)),
+                  MaterialPageRoute(builder: (_) => _AdhkarDetailPage(item: item, isDarkMode: _dark)),
                 );
               },
               child: Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: _cardBg(),
                   borderRadius: BorderRadius.circular(18),
-                  boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+                  border: _dark ? Border.all(color: Colors.white.withValues(alpha: 0.14)) : null,
+                  boxShadow: _dark
+                      ? []
+                      : [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
                 ),
                 child: Row(
                   children: [
@@ -1027,18 +1076,18 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(item.title, style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                          Text(item.title, style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: _primaryText())),
                           const SizedBox(height: 4),
                           Text(item.transliteration, maxLines: 1, overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(fontSize: 10.5, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600, color: AppColors.midTeal)),
                           const SizedBox(height: 4),
-                          Text(item.fullMeaning, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.55), height: 1.4)),
+                          Text(item.fullMeaning, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 11.5, color: _secondaryText(alpha: 0.55), height: 1.4)),
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              Icon(Icons.repeat_rounded, size: 12, color: AppColors.navyBlue.withValues(alpha: 0.4)),
+                              Icon(Icons.repeat_rounded, size: 12, color: _secondaryText(alpha: 0.4)),
                               const SizedBox(width: 4),
-                              Text('Recommended: ${item.recommendedCount}x', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.navyBlue.withValues(alpha: 0.4))),
+                              Text('Recommended: ${item.recommendedCount}x', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: _secondaryText(alpha: 0.4))),
                             ],
                           ),
                         ],
@@ -1047,7 +1096,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.1), shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: _dark ? 0.18 : 0.1), shape: BoxShape.circle),
                       child: const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.midTeal, size: 12),
                     ),
                   ],
@@ -1079,7 +1128,6 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     );
   }
 
-  // ===== REWARD OF DHIKR CARD =====
   Widget _buildRewardCard() {
     return Container(
       width: double.infinity,
@@ -1142,15 +1190,15 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.2))),
+        decoration: BoxDecoration(color: color.withValues(alpha: _dark ? 0.16 : 0.08), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: _dark ? 0.35 : 0.2))),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Icon(icon, color: color, size: 18), Icon(Icons.chevron_right_rounded, color: color.withValues(alpha: 0.4), size: 16)]),
             const SizedBox(height: 8),
-            Text(label, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+            Text(label, style: GoogleFonts.inter(fontSize: 10.5, color: _secondaryText(alpha: 0.5))),
             const SizedBox(height: 2),
-            Text(value, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+            Text(value, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: _primaryText())),
           ],
         ),
       ),
@@ -1168,7 +1216,12 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
         final maxVal = data.map((e) => e.value).fold<int>(0, (a, b) => a > b ? a : b);
         return Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))]),
+          decoration: BoxDecoration(
+            color: _cardBg(),
+            borderRadius: BorderRadius.circular(18),
+            border: _dark ? Border.all(color: Colors.white.withValues(alpha: 0.14)) : null,
+            boxShadow: _dark ? [] : [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+          ),
           child: Column(
             children: data.map((e) {
               final fraction = maxVal > 0 ? e.value / maxVal : 0.0;
@@ -1176,20 +1229,20 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   children: [
-                    SizedBox(width: 70, child: Text(e.key, style: GoogleFonts.inter(fontSize: 11, color: AppColors.navyBlue.withValues(alpha: 0.6)))),
+                    SizedBox(width: 70, child: Text(e.key, style: GoogleFonts.inter(fontSize: 11, color: _secondaryText(alpha: 0.6)))),
                     Expanded(
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(6),
                         child: LinearProgressIndicator(
                           value: fraction,
                           minHeight: 10,
-                          backgroundColor: AppColors.navyBlue.withValues(alpha: 0.06),
+                          backgroundColor: _dark ? Colors.white.withValues(alpha: 0.1) : AppColors.navyBlue.withValues(alpha: 0.06),
                           valueColor: const AlwaysStoppedAnimation<Color>(AppColors.midTeal),
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
-                    SizedBox(width: 32, child: Text('${e.value}', textAlign: TextAlign.right, style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue))),
+                    SizedBox(width: 32, child: Text('${e.value}', textAlign: TextAlign.right, style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: _primaryText()))),
                   ],
                 ),
               );
@@ -1227,7 +1280,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
         Padding(
           padding: const EdgeInsets.only(left: 12, bottom: 12),
           child: Text('Tap the time to customize it, then use the switch to turn it on.',
-              style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.45))),
+              style: GoogleFonts.inter(fontSize: 11.5, color: _secondaryText(alpha: 0.45))),
         ),
         _buildReminderTile(type: 'Morning Adhkar', icon: Icons.wb_sunny_rounded),
         const SizedBox(height: 10),
@@ -1237,7 +1290,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
         const SizedBox(height: 4),
         Padding(
           padding: const EdgeInsets.only(left: 12, bottom: 12),
-          child: Text('Unlocked automatically as you keep counting.', style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.navyBlue.withValues(alpha: 0.45))),
+          child: Text('Unlocked automatically as you keep counting.', style: GoogleFonts.inter(fontSize: 11.5, color: _secondaryText(alpha: 0.45))),
         ),
         _buildAchievementsGrid(),
       ],
@@ -1249,27 +1302,32 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     final TimeOfDay time = _reminderTimes[type]!;
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))]),
+      decoration: BoxDecoration(
+        color: _cardBg(),
+        borderRadius: BorderRadius.circular(16),
+        border: _dark ? Border.all(color: Colors.white.withValues(alpha: 0.14)) : null,
+        boxShadow: _dark ? [] : [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+      ),
       child: Row(
         children: [
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: AppColors.navyBlue, size: 20),
+            decoration: BoxDecoration(color: _dark ? Colors.white.withValues(alpha: 0.10) : AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: _primaryText(), size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(type, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                Text(type, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: _primaryText())),
                 const SizedBox(height: 3),
                 GestureDetector(
                   onTap: () => _pickReminderTime(type),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: _dark ? 0.18 : 0.1), borderRadius: BorderRadius.circular(8)),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1290,7 +1348,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
             onChanged: (_) => _toggleReminder(type),
             activeThumbColor: Colors.white,
             activeTrackColor: AppColors.midTeal,
-            inactiveTrackColor: const Color(0xFFE0E0E0),
+            inactiveTrackColor: _dark ? Colors.white.withValues(alpha: 0.2) : const Color(0xFFE0E0E0),
           ),
         ],
       ),
@@ -1319,35 +1377,35 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
             return Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: unlocked ? AppColors.midTeal.withValues(alpha: 0.08) : Colors.white,
+                color: unlocked ? AppColors.midTeal.withValues(alpha: _dark ? 0.16 : 0.08) : _cardBg(),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: unlocked ? AppColors.midTeal.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.08)),
+                border: Border.all(color: unlocked ? AppColors.midTeal.withValues(alpha: 0.3) : _cardBorder()),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: unlocked ? AppColors.midTeal.withValues(alpha: 0.15) : AppColors.navyBlue.withValues(alpha: 0.06), shape: BoxShape.circle),
-                    child: Icon(badge.icon, color: unlocked ? AppColors.midTeal : AppColors.navyBlue.withValues(alpha: 0.3), size: 20),
+                    decoration: BoxDecoration(color: unlocked ? AppColors.midTeal.withValues(alpha: 0.15) : (_dark ? Colors.white.withValues(alpha: 0.08) : AppColors.navyBlue.withValues(alpha: 0.06)), shape: BoxShape.circle),
+                    child: Icon(badge.icon, color: unlocked ? AppColors.midTeal : _secondaryText(alpha: 0.35), size: 20),
                   ),
                   const SizedBox(height: 10),
-                  Text(badge.title, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: unlocked ? AppColors.navyBlue : AppColors.navyBlue.withValues(alpha: 0.5))),
+                  Text(badge.title, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: unlocked ? _primaryText() : _secondaryText(alpha: 0.5))),
                   const SizedBox(height: 4),
-                  Text(badge.description, style: GoogleFonts.inter(fontSize: 9.5, color: AppColors.navyBlue.withValues(alpha: 0.4)), maxLines: 2),
+                  Text(badge.description, style: GoogleFonts.inter(fontSize: 9.5, color: _secondaryText(alpha: 0.4)), maxLines: 2),
                   const Spacer(),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: progress,
                       minHeight: 5,
-                      backgroundColor: AppColors.navyBlue.withValues(alpha: 0.06),
-                      valueColor: AlwaysStoppedAnimation<Color>(unlocked ? AppColors.midTeal : AppColors.navyBlue.withValues(alpha: 0.25)),
+                      backgroundColor: _dark ? Colors.white.withValues(alpha: 0.1) : AppColors.navyBlue.withValues(alpha: 0.06),
+                      valueColor: AlwaysStoppedAnimation<Color>(unlocked ? AppColors.midTeal : _secondaryText(alpha: 0.25)),
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(unlocked ? 'Unlocked!' : '$current / ${badge.threshold}',
-                      style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.w600, color: unlocked ? AppColors.midTeal : AppColors.navyBlue.withValues(alpha: 0.4))),
+                      style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.w600, color: unlocked ? AppColors.midTeal : _secondaryText(alpha: 0.4))),
                 ],
               ),
             );
@@ -1466,9 +1524,10 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                         margin: const EdgeInsets.symmetric(horizontal: 24),
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: _cardBg(),
                           borderRadius: BorderRadius.circular(24),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 30, offset: const Offset(0, 12))],
+                          border: _dark ? Border.all(color: Colors.white.withValues(alpha: 0.16)) : null,
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: _dark ? 0.5 : 0.15), blurRadius: 30, offset: const Offset(0, 12))],
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -1478,7 +1537,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                                  decoration: BoxDecoration(color: color.withValues(alpha: _dark ? 0.18 : 0.1), borderRadius: BorderRadius.circular(12)),
                                   child: Icon(icon, color: color, size: 20),
                                 ),
                                 const SizedBox(width: 12),
@@ -1486,12 +1545,12 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                                      Text(subtitle, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.navyBlue.withValues(alpha: 0.5))),
+                                      Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: _primaryText())),
+                                      Text(subtitle, style: GoogleFonts.inter(fontSize: 10.5, color: _secondaryText(alpha: 0.5))),
                                     ],
                                   ),
                                 ),
-                                GestureDetector(onTap: () => Navigator.pop(context), child: Icon(Icons.close_rounded, size: 18, color: AppColors.navyBlue.withValues(alpha: 0.4))),
+                                GestureDetector(onTap: () => Navigator.pop(context), child: Icon(Icons.close_rounded, size: 18, color: _secondaryText(alpha: 0.4))),
                               ],
                             ),
                             const SizedBox(height: 16),
@@ -1500,19 +1559,19 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Expanded(child: Text(r.key, style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.navyBlue.withValues(alpha: 0.75)))),
-                                      if (r.value > 0) Text('${r.value}', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                                      Expanded(child: Text(r.key, style: GoogleFonts.inter(fontSize: 12.5, color: _secondaryText(alpha: 0.75)))),
+                                      if (r.value > 0) Text('${r.value}', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: _primaryText())),
                                     ],
                                   ),
                                 )),
-                            const Divider(height: 22),
+                            Divider(height: 22, color: _dark ? Colors.white.withValues(alpha: 0.14) : null),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                              decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+                              decoration: BoxDecoration(color: color.withValues(alpha: _dark ? 0.18 : 0.08), borderRadius: BorderRadius.circular(12)),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(totalLabel, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.navyBlue)),
+                                  Text(totalLabel, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: _primaryText())),
                                   Text('$totalValue$totalSuffix', style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: color)),
                                 ],
                               ),
@@ -1533,21 +1592,28 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
 }
 
 // ===== ADHKAR DETAIL PAGE =====
-// Full-screen reading view for a single adhkar/ayah — shows the complete
-// Arabic text, an own-words English rendering, and the virtue/hadith note.
 class _AdhkarDetailPage extends StatelessWidget {
   final _AdhkarItem item;
-  const _AdhkarDetailPage({required this.item});
+  final bool isDarkMode;
+  const _AdhkarDetailPage({required this.item, this.isDarkMode = false});
+
+  bool _dark(BuildContext context) => isDarkMode || Theme.of(context).brightness == Brightness.dark;
 
   @override
   Widget build(BuildContext context) {
+    final dark = _dark(context);
+    final Color primaryText = dark ? Colors.white : AppColors.navyBlue;
+    final Color secondaryText = dark ? Colors.white.withValues(alpha: 0.65) : AppColors.navyBlue.withValues(alpha: 0.8);
+    final Color cardBg = dark ? Colors.black : Colors.white;
+    final Color cardBorder = dark ? Colors.white.withValues(alpha: 0.16) : AppColors.navyBlue.withValues(alpha: 0.08);
+
     return Container(
-      color: const Color(0xFFE8E8E8),
+      color: dark ? Colors.black : const Color(0xFFE8E8E8),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
           child: Scaffold(
-            backgroundColor: const Color(0xFFF7F7F5),
+            backgroundColor: dark ? Colors.black : const Color(0xFFF7F7F5),
             body: SafeArea(
               child: Column(
                 children: [
@@ -1556,11 +1622,11 @@ class _AdhkarDetailPage extends StatelessWidget {
                     child: Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 20),
+                          icon: Icon(Icons.arrow_back_ios_new_rounded, color: primaryText, size: 20),
                           onPressed: () => Navigator.pop(context),
                         ),
                         Expanded(
-                          child: Text(item.title, style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                          child: Text(item.title, style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: primaryText)),
                         ),
                       ],
                     ),
@@ -1585,20 +1651,24 @@ class _AdhkarDetailPage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        // Transliteration (English pronunciation guide)
+                        // Transliteration
                         Row(
                           children: [
                             const Icon(Icons.record_voice_over_rounded, size: 16, color: AppColors.coralOrange),
                             const SizedBox(width: 6),
-                            Text('How to Pronounce', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                            Text('How to Pronounce', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: primaryText)),
                           ],
                         ),
                         const SizedBox(height: 10),
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(color: AppColors.coralOrange.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.coralOrange.withValues(alpha: 0.2))),
-                          child: Text(item.transliteration, style: GoogleFonts.inter(fontSize: 13, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600, color: AppColors.navyBlue.withValues(alpha: 0.8), height: 1.7)),
+                          decoration: BoxDecoration(
+                            color: AppColors.coralOrange.withValues(alpha: dark ? 0.12 : 0.06),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.coralOrange.withValues(alpha: dark ? 0.35 : 0.2)),
+                          ),
+                          child: Text(item.transliteration, style: GoogleFonts.inter(fontSize: 13, fontStyle: FontStyle.italic, fontWeight: FontWeight.w600, color: secondaryText, height: 1.7)),
                         ),
                         const SizedBox(height: 20),
                         // English meaning
@@ -1606,15 +1676,20 @@ class _AdhkarDetailPage extends StatelessWidget {
                           children: [
                             const Icon(Icons.translate_rounded, size: 16, color: AppColors.midTeal),
                             const SizedBox(width: 6),
-                            Text('English Meaning', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                            Text('English Meaning', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: primaryText)),
                           ],
                         ),
                         const SizedBox(height: 10),
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))]),
-                          child: Text(item.fullMeaning, style: GoogleFonts.inter(fontSize: 13.5, color: AppColors.navyBlue.withValues(alpha: 0.8), height: 1.7)),
+                          decoration: BoxDecoration(
+                            color: cardBg,
+                            borderRadius: BorderRadius.circular(16),
+                            border: dark ? Border.all(color: cardBorder) : null,
+                            boxShadow: dark ? [] : [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+                          ),
+                          child: Text(item.fullMeaning, style: GoogleFonts.inter(fontSize: 13.5, color: secondaryText, height: 1.7)),
                         ),
                         const SizedBox(height: 20),
                         // Virtue
@@ -1622,26 +1697,26 @@ class _AdhkarDetailPage extends StatelessWidget {
                           children: [
                             const Icon(Icons.auto_stories_rounded, size: 16, color: AppColors.coralOrange),
                             const SizedBox(width: 6),
-                            Text('Virtue', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                            Text('Virtue', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: primaryText)),
                           ],
                         ),
                         const SizedBox(height: 10),
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(color: AppColors.coralOrange.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(16)),
-                          child: Text(item.virtue, style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.navyBlue.withValues(alpha: 0.7), height: 1.6)),
+                          decoration: BoxDecoration(color: AppColors.coralOrange.withValues(alpha: dark ? 0.14 : 0.08), borderRadius: BorderRadius.circular(16)),
+                          child: Text(item.virtue, style: GoogleFonts.inter(fontSize: 12.5, color: secondaryText.withValues(alpha: dark ? 0.85 : 0.7), height: 1.6)),
                         ),
                         const SizedBox(height: 16),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
+                          decoration: BoxDecoration(color: dark ? Colors.white.withValues(alpha: 0.10) : AppColors.navyBlue.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.repeat_rounded, size: 13, color: AppColors.navyBlue.withValues(alpha: 0.5)),
+                              Icon(Icons.repeat_rounded, size: 13, color: secondaryText.withValues(alpha: dark ? 0.7 : 0.5)),
                               const SizedBox(width: 5),
-                              Text('Recommended: ${item.recommendedCount}x', style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.navyBlue.withValues(alpha: 0.6))),
+                              Text('Recommended: ${item.recommendedCount}x', style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: secondaryText.withValues(alpha: dark ? 0.8 : 0.6))),
                             ],
                           ),
                         ),

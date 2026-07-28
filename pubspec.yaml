@@ -52,6 +52,7 @@ dependencies:
   printing: ^5.14.3
   google_maps_flutter: ^2.9.0
   video_player: ^2.9.2
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:
