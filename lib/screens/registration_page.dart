@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../widgets/auth_header.dart';
 
 class RegistrationPage extends StatefulWidget {
@@ -30,13 +32,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
   bool obscurePassword = true;
   bool obscureConfirmPassword = true;
   bool agreedToTerms = false;
+  bool _isLoading = false;
 
   String selectedFiqh = 'Hanafi';
   String selectedLanguage = 'English';
 
   final List<String> fiqhOptions = ['Hanafi', "Shafi'i", 'Maliki', 'Hanbali'];
 
-  // Sparkling Stars placement for Registration Header
   final List<StarConfig> _headerStars = [
     StarConfig(top: 60, left: 50, size: 8, delayMs: 200),
     StarConfig(top: 120, left: 75, size: 6, delayMs: 600),
@@ -55,145 +57,357 @@ class _RegistrationPageState extends State<RegistrationPage> {
     super.dispose();
   }
 
+  // ============================================================
+  // 🔥 FIREBASE EMAIL/PASSWORD REGISTRATION
+  // ============================================================
+  Future<void> _registerWithEmailAndPassword() async {
+    if (_isLoading) return;
+
+    // Validate passwords match
+    if (passwordController.text != confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Passwords do not match'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Create user with email/password
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: emailController.text.trim(),
+            password: passwordController.text,
+          );
+
+      // 2. Update user profile with name
+      await userCredential.user?.updateDisplayName(nameController.text.trim());
+
+      // 3. Save additional user data to Firestore (optional)
+      // Uncomment if you want to store user data in Firestore
+      /*
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set({
+        'name': nameController.text.trim(),
+        'email': emailController.text.trim(),
+        'phone': phoneController.text.trim(),
+        'fiqh': selectedFiqh,
+        'language': selectedLanguage,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      */
+
+      if (mounted) {
+        widget.onRegisterSuccess();
+      }
+    } on FirebaseAuthException catch (e) {
+      String message = 'Registration failed';
+
+      switch (e.code) {
+        case 'email-already-in-use':
+          message = 'This email is already registered. Please login.';
+          break;
+        case 'invalid-email':
+          message = 'Invalid email address.';
+          break;
+        case 'weak-password':
+          message = 'Password is too weak. Please use a stronger password.';
+          break;
+        default:
+          message = e.message ?? 'Registration failed. Please try again.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An unexpected error occurred.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // ============================================================
+  // 🔥 FIREBASE GOOGLE SIGN-IN (for Registration)
+  // ============================================================
+  Future<void> _signInWithGoogle() async {
+    if (_isLoading) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      if (mounted) {
+        widget.onRegisterSuccess();
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Google sign-in failed'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An unexpected error occurred.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.white,
-      body: Stack(
-        children: [
-          // Pinned still header image/vector
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 275,
-            child: _buildHeader(context),
-          ),
-          // Scrollable form container
-          Positioned.fill(
-            top: 247, // 275 header height - 28 overlap offset
-            child: Container(
-              decoration: const BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(36),
-                  topRight: Radius.circular(36),
-                ),
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isWideScreen = screenWidth > 500;
+
+    final Widget contentStack = Stack(
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 275,
+          child: _buildHeader(context),
+        ),
+        Positioned.fill(
+          top: 247,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(36),
+                topRight: Radius.circular(36),
               ),
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(24, 28, 24, 24 + MediaQuery.of(context).padding.bottom),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(
-                        child: Text(
-                          'Create Your Account',
-                          style: GoogleFonts.poppins(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.navyBlue,
-                          ),
+            ),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(24, 28, 24, 24 + MediaQuery.of(context).padding.bottom),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Text(
+                        'Create Your Account',
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.navyBlue,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Center(
-                        child: Text(
-                          'Join DeenMate to manage your worship, Islamic\nwealth, and daily spiritual journey.',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            fontSize: 12.5,
-                            color: AppColors.navyBlue.withValues(alpha: 0.75),
-                            height: 1.4,
-                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: Text(
+                        'Join DeenMate to manage your worship, Islamic\nwealth, and daily spiritual journey.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 12.5,
+                          color: AppColors.navyBlue.withValues(alpha: 0.75),
+                          height: 1.4,
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      _buildLabeledField(
-                        label: 'Full Name',
-                        controller: nameController,
-                        icon: Icons.account_circle_outlined,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildLabeledField(
-                        label: 'Email Address',
-                        controller: emailController,
-                        icon: Icons.alternate_email_rounded,
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildLabeledField(
-                        label: 'Phone Number',
-                        controller: phoneController,
-                        icon: Icons.phone_iphone_rounded,
-                        keyboardType: TextInputType.phone,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildLabeledField(
-                        label: 'Password',
-                        controller: passwordController,
-                        icon: Icons.lock_outlined,
-                        obscureText: obscurePassword,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscurePassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            color: AppColors.placeholder,
-                            size: 20,
-                          ),
-                          onPressed: () {
-                            setState(() => obscurePassword = !obscurePassword);
-                          },
+                    ),
+                    const SizedBox(height: 24),
+                    _buildLabeledField(
+                      label: 'Full Name',
+                      controller: nameController,
+                      icon: Icons.account_circle_outlined,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter your full name';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _buildLabeledField(
+                      label: 'Email Address',
+                      controller: emailController,
+                      icon: Icons.alternate_email_rounded,
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter your email';
+                        }
+                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
+                          return 'Please enter a valid email address';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _buildLabeledField(
+                      label: 'Phone Number',
+                      controller: phoneController,
+                      icon: Icons.phone_iphone_rounded,
+                      keyboardType: TextInputType.phone,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter your phone number';
+                        }
+                        if (value.trim().length < 10) {
+                          return 'Please enter a valid phone number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _buildLabeledField(
+                      label: 'Password',
+                      controller: passwordController,
+                      icon: Icons.lock_outlined,
+                      obscureText: obscurePassword,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter a password';
+                        }
+                        if (value.length < 6) {
+                          return 'Password must be at least 6 characters';
+                        }
+                        return null;
+                      },
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscurePassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: AppColors.placeholder,
+                          size: 20,
                         ),
+                        onPressed: () {
+                          setState(() => obscurePassword = !obscurePassword);
+                        },
                       ),
-                      const SizedBox(height: 16),
-                      _buildLabeledField(
-                        label: 'Confirm Password',
-                        controller: confirmPasswordController,
-                        icon: Icons.lock_reset_rounded,
-                        obscureText: obscureConfirmPassword,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscureConfirmPassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            color: AppColors.placeholder,
-                            size: 20,
-                          ),
-                          onPressed: () {
-                            setState(() =>
-                                obscureConfirmPassword = !obscureConfirmPassword);
-                          },
+                    ),
+                    const SizedBox(height: 16),
+                    _buildLabeledField(
+                      label: 'Confirm Password',
+                      controller: confirmPasswordController,
+                      icon: Icons.lock_reset_rounded,
+                      obscureText: obscureConfirmPassword,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please confirm your password';
+                        }
+                        if (value != passwordController.text) {
+                          return 'Passwords do not match';
+                        }
+                        return null;
+                      },
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscureConfirmPassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: AppColors.placeholder,
+                          size: 20,
                         ),
+                        onPressed: () {
+                          setState(() =>
+                              obscureConfirmPassword = !obscureConfirmPassword);
+                        },
                       ),
-                      const SizedBox(height: 20),
-                      _buildFiqhDropdown(),
-                      const SizedBox(height: 24),
-                      _buildLanguageSelector(),
-                      const SizedBox(height: 20),
-                      _buildTermsCheckbox(),
-                      const SizedBox(height: 24),
-                      _buildCreateAccountButton(),
-                      const SizedBox(height: 20),
-                      _buildDivider(),
-                      const SizedBox(height: 20),
-                      _buildGoogleButton(),
-                      const SizedBox(height: 24),
-                      _buildLoginText(),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildFiqhDropdown(),
+                    const SizedBox(height: 24),
+                    _buildLanguageSelector(),
+                    const SizedBox(height: 20),
+                    _buildTermsCheckbox(),
+                    const SizedBox(height: 24),
+                    _buildCreateAccountButton(),
+                    const SizedBox(height: 20),
+                    _buildDivider(),
+                    const SizedBox(height: 20),
+                    _buildGoogleButton(),
+                    const SizedBox(height: 24),
+                    _buildLoginText(),
+                  ],
                 ),
               ),
             ),
           ),
-        ],
+        ),
+      ],
+    );
+
+    return Scaffold(
+      backgroundColor: isWideScreen ? const Color(0xFFEFEFF4) : AppColors.white,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: isWideScreen
+                ? BoxDecoration(
+                    color: AppColors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  )
+                : const BoxDecoration(color: AppColors.white),
+            child: contentStack,
+          ),
+        ),
       ),
     );
   }
 
-  // ===== CUSTOM VECTOR HEADER WITH LOGO, SPARKLING STARS & ANIMATED LANTERNS =====
+  // ===== HEADER =====
   Widget _buildHeader(BuildContext context) {
     final Size size = MediaQuery.of(context).size;
     final double maxAppWidth = 430.0;
@@ -205,11 +419,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
       child: Stack(
         alignment: Alignment.topCenter,
         children: [
-          // Stateful animated header widget to drive continuous swinging
           const Positioned.fill(
             child: RegistrationHeader(),
           ),
-          // Sparkling Stars over the header
           ..._headerStars.map((star) {
             return TwinklingStar(
               top: star.top,
@@ -251,7 +463,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== LABELED FLOATING FIELD WITH DESIGNER ICONS & CLEAN FLOATING INPUT =====
+  // ===== LABELED FIELD =====
   Widget _buildLabeledField({
     required String label,
     required TextEditingController controller,
@@ -259,11 +471,14 @@ class _RegistrationPageState extends State<RegistrationPage> {
     bool obscureText = false,
     Widget? suffixIcon,
     TextInputType keyboardType = TextInputType.text,
+    FormFieldValidator<String>? validator,
   }) {
     return TextFormField(
       controller: controller,
       obscureText: obscureText,
       keyboardType: keyboardType,
+      validator: validator,
+      enabled: !_isLoading,
       style: GoogleFonts.inter(color: AppColors.navyBlue, fontSize: 14, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         labelText: label,
@@ -277,20 +492,18 @@ class _RegistrationPageState extends State<RegistrationPage> {
           fontSize: 13,
           fontWeight: FontWeight.w600,
         ),
-        // Premium prefix icon backing (soft blue-teal circle)
         prefixIcon: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10.0),
           child: Container(
             padding: const EdgeInsets.all(7.0),
             decoration: BoxDecoration(
-              color: AppColors.dustyBlueTeal.withValues(alpha: 0.1), // Soft blue-teal circle background
+              color: AppColors.dustyBlueTeal.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: AppColors.navyBlue, size: 16),
           ),
         ),
         suffixIcon: suffixIcon,
-        // No hintText is set so that the input interior remains completely empty/blank when label hovers to the top
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
@@ -308,11 +521,19 @@ class _RegistrationPageState extends State<RegistrationPage> {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.navyBlue, width: 1.5),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1.0),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1.5),
+        ),
       ),
     );
   }
 
-  // ===== FIQH DROPDOWN (Blue-Teal/Navy accents) =====
+  // ===== FIQH DROPDOWN =====
   Widget _buildFiqhDropdown() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -377,7 +598,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         ),
                       );
                     }).toList(),
-                    onChanged: (value) {
+                    onChanged: _isLoading ? null : (value) {
                       setState(() => selectedFiqh = value!);
                     },
                   ),
@@ -395,7 +616,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== LANGUAGE RADIO =====
+  // ===== LANGUAGE SELECTOR =====
   Widget _buildLanguageSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,7 +657,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: GestureDetector(
-        onTap: () => setState(() => selectedLanguage = lang),
+        onTap: _isLoading ? null : () => setState(() => selectedLanguage = lang),
         child: Row(
           children: [
             Container(
@@ -479,7 +700,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             activeColor: AppColors.navyBlue,
             checkColor: AppColors.white,
             side: const BorderSide(color: AppColors.dustyBlueTeal, width: 1.5),
-            onChanged: (value) => setState(() => agreedToTerms = value!),
+            onChanged: _isLoading ? null : (value) => setState(() => agreedToTerms = value!),
           ),
         ),
         const SizedBox(width: 8),
@@ -508,16 +729,18 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== CREATE ACCOUNT BUTTON (Navy with white text) =====
+  // ===== CREATE ACCOUNT BUTTON =====
   Widget _buildCreateAccountButton() {
     return SizedBox(
       height: 52,
       child: ElevatedButton(
-        onPressed: () {
-          if (_formKey.currentState!.validate() && agreedToTerms) {
-            widget.onRegisterSuccess();
-          }
-        },
+        onPressed: (_isLoading || !agreedToTerms)
+            ? null
+            : () {
+                if (_formKey.currentState!.validate()) {
+                  _registerWithEmailAndPassword();
+                }
+              },
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.navyBlue,
           foregroundColor: AppColors.white,
@@ -526,22 +749,31 @@ class _RegistrationPageState extends State<RegistrationPage> {
           ),
           elevation: 2,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Create Account',
-              style: GoogleFonts.poppins(
-                color: AppColors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
+        child: _isLoading
+            ? const SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Create Account',
+                    style: GoogleFonts.poppins(
+                      color: AppColors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward, color: AppColors.white, size: 18),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward, color: AppColors.white, size: 18),
-          ],
-        ),
       ),
     );
   }
@@ -566,9 +798,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     return SizedBox(
       height: 50,
       child: OutlinedButton(
-        onPressed: () {
-          // TODO: handle Google sign-in
-        },
+        onPressed: _isLoading ? null : _signInWithGoogle,
         style: OutlinedButton.styleFrom(
           backgroundColor: Colors.white,
           side: const BorderSide(color: AppColors.dustyBlueTeal, width: 1.0),
