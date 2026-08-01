@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import '../widgets/auth_header.dart'; // AppColors
+import '../services/theme_service.dart';
 
 /// ─────────────────────────────────────────────────────────────────────
 /// Dark-mode aware color helpers for this tab.
@@ -275,10 +276,16 @@ class _PrayerTabState extends State<PrayerTab> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Looping ambient prayer video, muted, crossfades smoothly on scene change.
-              // Always reflects the current prayer unless the user manually
-              // picked a different one to preview.
-              _PrayerVideoBackground(scene: effectiveScene),
+              // Hero background reactive to user's theme choice (Video or Vector)
+              ValueListenableBuilder<String>(
+                valueListenable: prayerCardThemeNotifier,
+                builder: (context, themeId, _) {
+                  if (themeId == 'vector') {
+                    return _PrayerVectorBackground(scene: effectiveScene);
+                  }
+                  return _PrayerVideoBackground(scene: effectiveScene);
+                },
+              ),
               // Subtle scrim so the header text/icons stay legible over
               // whatever part of the video is showing.
               Container(
@@ -1985,8 +1992,8 @@ class _PrayerOverviewCard extends StatelessWidget {
                   child: Stack(
                     children: [
                       Positioned(
-                        right: -8,
-                        bottom: -8,
+                        right: 0,
+                        bottom: -4,
                         child: Icon(
                           Icons.mosque,
                           size: 56,
@@ -2060,8 +2067,8 @@ class _PrayerOverviewCard extends StatelessWidget {
                   child: Stack(
                     children: [
                       Positioned(
-                        right: -8,
-                        bottom: -8,
+                        right: 0,
+                        bottom: -4,
                         child: Icon(
                           Icons.nightlight_round,
                           size: 52,
@@ -2370,4 +2377,489 @@ class _SunTimeItem extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Dynamic Vector Background for Prayer Tab hero.
+/// Follows soft theme color palettes, crisp glowing mosque outlines, sun/moon positions, sparkling stars and morning birds.
+class _PrayerVectorBackground extends StatefulWidget {
+  final String scene;
+  const _PrayerVectorBackground({required this.scene});
+
+  @override
+  State<_PrayerVectorBackground> createState() => _PrayerVectorBackgroundState();
+}
+
+class _PrayerVectorBackgroundState extends State<_PrayerVectorBackground>
+    with TickerProviderStateMixin {
+  late final AnimationController _animController;   // continuous pulse (glow/stars)
+  late final AnimationController _transitionCtrl;   // 0→1 on scene change for sun/moon glide
+  String _prevScene = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _prevScene = widget.scene;
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+    _transitionCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+      value: 1.0, // starts complete — no animation on first render
+    );
+  }
+
+  @override
+  void didUpdateWidget(_PrayerVectorBackground old) {
+    super.didUpdateWidget(old);
+    if (old.scene != widget.scene) {
+      _prevScene = old.scene;          // save where we came from
+      _transitionCtrl.forward(from: 0); // animate 0→1
+    }
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    _transitionCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = _VectorThemeSpec.getForScene(widget.scene);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 900),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: spec.skyGradient,
+        ),
+      ),
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_animController, _transitionCtrl]),
+        builder: (context, _) {
+          return CustomPaint(
+            painter: _PrayerTabVectorArtPainter(
+              scene: widget.scene,
+              prevScene: _prevScene,
+              transitionValue: CurveTween(curve: Curves.easeInOutCubic)
+                  .evaluate(_transitionCtrl),
+              animValue: _animController.value,
+              spec: spec,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _VectorThemeSpec {
+  final List<Color> skyGradient;
+  final Color bodyColor;
+  final Color domeAccentColor;
+  final Color sideDomeColor; // separate color for left/right domes (e.g. navy for Dhuhr)
+  final Color windowColor;
+
+  const _VectorThemeSpec({
+    required this.skyGradient,
+    required this.bodyColor,
+    required this.domeAccentColor,
+    Color? sideDomeColor,
+    required this.windowColor,
+  }) : sideDomeColor = sideDomeColor ?? domeAccentColor;
+
+  static _VectorThemeSpec getForScene(String scene) {
+    final s = scene.toLowerCase();
+    if (s.contains('fajr')) {
+      return const _VectorThemeSpec(
+        skyGradient: [Color(0xFF2E2440), Color(0xFF5A4468), Color(0xFF9E7185), Color(0xFFF3BD9E)],
+        bodyColor: Color(0xFFE2D6EE), // Soft Lavender Cream
+        domeAccentColor: Color(0xFFC8A5C6), // Soft Dusk Rose
+        windowColor: Color(0xFF8B678A), // Soft Deep Plum
+      );
+    } else if (s.contains('sunrise')) {
+      return const _VectorThemeSpec(
+        skyGradient: [Color(0xFF385E7E), Color(0xFF6F9FB8), Color(0xFFEBA87E), Color(0xFFFDE4C3)],
+        bodyColor: Color(0xFFFDE8D7), // Soft Peach Cream
+        domeAccentColor: Color(0xFFF4B8A5), // Soft Terracotta Coral
+        windowColor: Color(0xFFC48677), // Warm Rose Bronze
+      );
+    } else if (s.contains('dhuhr') || s.contains('zuhr')) {
+      return const _VectorThemeSpec(
+        skyGradient: [Color(0xFF3B82F6), Color(0xFF60A5FA), Color(0xFF93C5FD), Color(0xFFE0F2FE)],
+        bodyColor: Color(0xFFFFFFFF),         // Pure White Body
+        domeAccentColor: Color(0xFF459490),   // Mid Teal — center dome
+        sideDomeColor: Color(0xFF1A2E40),      // Navy Blue — left & right side domes
+        windowColor: Color(0xFF1A2E40),        // Deep Navy Door & Windows
+      );
+    } else if (s.contains('asr')) {
+      return const _VectorThemeSpec(
+        skyGradient: [Color(0xFF4A76A8), Color(0xFFC78B45), Color(0xFFF5B05E), Color(0xFFFEF0C7)],
+        bodyColor: Color(0xFFFEF3E2), // Warm Cream Ivory Body
+        domeAccentColor: Color(0xFFECC488), // Soft Golden Caramel Domes
+        windowColor: Color(0xFFB88243), // Warm Amber Bronze Door & Windows
+      );
+    } else if (s.contains('maghrib')) {
+      return const _VectorThemeSpec(
+        skyGradient: [Color(0xFF512B58), Color(0xFF9D446E), Color(0xFFED736A), Color(0xFFFDD5A5)],
+        bodyColor: Color(0xFFFBE4E8), // Soft Sunset Rose Cream Body
+        domeAccentColor: Color(0xFFE0A0B0), // Soft Sunset Berry Domes
+        windowColor: Color(0xFF8C4257), // Deep Sunset Ruby Door & Windows
+      );
+    } else {
+      // Isha / Night
+      return const _VectorThemeSpec(
+        skyGradient: [Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF334155), Color(0xFF475569)],
+        bodyColor: Color(0xFFE0F2FE), // Soft Moonlit Ice Blue Body
+        domeAccentColor: Color(0xFF94A3B8), // Soft Periwinkle Slate Domes
+        windowColor: Color(0xFF334155), // Midnight Indigo Door & Windows
+      );
+    }
+  }
+}
+
+// Returns the fractional (dx, dy) position of the sun/moon for a given scene.
+// These are relative to canvas width/height and used for smooth interpolation.
+// Dhuhr is a special case: position is anchored above the mosque — handled in paint().
+Offset _celestialFraction(String scene) {
+  final s = scene.toLowerCase();
+  if (s.contains('fajr'))    return const Offset(0.22, 0.22);  // crescent top-left
+  if (s.contains('sunrise')) return const Offset(0.22, 0.38);  // rising sun low-left
+  if (s.contains('dhuhr') || s.contains('zuhr')) return const Offset(0.50, 0.12); // placeholder — overridden in paint
+  if (s.contains('asr'))     return const Offset(0.64, 0.26);  // midway between zuhr & maghrib
+  if (s.contains('maghrib')) return const Offset(0.80, 0.42);  // dipping sun low-right
+  return const Offset(0.78, 0.22); // isha crescent
+}
+
+class _PrayerTabVectorArtPainter extends CustomPainter {
+  final String scene;
+  final String prevScene;
+  final double transitionValue; // 0 = prev scene position, 1 = current scene position
+  final double animValue;
+  final _VectorThemeSpec spec;
+
+  _PrayerTabVectorArtPainter({
+    required this.scene,
+    required this.prevScene,
+    required this.transitionValue,
+    required this.animValue,
+    required this.spec,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double w = size.width;
+    final double h = size.height;
+    final s = scene.toLowerCase();
+    final double pulse = math.sin(animValue * 2 * math.pi);
+
+    final bool isFajr = s.contains('fajr');
+    final bool isSunrise = s.contains('sunrise');
+    final bool isDhuhr = s.contains('dhuhr') || s.contains('zuhr');
+    final bool isAsr = s.contains('asr');
+    final bool isMaghrib = s.contains('maghrib');
+    final bool isIsha = s.contains('isha');
+
+    const double equalSunRadius = 24.0;
+
+    // Mosque geometry — used to anchor the Dhuhr sun above the spire
+    const double mosqueWidthFrac = 0.96;
+    const double mosqueHeightFrac = 0.54;
+    final double mosqueRight = w * 0.99;
+    final double mosqueWidth = w * mosqueWidthFrac;
+    final double mosqueHeight = h * mosqueHeightFrac;
+    final double by = h;
+    final double mCx = mosqueRight - mosqueWidth / 2;
+    final double centerDomeTopY = by - mosqueHeight * 0.35 - mosqueHeight * 0.55;
+    final double spireTopY = centerDomeTopY - 18;
+    // Dhuhr sun: close above the spire, but not too far (won't go off screen)
+    final Offset dhuhrSunPos = Offset(mCx, spireTopY - equalSunRadius - 6);
+
+    // Compute interpolated celestial position (smooth scene transition)
+    Offset resolvePos(String sc) {
+      final frac = _celestialFraction(sc);
+      if ((sc.contains('dhuhr') || sc.contains('zuhr'))) return dhuhrSunPos;
+      return Offset(w * frac.dx, h * frac.dy);
+    }
+    final Offset fromPos = resolvePos(prevScene);
+    final Offset toPos   = resolvePos(scene);
+    // Lerp with ease curve already applied via transitionValue
+    final Offset celestialPos = Offset.lerp(fromPos, toPos, transitionValue)!;
+
+    // 1. Celestial Objects
+    if (isFajr) {
+      _drawCrescentMoon(canvas, celestialPos, 18, Colors.white.withValues(alpha: 0.92));
+      _drawSparklingStars(canvas, [
+        Offset(w * 0.12, h * 0.12),
+        Offset(w * 0.38, h * 0.16),
+        Offset(w * 0.55, h * 0.10),
+        Offset(w * 0.75, h * 0.20),
+        Offset(w * 0.88, h * 0.14),
+      ], pulse);
+    } else if (isSunrise) {
+      _drawSun(canvas, celestialPos, equalSunRadius, const Color(0xFFFFF3E0), pulse);
+    } else if (isDhuhr) {
+      _drawSun(canvas, celestialPos, equalSunRadius, const Color(0xFFFFFDE7), pulse);
+    } else if (isAsr) {
+      _drawSun(canvas, celestialPos, equalSunRadius, const Color(0xFFFFF8E1), pulse);
+    } else if (isMaghrib) {
+      _drawSun(canvas, celestialPos, equalSunRadius, const Color(0xFFFFE0E6), pulse);
+    } else if (isIsha) {
+      _drawCrescentMoon(canvas, celestialPos, 20, Colors.white.withValues(alpha: 0.95));
+      _drawSparklingStars(canvas, [
+        Offset(w * 0.15, h * 0.15),
+        Offset(w * 0.32, h * 0.22),
+        Offset(w * 0.48, h * 0.10),
+        Offset(w * 0.62, h * 0.28),
+        Offset(w * 0.82, h * 0.12),
+        Offset(w * 0.25, h * 0.35),
+      ], pulse);
+    }
+
+    // 2. Draw Mosque Silhouette
+    _drawMosqueSilhouettes(canvas, w, h, spec, pulse);
+  }
+
+  void _drawCrescentMoon(Canvas canvas, Offset center, double radius, Color moonColor) {
+    // 1. Glowing outer aura
+    final glowPaint = Paint()
+      ..color = moonColor.withValues(alpha: 0.35)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14);
+    canvas.drawCircle(center, radius + 6, glowPaint);
+
+    // 2. True crescent path (difference between 2 ovals)
+    final outerPath = Path()
+      ..addOval(Rect.fromCircle(center: center, radius: radius));
+
+    final innerPath = Path()
+      ..addOval(Rect.fromCircle(
+        center: Offset(center.dx + radius * 0.48, center.dy - radius * 0.25),
+        radius: radius * 0.85,
+      ));
+
+    final crescentPath = Path.combine(PathOperation.difference, outerPath, innerPath);
+
+    final moonPaint = Paint()
+      ..color = moonColor
+      ..style = PaintingStyle.fill;
+
+    canvas.drawPath(crescentPath, moonPaint);
+  }
+
+  void _drawSun(Canvas canvas, Offset center, double radius, Color sunColor, double pulse) {
+    // 1. Wide outer radiant glow halo (animates/pulses gently!)
+    final outerGlowPaint = Paint()
+      ..color = sunColor.withValues(alpha: 0.30 + 0.12 * pulse)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 32);
+    canvas.drawCircle(center, radius * 2.4, outerGlowPaint);
+
+    // 2. Inner radiant aura
+    final innerAuraPaint = Paint()
+      ..color = sunColor.withValues(alpha: 0.60 + 0.15 * pulse)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14);
+    canvas.drawCircle(center, radius * 1.4, innerAuraPaint);
+
+    // 3. Crisp Sun Core
+    final corePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius, corePaint);
+
+    final sunBodyPaint = Paint()
+      ..color = sunColor
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius * 0.88, sunBodyPaint);
+  }
+
+  void _drawSparklingStars(Canvas canvas, List<Offset> locations, double pulse) {
+    for (int i = 0; i < locations.length; i++) {
+      final loc = locations[i];
+      final alpha = 0.35 + 0.45 * math.sin(pulse * math.pi + i * 1.2);
+      final starPaint = Paint()
+        ..color = Colors.white.withValues(alpha: alpha)
+        ..style = PaintingStyle.fill;
+
+      final path = Path();
+      final cx = loc.dx;
+      final cy = loc.dy;
+      final r = 3.5;
+
+      path.moveTo(cx, cy - r);
+      path.quadraticBezierTo(cx, cy, cx + r, cy);
+      path.quadraticBezierTo(cx, cy, cx, cy + r);
+      path.quadraticBezierTo(cx, cy, cx - r, cy);
+      path.quadraticBezierTo(cx, cy, cx, cy - r);
+      path.close();
+
+      canvas.drawPath(path, starPaint);
+    }
+  }
+
+  void _drawMosqueSilhouettes(Canvas canvas, double w, double h, _VectorThemeSpec spec, double pulse) {
+    final bodyPaint = Paint()
+      ..color = spec.bodyColor
+      ..style = PaintingStyle.fill;
+
+    final domePaint = Paint()
+      ..color = spec.domeAccentColor
+      ..style = PaintingStyle.fill;
+
+    final windowPaint = Paint()
+      ..color = spec.windowColor
+      ..style = PaintingStyle.fill;
+
+    // Outline: very subtle white glow (tiny blur sigma=2) + thin stroke
+    final outlineGlowPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.18)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.8
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    final outlinePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final double mosqueRight = w * 0.99;
+    final double mosqueWidth = w * 0.96; // wider
+    final double mosqueHeight = h * 0.54;
+    final double by = h;
+    final double cx = mosqueRight - mosqueWidth / 2;
+
+    void drawOutlined(Path path) {
+      canvas.drawPath(path, outlineGlowPaint);
+      canvas.drawPath(path, outlinePaint);
+    }
+
+    // 1. Draw Side Domes — use spec.sideDomeColor (navy for Dhuhr, accent for others)
+    final sideDomePaint = Paint()
+      ..color = spec.sideDomeColor
+      ..style = PaintingStyle.fill;
+    _drawOnionDomeFillWithOutline(canvas, cx - mosqueWidth * 0.26, by - mosqueHeight * 0.35,
+        mosqueWidth * 0.20, mosqueHeight * 0.32, sideDomePaint, outlineGlowPaint, outlinePaint);
+    _drawOnionDomeFillWithOutline(canvas, cx + mosqueWidth * 0.26, by - mosqueHeight * 0.35,
+        mosqueWidth * 0.20, mosqueHeight * 0.32, sideDomePaint, outlineGlowPaint, outlinePaint);
+
+    // 2. Draw Center Onion Dome
+    final centerDomeW = mosqueWidth * 0.38;
+    final centerDomeH = mosqueHeight * 0.55;
+    final centerDomeY = by - mosqueHeight * 0.35;
+    _drawOnionDomeFillWithOutline(canvas, cx, centerDomeY, centerDomeW, centerDomeH,
+        domePaint, outlineGlowPaint, outlinePaint);
+
+    // Spire on center dome
+    final spireTopY = centerDomeY - centerDomeH;
+    canvas.drawLine(Offset(cx, spireTopY), Offset(cx, spireTopY - 18), outlineGlowPaint);
+    canvas.drawLine(Offset(cx, spireTopY), Offset(cx, spireTopY - 18), outlinePaint);
+    canvas.drawCircle(Offset(cx, spireTopY - 18), 3.2, windowPaint);
+
+    // 3. Draw Connective Base Walls
+    final wallPath = Path()
+      ..moveTo(cx - mosqueWidth * 0.44, by)
+      ..lineTo(cx - mosqueWidth * 0.44, by - mosqueHeight * 0.38)
+      ..lineTo(cx + mosqueWidth * 0.44, by - mosqueHeight * 0.38)
+      ..lineTo(cx + mosqueWidth * 0.44, by)
+      ..close();
+    canvas.drawPath(wallPath, bodyPaint);
+    drawOutlined(wallPath);
+
+    // 4. Draw Minarets
+    _drawMinaretFills(canvas, cx - mosqueWidth * 0.42, by,
+        mosqueWidth * 0.08, mosqueHeight * 0.88,
+        bodyPaint, domePaint, windowPaint, outlineGlowPaint, outlinePaint);
+    _drawMinaretFills(canvas, cx + mosqueWidth * 0.42, by,
+        mosqueWidth * 0.08, mosqueHeight * 0.88,
+        bodyPaint, domePaint, windowPaint, outlineGlowPaint, outlinePaint);
+
+    // 5. Central Arched Door ONLY
+    final doorW = mosqueWidth * 0.16;
+    final doorH = mosqueHeight * 0.28;
+    final doorPath = Path()
+      ..moveTo(cx - doorW / 2, by)
+      ..lineTo(cx - doorW / 2, by - doorH * 0.65)
+      ..quadraticBezierTo(cx, by - doorH, cx + doorW / 2, by - doorH * 0.65)
+      ..lineTo(cx + doorW / 2, by)
+      ..close();
+    canvas.drawPath(doorPath, windowPaint);
+    drawOutlined(doorPath);
+  }
+
+  Path _buildOnionDomePath(double cx, double by, double width, double height) {
+    final path = Path();
+    final double w2 = width / 2;
+    final double bulge = width * 0.09;
+    path.moveTo(cx - w2, by);
+    path.cubicTo(
+      cx - w2 - bulge, by - height * 0.35,
+      cx - w2 + bulge * 0.2, by - height * 0.75,
+      cx, by - height,
+    );
+    path.cubicTo(
+      cx + w2 - bulge * 0.2, by - height * 0.75,
+      cx + w2 + bulge, by - height * 0.35,
+      cx + w2, by,
+    );
+    path.close();
+    return path;
+  }
+
+  void _drawOnionDomeFillWithOutline(
+    Canvas canvas,
+    double cx, double by, double width, double height,
+    Paint fillPaint, Paint outlineGlowPaint, Paint outlinePaint,
+  ) {
+    final path = _buildOnionDomePath(cx, by, width, height);
+    canvas.drawPath(path, fillPaint);
+    canvas.drawPath(path, outlineGlowPaint);
+    canvas.drawPath(path, outlinePaint);
+  }
+
+  void _drawMinaretFills(
+    Canvas canvas,
+    double cx, double by, double width, double height,
+    Paint bodyPaint, Paint domePaint, Paint windowPaint,
+    Paint outlineGlowPaint, Paint outlinePaint,
+  ) {
+    final double colW = width * 0.65;
+    final double balconyW = width * 1.25;
+
+    void outlineRect(Rect r) {
+      canvas.drawRect(r, outlineGlowPaint);
+      canvas.drawRect(r, outlinePaint);
+    }
+
+    // Column body
+    final colRect = Rect.fromLTRB(cx - colW / 2, by - height, cx + colW / 2, by);
+    canvas.drawRect(colRect, bodyPaint);
+    outlineRect(colRect);
+
+    // Lower Balcony
+    final b1Rect = Rect.fromLTRB(cx - balconyW / 2, by - height * 0.75, cx + balconyW / 2, by - height * 0.71);
+    canvas.drawRect(b1Rect, windowPaint);
+    outlineRect(b1Rect);
+
+    // Upper Balcony
+    final b2Rect = Rect.fromLTRB(cx - balconyW / 2, by - height - 4, cx + balconyW / 2, by - height);
+    canvas.drawRect(b2Rect, windowPaint);
+    outlineRect(b2Rect);
+
+    // Onion Dome Cap
+    _drawOnionDomeFillWithOutline(canvas, cx, by - height - 4,
+        width * 0.75, height * 0.16, domePaint, outlineGlowPaint, outlinePaint);
+  }
+
+  // _drawArchedWindow removed — side windows removed per user request
+
+  @override
+  bool shouldRepaint(covariant _PrayerTabVectorArtPainter old) =>
+      old.scene != scene ||
+      old.prevScene != prevScene ||
+      old.transitionValue != transitionValue ||
+      old.animValue != animValue;
 }
