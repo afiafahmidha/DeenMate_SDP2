@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart'; // AppColors
+import 'hajj_ritual_detail_screen.dart';
 
 class HajjUmrahPlannerScreen extends StatefulWidget {
   const HajjUmrahPlannerScreen({super.key});
@@ -22,10 +23,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   final Map<String, bool> _documentsDone = {};
 
   // ===== ROAD-FILL ANIMATION CONTROLLERS =====
-  // One controller per "segment" of the dotted road (segment i connects
-  // stop i to stop i+1). When stop i is marked done, its segment animates
-  // from 0 -> 1, filling in with a soft green glow as if the road lit up
-  // on the way to the next stop.
   final Map<String, AnimationController> _segmentControllers = {};
   final Map<String, Animation<double>> _segmentAnimations = {};
 
@@ -50,7 +47,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     {'id': 'halq_u', 'title': 'Halq / Taqsir', 'desc': 'Shave or trim the hair to complete Umrah.'},
   ];
 
-  // ===== STEP ILLUSTRATIONS (used as the "stops" on the ritual road) =====
+  // ===== STEP ILLUSTRATIONS =====
   final Map<String, String> _hajjStepImages = {
     'ihram': 'assets/images/hajj_umrah/2.png',
     'tawaf_qudum': 'assets/images/hajj_umrah/1.png',
@@ -69,6 +66,806 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     'tawaf_u': 'assets/images/hajj_umrah/1.png',
     'sai_u': 'assets/images/hajj_umrah/6.png',
     'halq_u': 'assets/images/hajj_umrah/7.png',
+  };
+
+  // ===== ELABORATE RITUAL DETAILS (Arabic & English with Quran & Hadith References) =====
+  final Map<String, Map<String, dynamic>> _ritualDetails = {
+    'ihram': {
+      'titleEn': 'Enter Ihram & Intention (Niyyah)',
+      'titleAr': 'الإحرام والنية',
+      'day': 'Miqat - Before entering the Haram boundaries',
+      'dayAr': 'الميقات - قبل دخول حدود الحرم',
+      'overviewEn':
+          'Ihram is the sacred state a pilgrim enters to perform Hajj or Umrah. It involves specific physical purifications (Ghusl), wearing designated unstitched white sheets (for men), reciting the Niyyah (intention), and continuously chanting the Talbiyah. Once in Ihram, prohibitions such as cutting hair, applying perfume, clipping nails, and hunting apply until deconsecration.',
+      'overviewAr':
+          'الإحرام هو النية والنية في الدخول في النسك مع التجرُّد من المَخِيط للرجال. ويبدأ بالتطهر والغسل، ثم لبس رداء وإزار أبيضين نظيفين، بينما تلبس المرأة ما شاءت من اللباس الساتر دون تبرج، ثم التلفظ بالنية والالتزام بمحظورات الإحرام كَقَصّ الشعر والطيب والجدال.',
+      'keyActionsEn': [
+        'Perform Ghusl (ritual bath) and trim nails/mustache before Miqat.',
+        'Wear 2 unstitched white sheets (Izar & Rida) for men; loose modest dress for women.',
+        'Offer 2 Rakat Sunnah prayer at the Miqat.',
+        'Make explicit intention: "Labbayk Allahumma Hajjah" (لَبَّيْكَ اللَّهُمَّ حَجًّا).',
+        'Begin loud recitation of Talbiyah: "Labbayk Allahumma Labbayk..."',
+      ],
+      'keyActionsAr': [
+        'الاغتسال والتطيب في البدن قبل الإحرام (للرجال والنساء).',
+        'ارتداء ملابس الإحرام (إزار ورداء أبيضين غير محيطين للرجال).',
+        'صلاة ركعتين سُنة الإحرام في الميقات.',
+        'التلفظ بالنية: "لَبَّيْكَ اللَّهُمَّ حَجًّا" أو "لَبَّيْكَ عُمْرَةً".',
+        'رفع الصوت بالتلبية للرجال ورفعها بقدر ما تسمع نفسها للنساء.',
+      ],
+      'quran': {
+        'textAr':
+            'الْحَجُّ أَشْهُرٌ مَّعْلُومَاتٌ ۚ فَمَن فَرَضَ فِيهِنَّ الْحَجَّ فَلَا رَفَثَ وَلَا فُسُوقَ وَلَا جِدَالَ فِي الْحَجِّ ۗ وَمَا تَفْعَلُوا مِنْ خَيْرٍ يَعْلَمْهُ اللَّهُ',
+        'referenceAr': 'سورة البقرة - الآية ١٩٧',
+        'textEn':
+            'Hajj is [during] well-known months, so whoever has made Hajj obligatory upon himself therein [by entering the state of ihram], there is [to be for him] no sexual relations and no disobedience and no disputing during Hajj. And whatever good you do - Allah knows it.',
+        'referenceEn': 'Surah Al-Baqarah (2:197)',
+        'explanationEn':
+            'Allah explicitly establishes that entering Ihram requires refraining from immoral actions, disputes, and earthly desires, elevating spiritual focus solely towards Allah.',
+        'explanationAr':
+            'توضح الآية الكريمة حرمة وقت الإحرام ووجوب اجتناب الرفث والفسوق والجدال بالباطل، ليتفرغ الحاج لذكر الله والتقوى.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ سُئِلَ: مَا يَلْبَسُ الْمُحْرِمُ؟ فَقَالَ: «لاَ يَلْبَسُ الْقُمُصَ وَلاَ الْعَمَائِمَ وَلاَ السََّرَاوِيلاَتِ وَلاَ الْبَرَانِسَ وَلاَ الْخِفَافَ...»',
+        'referenceAr': 'صحيح البخاري (١٥٤٢) وصحيح مسلم (١١٧٧)',
+        'textEn':
+            'Narrated Abdullah ibn Umar: A man asked the Prophet (ﷺ), "What should a pilgrim in Ihram wear?" The Prophet replied, "He should not wear shirts, turbans, trousers, hooded cloaks, or leather socks..."',
+        'referenceEn': 'Sahih al-Bukhari 1542, Sahih Muslim 1177',
+        'explanationEn':
+            'This Hadith lays out the essential dress code for men in Ihram to strip away worldly status and distinctions before Almighty Allah.',
+        'explanationAr':
+            'يبين الحديث الشريف أحكام اللباس للمحرم وتجرده من المظاهر والطبقية، ليتساوى الجميع أمام الله تعالى.',
+      },
+      'dua': {
+        'title': 'Intention & Talbiyah (التلبية والنية)',
+        'arabic':
+            'لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لا شَرِيكَ لَكَ لَبَّيْكَ، إِنَّ الْحَمْدَ وَالنِّعْمَةَ لَكَ وَالْمُلْكُ، لا شَرِيكَ لَكَ',
+        'translit':
+            'Labbayk Allahumma Labbayk, Labbayka la sharika laka labbayk, innal-hamda wan-ni’mata laka wal-mulk, la sharika lak.',
+        'meaningEn':
+            'Here I am O Allah, here I am. Here I am, You have no partner, here I am. Verily all praise, grace, and sovereignty belong to You. You have no partner.',
+        'meaningAr':
+            'إجابة بعد إجابة لك يا الله، لا شريك لك، إن الحمد والنعمة والملك لك وحدك لا شريك لك.',
+      },
+    },
+
+    'tawaf_qudum': {
+      'titleEn': 'Tawaf al-Qudum (Arrival Tawaf)',
+      'titleAr': 'طواف القدوم',
+      'day': 'Upon arrival in Makkah',
+      'dayAr': 'فور الوصول إلى مكة المكرمة',
+      'overviewEn':
+          'Tawaf al-Qudum is the welcome circumambulation performed around the Holy Kaaba upon reaching Makkah. Pilgrims circle the Kaaba seven times counter-clockwise, starting from the Black Stone (Hajar al-Aswad). For men, Idtiba (uncovering the right shoulder) and Raml (brisk walking in the first 3 rounds) are Sunnah.',
+      'overviewAr':
+          'طواف القدوم هو تحية البيت الحرام للمُفْرِد والمقترن فور وصولهما إلى مكة. يطوف الحاج سبعة أشواط يبدأ كل شوط من الحجر الأسود وينتهي عنده، ويُسن للرجال الانطباع (كشف الكتف الأيمن) والرَّمَل (الهرولة الخفيفة في الأشواط الثلاثة الأولى).',
+      'keyActionsEn': [
+        'Uncover the right shoulder (Idtiba) for men during Tawaf.',
+        'Start each circuit at the Hajar al-Aswad pointing/touching and saying "Bismillahi Allahu Akbar".',
+        'Perform Raml (quick brisk walking) in the first 3 rounds.',
+        'Recite "Rabbana atina fid-dunya hasanatan..." between RUKN AL-YAMANI and HAJAR AL-ASWAD.',
+        'Offer 2 Rakat behind Maqam Ibrahim upon completion.',
+      ],
+      'keyActionsAr': [
+        'الاضطباع للرجل بكشف الكتف الأيمن أثناء الطواف.',
+        'استلام الحجر الأسود أو الإشارة إليه قائلًا: "بسم الله والله أكبر".',
+        'الرَّمَل (الإسراع في المشي مع تقارب الخطى) في الأشواط الثلاثة الأولى.',
+        'الدعاء بين الركن اليماني والحجر الأسود: "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ".',
+        'صلاة ركعتين خلف مقام إبراهيم بعد الطواف.',
+      ],
+      'quran': {
+        'textAr':
+            'وَإِذْ جَعَلْنَا الْبَيْتَ مَثَابَةً لِّلنَّاسِ وَأَمْنًا وَاتَّخِذُوا مِن مَّقَامِ إِبْرَاهِيمَ مُصَلًّى',
+        'referenceAr': 'سورة البقرة - الآية ١٢٥',
+        'textEn':
+            'And [remember] when We made the House a place of return for the people and [a place of] security. And take, [O believers], from the standing place of Abraham a place of prayer.',
+        'referenceEn': 'Surah Al-Baqarah (2:125)',
+        'explanationEn':
+            'Allah commands believers to make the Sanctuary a place of worship and to pray behind Maqam Ibrahim after performing Tawaf.',
+        'explanationAr':
+            'أمر الله تعالى بتعظيم الكعبة وأداء الصلاة عند مقام إبراهيم عليه السلام تخليداً لذكراه واقتداءً بالأنبياء.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ جَابِرِ بْنِ عَبْدِ اللَّهِ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ لَمَّا قَدِمَ مَكَّةَ أَتَى الْحَجَرَ فَاسْتَلَمَهُ فََرَمَلَ ثَلاَثًا وَمَشَى أَرْبَعًا، ثُمَّ تَقَدَّمَ إِلَى مَقَامِ إِبْرَاهِيمَ فَقَرَأَ: {وَاتَّخِذُوا مِنْ مَقَامِ إِبْرَاهِيمَ مُصَلًّى}',
+        'referenceAr': 'صحيح مسلم (١٢١٨)',
+        'textEn':
+            'Jabir bin Abdullah reported: When Allah’s Messenger (ﷺ) came to Makkah, he touched the Black Stone, then walked briskly (Raml) for three circuits and walked normally for four. Then he proceeded to Maqam Ibrahim and recited: "Take from the standing place of Abraham a place of prayer."',
+        'referenceEn': 'Sahih Muslim 1218',
+        'explanationEn':
+            'This Hadith details the exact Sunnah method of Tawaf al-Qudum as demonstrated by Prophet Muhammad (ﷺ).',
+        'explanationAr':
+            'يوضح الحديث هيئة طواف النبي صلى الله عليه وسلم وصفة الرمل والصلاة خلف المقام.',
+      },
+      'dua': {
+        'title': 'Dua Between Yamani Corner & Black Stone',
+        'arabic':
+            'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
+        'translit':
+            'Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
+        'meaningEn':
+            'Our Lord, grant us good in this world and good in the Hereafter and protect us from the punishment of the Fire.',
+        'meaningAr':
+            'ربنا منحنا الخير في الدنيا والآخرة ونجنا من عذاب النار.',
+      },
+    },
+
+    'mina1': {
+      'titleEn': 'Day of Tarwiyah (8th Dhul Hijjah)',
+      'titleAr': 'يوم التروية (٨ ذو الحجة)',
+      'day': '8th Dhul Hijjah - Stay in Mina',
+      'dayAr': '٨ ذو الحجة - المبيت بمنى',
+      'overviewEn':
+          'The Day of Tarwiyah marks the official start of Hajj. Pilgrims move to the tent city of Mina in the morning. They perform Dhuhr, Asr, Maghrib, Isha, and Fajr of the 9th Dhul Hijjah in Mina, shortening 4-rak’at prayers to 2 rak’at (Qasr) without combining them. Pilgrims spend the night in spiritual preparation and remembrance.',
+      'overviewAr':
+          'يوم التروية هو بداية أعمال الحج الفعلية. يتوجه الحجاج إلى منى في الصباح، ويصلون فيها الظهر والعصر والمغرب والعشاء وفجر يوم عرفة، يقصرون الصلاة الرباعية ركعتين دون جمع، ويبيتون في منى اتباعاً لسنة النبي صلى الله عليه وسلم.',
+      'keyActionsEn': [
+        'Enter Ihram from residence if not already in Ihram.',
+        'Depart for Mina after sunrise on 8th Dhul Hijjah.',
+        'Pray Dhuhr, Asr, Maghrib, Isha, and Fajr at Mina (Qasr: shortened to 2 rakah, no combining).',
+        'Recite Talbiyah continuously and engage in Dhikr & Qur\'an recitation.',
+        'Spend the entire night at Mina resting for the Day of Arafah.',
+      ],
+      'keyActionsAr': [
+        'الإحرام بالحج لمن كان حلالاً بمكة صباح يوم التروية.',
+        'الخروج إلى منى والتلبية طوال الطريق.',
+        'أداء الصلوات الخمس بمنى (الظهر والعصر والمغرب والعشاء وفجر ٩ ذو الحجة) قصراً بلا جمع.',
+        'الإكثار من الذكر والاستغفار والتلبية وقراءة القرآن.',
+        'المبيت بمنى ليلة عرفة وهو سنة مؤكدة.',
+      ],
+      'quran': {
+        'textAr':
+            'وَاذْكُرُوا اللَّهَ فِي أَيَّامٍ مَّعْدُودَاتٍ ۚ فَمَن تَعَجَّلَ فِي يَوْمَيْنِ فَلَا إِثْمَ عَلَيْهِ وَمَن تَأَخَّرَ فَلَا إِثْمَ عَلَيْهِ ۚ لِمَنِ اتَّقَىٰ',
+        'referenceAr': 'سورة البقرة - الآية ٢٠٣',
+        'textEn':
+            'And remember Allah during specific numbered days. Then whoever hastens [his departure] in two days, there is no sin upon him; and whoever delays, there is no sin upon him - for him who fears Allah.',
+        'referenceEn': 'Surah Al-Baqarah (2:203)',
+        'explanationEn':
+            'The numbered days refer to the days spent in Mina, highlighting the importance of constant Remembrance (Dhikr) of Allah during this stay.',
+        'explanationAr':
+            'الأيام المعدودات هي أيام التشريق ومنى، وأمر الله فيها بإكثار الذكر والتقوى.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ فِي صِفَةِ حَجَّةِ النَّبِيِّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ: «فَلَمَّا كَانَ يَوْمُ التَّرْوِيَةِ تَوَجَّهُوا إِلَى مِنًى، فَرَكِبَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ، فَصَلَّى بِهَا الظُّهْرَ وَالْعَصْرَ وَالْمَغْرِبَ وَالْعِشَاءَ وَالْفَجْرَ، ثُمَّ مَكَثَ قَلِيلاً حَتَّى طَلَعَتِ الشَّمْسُ...»',
+        'referenceAr': 'صحيح مسلم (١٢١٨)',
+        'textEn':
+            'Jabir (RA) narrated regarding the Prophet’s Hajj: "When the Day of Tarwiyah arrived, they turned towards Mina. The Messenger of Allah (ﷺ) rode there and offered Dhuhr, Asr, Maghrib, Isha, and Fajr prayers. Then he waited until sunrise..."',
+        'referenceEn': 'Sahih Muslim 1218',
+        'explanationEn':
+            'This establishes the Sunnah of traveling to Mina on the 8th and performing shortened prayers before advancing to Arafah.',
+        'explanationAr':
+            'يؤكد الحديث حرص النبي صلى الله عليه وسلم على المبيت بمنى وأداء الصلوات الخمس مقصورة فيها.',
+      },
+      'dua': {
+        'title': 'Dua of Remembrance in Mina',
+        'arabic':
+            'اللَّهُمَّ إِلَيْكَ تَوَجَّهْتُ، وَوَجْهَكَ أَرَدْتُ، فَاجْعَلْ ذَنْبِي مَغْفُوراً، وَحَجِّي مَبْرُوراً، وَارْحَمْنِي وَلا تُخَيِّبْنِي',
+        'translit':
+            'Allahumma ilayka tawajjahtu, wa wajhaka aradtu, faj’al dhanbi maghfuran, wa hajji mabruran, warhamni wa la tukhayyibni.',
+        'meaningEn':
+            'O Allah, unto You I have turned, and Your Countenance I seek. Forgive my sins, accept my Hajj, show mercy upon me, and do not disappoint me.',
+        'meaningAr':
+            'اللهم إني توجهت إليك وابتغيت وجهك الكريم، فاغفر ذنبي واجعل حجي مبروراً وارحمني.',
+      },
+    },
+
+    'arafat': {
+      'titleEn': 'Day of Arafah (9th Dhul Hijjah) - Core of Hajj',
+      'titleAr': 'يوم عرفة (٩ ذو الحجة) - ركن الحج الأعظم',
+      'day': '9th Dhul Hijjah - Standing at Arafat (Wuquf)',
+      'dayAr': '٩ ذو الحجة - الوقوف بعرفة',
+      'overviewEn':
+          'The Day of Arafah is the pinnacle and supreme ritual of Hajj ("Hajj is Arafah"). Pilgrims move from Mina to the plain of Arafat. Standing at Arafat (Wuquf) takes place from Dhuhr until Maghrib. Dhuhr and Asr are prayed together combined and shortened (Jam\' & Qasr) at Dhuhr time. Pilgrims spend the entire afternoon crying, seeking forgiveness, and making earnest Duas.',
+      'overviewAr':
+          'يوم عرفة هو العيد الأكبر والحج الأعظم ("الحج عرفة"). يتوجه الحجاج من منى إلى عرفات. يبدأ وقت الوقوف من زوال الشمس (الظهر) حتى غروبها. يصلى الظهر والعصر جمع تقديم وقصراً بأذان وإقامتين. ويقضي الحاج ما بعد الظهر إلى الغروب بالتضرع والدعاء والبكاء لله تعالى.',
+      'keyActionsEn': [
+        'Travel to Arafat after sunrise on the 9th Dhul Hijjah.',
+        'Pray Dhuhr & Asr combined and shortened (Jam\' al-Taqdeem) at Dhuhr time with 1 Adhan and 2 Iqamahs.',
+        'Stand at Mount Arafat / Plains of Arafat facing Qiblah with raised hands until sunset.',
+        'Make maximum Duas, Istighfar, Qur\'an recitation, and recite the best Dua of Arafah.',
+        'Do NOT leave Arafat before sunset.',
+      ],
+      'keyActionsAr': [
+        'الانتقال من منى إلى عرفة بعد طلوع شمس يوم التاسع.',
+        'صلاة الظهر والعصر جمع تقديم وقصراً في وقت الظهر بأذان وإقامتين.',
+        'الوقوف بعرفة مستقبلاً القبلة داعياً رافعاً اليدين حتى غروب الشمس.',
+        'الإكثار من التضرع والاستغفار وقول: "لا إله إلا الله وحده لا شريك له...".',
+        'عدم الانصراف من عرفة إلا بعد غروب الشمس بالكلية.',
+      ],
+      'quran': {
+        'textAr':
+            'الْيَوْمَ أَكْمَلْتُ لَكُمْ دِينَكُمْ وَأَتْمَمْتُ عَلَيْكُمْ نِعْمَتِي وَرَضِيتُ لَكُمُ الْإِسْلَامَ دِينًا',
+        'referenceAr': 'سورة المائدة - الآية ٣ (نزلت بعرفة)',
+        'textEn':
+            'This day I have perfected for you your religion and completed My favor upon you and have approved for you Islam as your religion.',
+        'referenceEn': 'Surah Al-Ma\'idah (5:3)',
+        'explanationEn':
+            'This monumental verse was revealed to Prophet Muhammad (ﷺ) on the Day of Arafah at Jabal al-Rahmah, signifying the completion of divine revelation.',
+        'explanationAr':
+            'نزلت هذه الآية العظيمة على النبي صلى الله عليه وسلم وهو واقف بعرفة يوم الجمعة، إعلاناً بتمام الدين وكمال النعمة.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ عَبْدِ الرَّحْمَنِ بْنِ يَعْمَرَ رَضِيَ اللَّهُ عَنْهُ أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «الْحَجُّ عَرَفَةُ، فَمَنْ جَاءَ قَبْلَ صَلاَةِ الْفَجْرِ مِنْ لَيْلَةِ جَمْعٍ فَقَدْ تَمَّ حَجُّهُ»',
+        'referenceAr': 'سنن الترمذي (٨٨٩) وسنن أبا داود (١٩٤٩)',
+        'textEn':
+            'Abdur-Rahman ibn Ya\'mar reported: The Prophet (ﷺ) said: "Hajj is Arafah. Whoever arrives before Fajr prayer on the night of Muzdalifah has completed his Hajj."',
+        'referenceEn': 'Jami\' at-Tirmidhi 889, Sunan Abi Dawud 1949',
+        'explanationEn':
+            'Standing at Arafat is the single non-negotiable pillar (Rukn) of Hajj without which Hajj is invalid.',
+        'explanationAr':
+            'يبين الحديث أن الوقوف بعرفة هو الركن الأعظم للحج، وبدونه لا يصح الحج.',
+      },
+      'dua': {
+        'title': 'The Supreme Dua of Arafah (خَيْرُ الدُّعَاءِ دُعَاءُ يَوْمِ عَرَفَةَ)',
+        'arabic':
+            'لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ',
+        'translit':
+            'La ilaha illallahu wahdahu la sharika lahu, lahul-mulku wa lahul-hamdu, wa huwa \'ala kulli shay\'in qadir.',
+        'meaningEn':
+            'There is no deity worthy of worship except Allah, alone without partner. To Him belongs sovereignty and praise, and He has power over all things.',
+        'meaningAr':
+            'أفضل ما قال النبي صلى الله عليه وسلم والنبيون من قبله عشية عرفة: التوحيد والتمجيد لله وحده.',
+      },
+    },
+
+    'muzdalifah': {
+      'titleEn': 'Muzdalifah (Night of 10th Dhul Hijjah)',
+      'titleAr': 'المزدلفة (ليلة العاشر من ذي الحجة)',
+      'day': 'Night following Arafah (9th-10th Dhul Hijjah)',
+      'dayAr': 'ليلة ١٠ ذو الحجة - المبيت بالمزدلفة',
+      'overviewEn':
+          'Immediately after sunset on 9th Dhul Hijjah, pilgrims travel from Arafat to Muzdalifah without praying Maghrib at Arafat. Upon arrival in Muzdalifah, Maghrib and Isha are prayed together combined and shortened (Jam\' al-Ta\'khir). Pilgrims spend the night under the open sky, resting, performing Fajr at twilight, and collecting pebbles for Rami.',
+      'overviewAr':
+          'بعد غروب شمس يوم عرفة مباشرة، ينطلق الحجاج إلى المزدلفة بهدوء وسكينة، ولا يصلون المغرب بعرفة. عند الوصول للمزدلفة يصلون المغرب ثلاث ركعات والعشاء ركعتين جمع تأخير بأذان وإقامتين. ويبيتون الليل تحت السماء، ثم يصلون الفجر بالمشعر الحرام ويجمعون الجمار.',
+      'keyActionsEn': [
+        'Depart Arafat calmly after sunset without praying Maghrib at Arafat.',
+        'Pray Maghrib (3 rakah) and Isha (2 rakah) combined at Muzdalifah (Jam\' al-Ta\'khir).',
+        'Collect 7, 21, or 49+ small pebbles (size of a chickpea/bean) for Rami.',
+        'Spend the night sleeping/resting at Muzdalifah until Fajr (Wajib).',
+        'Offer Fajr prayer early at twilight, make Dua at Al-Mash\'ar Al-Haram, then depart for Mina before sunrise.',
+      ],
+      'keyActionsAr': [
+        'الانصراف من عرفة بعد الغروب بسكينة ودون استعجال.',
+        'صلاة المغرب ثلاثاً والعشاء قصراً جمع تأخير عند الوصول للمزدلفة.',
+        'التقاط حصى الجمار (حجم حمصة تقريباً) من المزدلفة أو منى.',
+        'المبيت بالمزدلفة حتى صلاة الفجر (وهو واجب عند جمهور العلماء).',
+        'صلاة الفجر في أول وقتها ثم التضرع عند المشعر الحرام والانطلاق إلى منى قبل طلوع الشمس.',
+      ],
+      'quran': {
+        'textAr':
+            'فَإِذَا أَفَضْتُم مِّنْ عَرَفَاتٍ فَاذْكُرُوا اللَّهَ عِندَ الْمَشْعَرِ الْحَرَامِ ۖ وَاذْكُرُوهُ كَمَا هَدَاكُمْ وَإِن كُنتُم مِّن قَبْلِهِ لَمَِنَ الضَّالِّينَ',
+        'referenceAr': 'سورة البقرة - الآية ١٩٨',
+        'textEn':
+            'Then when you depart from Arafat, remember Allah at al-Mash\'ar al-Haram. And remember Him as He has guided you, for indeed, you were before that among those astray.',
+        'referenceEn': 'Surah Al-Baqarah (2:198)',
+        'explanationEn':
+            'Allah explicitly orders pilgrims departing from Arafat to stop and engage in His Remembrance at Al-Mash\'ar Al-Haram in Muzdalifah.',
+        'explanationAr':
+            'تأمر الآية الكريمة بذكر الله عند المشعر الحرام بالمزدلفة فور الإفاضة من عرفات.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ عَبْدِ اللَّهِ بْنِ مَسْعُودٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: مَا رَأَيْتُ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ صَلَّى صَلاَةً إِلاَّ لِوَقْتِهَا إِلاَّ صَلاَتَيْنِ: جَمَعَ بَيْنَ الْمَغْرِبِ وَالْعِشَاءِ بِجَمْعٍ (الْمُزْدَلِفَةِ)، وَصَلَّى الْفَجْرَ يَوْمَئِذٍ قَبْلَ وَقْتِهَا الْمُعْتَادِ',
+        'referenceAr': 'صحيح البخاري (١٦٧٥) وصحيح مسلم (١٢٨٠)',
+        'textEn':
+            'Ibn Mas\'ud reported: "I never saw the Messenger of Allah (ﷺ) offer any prayer out of its time except two: He combined Maghrib and Isha at Muzdalifah, and he offered Fajr prayer on that day earlier than its usual time (at twilight)."',
+        'referenceEn': 'Sahih al-Bukhari 1675, Sahih Muslim 1280',
+        'explanationEn':
+            'Highlights the mandatory sunnah of delaying Maghrib until arriving at Muzdalifah and offering Fajr early at twilight.',
+        'explanationAr':
+            'يبين الحديث استثناء النبي صلى الله عليه وسلم لصلاتي المغرب والعشاء بجمعهما بالمزدلفة وصلاة الفجر بغلس.',
+      },
+      'dua': {
+        'title': 'Dua at Al-Mash\'ar Al-Haram (دعاء المشعر الحرام)',
+        'arabic':
+            'اللَّهُمَّ كَمَا وَقَفْتَنَا فِيهِ وَأَرَيْتَنَا إِيَّاهُ فَوَفِّقْنَا لِذِكْرِكَ كَمَا هَدَيْتَنَا، وَاغْفِرْ لَنَا وَارْحَمْنَا كَمَا وَعَدْتَنَا',
+        'translit':
+            'Allahumma kama waqaftana fihi wa araytana iyyahu fawaffiqna lidhikrika kama hadaytana, waghfir lana warhamna kama wa’adtana.',
+        'meaningEn':
+            'O Allah, just as You enabled us to stand here and showed it to us, grant us success in remembering You as You guided us, and forgive us and have mercy on us as You promised us.',
+        'meaningAr':
+            'دعاء الثناء والاستغفار عند المشعر الحرام بالمزدلفة قبل طلوع الشمس.',
+      },
+    },
+
+    'rami1': {
+      'titleEn': 'Rami al-Jamarat (10th Dhul Hijjah - Yawm an-Nahr)',
+      'titleAr': 'رمي جمرة العقبة (١٠ ذو الحجة - يوم النحر)',
+      'day': '10th Dhul Hijjah (Eid al-Adha)',
+      'dayAr': '١٠ ذو الحجة (يوم عيد الأضحى المبارك)',
+      'overviewEn':
+          'On the morning of 10th Dhul Hijjah (Yawm an-Nahr), pilgrims return from Muzdalifah to Mina to pelt only the largest pillar, Jamarat al-Aqabah (Al-Jamrah Al-Kubra). Pilgrims throw 7 pebbles individually while saying "Allahu Akbar" with each throw. This symbolizes rejecting Shaytan and remaining steadfast in faith.',
+      'overviewAr':
+          'صباح يوم العاشر من ذي الحجة (يوم النحر)، يتجه الحجاج إلى منى لرمي جمرة العقبة الكبرى فقط بسبع حصيات متعاقبة، يكبر الحاج مع كل حصاة قائلًا: "الله أكبر"، مقطعاً التلبية مع أول حصاة، اقتداءً بإبراهيم عليه السلام في دحر الشيطان.',
+      'keyActionsEn': [
+        'Arrive in Mina from Muzdalifah in the morning (Dhuha time).',
+        'Pelt ONLY the Big Pillar (Jamarat al-Aqabah) with 7 pebbles.',
+        'Say "Allahu Akbar" with every single thrown pebble.',
+        'Stop reciting Talbiyah upon throwing the first pebble of Jamarat al-Aqabah.',
+        'Ensure pebbles land inside the basin (Marma).',
+      ],
+      'keyActionsAr': [
+        'الوصول إلى منى من المزدلفة ضحى يوم النحر.',
+        'رمي الجمرة الكبرى (جمرة العقبة) فقط بـ ٧ حصيات متعاقبة.',
+        'التكبير مع كل حصاة: "الله أكبر".',
+        'قطع التلبية مع بداية رمي أول حصاة من جمرة العقبة.',
+        'التأكد من وقوع الحصى داخل حوض الجمرة.',
+      ],
+      'quran': {
+        'textAr':
+            'وَمَن يُعَظِّمْ شَعَائِرَ اللَّهِ فَإِنَّهَا مِن تَقْوَى الْقُلُوبِ',
+        'referenceAr': 'سورة الحج - الآية ٣٢',
+        'textEn':
+            'And whoever honors the symbols of Allah - indeed, it is from the piety of hearts.',
+        'referenceEn': 'Surah Al-Hajj (22:32)',
+        'explanationEn':
+            'Throwing pebbles at the Jamarat is among the sacred symbols (Sha’a’ir) of Allah performed to commemorate Ibrahim’s steadfastness.',
+        'explanationAr':
+            'رمي الجمار وتعظيم مناسك الحج من دلالات تقوى القلوب وإجلال أمر الله.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: «رَأَيْتُ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ يَرْمِي الْجَمْرَةَ ضُحًى يَوْمَ النَّحْرِ، وَوَهْوَ عَلَى نَاقَتِهِ يَقُولُ: لِتَأْخُذُوا مَنَاسِكَكُمْ، فَإِنِّي لاَ أَدْرِي لَعَلِّي لاَ أَحُجُّ بَعْدَ حَجَّتِي هَذِهِ»',
+        'referenceAr': 'صحيح مسلم (١٢٩٧)',
+        'textEn':
+            'Jabir reported: "I saw the Prophet (ﷺ) throwing pebbles at Jamarat al-Aqabah in the forenoon on the Day of Sacrifice, saying: Take your rituals from me, for I do not know whether I will perform Hajj after this Hajj of mine."',
+        'referenceEn': 'Sahih Muslim 1297',
+        'explanationEn':
+            'This establishes the timing (Dhuha) and fundamental rule that all Hajj rituals must mirror the Prophet’s demonstration.',
+        'explanationAr':
+            'أمر النبي صلى الله عليه وسلم الأمة بالأخذ عنه في أفعال الحج ومناسك الرمي.',
+      },
+      'dua': {
+        'title': 'Takbeer During Rami (التكبير عند الرمي)',
+        'arabic':
+            'اللَّهُ أَكْبَرُ، اللَّهُمَّ اجْعَلْهُ حَجًّا مَبْرُورًا وَذَنْبًا مَغْفُورًا',
+        'translit':
+            'Allahu Akbar, Allahumma-j’alhu hajjan mabruran wa dhanban maghfura.',
+        'meaningEn':
+            'Allah is the Greatest. O Allah, make it an accepted Hajj and a forgiven sin.',
+        'meaningAr':
+            'التكبير عند رمي كل حصاة والدعاء بالقبول ومغفرة الذنوب.',
+      },
+    },
+
+    'qurbani': {
+      'titleEn': 'Qurbani (Hady Sacrifice) & Halq / Taqsir',
+      'titleAr': 'الهدي والحلق أو التقصير',
+      'day': '10th Dhul Hijjah (Yawm an-Nahr)',
+      'dayAr': '١٠ ذو الحجة (يوم النحر)',
+      'overviewEn':
+          'After Rami on the 10th of Dhul Hijjah, pilgrims performing Hajj Tamattu or Qiran offer the Hady (animal sacrifice). Afterwards, male pilgrims shave their heads completely (Halq - preferred) or trim hair evenly (Taqsir). Female pilgrims trim a fingertip length of their hair. At this point, Tahallul al-Asghar (first partial deconsecration) is achieved.',
+      'overviewAr':
+          'بعد رمي جمرة العقبة يوم النحر، يقوم المتمتع والمقرن بذبْح الهدي. ثم يحلق الرجل رأسه (وهو الأفضل) أو يقصره، وتقصر المرأة من أطراف شعرها قدر أنملة (حوالي ٢ سم). وبذلك يتحلل الحاج التحلل الأول (التحلل الأصغر) فيحل له كل شيء حرم عليه بالإحرام إلا النساء.',
+      'keyActionsEn': [
+        'Slaughter the Hady (sheep, goat, or 1/7 of camel/cow) for Tamattu/Qiran pilgrims.',
+        'Men: Shave head completely (Halq) or trim hair evenly all around (Taqsir).',
+        'Women: Trim a fingertip length (approx 1.5 - 2 cm) from the ends of hair.',
+        'Attain Tahallul al-Asghar: Change out of Ihram garments into regular clothes.',
+        'All Ihram prohibitions lifted EXCEPT marital relations until Tawaf al-Ifadah.',
+      ],
+      'keyActionsAr': [
+        'ذبح الهدي للمتمتع والمقرن (شاة أو سبع بدنة/بقرة).',
+        'الحلق للرجال بالموسى (وهو الأفضل) أو التقصير لجميع الرأس.',
+        'تقصير المرأة من كل ضفيرة أو من طرف شعرها قدر أنملة.',
+        'التحلل الأصغر (التحلل الأول): لبس الثياب العادية والتطيب.',
+        'إباحة محظورات الإحرام عدا النساء حتى طواف الإفاضة.',
+      ],
+      'quran': {
+        'textAr':
+            'لَّقَدْ صَدَقَ اللَّهُ رَسُولَهُ الرُّؤْيَا بِالْحَقِّ ۖ لَتَدْخُلُنَّ الْمَسْجِدَ الْحَرَامَ إِن شَاءَ اللَّهُ آمِنِينَ مُحَلِّقِينَ رُءُوسَكُمْ وَمُقَصِّرِينَ لَا تَخَافُونَ',
+        'referenceAr': 'سورة الفتح - الآية ٢٧',
+        'textEn':
+            'Certainly has Allah showed to His Messenger the vision in truth. You will surely enter al-Masjid al-Haram, if Allah wills, in safety, with your heads shaved and hair shortened, not fearing.',
+        'referenceEn': 'Surah Al-Fath (48:27)',
+        'explanationEn':
+            'Quranic prophecy highlighting head shaving (Halq) and shortening (Taqsir) as sacred symbols marking the completion of pilgrimage.',
+        'explanationAr':
+            'بشر الله نبيه بدخول المسجد الحرام وأداء النسك مع الحلق والتقصير.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ أَبِي هُرَيْرَةَ رَضِيَ اللَّهُ عَنْهُ قَالَ: قَالَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ: «اللَّهُمَّ اغْفِرْ لِلْمُحَلِّقِينَ»، قَالُوا: وَلِلْمُقَصِّرِينَ يَا رَسُولَ اللَّهِ؟ قَالَ: «اللَّهُمَّ اغْفِرْ لِلْمُحَلِّقِينَ»، قَالُوا: وَلِلْمُقَصِّرِينَ يَا رَسُولَ اللَّهِ؟ قَالَ: «وَلِلْمُقَصِّرِينَ» فِي الثَّالِثَةِ أَوْ الرَّابِعَةِ',
+        'referenceAr': 'صحيح البخاري (١٧٢٧) وصحيح مسلم (١٣٠١)',
+        'textEn':
+            'Abu Hurairah reported: The Messenger of Allah (ﷺ) prayed: "O Allah, forgive those who shave their heads!" They asked: "And those who shorten, O Messenger of Allah?" He repeated: "O Allah, forgive those who shave!" They asked again, and on the third or fourth time he added: "And those who shorten."',
+        'referenceEn': 'Sahih al-Bukhari 1727, Sahih Muslim 1301',
+        'explanationEn':
+            'Demonstrates the superior reward for men who shave their heads completely (Halq) compared to trimming.',
+        'explanationAr':
+            'فضل الحلق ومضاعفة الدعاء للمحلقين ثلاثاً بالرحمة والمغفرة.',
+      },
+      'dua': {
+        'title': 'Dua Upon Shaving/Trimming Hair',
+        'arabic':
+            'الْحَمْدُ لِلَّهِ عَلَى مَا هَدَانَا، اللَّهُمَّ ثَبِّتْنِي عَلَى الْهُدَى وَاغْفِرْ لِي وَلِوَالِدَيَّ وَلِلْمُسْلِمِينَ أَجْمَعِينَ',
+        'translit':
+            'Alhamdu lillahi \'ala ma hadana, Allahumma thabbitni \'alal-huda waghfir li wa li-walidayya wa lil-muslimina ajma\'in.',
+        'meaningEn':
+            'Praise be to Allah for guiding us. O Allah, keep me firm upon guidance and forgive me, my parents, and all Muslims.',
+        'meaningAr':
+            'حمد الله على توفيقه لإتمام النسك والدعاء بالثبات والمغفرة.',
+      },
+    },
+
+    'tawaf_ifadah': {
+      'titleEn': 'Tawaf al-Ifadah (Tawaf al-Ziyarah) & Sa’i',
+      'titleAr': 'طواف الإفاضة والسعي',
+      'day': '10th Dhul Hijjah or Days of Tashreeq',
+      'dayAr': '١٠ ذو الحجة أو أيام التشريق',
+      'overviewEn':
+          'Tawaf al-Ifadah is a core, mandatory pillar (Rukn) of Hajj without which Hajj remains incomplete. Pilgrims travel from Mina to Makkah to circumambulate the Kaaba 7 times. After Tawaf, pilgrims perform Sa\'i between Safa and Marwah (for Tamattu pilgrims and those who did not perform Sa\'i earlier). Completing this grants Tahallul al-Akbar (complete deconsecration).',
+      'overviewAr':
+          'طواف الإفاضة هو ركن من أركان الحج لا يتم الحج إلا به. يتجه الحاج إلى مكة للطواف حول الكعبة ٧ أشواط، ثم يصلي ركعتين خلف المقام، ويسعى بين الصفا والمروة ٧ أشواط (للمتمتع ولمن لم يسعَ مع طواف القدوم). وبتمام طواف الإفاضة والسعي يتحلل الحاج التحلل الأكبر (الكامل) فيحل له كل شيء حتى النساء.',
+      'keyActionsEn': [
+        'Perform 7 circuits around the Kaaba (Tawaf al-Ifadah).',
+        'Pray 2 Rakah behind Maqam Ibrahim.',
+        'Drink Zamzam water and make Dua.',
+        'Perform Sa\'i between Mount Safa and Mount Marwah (7 laps starting at Safa, ending at Marwah).',
+        'Attain Tahallul al-Akbar (complete deconsecration): All restrictions including marital relations lifted.',
+      ],
+      'keyActionsAr': [
+        'الطواف حول الكعبة المشرفة ٧ أشواط (طواف الإفاضة).',
+        'صلاة ركعتين خلف مقام إبراهيم والشرب من ماء زمزم.',
+        'السعي بين الصفا والمروة ٧ أشواط يبدأ بالصفا وينتهي بالمروة.',
+        'التحلل الأكبر (التحلل الكامل) الذي يبيح كل محظورات الإحرام بما فيها النساء.',
+        'العودة إلى منى للمبيت بها بقية أيام التشريق.',
+      ],
+      'quran': {
+        'textAr':
+            'إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ ۖ فَمَنْ حَجَّ الْبَيْتَ أَوِ اعْتَمَرَ فَلَا جُنَاحَ عَلَيْهِ أَن يَطَّوَّفَ بِهِمَا',
+        'referenceAr': 'سورة البقرة - الآية ١٥٨',
+        'textEn':
+            'Indeed, Safa and Marwah are among the symbols of Allah. So whoever makes Hajj to the House or performs Umrah - there is no blame upon him for walking between them.',
+        'referenceEn': 'Surah Al-Baqarah (2:158)',
+        'explanationEn':
+            'Allah enshrines Sa\'i between Safa and Marwah as an obligatory symbol commemorating Hajar’s devotion to saving baby Ismail.',
+        'explanationAr':
+            'تشريع السعي بين الصفا والمروة واعتبارهما من شعائر الله الدالة على طاعته والإخلاص له.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ عَائِشَةَ رَضِيَ اللَّهُ عَنْهَا قَالَتْ: «أَفَاضَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ مِنْ آخِرِ يَوْمِهِ حِينَ صَلَّى الظُّهْرَ، ثُمَّ رَجَعَ إِلَى مِنًى»',
+        'referenceAr': 'صحيح البخاري (١٧٣٣) وصحيح مسلم (١٢١٨)',
+        'textEn':
+            'Aisha reported: "The Messenger of Allah (ﷺ) performed Tawaf al-Ifadah on the latter part of the day (10th) after praying Dhuhr, then he returned to Mina."',
+        'referenceEn': 'Sahih al-Bukhari 1733, Sahih Muslim 1218',
+        'explanationEn':
+            'Confirms that Tawaf al-Ifadah is performed on the 10th of Dhul Hijjah before returning to Mina for Tashreeq nights.',
+        'explanationAr':
+            'بيان وقت طواف الإفاضة للنبي صلى الله عليه وسلم يوم النحر ورجوعه للمبيت بمنى.',
+      },
+      'dua': {
+        'title': 'Dua at Mount Safa (دعاء الصفا والمروة)',
+        'arabic':
+            'أَبْدَأُ بِمَا بَدَأَ اللَّهُ بِهِ، إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ... لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ أَنْجَزَ وَعْدَهُ، وَنَصَرَ عَبْدَهُ، وَهَزَمَ الأَحْزَابَ وَحْدَهُ',
+        'translit':
+            'Abda’u bima bada’allahu bihi. La ilaha illallahu wahdahu anjaza wa’dahu, wa nasara \'abdahu, wa hazamal-ahzaba wahdah.',
+        'meaningEn':
+            'I begin with that which Allah began with. There is no deity except Allah alone, He fulfilled His promise, granted victory to His servant, and defeated the confederates alone.',
+        'meaningAr':
+            'التكبير والتهليل والثناء على الله عند صعود جبل الصفا والمروة والاستقبال للقبلة.',
+      },
+    },
+
+    'rami_days': {
+      'titleEn': 'Rami al-Jamarat (Days of Tashreeq - 11th, 12th, 13th)',
+      'titleAr': 'رمي الجمار في أيام التشريق (١١، ١٢، ١٣ ذو الحجة)',
+      'day': '11th, 12th, and optional 13th Dhul Hijjah',
+      'dayAr': '١١ و١٢ و١٣ ذو الحجة - أيام التشريق',
+      'overviewEn':
+          'Pilgrims remain in Mina during the Days of Tashreeq (11th, 12th, and optionally 13th Dhul Hijjah). Each afternoon AFTER Zawal (midday sun turn), pilgrims pelt all three Jamarat in order: Small (Al-Sugra), Medium (Al-Wusta), and Large (Al-Aqabah) with 7 pebbles each (21 total per day). Long supplications are made after the 1st and 2nd Jamarat.',
+      'overviewAr':
+          'يقيم الحجاج بمنى أيام التشريق (١١، ١٢، و١٣ لمن تأخر). ويكون رمي الجمار الثلاث بعد زوال الشمس (بعد صلاة الظهر) كل يوم بترتيب: الجمرة الصغرى (٧ حصيات)، ثم الوسطى (٧ حصيات)، ثم العقبة الكبرى (٧ حصيات) بمجموع ٢١ حصاة يومياً. ويُسن الوقوف والدعاء الطويل بعد الصغرى والوسطى.',
+      'keyActionsEn': [
+        'Stay overnight in Mina during Tashreeq nights (Wajib).',
+        'Wait for Zawal (Dhuhr time) each day before starting Rami.',
+        'Pelt 1st: Small Jamrah (7 pebbles) -> Step aside & make long Dua facing Qiblah.',
+        'Pelt 2nd: Medium Jamrah (7 pebbles) -> Step aside & make long Dua facing Qiblah.',
+        'Pelt 3rd: Large Jamrah al-Aqabah (7 pebbles) -> Depart without stopping for Dua.',
+        'Pilgrims can depart Mina on 12th before Maghrib (Ta\'ajjul) or stay for 13th (Takhar).',
+      ],
+      'keyActionsAr': [
+        'المبيت بمنى ليالي أيام التشريق (واجب).',
+        'بداية الرمي يومياً بعد زوال الشمس (أذان الظهر).',
+        'رمي الجمرة الأولى الصغرى بـ ٧ حصيات ثم التنحي والقيام للدعاء الطويل مستقبل القبلة.',
+        'رمي الجمرة الثانية الوسطى بـ ٧ حصيات ثم التنحي والقيام للدعاء الطويل.',
+        'رمي الجمرة الثالثة الكبرى (العقبة) بـ ٧ حصيات والانصراف دون دعاء.',
+        'جواز التعجل والخروج من منى في اليوم الثاني عشر قبل الغروب، أو التأخر لليوم الثالث عشر وهو الأفضل.',
+      ],
+      'quran': {
+        'textAr':
+            'فَمَن تَعَجَّلَ فِي يَوْمَيْنِ فَلَا إِثْمَ عَلَيْهِ وَمَن تَأَخَّرَ فَلَا إِثْمَ عَلَيْهِ ۚ لِمَنِ اتَّقَىٰ ۗ وَاتَّقُوا اللَّهَ وَاعْلَمُوا أَنَّكُمْ إِلَيْهِ تُحْشَرُونَ',
+        'referenceAr': 'سورة البقرة - الآية ٢٠٣',
+        'textEn':
+            'Whoever hastens [his departure] in two days, there is no sin upon him; and whoever delays, there is no sin upon him - for him who fears Allah. And fear Allah and know that unto Him you will be gathered.',
+        'referenceEn': 'Surah Al-Baqarah (2:203)',
+        'explanationEn':
+            'Divine permission for pilgrims to either complete Tashreeq on the 12th (Ta\'ajjul) or complete the 13th day (Takhar), provided it is done with Taqwa.',
+        'explanationAr':
+            'تبيح الآية التعجل في اليوم الثاني عشر أو التأخر لليوم الثالث عشر لمن اتقى الله.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّهُ كَانَ يَرْمِي الْجَمْرَةَ الدُّنْيَا بِسَبْعِ حَصَيَاتٍ، ثُمَّ يُكَبِّرُ عَلَى إِثْرِ كُلِّ حَصَاةٍ، ثُمَّ يَتَقَدَّمُ فَيُسْهِلُ فَيَقُومُ مُسْتَقْبِلَ الْقِبْلَةِ، فَيَقُومُ طَوِيلاً وَيَدْعُو وَيَرْفَعُ يَدَيْهِ... وَيَقُولُ: هَكَذَا رَأَيْتُ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ يَفْعَلُهُ',
+        'referenceAr': 'صحيح البخاري (١٧٥١)',
+        'textEn':
+            'Narrated Ibn Umar: He used to stone the nearest Jamrah with 7 pebbles, saying Takbeer with each pebble. Then he would move forward, stand facing the Qiblah for a long time making Dua with raised hands... and say: "This is how I saw the Prophet (ﷺ) doing it."',
+        'referenceEn': 'Sahih al-Bukhari 1751',
+        'explanationEn':
+            'Details the Sunnah method of standing for prolonged Dua after the Small and Medium Jamarat during Tashreeq days.',
+        'explanationAr':
+            'شرح وتطبييق سنة النبي صلى الله عليه وسلم في الوقوف للدعاء الطويل بين الجمار.',
+      },
+      'dua': {
+        'title': 'Dua Between Jamarat (الدعاء الطويل بين الجمرتين)',
+        'arabic':
+            'اللَّهُمَّ اغْفِرْ وَارْحَمْ، وَاعْفُ عَمَّا تَعْلَمُ، وَأَنْتَ الأَعَزُّ الأَكْرَمُ، اللَّهُمَّ آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
+        'translit':
+            'Allahummaghfir warham, wa’fu \'amma ta’lam, wa antal-a’azzul-akram. Allahumma atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
+        'meaningEn':
+            'O Allah forgive and have mercy, and pardon what You know, for You are the Most Mighty, Most Generous. O Allah grant us good in this world and the next and save us from the Fire.',
+        'meaningAr':
+            'الدعاء والمناجاة الطويلة مستقبل القبلة بعد رمي الجمرة الصغرى والوسطى.',
+      },
+    },
+
+    'tawaf_wida': {
+      'titleEn': 'Tawaf al-Wida (Farewell Tawaf)',
+      'titleAr': 'طواف الوداع',
+      'day': 'Final action before leaving Makkah',
+      'dayAr': 'آخر أعمال الحاج قبل مغادرة مكة',
+      'overviewEn':
+          'Tawaf al-Wida (Farewell Tawaf) is the final compulsory obligation (Wajib) for every pilgrim before leaving the holy city of Makkah. It consists of 7 circuits around the Kaaba without Sa\'i. After completing Tawaf al-Wida, pilgrims pray 2 Rakat, drink Zamzam, and depart Makkah directly without lingering.',
+      'overviewAr':
+          'طواف الوداع هو آخر واجبات الحج على كل آفاقي (من خارج مكة) قبل مغادرتها. يطوف الحاج ٧ أشواط حول البيت الحرام تحيةً ووداعاً للكعبة، ثم يصلي ركعتين، ويشرب من زمزم، وينطلق مسافراً إلى أهله دون إقامة أو مكوث بعده.',
+      'keyActionsEn': [
+        'Perform 7 circuits around the Kaaba as the absolute last activity in Makkah.',
+        'No Raml (brisk walking) or Idtiba (shoulder uncovering) required.',
+        'Pray 2 Rakat behind Maqam Ibrahim.',
+        'Drink Zamzam water and supplicate for accepted Hajj and safe journey home.',
+        'Depart Makkah immediately after completing Tawaf al-Wida.',
+      ],
+      'keyActionsAr': [
+        'الطواف حول الكعبة المشرفة ٧ أشواط كآخر عهد بالحرم.',
+        'لا يُشرع فيه رَمَل ولا اضطباع.',
+        'صلاة ركعتين خلف المقام والشرب من ماء زمزم.',
+        'الدعاء بالقبول والعودة إلى الديار سالماً.',
+        'المغادرة الفورية لمكة المكرمة بعد الطواف مباشرة.',
+      ],
+      'quran': {
+        'textAr':
+            'ثُمَّ لْيَقْضُوا تَفَثَهُمْ وَلْيُوفُوا نُذُورَهُمْ وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
+        'referenceAr': 'سورة الحج - الآية ٢٩',
+        'textEn':
+            'Then let them end their untidiness and fulfill their vows and perform Tawaf around the Ancient House.',
+        'referenceEn': 'Surah Al-Hajj (22:29)',
+        'explanationEn':
+            'General divine directive commanding believers to wrap up their pilgrimage rites with Tawaf around the sacred Kaaba.',
+        'explanationAr':
+            'الأمر الرباني بختام المناسك بالطواف بالبيت العتيق تعظيماً له.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنِ ابْنِ عَبَّاسٍ رَضِيَ اللَّهُ عَنْهُمَا قَالَ: «أُمِرَ النَّاسُ أَنْ يَكُونَ آخِرُ عَهْدِهِمْ بِالْبَيْتِ، إِلاَّ أَنَّهُ خُفِّفَ عَنِ الْمَرْأَةِ الْحَائِضِ»',
+        'referenceAr': 'صحيح البخاري (١٧٥٥) وصحيح مسلم (١٣٢٧)',
+        'textEn':
+            'Ibn Abbas reported: "The people were ordered that their last action should be at the House (Kaaba), except that an exemption was granted for menstruating women."',
+        'referenceEn': 'Sahih al-Bukhari 1755, Sahih Muslim 1327',
+        'explanationEn':
+            'Establishes Tawaf al-Wida as a binding obligation for all departing pilgrims.',
+        'explanationAr':
+            'وجوب كون طواف الوداع آخر أعمال الحاج بمكة والتخفيف عن الحائض.',
+      },
+      'dua': {
+        'title': 'Dua of Departure & Farewell',
+        'arabic':
+            'اللَّهُمَّ لا تَجْعَلْ هَذَا آخِرَ الْعَهْدِ بِبَيْتِكَ الْحَرَامِ، وَإِنْ جَعَلْتَهُ آخِرَ الْعَهْدِ فَاعْوَضْنِي عَنْهُ الْجَنَّةَ بِرَحْمَتِكَ يَا أَرْحَمَ الرَّاحِمِينَ',
+        'translit':
+            'Allahumma la taj’al hadha akhiral-\'ahdi bibaytikal-haram, wa in ja’altahu akhiral-\'ahdi fa’awwidni \'anhul-jannata birahmatika ya arhamar-rahimin.',
+        'meaningEn':
+            'O Allah, do not make this the last visit to Your Sacred House, and if You decree it to be the last, grant me Paradise in exchange by Your Mercy, O Most Merciful!',
+        'meaningAr':
+            'التوسل إلى الله ألا يكون هذا آخر العهد بالبيت الحرام والتضرع بالعودة والقبول.',
+      },
+    },
+
+    // ===== UMRAH STEPS DETAILS =====
+    'ihram_u': {
+      'titleEn': 'Enter Ihram for Umrah',
+      'titleAr': 'الإحرام للعمرة',
+      'day': 'At Miqat',
+      'dayAr': 'عند الميقات',
+      'overviewEn':
+          'The first pillar of Umrah is entering Ihram at the designated Miqat with ritual purification, wearing Ihram garments, stating the Niyyah for Umrah ("Labbayk Allahumma Umrah"), and continuously reciting Talbiyah until seeing the Kaaba.',
+      'overviewAr':
+          'أول أركان العمرة وهو الإحرام من الميقات بالطهارة والغسل ولبس ثياب الإحرام والتلفظ بالنية ("لَبَّيْكَ اللَّهُمَّ عُمْرَةً") ورفع الصوت بالتلبية حتى رؤية الكعبة.',
+      'keyActionsEn': [
+        'Ghusl & perfumes on body before Ihram.',
+        'Wear Ihram cloths (men) / modest dress (women).',
+        'Intention: "Labbayk Allahumma Umrah".',
+        'Recite Talbiyah continuously.',
+      ],
+      'keyActionsAr': [
+        'الاغتسال والتطيب قبل الإحرام.',
+        'ارتداء ملابس الإحرام.',
+        'النية: "لَبَّيْكَ اللَّهُمَّ عُمْرَةً".',
+        'رفع الصوت بالتلبية.',
+      ],
+      'quran': {
+        'textAr': 'وَأَتِمُّوا الْحَجَّ وَالْعُمْرَةَ لِلَّهِ',
+        'referenceAr': 'سورة البقرة - الآية ١٩٦',
+        'textEn': 'And complete the Hajj and Umrah for Allah.',
+        'referenceEn': 'Surah Al-Baqarah (2:196)',
+        'explanationEn':
+            'Divine mandate commanding the sincere completion of Umrah rituals exclusively for Allah.',
+        'explanationAr': 'وجوب إتمام العمرة وإخلاصها لله تعالى.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ أَبِي هُرَيْرَةَ رَضِيَ اللَّهُ عَنْهُ أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «الْعُمْرَةُ إِلَى الْعُمْرَةِ كَفَّارَةٌ لِمَا بَيْنَهُمَا، وَالْحَجُّ الْمَبْرُورُ لَيْسَ لَهُ جَزَاءٌ إِلاَّ الْجَنَّةُ»',
+        'referenceAr': 'صحيح البخاري (١٧٧٣) وصحيح مسلم (١٣٤٩)',
+        'textEn':
+            'Abu Hurairah reported: The Messenger of Allah (ﷺ) said: "An Umrah to another Umrah is an expiation for whatever sins occur between them, and an accepted Hajj receives no reward less than Paradise."',
+        'referenceEn': 'Sahih al-Bukhari 1773, Sahih Muslim 1349',
+        'explanationEn':
+            'Highlights the immense spiritual purification and expiation of sins obtained through Umrah.',
+        'explanationAr': 'فضل العمرة ومحوها للذنوب والخطايا.',
+      },
+      'dua': {
+        'title': 'Intention for Umrah',
+        'arabic': 'لَبَّيْكَ اللَّهُمَّ عُمْرَةً، لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ...',
+        'translit': 'Labbayk Allahumma \'Umrah, Labbayk Allahumma Labbayk...',
+        'meaningEn': 'Here I am O Allah, performing Umrah at Your service.',
+        'meaningAr': 'التلبية والنية لأداء مناسك العمرة.',
+      },
+    },
+
+    'tawaf_u': {
+      'titleEn': 'Tawaf of Umrah',
+      'titleAr': 'طواف العمرة',
+      'day': 'Around the Kaaba',
+      'dayAr': 'حول الكعبة المشرفة',
+      'overviewEn':
+          'Circumambulate the Holy Kaaba 7 times counter-clockwise, starting from the Black Stone. Men perform Idtiba and Raml in the first 3 rounds. Conclude with 2 Rakat behind Maqam Ibrahim and drinking Zamzam.',
+      'overviewAr':
+          'الطواف حول الكعبة المشرفة ٧ أشواط يبدأ من الحجر الأسود وينتهي عنده، مع الاضطباع والرمل للرجال في الأشواط الثلاثة الأولى، يعقبه صلاة ركعتين خلف المقام والشرب من زمزم.',
+      'keyActionsEn': [
+        '7 rounds around Kaaba.',
+        'Idtiba & Raml (men in 3 rounds).',
+        '2 Rakat at Maqam Ibrahim.',
+        'Drink Zamzam water.',
+      ],
+      'keyActionsAr': [
+        'الطواف ٧ أشواط حول الكعبة.',
+        'الاضطباع والرمل للرجال في الثلاث الأولى.',
+        'صلاة ركعتين خلف المقام.',
+        'الشرب من ماء زمزم.',
+      ],
+      'quran': {
+        'textAr': 'وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
+        'referenceAr': 'سورة الحج - الآية ٢٩',
+        'textEn': 'And perform Tawaf around the Ancient House.',
+        'referenceEn': 'Surah Al-Hajj (22:29)',
+        'explanationEn': 'Divine order to perform Tawaf around the sacred Kaaba.',
+        'explanationAr': 'الأمر بالطواف بالبيت الحرام.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا قَالَ: «مَنْ طَافَ بِهَذَا الْبَيْتِ أُسْبُوعًا فَأَحْصَاهُ كَانَ كَعِتْقِ رَقَبَةٍ»',
+        'referenceAr': 'سنن الترمذي (٩٥٩)',
+        'textEn':
+            'Ibn Umar reported: "Whoever performs Tawaf around this House seven times properly, it is equal to freeing a slave."',
+        'referenceEn': 'Jami\' at-Tirmidhi 959',
+        'explanationEn': 'Virtue and great reward of performing 7 rounds of Tawaf.',
+        'explanationAr': 'عظيم ثواب الطواف بالبيت الحرام.',
+      },
+      'dua': {
+        'title': 'Dua Between Corners',
+        'arabic': 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
+        'translit': 'Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
+        'meaningEn': 'Our Lord, grant us good in this world and the next and save us from Hellfire.',
+        'meaningAr': 'الدعاء بين الركن اليماني والحجر الأسود.',
+      },
+    },
+
+    'sai_u': {
+      'titleEn': 'Sa’i of Umrah (Safa & Marwah)',
+      'titleAr': 'سعي العمرة (الصفا والمروة)',
+      'day': 'Between Safa and Marwah',
+      'dayAr': 'بين الصفا والمروة',
+      'overviewEn':
+          'Walk 7 times between the hills of Safa and Marwah, commencing at Safa and ending at Marwah. Men jog lightly between the green lights. Recite Dhikr and make personal supplications at both hills.',
+      'overviewAr':
+          'السعي بين الصفا والمروة ٧ أشواط يبدأ بالصفا وينتهي بالمروة، يهرول الرجال بين العلمين الأخضرين، مع الإكثار من الذكر والدعاء عند كل جبل.',
+      'keyActionsEn': [
+        'Begin at Safa facing Kaaba.',
+        '7 laps (Safa to Marwah = 1, Marwah to Safa = 2).',
+        'Light jog for men between green marker lights.',
+        'Conclude at Marwah on 7th lap.',
+      ],
+      'keyActionsAr': [
+        'البداية من جبل الصفا واستقبال القبلة.',
+        '٧ أشواط (من الصفا للمروة شوط، والعكس شوط).',
+        'الهرولة للرجال بين الميلين الأخضرين.',
+        'الختام في الشوط السابع عند المروة.',
+      ],
+      'quran': {
+        'textAr': 'إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ',
+        'referenceAr': 'سورة البقرة - الآية ١٥٨',
+        'textEn': 'Indeed, Safa and Marwah are among the symbols of Allah.',
+        'referenceEn': 'Surah Al-Baqarah (2:158)',
+        'explanationEn': 'Safa and Marwah are established as sacred symbols for pilgrimage.',
+        'explanationAr': 'اعتبار الصفا والمروة من شعائر الله.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: فَبَدَأَ بِالصَّفَا فَرَقِيَ عَلَيْهِ حَتَّى رَأَى الْبَيْتَ فَاسْتَقْبَلَ الْقِبْلَةَ، فَوَحَّدَ اللَّهَ وَكَبَّرَهُ وَقَالَ: «أَبْدَأُ بِمَا بَدَأَ اللَّهُ بِهِ»',
+        'referenceAr': 'صحيح مسلم (١٢١٨)',
+        'textEn':
+            'Jabir reported: Prophet (ﷺ) started at Safa, mounted it until he saw the Kaaba, faced Qiblah, praised Allah, and said: "I begin with that which Allah began with."',
+        'referenceEn': 'Sahih Muslim 1218',
+        'explanationEn': 'The exact Sunnah guidance for initiating Sa\'i at Safa.',
+        'explanationAr': 'سنة النبي صلى الله عليه وسلم في أداء السعي.',
+      },
+      'dua': {
+        'title': 'Dua on Safa & Marwah',
+        'arabic': 'لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ...',
+        'translit': 'La ilaha illallahu wahdahu la sharika lahu...',
+        'meaningEn': 'There is no deity except Allah alone without partner...',
+        'meaningAr': 'التوحيد والثناء عند الجبلين.',
+      },
+    },
+
+    'halq_u': {
+      'titleEn': 'Halq / Taqsir (Completion of Umrah)',
+      'titleAr': 'الحلق أو التقصير (إتمام العمرة)',
+      'day': 'Final step of Umrah',
+      'dayAr': 'آخر أعمال العمرة',
+      'overviewEn':
+          'Complete Umrah by shaving the head (men - preferred) or trimming hair all around. Women trim a fingertip length. All Ihram prohibitions are lifted, and Umrah is completed!',
+      'overviewAr':
+          'ختام مناسك العمرة بحلق رأس الرجل (وهو الأفضل) أو تقصيره، وتقصير المرأة قدر أنملة، وبذلك تحل العمرة بالكامل وتكتمل المناسك.',
+      'keyActionsEn': [
+        'Men shave (Halq) or trim (Taqsir).',
+        'Women trim fingertip length.',
+        'Ihram restrictions completely lifted.',
+        'Umrah is officially complete!',
+      ],
+      'keyActionsAr': [
+        'حلق الرجل أو تقصيره.',
+        'تقصير المرأة من أطراف شعرها.',
+        'خلع ملابس الإحرام والتحلل التام.',
+        'اكتمال العمرة بفضل الله.',
+      ],
+      'quran': {
+        'textAr': 'مُحَلِّقِينَ رُءُوسَكُمْ وَمُقَصِّرِينَ لَا تَخَافُونَ',
+        'referenceAr': 'سورة الفتح - الآية ٢٧',
+        'textEn': 'With your heads shaved and hair shortened, not fearing.',
+        'referenceEn': 'Surah Al-Fath (48:27)',
+        'explanationEn': 'Divine sanction of shaving and trimming to complete Umrah.',
+        'explanationAr': 'مشروعية الحلق والتقصير لإتمام النسك.',
+      },
+      'hadith': {
+        'textAr':
+            'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «رَحِمَ اللَّهُ الْمُحَلِّقِينَ»، قَالُوا: وَالْمُقَصِّرِينَ يَا رَسُولَ اللَّهِ؟ قَالَ: «رَحِمَ اللَّهُ الْمُحَلِّقِينَ»، قَالُوا: وَالْمُقَصِّرِينَ؟ قَالَ: «وَالْمُقَصِّرِينَ»',
+        'referenceAr': 'صحيح البخاري (١٧٢٧)',
+        'textEn':
+            'The Prophet (ﷺ) invoked mercy thrice for those who shave their heads and then for those who shorten.',
+        'referenceEn': 'Sahih al-Bukhari 1727',
+        'explanationEn': 'Prophetic mercy for pilgrims upon shaving or trimming.',
+        'explanationAr': 'الدعاء بالرحمة للمحلقين والمقصرين.',
+      },
+      'dua': {
+        'title': 'Dua of Gratitude upon Completion',
+        'arabic': 'الْحَمْدُ لِلَّهِ الَّذِي بِنِعْمَتِهِ تَتِمُّ الصَّالِحَاتُ',
+        'translit': 'Alhamdu lillahil-ladhi bi-ni\'matihi tatimmus-salihat.',
+        'meaningEn': 'Praise be to Allah by Whose grace good deeds are completed.',
+        'meaningAr': 'شكر الله تعالى على التوفيق لإتمام العمرة.',
+      },
+    },
   };
 
   // ===== PACKING & DOCUMENT LISTS =====
@@ -128,8 +925,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     _loadState();
   }
 
-  // Creates one AnimationController (+ eased Animation) per road segment,
-  // for both Hajj and Umrah, up front so mode-switching is instant.
   void _initSegmentControllers() {
     for (int i = 0; i < _hajjSteps.length - 1; i++) {
       final controller = AnimationController(
@@ -177,8 +972,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         _documentsDone[item] = prefs.getBool('doc_${item.hashCode}') ?? false;
       }
 
-      // Set the road-fill controllers to their resting state (no animation)
-      // to match whatever was already completed before this session.
       for (int i = 0; i < _hajjSteps.length - 1; i++) {
         final done = _hajjRitualDone[_hajjSteps[i]['id']] ?? false;
         _segmentControllers['hajj_$i']?.value = done ? 1.0 : 0.0;
@@ -232,7 +1025,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     );
   }
 
-  // ===== HEADER (back button + title + Hajj/Umrah toggle) =====
+  // ===== HEADER =====
   Widget _buildHeader() {
     final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
     final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55);
@@ -267,7 +1060,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               ],
             ),
           ),
-          // Hajj / Umrah mode toggle
           Container(
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
@@ -336,13 +1128,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     );
   }
 
-  // ===== RITUALS TAB — "road / journey" layout =====
-  // A dotted path winds down the screen, alternating left/right. Each stop is
-  // a circular photo (the ritual illustration) with its step number badge,
-  // and the info card next to it carries the title + a "guideline" line
-  // underneath describing what to do for that day/step. When a stop is
-  // tapped done, the road segment leading to the next stop softly fills
-  // in with green.
+  // ===== RITUALS TAB =====
   Widget _buildRitualsTab() {
     final steps = _mode == 'Hajj' ? _hajjSteps : _umrahSteps;
     final doneMap = _mode == 'Hajj' ? _hajjRitualDone : _umrahRitualDone;
@@ -355,11 +1141,9 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.6);
     final pathColor = _isDarkMode ? Colors.white24 : AppColors.navyBlue.withValues(alpha: 0.28);
 
-    const double rowHeight = 208;
+    const double rowHeight = 225;
     const double nodeSize = 64;
     const double sidePad = 16;
-    // Extra breathing room between the progress card above and the first
-    // ritual stop, so "Enter Ihram" isn't crammed right under the card.
     const double topOffset = 36;
 
     return ListView(
@@ -373,8 +1157,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             final width = constraints.maxWidth;
             final totalHeight = rowHeight * steps.length + nodeSize + topOffset;
 
-            // Pre-compute the centre of every "stop" on the road, zig-zagging
-            // left/right so the dotted line snakes down the page.
             final centers = List.generate(steps.length, (i) {
               final isLeft = i.isEven;
               final cx = isLeft ? sidePad + nodeSize / 2 : width - sidePad - nodeSize / 2;
@@ -393,7 +1175,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // dotted road + animated green fill on completion
                   Positioned.fill(
                     child: AnimatedBuilder(
                       animation: Listenable.merge(segmentAnimations),
@@ -415,7 +1196,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                       nodeSize: nodeSize,
                       imagePath: images[steps[i]['id']],
                       isDone: doneMap[steps[i]['id']] ?? false,
-                      // Locked = not done AND the previous step isn't done yet.
                       isLocked: i > 0 &&
                           !(doneMap[steps[i]['id']] ?? false) &&
                           !(doneMap[steps[i - 1]['id']] ?? false),
@@ -426,7 +1206,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                         final alreadyDone = doneMap[id] ?? false;
 
                         if (!alreadyDone) {
-                          // Completing this step requires the previous one done first.
                           if (i > 0) {
                             final prevDone = doneMap[steps[i - 1]['id']!] ?? false;
                             if (!prevDone) {
@@ -442,7 +1221,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                             }
                           }
                         } else {
-                          // Un-checking requires the next step to not be done.
                           if (i < steps.length - 1) {
                             final nextDone = doneMap[steps[i + 1]['id']!] ?? false;
                             if (nextDone) {
@@ -463,7 +1241,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                         setState(() => doneMap[id] = newVal);
                         _saveBool('$prefix$id', newVal);
 
-                        // Animate the road segment leading to the next stop.
                         if (i < steps.length - 1) {
                           final controller = _segmentControllers['${segKeyPrefix}_$i'];
                           if (controller != null) {
@@ -482,6 +1259,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                       width: width,
                       nodeSize: nodeSize,
                       sidePad: sidePad,
+                      stepId: steps[i]['id']!,
                       title: steps[i]['title']!,
                       guideline: steps[i]['desc']!,
                       isDone: doneMap[steps[i]['id']] ?? false,
@@ -499,7 +1277,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     );
   }
 
-  // A single circular "stop" photo sitting on the dotted road.
   Widget _buildJourneyNode({
     required Offset center,
     required double nodeSize,
@@ -569,7 +1346,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                 ),
               ),
             ),
-            // step number badge
             Positioned(
               right: -2,
               top: -2,
@@ -593,14 +1369,13 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     );
   }
 
-  // The info card next to a stop: title on top, the "guideline" (what to do)
-  // underneath it, exactly like a caption below each day's stop on the road.
   Widget _buildJourneyCard({
     required Offset center,
     required bool isLeft,
     required double width,
     required double nodeSize,
     required double sidePad,
+    required String stepId,
     required String title,
     required String guideline,
     required bool isDone,
@@ -613,7 +1388,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
 
     return Positioned(
       left: left,
-      top: center.dy - 54,
+      top: center.dy - 62,
       width: cardWidth,
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -647,11 +1422,10 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               color: (_isDarkMode ? Colors.white : AppColors.navyBlue).withValues(alpha: 0.08),
             ),
             const SizedBox(height: 6),
-            // ----- Guideline, shown below the step -----
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline_rounded, size: 12, color: AppColors.midTeal),
+                const Icon(Icons.info_outline_rounded, size: 12, color: AppColors.midTeal),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
@@ -661,10 +1435,133 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            // ----- VIEW DETAILS BUTTON -----
+            InkWell(
+              onTap: () => _openRitualDetailPage(context, stepId),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.midTeal.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.midTeal.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.menu_book_rounded, size: 12, color: AppColors.midTeal),
+                    const SizedBox(width: 5),
+                    Text(
+                      'View Details',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.midTeal,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_forward_ios_rounded, size: 9, color: AppColors.midTeal),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  // ===== RITUAL DETAILS — OPEN MOBILE DETAIL PAGE =====
+  void _openRitualDetailPage(BuildContext context, String stepId) {
+    final detail = _ritualDetails[stepId];
+    if (detail == null) return;
+
+    final imagePath = _mode == 'Hajj'
+        ? _hajjStepImages[stepId]
+        : _umrahStepImages[stepId];
+
+    final screenSize = MediaQuery.of(context).size;
+    final isWideScreen = screenSize.width > 600;
+
+    if (isWideScreen) {
+      showGeneralDialog(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Ritual Detail',
+        barrierColor: Colors.black.withValues(alpha: 0.65),
+        transitionDuration: const Duration(milliseconds: 350),
+        transitionBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+          return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
+              child: child,
+            ),
+          );
+        },
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return Center(
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: 400,
+                height: 800,
+                constraints: BoxConstraints(
+                  maxWidth: screenSize.width * 0.92,
+                  maxHeight: screenSize.height * 0.92,
+                ),
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      blurRadius: 40,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: HajjRitualDetailScreen(
+                  detail: detail,
+                  imagePath: imagePath,
+                  isDarkMode: _isDarkMode,
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              HajjRitualDetailScreen(
+            detail: detail,
+            imagePath: imagePath,
+            isDarkMode: _isDarkMode,
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.04),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                child: child,
+              ),
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 350),
+        ),
+      );
+    }
   }
 
   // ===== PACKING TAB =====
@@ -748,25 +1645,21 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               const SizedBox(height: 12),
               Text(
                 dua['arabic']!,
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: _isDarkMode ? const Color(0xFF81C784) : AppColors.navyBlue,
-                  height: 1.8,
-                ),
+                style: GoogleFonts.amiri(
+                    fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.midTeal, height: 1.6),
+                textDirection: TextDirection.rtl,
               ),
               const SizedBox(height: 8),
-              Text(dua['translit']!,
-                  style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                      color: AppColors.midTeal,
-                      fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              Text(dua['meaning']!,
-                  style: GoogleFonts.inter(
-                      fontSize: 12, color: subtextColor, height: 1.4)),
+              Text(
+                dua['translit']!,
+                style: GoogleFonts.inter(
+                    fontSize: 12, fontStyle: FontStyle.italic, color: subtextColor),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                dua['meaning']!,
+                style: GoogleFonts.inter(fontSize: 12, color: textColor, height: 1.35),
+              ),
             ],
           ),
         );
@@ -774,22 +1667,25 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     );
   }
 
-  // ===== SHARED WIDGETS =====
   Widget _buildProgressCard(int completed, int total, String label) {
-    final double progress = total == 0 ? 0 : completed / total;
+    final double progress = total == 0 ? 0.0 : (completed / total).clamp(0.0, 1.0);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
+          colors: _isDarkMode
+              ? [const Color(0xFF1E3A3A), const Color(0xFF0F2626)]
+              : [AppColors.navyBlue, const Color(0xFF1F3A52)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: _isDarkMode
-              ? [const Color(0xFF1E2638), const Color(0xFF111827)]
-              : [AppColors.navyBlue, const Color(0xFF1D3550)],
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 16, offset: const Offset(0, 6)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
@@ -882,16 +1778,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   }
 }
 
-// Draws the winding "road" between ritual stops: a subtle dashed base path,
-// plus — for each segment whose stop has been marked done — a soft, glowing
-// green fill that animates in from the completed stop toward the next one.
-//
-// NOTE: the animated portion is drawn by manually sampling the same cubic
-// bezier used for the base road (instead of relying on
-// Path.computeMetrics().extractPath), because extractPath on a freshly
-// built Path can behave inconsistently across engine versions when the
-// path length is recomputed every frame. Manual sampling is simple,
-// deterministic, and guaranteed to render every frame.
+// ===== JOURNEY PATH PAINTER =====
 class _JourneyPathPainter extends CustomPainter {
   final List<Offset> points;
   final List<double> progresses;
@@ -932,8 +1819,6 @@ class _JourneyPathPainter extends CustomPainter {
     return path;
   }
 
-  // Finely-sampled polyline for the partial (animated) curve — used to walk
-  // a fixed dash length along the curve regardless of its overall length.
   List<Offset> _partialCubicPoints(Offset p0, Offset p1, double progress, {int steps = 80}) {
     final midY = (p0.dy + p1.dy) / 2;
     final c0 = Offset(p0.dx, midY);
@@ -947,11 +1832,6 @@ class _JourneyPathPainter extends CustomPainter {
     return pts;
   }
 
-  // Walks a polyline (a sequence of short straight sub-segments approximating
-  // a curve) and draws short dash strokes with gaps in between, matching the
-  // look of the dashed base road but in the glowing green. `distanceIntoPattern`
-  // tracks total distance travelled so the dash/gap rhythm stays continuous
-  // across the whole polyline instead of resetting per sub-segment.
   void _drawDashedPolyline(
     Canvas canvas,
     List<Offset> pts,
@@ -997,7 +1877,6 @@ class _JourneyPathPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (points.length < 2) return;
 
-    // ---- base dotted road, always visible underneath ----
     final fullPath = Path()..moveTo(points.first.dx, points.first.dy);
     for (int i = 0; i < points.length - 1; i++) {
       final p0 = points[i];
@@ -1027,7 +1906,6 @@ class _JourneyPathPainter extends CustomPainter {
       }
     }
 
-    // ---- animated soft-green fill, one segment per completed stop ----
     for (int i = 0; i < points.length - 1; i++) {
       final progress = i < progresses.length ? progresses[i] : 0.0;
       if (progress <= 0.001) continue;
@@ -1037,8 +1915,6 @@ class _JourneyPathPainter extends CustomPainter {
       final extracted = _partialCubic(p0, p1, progress);
       final sampledPts = _partialCubicPoints(p0, p1, progress);
 
-      // wide soft outer halo — kept continuous (not dashed) so the glow
-      // still reads as one smooth soft wash of light along the path
       final haloPaint = Paint()
         ..color = _brightGreen.withValues(alpha: 0.20)
         ..strokeWidth = 20
@@ -1048,7 +1924,6 @@ class _JourneyPathPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
       canvas.drawPath(extracted, haloPaint);
 
-      // mid glow — also continuous, sits behind the dashes
       final glowPaint = Paint()
         ..color = glowColor.withValues(alpha: 0.45)
         ..strokeWidth = 10
@@ -1058,7 +1933,6 @@ class _JourneyPathPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
       canvas.drawPath(extracted, glowPaint);
 
-      // crisp bright DOTTED core line — same dash rhythm as the base road
       final corePaint = Paint()
         ..color = _brightGreen
         ..strokeWidth = 4.5
@@ -1067,7 +1941,6 @@ class _JourneyPathPainter extends CustomPainter {
         ..strokeJoin = StrokeJoin.round;
       _drawDashedPolyline(canvas, sampledPts, corePaint, dashWidth: 7, dashSpace: 6);
 
-      // glowing "leading" dot while the fill is still travelling
       if (progress < 1.0 && progress > 0.02) {
         final midY = (p0.dy + p1.dy) / 2;
         final leadPoint = _cubicPoint(p0, Offset(p0.dx, midY), Offset(p1.dx, midY), p1, progress);
