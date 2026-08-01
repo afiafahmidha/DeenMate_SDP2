@@ -1194,24 +1194,14 @@ _buildAnimatedEntry(
                           ],
                         ),
                       ),
-                      // Pulsing clock ring — still animated
-                      Transform.scale(
-                        scale: 1.0 + _pulseController.value * 0.055,
-                        child: Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.12),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.access_time_filled_rounded,
-                            color: Colors.white,
-                            size: 28,
+                      // Transparent analog clock — static (hour & minute hands only,
+                      // tick marks at 12/3/6/9 only, no numbers, no pulse/float animation)
+                      SizedBox(
+                        width: 76,
+                        height: 76,
+                        child: CustomPaint(
+                          painter: _AnalogClockPainter(
+                            time: DateTime.now(),
                           ),
                         ),
                       ),
@@ -1923,6 +1913,109 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
     return oldDelegate.cloudAnimationVal != cloudAnimationVal ||
         oldDelegate.pulseVal != pulseVal ||
         oldDelegate.prayerName != prayerName;
+  }
+}
+
+// ===== TRANSPARENT ANALOG CLOCK PAINTER =====
+// Draws a minimalist analog clock face: transparent background, a thin
+// outer ring, tick marks only at the 12 / 3 / 6 / 9 positions (no numerals),
+// and hour + minute hands only (no second hand). Purely static per-frame —
+// no built-in pulsing or scaling; the caller controls if/when it repaints.
+class _AnalogClockPainter extends CustomPainter {
+  final DateTime time;
+
+  _AnalogClockPainter({required this.time});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Offset center = Offset(size.width / 2, size.height / 2);
+    final double radius = math.min(size.width, size.height) / 2;
+
+    // Outer ring — subtle, transparent/glassy
+    final ringPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+    canvas.drawCircle(center, radius - 1, ringPaint);
+
+    // Tick marks only at 12, 3, 6, 9 — no digits drawn anywhere
+    final tickPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.85)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round;
+
+    const List<double> tickAngles = [
+      -math.pi / 2, // 12
+      0, // 3
+      math.pi / 2, // 6
+      math.pi, // 9
+    ];
+
+    final double tickOuter = radius - 7;
+    final double tickInner = radius - 14;
+    for (final angle in tickAngles) {
+      final Offset p1 = Offset(
+        center.dx + tickOuter * math.cos(angle),
+        center.dy + tickOuter * math.sin(angle),
+      );
+      final Offset p2 = Offset(
+        center.dx + tickInner * math.cos(angle),
+        center.dy + tickInner * math.sin(angle),
+      );
+      canvas.drawLine(p1, p2, tickPaint);
+    }
+
+    // Compute hand angles from the given time
+    final double hourFraction = (time.hour % 12) / 12 + (time.minute / 60) / 12;
+    final double minuteFraction = time.minute / 60;
+
+    final double hourAngle = hourFraction * 2 * math.pi - math.pi / 2;
+    final double minuteAngle = minuteFraction * 2 * math.pi - math.pi / 2;
+
+    // Hour hand — shorter & thicker — navy blue
+    final double hourHandLen = radius * 0.5;
+    final hourHandPaint = Paint()
+      ..color = AppColors.navyBlue
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      center,
+      Offset(
+        center.dx + hourHandLen * math.cos(hourAngle),
+        center.dy + hourHandLen * math.sin(hourAngle),
+      ),
+      hourHandPaint,
+    );
+
+    // Minute hand — longer & thinner — coral orange
+    final double minuteHandLen = radius * 0.75;
+    final minuteHandPaint = Paint()
+      ..color = AppColors.coralOrange
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      center,
+      Offset(
+        center.dx + minuteHandLen * math.cos(minuteAngle),
+        center.dy + minuteHandLen * math.sin(minuteAngle),
+      ),
+      minuteHandPaint,
+    );
+
+    // Small center pivot dot
+    final centerDotPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 2.6, centerDotPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _AnalogClockPainter oldDelegate) {
+    return oldDelegate.time.minute != time.minute ||
+        oldDelegate.time.hour != time.hour;
   }
 }
 

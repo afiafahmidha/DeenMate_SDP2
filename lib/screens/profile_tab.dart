@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import '../widgets/auth_header.dart'; // AppColors
+import '../services/theme_service.dart';
 
 /// ===== PROFILE TAB =====
 /// NOTE ON DEPENDENCIES: this file uses `image_picker` to let the user pick
@@ -540,6 +543,32 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             ],
           ),
+          const Divider(height: 14),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            leading: Icon(Icons.style_rounded, color: primaryColor, size: 18),
+            title: Text(
+              _isBengali ? 'প্রার্থনা কার্ড থিম সিলেকশন' : 'Prayer Card Theme Selection',
+              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor),
+            ),
+            subtitle: Text(
+              _isBengali ? 'ভিডিও ও ভেক্টর ব্যাকগ্রাউন্ড বেছে নিন' : 'Choose hero video or vector theme',
+              style: GoogleFonts.inter(fontSize: 10, color: subtextColor),
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (ctx) => PrayerCardThemeSelectionScreen(
+                    isDarkMode: widget.isDarkMode,
+                    isBengali: _isBengali,
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -774,3 +803,718 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 }
+
+// ===== PRAYER CARD THEME SELECTION SCREEN =====
+// Shows only 2 options: actual playing video, actual vector art.
+class PrayerCardThemeSelectionScreen extends StatefulWidget {
+  final bool isDarkMode;
+  final bool isBengali;
+
+  const PrayerCardThemeSelectionScreen({
+    super.key,
+    required this.isDarkMode,
+    required this.isBengali,
+  });
+
+  @override
+  State<PrayerCardThemeSelectionScreen> createState() => _PrayerCardThemeSelectionScreenState();
+}
+
+class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectionScreen>
+    with SingleTickerProviderStateMixin {
+
+  // Vector art animation controller
+  late AnimationController _vectorAnimController;
+  late Animation<double> _vectorAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _vectorAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+    _vectorAnim = CurvedAnimation(parent: _vectorAnimController, curve: Curves.linear);
+  }
+
+  @override
+  void dispose() {
+    _vectorAnimController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = widget.isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F9FC);
+    final cardBg = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = widget.isDarkMode ? Colors.white : const Color(0xFF2C3E50);
+    final subtextColor = widget.isDarkMode ? Colors.white70 : Colors.black54;
+    final primaryColor = AppColors.midTeal;
+
+    return Scaffold(
+      backgroundColor: widget.isDarkMode ? Colors.black : const Color(0xFFE8ECEF),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Container(
+            color: bgColor,
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // ── Header ──
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 18),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        const SizedBox(width: 2),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.isBengali ? 'প্রার্থনা কার্ড থিম' : 'Prayer Card Theme',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                ),
+                              ),
+                              Text(
+                                widget.isBengali
+                                    ? 'ভিডিও বা ভেক্টর আর্ট — যেটা পছন্দ বেছে নিন'
+                                    : 'Select Video or Vector Art for your Prayer tab',
+                                style: GoogleFonts.inter(fontSize: 10.5, color: subtextColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ── The 2 theme cards side by side (compact size) ──
+                  ValueListenableBuilder<String>(
+                    valueListenable: prayerCardThemeNotifier,
+                    builder: (context, currentThemeId, _) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ── VIDEO CARD ──
+                            Expanded(
+                              child: _buildVideoCard(
+                                isSelected: currentThemeId == 'video',
+                                cardBg: cardBg,
+                                textColor: textColor,
+                                subtextColor: subtextColor,
+                                primaryColor: primaryColor,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            // ── VECTOR CARD ──
+                            Expanded(
+                              child: _buildVectorCard(
+                                isSelected: currentThemeId == 'vector',
+                                cardBg: cardBg,
+                                textColor: textColor,
+                                subtextColor: subtextColor,
+                                primaryColor: primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── VIDEO CARD: plays the actual fajr prayer video ──
+  Widget _buildVideoCard({
+    required bool isSelected,
+    required Color cardBg,
+    required Color textColor,
+    required Color subtextColor,
+    required Color primaryColor,
+  }) {
+    return GestureDetector(
+      onTap: () async {
+        await savePrayerCardThemePreference('video');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(widget.isBengali ? 'ভিডিও থিম নির্বাচিত হয়েছে ✓' : 'Video theme selected ✓'),
+            duration: const Duration(seconds: 1),
+            backgroundColor: primaryColor,
+          ));
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? primaryColor : Colors.grey.withValues(alpha: 0.2),
+            width: isSelected ? 2.5 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected
+                  ? primaryColor.withValues(alpha: 0.25)
+                  : Colors.black.withValues(alpha: 0.06),
+              blurRadius: isSelected ? 10 : 4,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Actual video preview (compact height)
+              SizedBox(
+                height: 140,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _ActualVideoPreview(videoAsset: 'assets/videos/fajr.mp4'),
+                    // subtle bottom scrim
+                    Positioned(
+                      bottom: 0, left: 0, right: 0,
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [Colors.black.withValues(alpha: 0.55), Colors.transparent],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // VIDEO badge
+                    Positioned(
+                      top: 8, left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.videocam_rounded, color: Color(0xFF4ECDC4), size: 11),
+                            const SizedBox(width: 3),
+                            Text('VIDEO', style: GoogleFonts.inter(
+                              fontSize: 9, fontWeight: FontWeight.w800,
+                              color: Colors.white, letterSpacing: 0.5,
+                            )),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Selected check
+                    if (isSelected)
+                      Positioned(
+                        top: 8, right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                          child: const Icon(Icons.check_rounded, color: Colors.white, size: 13),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              // Label
+              Container(
+                color: cardBg,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.isBengali ? 'ভিডিও থিম' : 'Video Theme',
+                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.isBengali
+                          ? 'ওয়াক্ত অনুযায়ী আসল ভিডিও বদলাবে'
+                          : 'Real prayer video changes with each prayer time',
+                      style: GoogleFonts.inter(fontSize: 10, color: subtextColor, height: 1.3),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── VECTOR CARD: renders the actual animated vector art ──
+  Widget _buildVectorCard({
+    required bool isSelected,
+    required Color cardBg,
+    required Color textColor,
+    required Color subtextColor,
+    required Color primaryColor,
+  }) {
+    return GestureDetector(
+      onTap: () async {
+        await savePrayerCardThemePreference('vector');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(widget.isBengali ? 'ভেক্টর থিম নির্বাচিত হয়েছে ✓' : 'Vector theme selected ✓'),
+            duration: const Duration(seconds: 1),
+            backgroundColor: primaryColor,
+          ));
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? primaryColor : Colors.grey.withValues(alpha: 0.2),
+            width: isSelected ? 2.5 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected
+                  ? primaryColor.withValues(alpha: 0.25)
+                  : Colors.black.withValues(alpha: 0.06),
+              blurRadius: isSelected ? 10 : 4,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Actual animated vector art (compact height)
+              SizedBox(
+                height: 140,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Deep-night gradient sky
+                    Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xFF0D1B3E), Color(0xFF1B2A56), Color(0xFF2C3E6B)],
+                        ),
+                      ),
+                    ),
+                    // Animated vector painter (twinkling stars, glowing moon)
+                    AnimatedBuilder(
+                      animation: _vectorAnim,
+                      builder: (context, child) => CustomPaint(
+                        painter: _ActualVectorPainter(animValue: _vectorAnim.value),
+                      ),
+                    ),
+                    // VECTOR badge
+                    Positioned(
+                      top: 8, left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.auto_awesome_rounded, color: Color(0xFFFFD166), size: 11),
+                            const SizedBox(width: 3),
+                            Text('VECTOR', style: GoogleFonts.inter(
+                              fontSize: 9, fontWeight: FontWeight.w800,
+                              color: Colors.white, letterSpacing: 0.5,
+                            )),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Selected check
+                    if (isSelected)
+                      Positioned(
+                        top: 8, right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                          child: const Icon(Icons.check_rounded, color: Colors.white, size: 13),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              // Label
+              Container(
+                color: cardBg,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.isBengali ? 'ভেক্টর আর্ট' : 'Vector Art',
+                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.isBengali
+                          ? 'চাঁদ, তারা ও মসজিদ সিলুয়েট সহ অ্যানিমেটেড ভেক্টর'
+                          : 'Animated mosque silhouette with moon, stars & sun',
+                      style: GoogleFonts.inter(fontSize: 10, color: subtextColor, height: 1.3),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Actual video player preview widget ──
+class _ActualVideoPreview extends StatefulWidget {
+  final String videoAsset;
+  const _ActualVideoPreview({required this.videoAsset});
+
+  @override
+  State<_ActualVideoPreview> createState() => _ActualVideoPreviewState();
+}
+
+class _ActualVideoPreviewState extends State<_ActualVideoPreview> {
+  late VideoPlayerController _controller;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.asset(widget.videoAsset);
+    _controller.initialize().then((_) {
+      if (mounted) {
+        _controller.setLooping(true);
+        _controller.setVolume(0);
+        _controller.play();
+        setState(() => _initialized = true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_initialized) {
+      return Container(
+        color: const Color(0xFF1B2A44),
+        child: const Center(
+          child: SizedBox(
+            width: 20, height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
+          ),
+        ),
+      );
+    }
+    return FittedBox(
+      fit: BoxFit.cover,
+      child: SizedBox(
+        width: _controller.value.size.width,
+        height: _controller.value.size.height,
+        child: VideoPlayer(_controller),
+      ),
+    );
+  }
+}
+
+// ── Actual vector art painter — mosque silhouette + glowing outline + animated stars + moon ──
+class _ActualVectorPainter extends CustomPainter {
+  final double animValue;
+  _ActualVectorPainter({required this.animValue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double w = size.width;
+    final double h = size.height;
+
+    // Glowing Crescent Moon
+    final moonGlow = Paint()
+      ..color = const Color(0xFFE0F2FE).withValues(alpha: 0.35)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+    canvas.drawCircle(Offset(w * 0.78, h * 0.22), 20, moonGlow);
+
+    final moonFill = Paint()
+      ..color = const Color(0xFFE0F2FE)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(w * 0.78, h * 0.22), 13, moonFill);
+
+    final moonBite = Paint()
+      ..color = const Color(0xFF1B2A56)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(w * 0.78 + 7, h * 0.22 - 3), 11, moonBite);
+
+    // Sparkling Stars
+    final List<Offset> starLocations = [
+      Offset(w * 0.15, h * 0.15),
+      Offset(w * 0.35, h * 0.22),
+      Offset(w * 0.52, h * 0.10),
+      Offset(w * 0.65, h * 0.28),
+      Offset(w * 0.22, h * 0.35),
+    ];
+    for (int i = 0; i < starLocations.length; i++) {
+      final loc = starLocations[i];
+      final alpha = 0.35 + 0.45 * math.sin(animValue * 2 * math.pi + i * 1.2);
+      final starPaint = Paint()
+        ..color = Colors.white.withValues(alpha: alpha)
+        ..style = PaintingStyle.fill;
+
+      final path = Path();
+      final cx = loc.dx;
+      final cy = loc.dy;
+      final r = 3.0;
+
+      path.moveTo(cx, cy - r);
+      path.quadraticBezierTo(cx, cy, cx + r, cy);
+      path.quadraticBezierTo(cx, cy, cx, cy + r);
+      path.quadraticBezierTo(cx, cy, cx - r, cy);
+      path.quadraticBezierTo(cx, cy, cx, cy - r);
+      path.close();
+
+      canvas.drawPath(path, starPaint);
+    }
+
+    // Mosque Silhouette with Crisp Glowing Outline (#E0F2FE)
+    final glowPaint = Paint()
+      ..color = const Color(0xFFE0F2FE).withValues(alpha: 0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 3);
+
+    final crispLinePaint = Paint()
+      ..color = const Color(0xFFE0F2FE)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    final bodyPaint = Paint()
+      ..color = const Color(0xFF202B48)
+      ..style = PaintingStyle.fill;
+
+    final domePaint = Paint()
+      ..color = const Color(0xFF2B385C)
+      ..style = PaintingStyle.fill;
+
+    final double mosqueRight = w * 0.98;
+    final double mosqueWidth = w * 0.75;
+    final double mosqueHeight = h * 0.52;
+    final double by = h;
+    final double cx = mosqueRight - mosqueWidth / 2;
+
+    // 1. Draw Side Domes (Background layer)
+    _drawOnionDomeWithOutline(
+      canvas,
+      cx - mosqueWidth * 0.26,
+      by - mosqueHeight * 0.35,
+      mosqueWidth * 0.20,
+      mosqueHeight * 0.32,
+      domePaint,
+      glowPaint,
+      crispLinePaint,
+    );
+    _drawOnionDomeWithOutline(
+      canvas,
+      cx + mosqueWidth * 0.26,
+      by - mosqueHeight * 0.35,
+      mosqueWidth * 0.20,
+      mosqueHeight * 0.32,
+      domePaint,
+      glowPaint,
+      crispLinePaint,
+    );
+
+    // 2. Draw Center Onion Dome (Foreground main layer)
+    final centerDomeW = mosqueWidth * 0.38;
+    final centerDomeH = mosqueHeight * 0.55;
+    final centerDomeY = by - mosqueHeight * 0.35;
+    _drawOnionDomeWithOutline(
+      canvas,
+      cx,
+      centerDomeY,
+      centerDomeW,
+      centerDomeH,
+      bodyPaint,
+      glowPaint,
+      crispLinePaint,
+    );
+
+    // Spire on center dome
+    final spireTopY = centerDomeY - centerDomeH;
+    canvas.drawLine(Offset(cx, spireTopY), Offset(cx, spireTopY - 18), crispLinePaint);
+    canvas.drawCircle(Offset(cx, spireTopY - 18), 3.0, bodyPaint);
+    canvas.drawCircle(Offset(cx, spireTopY - 18), 3.0, crispLinePaint);
+
+    // 3. Draw Connective Base Walls
+    final wallPath = Path()
+      ..moveTo(cx - mosqueWidth * 0.44, by)
+      ..lineTo(cx - mosqueWidth * 0.44, by - mosqueHeight * 0.38)
+      ..lineTo(cx + mosqueWidth * 0.44, by - mosqueHeight * 0.38)
+      ..lineTo(cx + mosqueWidth * 0.44, by)
+      ..close();
+    canvas.drawPath(wallPath, bodyPaint);
+    canvas.drawPath(wallPath, glowPaint);
+    canvas.drawPath(wallPath, crispLinePaint);
+
+    // 4. Draw Minarets (Left & Right columns with 2 balconies and onion caps)
+    _drawMinaretWithOutline(
+      canvas,
+      cx - mosqueWidth * 0.42,
+      by,
+      mosqueWidth * 0.08,
+      mosqueHeight * 0.88,
+      bodyPaint,
+      domePaint,
+      glowPaint,
+      crispLinePaint,
+    );
+    _drawMinaretWithOutline(
+      canvas,
+      cx + mosqueWidth * 0.42,
+      by,
+      mosqueWidth * 0.08,
+      mosqueHeight * 0.88,
+      bodyPaint,
+      domePaint,
+      glowPaint,
+      crispLinePaint,
+    );
+
+    // 5. Draw Central Arched Door
+    final doorW = mosqueWidth * 0.16;
+    final doorH = mosqueHeight * 0.28;
+    final doorPath = Path()
+      ..moveTo(cx - doorW / 2, by)
+      ..lineTo(cx - doorW / 2, by - doorH * 0.65)
+      ..quadraticBezierTo(cx, by - doorH, cx + doorW / 2, by - doorH * 0.65)
+      ..lineTo(cx + doorW / 2, by)
+      ..close();
+    canvas.drawPath(doorPath, domePaint);
+    canvas.drawPath(doorPath, glowPaint);
+    canvas.drawPath(doorPath, crispLinePaint);
+  }
+
+  void _drawOnionDomeWithOutline(
+    Canvas canvas,
+    double cx,
+    double by,
+    double width,
+    double height,
+    Paint fillPaint,
+    Paint glowPaint,
+    Paint crispPaint,
+  ) {
+    final path = Path();
+    final double w2 = width / 2;
+    final double bulge = width * 0.09;
+
+    path.moveTo(cx - w2, by);
+    path.cubicTo(
+      cx - w2 - bulge, by - height * 0.35,
+      cx - w2 + bulge * 0.2, by - height * 0.75,
+      cx, by - height,
+    );
+    path.cubicTo(
+      cx + w2 - bulge * 0.2, by - height * 0.75,
+      cx + w2 + bulge, by - height * 0.35,
+      cx + w2, by,
+    );
+    path.close();
+
+    canvas.drawPath(path, fillPaint);
+    canvas.drawPath(path, glowPaint);
+    canvas.drawPath(path, crispPaint);
+  }
+
+  void _drawMinaretWithOutline(
+    Canvas canvas,
+    double cx,
+    double by,
+    double width,
+    double height,
+    Paint bodyPaint,
+    Paint capPaint,
+    Paint glowPaint,
+    Paint crispPaint,
+  ) {
+    final double colW = width * 0.65;
+    final double balconyW = width * 1.25;
+
+    // Column body
+    final colRect = Rect.fromLTRB(cx - colW / 2, by - height, cx + colW / 2, by);
+    canvas.drawRect(colRect, bodyPaint);
+    canvas.drawRect(colRect, glowPaint);
+    canvas.drawRect(colRect, crispPaint);
+
+    // Lower Balcony
+    final b1Rect = Rect.fromLTRB(cx - balconyW / 2, by - height * 0.75, cx + balconyW / 2, by - height * 0.71);
+    canvas.drawRect(b1Rect, bodyPaint);
+    canvas.drawRect(b1Rect, glowPaint);
+    canvas.drawRect(b1Rect, crispPaint);
+
+    // Upper Balcony
+    final b2Rect = Rect.fromLTRB(cx - balconyW / 2, by - height - 4, cx + balconyW / 2, by - height);
+    canvas.drawRect(b2Rect, bodyPaint);
+    canvas.drawRect(b2Rect, glowPaint);
+    canvas.drawRect(b2Rect, crispPaint);
+
+    // Onion Dome Cap
+    _drawOnionDomeWithOutline(
+      canvas,
+      cx,
+      by - height - 4,
+      width * 0.75,
+      height * 0.16,
+      capPaint,
+      glowPaint,
+      crispPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ActualVectorPainter old) => old.animValue != animValue;
+}
