@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "938877453735",
+    "project_id": "deenmate-be588",
+    "storage_bucket": "deenmate-be588.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:938877453735:android:584043f15f0bd5edaee282",
+        "android_client_info": {
+          "package_name": "com.example.deenmate_sdp2"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "938877453735-02b9bu30jf6vtnam6otatevc63jb9au8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.deenmate_sdp2",
+            "certificate_hash": "07baf93a77c326054dc1f4f6d184fe7a8046d496"
+          }
+        },
+        {
+          "client_id": "938877453735-h09hklcic3r508sujin0m6o765m2noo4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB3tLlSxJydHOoLGF02lAL2Cdu14hSWXe0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "938877453735-h09hklcic3r508sujin0m6o765m2noo4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "938877453735-6ebilga7itu3mp9na7n952h5lgrlkbhm.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.deenmateSdp2"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
