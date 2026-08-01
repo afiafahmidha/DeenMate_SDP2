@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'login_page.dart';
 import 'registration_page.dart';
-import 'package:deenmate_sdp2/screens/dashboard_screen.dart';
+import 'dashboard_screen.dart';
 
 enum AppScreenState {
   loading,
@@ -24,37 +26,55 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void initState() {
     super.initState();
-    _checkLoginSession();
+    _checkAuthState();
   }
 
-  // Check SharedPreferences on start
-  Future<void> _checkLoginSession() async {
+  // 🔥 Check Firebase Auth state
+  Future<void> _checkAuthState() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
-      if (mounted) {
-        setState(() {
-          _screenState = isLoggedIn ? AppScreenState.dashboard : AppScreenState.login;
-        });
+      // Listen to Firebase auth changes
+      final User? currentUser = FirebaseAuth.instance.currentUser;
+      
+      if (currentUser != null) {
+        // User is signed in
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_logged_in', true);
+        if (mounted) {
+          setState(() => _screenState = AppScreenState.dashboard);
+        }
+      } else {
+        // Check SharedPreferences as backup
+        final prefs = await SharedPreferences.getInstance();
+        final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+        if (mounted) {
+          setState(() {
+            _screenState = isLoggedIn ? AppScreenState.dashboard : AppScreenState.login;
+          });
+        }
       }
     } catch (e) {
-      debugPrint('Error loading login session: $e');
+      debugPrint('Error checking auth state: $e');
       if (mounted) {
-        setState(() {
-          _screenState = AppScreenState.login;
-        });
+        setState(() => _screenState = AppScreenState.login);
       }
     }
   }
 
-  // Update session state in SharedPreferences
-  Future<void> _updateLoginSession(bool isLoggedIn) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('is_logged_in', isLoggedIn);
-    } catch (e) {
-      debugPrint('Error updating login session: $e');
-    }
+  // 🔥 Listen to auth changes (realtime)
+  void _listenToAuthChanges() {
+    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      if (user != null && mounted) {
+        setState(() => _screenState = AppScreenState.dashboard);
+      } else if (mounted) {
+        setState(() => _screenState = AppScreenState.login);
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _listenToAuthChanges();
   }
 
   @override
@@ -75,9 +95,12 @@ class _AuthScreenState extends State<AuthScreen> {
         activePage = LoginPage(
           key: const ValueKey('LoginPage'),
           onShowRegister: () => setState(() => _screenState = AppScreenState.register),
-          onLoginSuccess: () {
-            _updateLoginSession(true);
-            setState(() => _screenState = AppScreenState.dashboard);
+          onLoginSuccess: () async {
+            // Firebase handles login, just update state
+            await _updateLoginSession(true);
+            if (mounted) {
+              setState(() => _screenState = AppScreenState.dashboard);
+            }
           },
         );
         break;
@@ -85,18 +108,22 @@ class _AuthScreenState extends State<AuthScreen> {
         activePage = RegistrationPage(
           key: const ValueKey('RegistrationPage'),
           onShowLogin: () => setState(() => _screenState = AppScreenState.login),
-          onRegisterSuccess: () {
-            _updateLoginSession(true);
-            setState(() => _screenState = AppScreenState.dashboard);
+          onRegisterSuccess: () async {
+            await _updateLoginSession(true);
+            if (mounted) {
+              setState(() => _screenState = AppScreenState.dashboard);
+            }
           },
         );
         break;
       case AppScreenState.dashboard:
         activePage = DashboardScreen(
           key: const ValueKey('DashboardScreen'),
-          onLogout: () {
-            _updateLoginSession(false);
-            setState(() => _screenState = AppScreenState.login);
+          onLogout: () async {
+            await _updateLoginSession(false);
+            if (mounted) {
+              setState(() => _screenState = AppScreenState.login);
+            }
           },
         );
         break;
@@ -114,5 +141,20 @@ class _AuthScreenState extends State<AuthScreen> {
       },
       child: activePage,
     );
+  }
+
+  // 🔥 Update session state
+  Future<void> _updateLoginSession(bool isLoggedIn) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_logged_in', isLoggedIn);
+      
+      if (!isLoggedIn) {
+        await FirebaseAuth.instance.signOut();
+        await GoogleSignIn().signOut();
+      }
+    } catch (e) {
+      debugPrint('Error updating login session: $e');
+    }
   }
 }
