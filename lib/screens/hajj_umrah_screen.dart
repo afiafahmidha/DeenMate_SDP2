@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart'; // AppColors
@@ -15,6 +15,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
   String _mode = 'Hajj'; // 'Hajj' or 'Umrah'
+  String _hajjType = 'Tamattu'; // 'Tamattu', 'Qiran', or 'Ifrad'
   bool _isDarkMode = false;
 
   final Map<String, bool> _hajjRitualDone = {};
@@ -27,18 +28,60 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   final Map<String, Animation<double>> _segmentAnimations = {};
 
   // ===== RITUAL STEPS DATA =====
-  final List<Map<String, String>> _hajjSteps = [
-    {'id': 'ihram', 'title': 'Enter Ihram', 'desc': 'Wear Ihram at the Miqat with the intention (Niyyah) for Hajj.'},
-    {'id': 'tawaf_qudum', 'title': 'Tawaf al-Qudum', 'desc': 'Arrival Tawaf around the Kaaba (7 rounds).'},
+  final List<Map<String, String>> _hajjStepsTamattu = [
+    {'id': 'ihram_u', 'title': 'Enter Ihram for Umrah', 'desc': 'Wear Ihram at the Miqat with the intention (Niyyah) for Umrah.'},
+    {'id': 'tawaf_u', 'title': 'Tawaf of Umrah', 'desc': 'Circle the Kaaba 7 times, starting at the Black Stone.'},
+    {'id': 'sai_u', 'title': 'Sa\'i of Umrah', 'desc': 'Walk between the hills of Safa and Marwah 7 times.'},
+    {'id': 'halq_u', 'title': 'Halq / Taqsir (Umrah)', 'desc': 'Shave or trim the hair to complete Umrah and exit Ihram.'},
+    {'id': 'ihram_h', 'title': 'Enter Ihram for Hajj', 'desc': 'Wear Ihram on the 8th of Dhul Hijjah from Makkah.'},
     {'id': 'mina1', 'title': 'Day of Tarwiyah (8th Dhul Hijjah)', 'desc': 'Travel to Mina, stay overnight, offer the 5 daily prayers.'},
     {'id': 'arafat', 'title': 'Day of Arafah (9th Dhul Hijjah)', 'desc': 'Stand at Arafat (Wuquf) from Dhuhr until Maghrib — the core of Hajj.'},
     {'id': 'muzdalifah', 'title': 'Muzdalifah', 'desc': 'Travel after sunset, collect pebbles for Rami, stay overnight.'},
     {'id': 'rami1', 'title': 'Rami al-Jamarat (10th)', 'desc': 'Stone the large Jamarat (Jamarat al-Aqabah) with 7 pebbles.'},
     {'id': 'qurbani', 'title': 'Qurbani (Sacrifice)', 'desc': 'Offer the sacrifice, then shave or trim the hair (Halq/Taqsir).'},
-    {'id': 'tawaf_ifadah', 'title': 'Tawaf al-Ifadah', 'desc': 'Return to Makkah for the obligatory Tawaf, then Sa\'i.'},
+    {'id': 'tawaf_ifadah', 'title': 'Tawaf al-Ifadah', 'desc': 'Return to Makkah for the obligatory Tawaf.'},
+    {'id': 'sai_h', 'title': 'Sa\'i of Hajj', 'desc': 'Walk between the hills of Safa and Marwah 7 times for Hajj.'},
     {'id': 'rami_days', 'title': 'Rami (11th–13th)', 'desc': 'Stone all three Jamarat each day while staying at Mina.'},
     {'id': 'tawaf_wida', 'title': 'Tawaf al-Wida', 'desc': 'Farewell Tawaf performed just before leaving Makkah.'},
   ];
+
+  final List<Map<String, String>> _hajjStepsQiran = [
+    {'id': 'ihram_qiran', 'title': 'Enter Ihram for Qiran', 'desc': 'Wear Ihram at the Miqat with the intention for both Hajj & Umrah.'},
+    {'id': 'tawaf_qudum', 'title': 'Tawaf al-Qudum', 'desc': 'Arrival Tawaf around the Kaaba (7 rounds).'},
+    {'id': 'sai_h', 'title': 'Sa\'i of Hajj & Umrah', 'desc': 'Walk between the hills of Safa and Marwah 7 times.'},
+    {'id': 'mina1', 'title': 'Day of Tarwiyah (8th Dhul Hijjah)', 'desc': 'Travel to Mina, stay overnight, offer the 5 daily prayers.'},
+    {'id': 'arafat', 'title': 'Day of Arafah (9th Dhul Hijjah)', 'desc': 'Stand at Arafat (Wuquf) from Dhuhr until Maghrib — the core of Hajj.'},
+    {'id': 'muzdalifah', 'title': 'Muzdalifah', 'desc': 'Travel after sunset, collect pebbles for Rami, stay overnight.'},
+    {'id': 'rami1', 'title': 'Rami al-Jamarat (10th)', 'desc': 'Stone the large Jamarat (Jamarat al-Aqabah) with 7 pebbles.'},
+    {'id': 'qurbani', 'title': 'Qurbani (Sacrifice)', 'desc': 'Offer the sacrifice, then shave or trim the hair (Halq/Taqsir).'},
+    {'id': 'tawaf_ifadah', 'title': 'Tawaf al-Ifadah', 'desc': 'Return to Makkah for the obligatory Hajj Tawaf.'},
+    {'id': 'rami_days', 'title': 'Rami (11th–13th)', 'desc': 'Stone all three Jamarat each day while staying at Mina.'},
+    {'id': 'tawaf_wida', 'title': 'Tawaf al-Wida', 'desc': 'Farewell Tawaf performed just before leaving Makkah.'},
+  ];
+
+  final List<Map<String, String>> _hajjStepsIfrad = [
+    {'id': 'ihram_ifrad', 'title': 'Enter Ihram for Ifrad', 'desc': 'Wear Ihram at the Miqat with the intention for Hajj only.'},
+    {'id': 'tawaf_qudum', 'title': 'Tawaf al-Qudum', 'desc': 'Arrival Tawaf around the Kaaba (7 rounds).'},
+    {'id': 'sai_h', 'title': 'Sa\'i of Hajj', 'desc': 'Walk between the hills of Safa and Marwah 7 times.'},
+    {'id': 'mina1', 'title': 'Day of Tarwiyah (8th Dhul Hijjah)', 'desc': 'Travel to Mina, stay overnight, offer the 5 daily prayers.'},
+    {'id': 'arafat', 'title': 'Day of Arafah (9th Dhul Hijjah)', 'desc': 'Stand at Arafat (Wuquf) from Dhuhr until Maghrib — the core of Hajj.'},
+    {'id': 'muzdalifah', 'title': 'Muzdalifah', 'desc': 'Travel after sunset, collect pebbles for Rami, stay overnight.'},
+    {'id': 'rami1', 'title': 'Rami al-Jamarat (10th)', 'desc': 'Stone the large Jamarat (Jamarat al-Aqabah) with 7 pebbles.'},
+    {'id': 'halq_ifrad', 'title': 'Halq / Taqsir', 'desc': 'Shave or trim the hair to exit Ihram (Qurbani is optional/not obligatory).'},
+    {'id': 'tawaf_ifadah', 'title': 'Tawaf al-Ifadah', 'desc': 'Return to Makkah for the obligatory Hajj Tawaf.'},
+    {'id': 'rami_days', 'title': 'Rami (11th–13th)', 'desc': 'Stone all three Jamarat each day while staying at Mina.'},
+    {'id': 'tawaf_wida', 'title': 'Tawaf al-Wida', 'desc': 'Farewell Tawaf performed just before leaving Makkah.'},
+  ];
+
+  List<Map<String, String>> _getActiveSteps() {
+    if (_mode == 'Hajj') {
+      if (_hajjType == 'Tamattu') return _hajjStepsTamattu;
+      if (_hajjType == 'Qiran') return _hajjStepsQiran;
+      return _hajjStepsIfrad;
+    } else {
+      return _umrahSteps;
+    }
+  }
 
   final List<Map<String, String>> _umrahSteps = [
     {'id': 'ihram_u', 'title': 'Enter Ihram', 'desc': 'Wear Ihram at the Miqat with the intention (Niyyah) for Umrah.'},
@@ -50,13 +93,22 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   // ===== STEP ILLUSTRATIONS =====
   final Map<String, String> _hajjStepImages = {
     'ihram': 'assets/images/hajj_umrah/2.png',
+    'ihram_u': 'assets/images/hajj_umrah/2.png',
+    'tawaf_u': 'assets/images/hajj_umrah/1.png',
+    'sai_u': 'assets/images/hajj_umrah/6.png',
+    'halq_u': 'assets/images/hajj_umrah/7.png',
+    'ihram_h': 'assets/images/hajj_umrah/2.png',
+    'ihram_qiran': 'assets/images/hajj_umrah/2.png',
+    'ihram_ifrad': 'assets/images/hajj_umrah/2.png',
     'tawaf_qudum': 'assets/images/hajj_umrah/1.png',
     'mina1': 'assets/images/hajj_umrah/6.png',
     'arafat': 'assets/images/hajj_umrah/8.png',
     'muzdalifah': 'assets/images/hajj_umrah/9.png',
     'rami1': 'assets/images/hajj_umrah/5.png',
     'qurbani': 'assets/images/hajj_umrah/10.png',
+    'halq_ifrad': 'assets/images/hajj_umrah/7.png',
     'tawaf_ifadah': 'assets/images/hajj_umrah/4.png',
+    'sai_h': 'assets/images/hajj_umrah/6.png',
     'rami_days': 'assets/images/hajj_umrah/11.png',
     'tawaf_wida': 'assets/images/hajj_umrah/1.png',
   };
@@ -70,6 +122,231 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
 
   // ===== ELABORATE RITUAL DETAILS (Arabic & English with Quran & Hadith References) =====
   final Map<String, Map<String, dynamic>> _ritualDetails = {
+    'ihram_h': {
+      'titleEn': 'Enter Ihram for Hajj (Tamattu\')',
+      'titleAr': 'الإحرام للحج (تمتع)',
+      'day': '8th Dhul Hijjah - From Makkah residence',
+      'dayAr': '٨ ذو الحجة - من مكان الإقامة بمكة',
+      'overviewEn':
+          'For Hajj al-Tamattu\', pilgrims re-enter the state of Ihram on the 8th of Dhul Hijjah from their hotel or residence in Makkah. It involves physical purification, putting on the Ihram garments, making the intention for Hajj, and chanting the Talbiyah.',
+      'overviewAr':
+          'بالنسبة لحج التمتع، يحرم الحاج بالحج ضحى يوم التروية (٨ ذو الحجة) من مكان إقامته في مكة المكرمة، حيث يغتسل ويتطيب ويلبس ملابس الإحرام وينوي الحج قائلاً: لَبَّيْكَ اللَّهُمَّ حَجًّا.',
+      'keyActionsEn': [
+        'Perform Ghusl (ritual bath) at your residence in Makkah.',
+        'Wear Ihram garments (for men) or modest dress (for women).',
+        'Offer 2 Rakah prayer if possible, then make intention: "Labbayk Allahumma Hajjah" (لَبَّيْكَ اللَّهُمَّ حَجًّا).',
+        'Begin reciting Talbiyah: "Labbayk Allahumma Labbayk..."',
+      ],
+      'keyActionsAr': [
+        'الاغتسال والتنظف في السكن بمكة المكرمة.',
+        'لبس الإزار والرداء للرجال واللباس الساتر للمرأة.',
+        'صلاة ركعتين ثم النية: "لَبَّيْكَ اللَّهُمَّ حَجًّا".',
+        'البدء في التلبية ورفع الصوت بها للرجال.',
+      ],
+      'quran': {
+        'textAr': 'وَأَتِمُّوا الْحَجَّ وَالْعُمْرَةَ لِلَّهِ',
+        'referenceAr': 'سورة البقرة - الآية ١٩٦',
+        'textEn': 'And complete the Hajj and Umrah for Allah.',
+        'referenceEn': 'Surah Al-Baqarah (2:196)',
+        'explanationEn': 'Divine command to complete the rituals of Hajj and Umrah sincerely for the sake of Allah.',
+        'explanationAr': 'الأمر بوجوب إكمال أعمال الحج والعمرة وإخلاصها لله تعالى.',
+      },
+      'hadith': {
+        'textAr': 'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ: «أَمَرَنَا النَّبِيُّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ لَمَّا حَلَلْنَا أَنْ نُحْرِمَ إِذَا تَوَجَّهْنَا إِلَى مِنًى، فَأَهْلَلْنَا مِنَ الأَبْطَحِ»',
+        'referenceAr': 'صحيح البخاري وصحيح مسلم',
+        'textEn': 'Jabir narrated: "The Prophet (ﷺ) commanded us to assume Ihram when we directed ourselves towards Mina; so we assumed Ihram from Al-Abtah (Makkah Residence)."',
+        'referenceEn': 'Sahih al-Bukhari & Sahih Muslim',
+        'explanationEn': 'This Hadith establishes that pilgrims performing Tamattu\' should enter Ihram for Hajj from their location of stay in Makkah on the 8th of Dhul Hijjah.',
+        'explanationAr': 'يوضح الحديث سنة الإحرام بالحج من مكة عند التوجه إلى منى في يوم التروية.',
+      },
+      'dua': {
+        'title': 'Intention for Hajj (Tamattu\')',
+        'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا',
+        'translit': 'Labbayk Allahumma Hajjah',
+        'meaningEn': 'O Allah, I answer Your call to perform Hajj.',
+        'meaningAr': 'التلفظ بالنية للدخول في مناسك الحج.',
+      },
+    },
+
+    'ihram_qiran': {
+      'titleEn': 'Enter Ihram for Hajj Qiran',
+      'titleAr': 'الإحرام لحج القران',
+      'day': 'At Miqat - Before entering the Haram boundaries',
+      'dayAr': 'الميقات - قبل دخول حدود الحرم',
+      'overviewEn':
+          'In Hajj al-Qiran, the pilgrim enters the state of Ihram at the Miqat with the intention of performing both Umrah and Hajj combined. The pilgrim remains in Ihram without shaving or cutting hair after Umrah, staying in Ihram until the 10th of Dhul Hijjah.',
+      'overviewAr':
+          'حج القران هو أن يحرم الحاج بالعمرة والحج معاً من الميقات، أو يحرم بالعمرة ثم يدخل عليها الحج قبل الطواف. ويلتزم بمحظورات الإحرام ولا يتحلل منه بعد طواف القدوم وسعيه بل يبقى محرماً حتى يوم النحر.',
+      'keyActionsEn': [
+        'Perform Ghusl and wear Ihram garments at the Miqat.',
+        'Make intention for both Hajj and Umrah: "Labbayk Allahumma Hajjah wa Umrah" (لَبَّيْكَ اللَّهُمَّ حَجًّا وَعُمْرَةً).',
+        'Begin reciting Talbiyah and maintain Ihram restrictions throughout.',
+      ],
+      'keyActionsAr': [
+        'الغسل والنظافة ولبس ملابس الإحرام في الميقات.',
+        'النية للنسكين معاً: "لَبَّيْكَ اللَّهُمَّ حَجًّا وَعُمْرَةً".',
+        'الاستمرار في التلبية والالتزام الكامل بمحظورات الإحرام.',
+      ],
+      'quran': {
+        'textAr': 'فَمَن تَمَتَّعَ بِالْعُمْرَةِ إِلَى الْحَجِّ فَمَا اسْتَيْسَرَ مِنَ الْهَدْيِ',
+        'referenceAr': 'سورة البقرة - الآية ١٩٦',
+        'textEn': 'Then whoever performs Umrah [during the Hajj months] followed by Hajj, [offers] what can be obtained with ease of sacrificial animals.',
+        'referenceEn': 'Surah Al-Baqarah (2:196)',
+        'explanationEn': 'The Quran commands those who combine Umrah and Hajj (Tamattu\' or Qiran) to offer an animal sacrifice (Qurbani) out of gratitude.',
+        'explanationAr': 'وجوب الهدي (ذبْح شاة) شُكراً لله على تيسير الجمع بين النسكين في سفرة واحدة.',
+      },
+      'hadith': {
+        'textAr': 'عَنْ أَنَسٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: سَمِعْتُ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ يَقُولُ: «لَبَّيْكَ عُمْرَةً وَحَجًّا»',
+        'referenceAr': 'صحيح مسلم (١٢٥١)',
+        'textEn': 'Anas reported: "I heard the Messenger of Allah (ﷺ) saying: Labbayk for Umrah and Hajj together."',
+        'referenceEn': 'Sahih Muslim 1251',
+        'explanationEn': 'This Hadith provides direct evidence for the legality of Qiran (combining Hajj and Umrah in one Ihram).',
+        'explanationAr': 'دليل صريح على مشروعية حج القران وهو ما فعله النبي صلى الله عليه وسلم في حجته.',
+      },
+      'dua': {
+        'title': 'Intention for Hajj Qiran',
+        'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا وَعُمْرَةً',
+        'translit': 'Labbayk Allahumma Hajjah wa \'Umrah',
+        'meaningEn': 'O Allah, I answer Your call to perform Hajj and Umrah together.',
+        'meaningAr': 'النية للجمع بين العمرة والحج في إحرام واحد.',
+      },
+    },
+
+    'ihram_ifrad': {
+      'titleEn': 'Enter Ihram for Hajj Ifrad',
+      'titleAr': 'الإحرام لحج الإفراد',
+      'day': 'At Miqat - Before entering the Haram boundaries',
+      'dayAr': 'الميقات - قبل دخول حدود الحرم',
+      'overviewEn':
+          'Hajj al-Ifrad is performing Hajj alone, without Umrah. The pilgrim enters Ihram at the Miqat with the intention of Hajj only, performs Tawaf al-Qudum, and remains in the state of Ihram until the 10th of Dhul Hijjah. No sacrificial animal (Hady) is obligatory for Ifrad.',
+      'overviewAr':
+          'حج الإفراد هو أن يحرم الحاج بالحج وحده من الميقات قائلاً: لَبَّيْكَ اللَّهُمَّ حَجًّا. ويطوف للقدوم ويسعى للحج ويبقى على إحرامه حتى يوم النحر. ولا يجب عليه الهدي (ذبح فدية).',
+      'keyActionsEn': [
+        'Perform Ghusl and wear Ihram garments at the Miqat.',
+        'Make intention for Hajj only: "Labbayk Allahumma Hajjah" (لَبَّيْكَ اللَّهُمَّ حَجًّا).',
+        'Recite Talbiyah and strictly follow Ihram rules until the 10th of Dhul Hijjah.',
+      ],
+      'keyActionsAr': [
+        'الاغتسال ولبس ثياب الإحرام في الميقات.',
+        'النية للحج فقط: "لَبَّيْكَ اللَّهُمَّ حَجًّا".',
+        'الالتزام بالتلبية ومحظورات الإحرام إلى يوم عيد الأضحى.',
+      ],
+      'quran': {
+        'textAr': 'وَلِلَّهِ عَلَى النَّاسِ حِجُّ الْبَيْتِ مَنِ اسْتَتَاعَ إِلَيْهِ سَبِيلًا',
+        'referenceAr': 'سورة آل عمران - الآية ٩٧',
+        'textEn': 'And [due] to Allah from the people is a pilgrimage to the House - for whoever is able to find thereto a way.',
+        'referenceEn': 'Surah Ali \'Imran (3:97)',
+        'explanationEn': 'This general command shows Hajj itself is the core duty, which the Mufrid (pilgrim performing Ifrad) fulfills directly.',
+        'explanationAr': 'وجوب الحج العيني على المستطيع مرة واحدة في العمر.',
+      },
+      'hadith': {
+        'textAr': 'عَنْ عَائِشَةَ رَضِيَ اللَّهُ عَنْهَا قَالَتْ: «خَرَجْنَا مَعَ رَسُولِ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ... فَمِنَّا مَنْ أَهَلَّ بِعُمْرَةٍ، وَمِنَّا مَنْ أَهَلَّ بِحَجٍّ وَعُمْرَةٍ، وَمِنَّا مَنْ أَهَلَّ بِحَجٍّ مُفْرِدٍ»',
+        'referenceAr': 'صحيح البخاري وصحيح مسلم',
+        'textEn': 'Aisha narrated: "We set out with the Messenger of Allah (ﷺ)... some of us assumed Ihram for Umrah, some for both Hajj and Umrah, and some for Hajj only (Ifrad)."',
+        'referenceEn': 'Sahih al-Bukhari & Sahih Muslim',
+        'explanationEn': 'This confirms that all three types of Hajj (Tamattu\', Qiran, and Ifrad) are valid and were practiced by the Companions under the guidance of the Prophet.',
+        'explanationAr': 'دليل على جواز الإفراد وتخيير الحاج بين الأنساك الثلاثة.',
+      },
+      'dua': {
+        'title': 'Intention for Hajj Ifrad',
+        'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا',
+        'translit': 'Labbayk Allahumma Hajjah',
+        'meaningEn': 'O Allah, I answer Your call to perform Hajj.',
+        'meaningAr': 'النية لأداء الحج مفرداً.',
+      },
+    },
+
+    'halq_ifrad': {
+      'titleEn': 'Halq or Taqsir (Shaving or Trimming)',
+      'titleAr': 'الحلق أو التقصير للمفرد',
+      'day': '10th Dhul Hijjah (Yawm an-Nahr)',
+      'dayAr': '١٠ ذو الحجة (يوم النحر)',
+      'overviewEn':
+          'After stoning Jamarat al-Aqabah on the 10th of Dhul Hijjah, the pilgrim performing Hajj Ifrad shaves or trims their hair to complete the first partial deconsecration (Tahallul al-Asghar). Because this is Hajj Ifrad, Qurbani (sacrifice) is not obligatory, so they proceed directly from stoning to shaving.',
+      'overviewAr':
+          'بعد رمي جمرة العقبة الكبرى يوم النحر، يقوم المفرد بحلق رأسه أو تقصيره مباشرة (حيث لا يجب عليه ذبح هدي) ليتحلل التحلل الأول، فيلبس ثيابه ويتطيب وتزول عنه محظورات الإحرام عدا النساء.',
+      'keyActionsEn': [
+        'Proceed directly to shave (Halq) or trim (Taqsir) hair after pelting.',
+        'Men are highly recommended to shave completely.',
+        'Women trim a fingertip length of hair.',
+        'Achieve Tahallul al-Asghar and change into regular clothes.',
+      ],
+      'keyActionsAr': [
+        'الحلق بالموسى للرجال وهو الأفضل، أو تقصير كامل الرأس.',
+        'تقصير النساء قدر أنملة من أطراف الشعر.',
+        'التحلل الأصغر ولبس المخيط والتطيب.',
+      ],
+      'quran': {
+        'textAr': 'مُحَلِّقِينَ رُءُوسَكُمْ وَمُقَصِّرِينَ لَا تَخَافُونَ',
+        'referenceAr': 'سورة الفتح - الآية ٢٧',
+        'textEn': 'With your heads shaved and hair shortened, not fearing.',
+        'referenceEn': 'Surah Al-Fath (48:27)',
+        'explanationEn': 'Shaving and trimming are recognized by Allah as the sacred conclusion of the state of Ihram.',
+        'explanationAr': 'مشروعية الحلق والتقصير لإنهاء الإحرام والتحلل.',
+      },
+      'hadith': {
+        'textAr': 'عَنِ ابْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ حَلَقَ فِي حَجَّتِهِ',
+        'referenceAr': 'صحيح البخاري وصحيح مسلم',
+        'textEn': 'Ibn Umar narrated: "The Messenger of Allah (ﷺ) had his head shaved during his Hajj pilgrimage."',
+        'referenceEn': 'Sahih al-Bukhari & Sahih Muslim',
+        'explanationEn': 'Prophetic action showing head shaving is the optimal way to conclude the pilgrimage.',
+        'explanationAr': 'اقتداء الحجاج بالنبي صلى الله عليه وسلم بالحلق يوم النحر.',
+      },
+      'dua': {
+        'title': 'Dua of Gratitude upon Shaving',
+        'arabic': 'الْحَمْدُ لِلَّهِ الَّذِي قَضَى عَنَّا نُسُكَنَا',
+        'translit': 'Alhamdu lillahil-ladhi qada \'anna nusukana',
+        'meaningEn': 'Praise be to Allah Who has enabled us to complete our rituals.',
+        'meaningAr': 'الحمد والشكر لله على إتمام مناسك التحلل الأصغر.',
+      },
+    },
+
+    'sai_h': {
+      'titleEn': 'Sa’i of Hajj (Safa & Marwah)',
+      'titleAr': 'سعي الحج (الصفا والمروة)',
+      'day': '10th Dhul Hijjah or Days of Tashreeq',
+      'dayAr': '١٠ ذو الحجة أو أيام التشريق',
+      'overviewEn':
+          'Sa’i of Hajj is a mandatory ritual consisting of walking seven times between the hills of Safa and Marwah. For Hajj Tamattu\', this Sa\'i is performed after Tawaf al-Ifadah. For Hajj Qiran and Ifrad, it is typically performed after Tawaf al-Qudum or Tawaf al-Ifadah.',
+      'overviewAr':
+          'سعي الحج هو المشي بين الصفا والمروة سبعة أشواط، وهو ركن من أركان الحج عند جمهور العلماء. يؤديه القارن والمفرد بعد طواف القدوم (أو طواف الإفاضة)، بينما يؤديه المتمتع بعد طواف الإفاضة وجوباً.',
+      'keyActionsEn': [
+        'Perform 7 laps starting from Safa and ending at Marwah.',
+        'Safa to Marwah is 1 lap; Marwah to Safa is the 2nd lap.',
+        'Men should jog/run briskly between the green lights (Raml).',
+        'Make sincere Duas and remember Allah at the peaks of Safa and Marwah.',
+      ],
+      'keyActionsAr': [
+        'السعي ٧ أشواط كاملة تبدأ بالصفا وتنتهي بالمروة.',
+        'الذهاب من الصفا إلى المروة يعتبر شوطاً، والرجوع شوطاً آخر.',
+        'يُسن للرجال الهرولة بين العلمين الأخضرين.',
+        'الوقوف عند الصفا والمروة مستقبل القبلة والدعاء بالتكبير والتهليل.',
+      ],
+      'quran': {
+        'textAr': 'إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ ۖ فَمَنْ حَجَّ الْبَيْتَ أَوِ اعْتَمَرَ فَلَا جُنَاحَ عَلَيْهِ أَن يَطَّوَّفَ بِهِمَا',
+        'referenceAr': 'سورة البقرة - الآية ١٥٨',
+        'textEn': 'Indeed, Safa and Marwah are among the symbols of Allah. So whoever makes Hajj to the House or performs Umrah - there is no blame upon him for walking between them.',
+        'referenceEn': 'Surah Al-Baqarah (2:158)',
+        'explanationEn': 'Allah establishes Safa and Marwah as sacred signs of His worship, honoring the persistence and faith of Hajar (peace be upon her).',
+        'explanationAr': 'تبيّن الآية أن الصفا والمروة من شعائر الدين ومواضع العبادة، وتشرع السعي بينهما.',
+      },
+      'hadith': {
+        'textAr': 'عَنْ جَابِرِ بْنِ عَبْدِ اللَّهِ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ فِي سَعْيِهِ: «ابْدَءُوا بِمَا بَدَأَ اللَّهُ بِهِ» فَبَدَأَ بِالصَّفَا',
+        'referenceAr': 'صحيح مسلم (١٢١٨)',
+        'textEn': 'Jabir bin Abdullah reported: The Prophet (ﷺ) said regarding Sa’i: "Begin with that which Allah has begun with." So he started with Safa.',
+        'referenceEn': 'Sahih Muslim 1218',
+        'explanationEn': 'This Hadith confirms the obligation of starting the Sa’i from Mount Safa as demonstrated by the Prophet (ﷺ).',
+        'explanationAr': 'يبين الحديث وجوب البداية بالصفا اقتداءً بفعله صلى الله عليه وسلم وتفسيره للقرآن.',
+      },
+      'dua': {
+        'title': 'Dua on Safa & Marwah',
+        'arabic': 'لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ، لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ، أَنْجَزَ وَعْدَهُ، وَنَصَرَ عَبْدَهُ، وَهَزَمَ الأَحْزَابَ وَحْدَهُ',
+        'translit': 'La ilaha illallahu wahdahu la sharika lahu, lahul-mulku wa lahul-hamdu, wa huwa \'ala kulli shay\'in qadir. La ilaha illallahu wahdahu, anjaza wa\'dahu, wa nasara \'abdahu, wa hazamal-ahzaba wahdah.',
+        'meaningEn': 'There is no deity except Allah alone, without partner. To Him belongs sovereignty and praise, and He has power over all things. There is no deity except Allah alone, He fulfilled His promise, granted victory to His servant, and defeated the confederates alone.',
+        'meaningAr': 'التكبير والتهليل والثناء على الله عند صعود جبل الصفا والمروة والاستقبال للقبلة.',
+      },
+    },
+
     'ihram': {
       'titleEn': 'Enter Ihram & Intention (Niyyah)',
       'titleAr': 'الإحرام والنية',
@@ -921,28 +1198,31 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    _initSegmentControllers();
     _loadState();
   }
 
-  void _initSegmentControllers() {
-    for (int i = 0; i < _hajjSteps.length - 1; i++) {
-      final controller = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 750),
-      );
-      _segmentControllers['hajj_$i'] = controller;
-      _segmentAnimations['hajj_$i'] =
-          CurvedAnimation(parent: controller, curve: Curves.easeOutCubic);
+  void _initSegmentControllersForCurrentMode() {
+    // Dispose any existing segment controllers first to prevent memory leaks
+    for (final controller in _segmentControllers.values) {
+      controller.dispose();
     }
-    for (int i = 0; i < _umrahSteps.length - 1; i++) {
+    _segmentControllers.clear();
+    _segmentAnimations.clear();
+
+    final steps = _getActiveSteps();
+    final segKeyPrefix = _mode == 'Hajj' ? 'hajj_$_hajjType' : 'umrah';
+
+    for (int i = 0; i < steps.length - 1; i++) {
       final controller = AnimationController(
         vsync: this,
         duration: const Duration(milliseconds: 750),
       );
-      _segmentControllers['umrah_$i'] = controller;
-      _segmentAnimations['umrah_$i'] =
+      _segmentControllers['${segKeyPrefix}_$i'] = controller;
+      _segmentAnimations['${segKeyPrefix}_$i'] =
           CurvedAnimation(parent: controller, curve: Curves.easeOutCubic);
+      
+      final done = (_mode == 'Hajj' ? _hajjRitualDone : _umrahRitualDone)[steps[i]['id']] ?? false;
+      controller.value = done ? 1.0 : 0.0;
     }
   }
 
@@ -959,9 +1239,18 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
-      for (final s in _hajjSteps) {
+      _hajjType = prefs.getString('hajj_type') ?? 'Tamattu';
+
+      // Load all Hajj steps
+      final allHajjStepsList = [
+        ..._hajjStepsTamattu,
+        ..._hajjStepsQiran,
+        ..._hajjStepsIfrad
+      ];
+      for (final s in allHajjStepsList) {
         _hajjRitualDone[s['id']!] = prefs.getBool('hajj_${s['id']}') ?? false;
       }
+
       for (final s in _umrahSteps) {
         _umrahRitualDone[s['id']!] = prefs.getBool('umrah_${s['id']}') ?? false;
       }
@@ -972,14 +1261,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         _documentsDone[item] = prefs.getBool('doc_${item.hashCode}') ?? false;
       }
 
-      for (int i = 0; i < _hajjSteps.length - 1; i++) {
-        final done = _hajjRitualDone[_hajjSteps[i]['id']] ?? false;
-        _segmentControllers['hajj_$i']?.value = done ? 1.0 : 0.0;
-      }
-      for (int i = 0; i < _umrahSteps.length - 1; i++) {
-        final done = _umrahRitualDone[_umrahSteps[i]['id']] ?? false;
-        _segmentControllers['umrah_$i']?.value = done ? 1.0 : 0.0;
-      }
+      _initSegmentControllersForCurrentMode();
     });
   }
 
@@ -1070,7 +1352,14 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               children: ['Hajj', 'Umrah'].map((m) {
                 final bool selected = _mode == m;
                 return GestureDetector(
-                  onTap: () => setState(() => _mode = m),
+                  onTap: () {
+                    if (_mode != m) {
+                      setState(() {
+                        _mode = m;
+                        _initSegmentControllersForCurrentMode();
+                      });
+                    }
+                  },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1130,12 +1419,20 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
 
   // ===== RITUALS TAB =====
   Widget _buildRitualsTab() {
-    final steps = _mode == 'Hajj' ? _hajjSteps : _umrahSteps;
+    final steps = _getActiveSteps();
     final doneMap = _mode == 'Hajj' ? _hajjRitualDone : _umrahRitualDone;
     final prefix = _mode == 'Hajj' ? 'hajj_' : 'umrah_';
-    final segKeyPrefix = _mode == 'Hajj' ? 'hajj' : 'umrah';
+    final segKeyPrefix = _mode == 'Hajj' ? 'hajj_$_hajjType' : 'umrah';
     final images = _mode == 'Hajj' ? _hajjStepImages : _umrahStepImages;
-    final completed = doneMap.values.where((v) => v).length;
+    
+    // Compute progress specifically for the active steps of this mode/type
+    int completedCount = 0;
+    for (final s in steps) {
+      if (doneMap[s['id']] == true) {
+        completedCount++;
+      }
+    }
+
     final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
     final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.6);
@@ -1147,10 +1444,14 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     const double topOffset = 36;
 
     return ListView(
-      key: ValueKey('rituals_$_mode'),
+      key: ValueKey('rituals_${_mode}_$_hajjType'),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
-        _buildProgressCard(completed, steps.length, '$_mode Progress'),
+        _buildProgressCard(completedCount, steps.length, '$_mode Progress'),
+        if (_mode == 'Hajj') ...[
+          const SizedBox(height: 16),
+          _buildHajjTypeSelector(),
+        ],
         const SizedBox(height: 24),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -1274,6 +1575,105 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildHajjTypeSelector() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            'Select Hajj Type',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              _buildTypeChip('Tamattu', 'Tamattu\'', 'Umrah + Hajj'),
+              _buildTypeChip('Qiran', 'Qiran', 'Combined'),
+              _buildTypeChip('Ifrad', 'Ifrad', 'Hajj Only'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTypeChip(String type, String title, String subtitle) {
+    final isSelected = _hajjType == type;
+    final activeBg = _isDarkMode ? AppColors.midTeal : AppColors.navyBlue;
+    final inactiveBg = Colors.transparent;
+    
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          if (_hajjType != type) {
+            setState(() {
+              _hajjType = type;
+              _initSegmentControllersForCurrentMode();
+            });
+            SharedPreferences.getInstance().then((prefs) {
+              prefs.setString('hajj_type', type);
+            });
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? activeBg : inactiveBg,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? Colors.white
+                      : (_isDarkMode ? Colors.white70 : AppColors.navyBlue),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  fontSize: 8.5,
+                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.8)
+                      : (_isDarkMode ? Colors.white38 : AppColors.navyBlue.withValues(alpha: 0.55)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
