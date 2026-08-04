@@ -50,6 +50,7 @@ dependencies:
   pdf: ^3.12.0
   printing: ^5.14.3
   video_player: ^2.9.2
+  sensors_plus: ^6.1.0
   image_picker: ^1.1.2
 
 dev_dependencies:
@@ -82,4 +83,6 @@ flutter:
     - assets/images/inheritance/
     - assets/images/hajj_umrah/
     - assets/images/health_tips/
+    - assets/images/salat/wudu/
+    - assets/images/salat/salat_steps/
     - assets/videos/

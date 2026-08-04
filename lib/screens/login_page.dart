@@ -54,10 +54,33 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
+
+      // ── Email verification gate ──────────────────────────────────
+      final user = cred.user;
+      if (user != null && !user.emailVerified) {
+        // Resend verification email and redirect to verification screen
+        try {
+          await user.sendEmailVerification();
+        } catch (_) {}
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Please verify your email first. A new verification link has been sent to $email.',
+              ),
+              backgroundColor: Colors.orange.shade700,
+              duration: const Duration(seconds: 5),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          widget.onLoginSuccess(); // auth_screen will re-check and route to verify screen
+        }
+        return;
+      }
       
       if (mounted) {
         widget.onLoginSuccess();
@@ -67,9 +90,10 @@ class _LoginPageState extends State<LoginPage> {
       
       switch (e.code) {
         case 'user-not-found':
-          message = 'No user found with this email.';
+          message = 'No account found with this email.';
           break;
         case 'wrong-password':
+        case 'invalid-credential':
           message = 'Incorrect password. Please try again.';
           break;
         case 'invalid-email':
@@ -94,7 +118,7 @@ class _LoginPageState extends State<LoginPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('An unexpected error occurred.'),
             backgroundColor: Colors.red,
           ),
@@ -314,7 +338,7 @@ class _LoginPageState extends State<LoginPage> {
       backgroundColor: isWideScreen ? const Color(0xFFEFEFF4) : AppColors.white,
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
+          constraints: const BoxConstraints(maxWidth: 430),
           child: Container(
             clipBehavior: Clip.antiAlias,
             decoration: isWideScreen
