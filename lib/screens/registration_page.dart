@@ -84,25 +84,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
             password: passwordController.text,
           );
 
-      // 2. Update user profile with name
+      // 2. Update display name
       await userCredential.user?.updateDisplayName(nameController.text.trim());
 
-      // 3. Save additional user data to Firestore (optional)
-      // Uncomment if you want to store user data in Firestore
-      /*
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .set({
-        'name': nameController.text.trim(),
-        'email': emailController.text.trim(),
-        'phone': phoneController.text.trim(),
-        'fiqh': selectedFiqh,
-        'language': selectedLanguage,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      */
+      // 3. Send verification email immediately ✅
+      await userCredential.user?.sendEmailVerification();
 
+      // 4. Go to email verification screen (NOT dashboard)
       if (mounted) {
         widget.onRegisterSuccess();
       }
@@ -135,7 +123,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('An unexpected error occurred.'),
             backgroundColor: Colors.red,
           ),
@@ -385,7 +373,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       backgroundColor: isWideScreen ? const Color(0xFFEFEFF4) : AppColors.white,
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
+          constraints: const BoxConstraints(maxWidth: 430),
           child: Container(
             clipBehavior: Clip.antiAlias,
             decoration: isWideScreen
