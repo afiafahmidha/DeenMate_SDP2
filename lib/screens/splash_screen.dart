@@ -129,19 +129,22 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     final double maxAppWidth = 430.0;
     final double appWidth = math.min(size.width, maxAppWidth);
 
-    return Center(
-      child: Container(
-        width: appWidth,
-        height: double.infinity,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: AppColors.dustyBlueTeal,
-          border: Border.all(
-            color: AppColors.white.withValues(alpha: 0.15),
-            width: 8.0,
+    return Scaffold(
+      backgroundColor: AppColors.dustyBlueTeal,
+      body: Center(
+        child: Container(
+          width: appWidth,
+          height: double.infinity,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: AppColors.dustyBlueTeal,
+            border: Border.all(
+              color: AppColors.white.withValues(alpha: 0.15),
+              width: 8.0,
+            ),
+            borderRadius: BorderRadius.circular(16),
           ),
-          borderRadius: BorderRadius.circular(16),
-        ),
+
         child: AnimatedBuilder(
           animation: Listenable.merge([_mainController, _swingController]),
           builder: (context, child) {
@@ -286,6 +289,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           },
         ),
       ),
+    ),
     );
   }
 }

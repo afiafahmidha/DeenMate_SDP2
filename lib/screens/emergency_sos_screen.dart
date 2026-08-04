@@ -926,9 +926,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
                 children: [
                   const Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 16),
                   const SizedBox(width: 8),
-                  Text(
-                    "Click once when safe to broadcast recovery",
-                    style: GoogleFonts.inter(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600),
+                  Flexible(
+                    child: Text(
+                      "Click once when safe to broadcast recovery",
+                      style: GoogleFonts.inter(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ],
               ),
@@ -2074,14 +2076,21 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
       context: context,
       builder: (BuildContext ctx) {
         return AlertDialog(
+          backgroundColor: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
               const Icon(Icons.navigation_rounded, color: AppColors.midTeal),
               const SizedBox(width: 8),
-              Text(
-                "Google Maps Navigation",
-                style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold),
+              Expanded(
+                child: Text(
+                  "Google Maps Navigation",
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
+                  ),
+                ),
               ),
             ],
           ),
@@ -2091,7 +2100,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
             children: [
               Text(
                 "Select a destination to draw your turn-by-turn route line from your current location:",
-                style: GoogleFonts.inter(fontSize: 12, height: 1.3),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  height: 1.3,
+                  color: widget.isDarkMode ? Colors.white70 : Colors.grey.shade700,
+                ),
               ),
               const SizedBox(height: 12),
               _buildNavDestinationTile("🕋 Masjid Al-Haram (Kaaba)", 21.4225, 39.8262, userLat, userLng, ctx),
@@ -2102,7 +2115,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
           ),
           actions: [
             TextButton(
-              child: const Text("CANCEL"),
+              child: Text("CANCEL", style: GoogleFonts.poppins(color: AppColors.midTeal, fontWeight: FontWeight.bold)),
               onPressed: () => Navigator.of(ctx).pop(),
             ),
           ],
@@ -2115,7 +2128,14 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
-      title: Text(name, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.navyBlue)),
+      title: Text(
+        name,
+        style: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
+        ),
+      ),
       trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.midTeal),
       onTap: () async {
         Navigator.of(ctx).pop();
