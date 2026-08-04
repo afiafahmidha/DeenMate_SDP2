@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -22,6 +22,7 @@ import 'dhikr_counter_screen.dart';
 import 'profile_tab.dart';
 import 'halal_scanner/halal_scanner_home.dart';
 import 'prayer_tab.dart'; // Extracted Prayer tab widget
+import 'salat_guide_screen.dart'; // Salat rules, illustrated steps & rakat guide
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -636,13 +637,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 width: 72,
                                 height: 72,
                                 decoration: BoxDecoration(
-                                  color: AppColors.navyBlue.withValues(alpha: 0.08),
+                                  color: _isDarkMode
+                                      ? Colors.white.withValues(alpha: 0.12)
+                                      : AppColors.navyBlue.withValues(alpha: 0.08),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.mosque_rounded,
                                   size: 38,
-                                  color: AppColors.navyBlue,
+                                  color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -651,7 +654,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 style: GoogleFonts.playfairDisplay(
                                   fontSize: 13,
                                   letterSpacing: 3,
-                                  color: AppColors.navyBlue.withValues(alpha: 0.5),
+                                  color: _isDarkMode
+                                      ? Colors.white70
+                                      : AppColors.navyBlue.withValues(alpha: 0.5),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -661,7 +666,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 style: GoogleFonts.playfairDisplay(
                                   fontSize: 34,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.navyBlue,
+                                  color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -669,7 +674,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 'الله أكبر • الله أكبر',
                                 style: GoogleFonts.inter(
                                   fontSize: 18,
-                                  color: AppColors.navyBlue.withValues(alpha: 0.7),
+                                  color: _isDarkMode
+                                      ? Colors.white.withValues(alpha: 0.9)
+                                      : AppColors.navyBlue.withValues(alpha: 0.7),
                                   letterSpacing: 1.5,
                                 ),
                               ),
@@ -679,7 +686,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
-                                  color: AppColors.navyBlue.withValues(alpha: 0.55),
+                                  color: _isDarkMode
+                                      ? Colors.white70
+                                      : AppColors.navyBlue.withValues(alpha: 0.55),
                                 ),
                               ),
                               const SizedBox(height: 28),
@@ -688,7 +697,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 child: ElevatedButton(
                                   onPressed: () => setState(() => _showAlarmOverlay = false),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.navyBlue,
+                                    backgroundColor: _isDarkMode
+                                        ? const Color(0xFF1E3A5F)
+                                        : AppColors.navyBlue,
                                     foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(vertical: 14),
                                     shape: RoundedRectangleBorder(
@@ -1378,6 +1389,27 @@ _buildAnimatedEntry(
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _buildFeatureCard(
+                  icon: Icons.crop_portrait_rounded,
+                  label: 'Salat Guide',
+                  iconPainter: _SalatGuideIconPainter(isDark: _isDarkMode),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => SalatGuideScreen(isDarkMode: _isDarkMode),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(child: SizedBox()), // reserved for a future Worship tile (e.g. Qibla Compass)
+            ],
+          ),
         ],
       ),
     );
@@ -1455,6 +1487,7 @@ _buildAnimatedEntry(
     ),
   );
 }
+
   // ===== TODAY'S GUIDANCE =====
  Widget _buildTodaysGuidance() {
   return Padding(
@@ -1778,8 +1811,12 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
     // 2. Draw a glowing sun for daytime prayers (Dhuhr, Asr)
     if (isDaytime) {
       final sunGlow = Paint()
-        ..color = Colors.white.withValues(alpha: 0.10 + 0.06 * math.sin(pulseVal * math.pi))
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18);
+        ..shader = RadialGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.22),
+            Colors.white.withValues(alpha: 0.0),
+          ],
+        ).createShader(Rect.fromCircle(center: Offset(w * 0.82, h * 0.22), radius: 32));
       canvas.drawCircle(Offset(w * 0.82, h * 0.22), 32, sunGlow);
       final sunCore = Paint()
         ..color = Colors.white.withValues(alpha: 0.22)
@@ -1790,8 +1827,12 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
     // 3. Draw a warm glow orb for Maghrib
     if (prayerName == 'Maghrib') {
       final glowPaint = Paint()
-        ..color = const Color(0xFFFF9966).withValues(alpha: 0.18 + 0.07 * math.sin(pulseVal * math.pi))
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 22);
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFFFF9966).withValues(alpha: 0.25),
+            const Color(0xFFFF9966).withValues(alpha: 0.0),
+          ],
+        ).createShader(Rect.fromCircle(center: Offset(w * 0.80, h * 0.25), radius: 38));
       canvas.drawCircle(Offset(w * 0.80, h * 0.25), 38, glowPaint);
     }
 
@@ -2351,6 +2392,85 @@ class _HalalIconPainter extends CustomPainter {
       ..color = AppColors.coralOrange.withValues(alpha: 0.5)
       ..strokeWidth = 1.0;
     canvas.drawLine(Offset(cx - s * 0.8, cy - s * 0.5), Offset(cx + s * 0.8, cy - s * 0.5), scanPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Salat Guide Icon — Prayer Rug (Janamaz)
+class _SalatGuideIconPainter extends CustomPainter {
+  final bool isDark;
+  _SalatGuideIconPainter({this.isDark = false});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.7
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final rugW = size.width * 0.5;
+    final rugH = size.height * 0.56;
+    final rugTop = cy - rugH * 0.62;
+    final rugBottom = cy + rugH * 0.5;
+
+    // Outer rug border
+    final outer = RRect.fromRectAndRadius(
+      Rect.fromLTRB(cx - rugW / 2, rugTop, cx + rugW / 2, rugBottom),
+      const Radius.circular(3),
+    );
+    canvas.drawRRect(outer, paint);
+
+    // Inner border (rug trim)
+    final innerPaint = Paint()
+      ..color = paint.color.withValues(alpha: 0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.1;
+    final inset = rugW * 0.12;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(cx - rugW / 2 + inset, rugTop + inset,
+            cx + rugW / 2 - inset, rugBottom - inset * 1.4),
+        const Radius.circular(2),
+      ),
+      innerPaint,
+    );
+
+    // Mihrab arch motif — pointed arch near the top, pointing "toward the Qibla"
+    final archW = rugW * 0.46;
+    final archTopY = rugTop + inset * 1.6;
+    final archBaseY = cy - rugH * 0.02;
+    final archPaint = Paint()
+      ..color = AppColors.midTeal.withValues(alpha: 0.85)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4
+      ..strokeCap = StrokeCap.round;
+    final archPath = Path()
+      ..moveTo(cx - archW / 2, archBaseY)
+      ..lineTo(cx - archW / 2, archTopY + archW * 0.32)
+      ..quadraticBezierTo(cx - archW / 2, archTopY, cx, archTopY)
+      ..quadraticBezierTo(cx + archW / 2, archTopY, cx + archW / 2, archTopY + archW * 0.32)
+      ..lineTo(cx + archW / 2, archBaseY);
+    canvas.drawPath(archPath, archPaint);
+
+    // Small finial dot at the peak of the arch
+    canvas.drawCircle(Offset(cx, archTopY - 2), 1.6, Paint()..color = AppColors.coralOrange.withValues(alpha: 0.85));
+
+    // Fringe / tassels along the bottom edge
+    final fringePaint = Paint()
+      ..color = paint.color.withValues(alpha: 0.55)
+      ..strokeWidth = 1.1
+      ..strokeCap = StrokeCap.round;
+    const tassels = 5;
+    for (int i = 0; i < tassels; i++) {
+      final x = (cx - rugW / 2) + (rugW / (tassels - 1)) * i;
+      canvas.drawLine(Offset(x, rugBottom), Offset(x, rugBottom + 3.5), fringePaint);
+    }
   }
 
   @override

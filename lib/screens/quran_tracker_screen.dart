@@ -1693,17 +1693,32 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 onPressed: _activeReaderAyahIndex > 1
                     ? () => setState(() => _activeReaderAyahIndex--)
                     : null,
-                child: Text('← Previous', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                child: Text('← Previous', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
-              Text(
-                'Ayah $_activeReaderAyahIndex / ${_loadedAyahs.length}',
-                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: themeText),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'Ayah $_activeReaderAyahIndex / ${_loadedAyahs.length}',
+                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: themeText),
+                  ),
+                ),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.navyBlue,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 onPressed: () {
                   setState(() {
                     if (_activeReaderAyahIndex < _loadedAyahs.length) {
@@ -1744,7 +1759,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 },
                 child: Text(
                   _activeReaderAyahIndex == _loadedAyahs.length ? 'Finish' : 'Next Ayah →',
-                  style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ),
             ],
