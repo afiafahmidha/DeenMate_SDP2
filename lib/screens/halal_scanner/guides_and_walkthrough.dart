@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'halal_scanner_home.dart';
 
 const tealColor = Color(0xFF55A498);
 
@@ -10,12 +8,13 @@ const tealColor = Color(0xFF55A498);
 // has no visible effect there — it only kicks in on wide desktop windows.
 class MobileFrame extends StatelessWidget {
   final Widget child;
-  const MobileFrame({super.key, required this.child});
+  final bool isDarkMode;
+  const MobileFrame({super.key, required this.child, this.isDarkMode = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFE8E8E8),
+      color: isDarkMode ? const Color(0xFF0F1216) : const Color(0xFFE8E8E8),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
@@ -27,7 +26,8 @@ class MobileFrame extends StatelessWidget {
 }
 
 class GuidesAndWalkthroughScreen extends StatefulWidget {
-  const GuidesAndWalkthroughScreen({super.key});
+  final bool isDarkMode;
+  const GuidesAndWalkthroughScreen({super.key, this.isDarkMode = false});
 
   @override
   State<GuidesAndWalkthroughScreen> createState() => _GuidesAndWalkthroughScreenState();
@@ -37,8 +37,9 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
   @override
   Widget build(BuildContext context) {
     return MobileFrame(
+      isDarkMode: widget.isDarkMode,
       child: Scaffold(
-      backgroundColor: const Color(0xFFF9F9FA),
+      backgroundColor: widget.isDarkMode ? const Color(0xFF121212) : const Color(0xFFF9F9FA),
       appBar: AppBar(
         backgroundColor: tealColor,
         elevation: 0,
@@ -69,7 +70,7 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const WalkthroughCarousel(groupIndex: 0),
+                      builder: (context) => WalkthroughCarousel(groupIndex: 0, isDarkMode: widget.isDarkMode),
                     ),
                   );
                 },
@@ -82,7 +83,7 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const WalkthroughCarousel(groupIndex: 1),
+                      builder: (context) => WalkthroughCarousel(groupIndex: 1, isDarkMode: widget.isDarkMode),
                     ),
                   );
                 },
@@ -95,19 +96,19 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const WalkthroughCarousel(groupIndex: 2),
+                      builder: (context) => WalkthroughCarousel(groupIndex: 2, isDarkMode: widget.isDarkMode),
                     ),
                   );
                 },
               ),
               const SizedBox(height: 24),
 
-              const Text(
+              Text(
                 'What is Halal?',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: widget.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               const SizedBox(height: 8),
@@ -116,12 +117,12 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
               ),
               const SizedBox(height: 20),
 
-              const Text(
+              Text(
                 'What is Haram?',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: widget.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               const SizedBox(height: 8),
@@ -140,12 +141,12 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
               ),
               const SizedBox(height: 20),
 
-              const Text(
+              Text(
                 'What is Musbooh?',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: widget.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               const SizedBox(height: 8),
@@ -154,12 +155,12 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
               ),
               const SizedBox(height: 24),
 
-              const Text(
+              Text(
                 'Level of toxicity',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 16,
-                  color: Colors.black87,
+                  color: widget.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               const SizedBox(height: 10),
@@ -175,12 +176,12 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
               ),
               const SizedBox(height: 24),
 
-              const Text(
+              Text(
                 'Origin of the additive',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 16,
-                  color: Colors.black87,
+                  color: widget.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               const SizedBox(height: 10),
@@ -244,14 +245,14 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[400]!, width: 2),
+        border: Border.all(color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.2) : Colors.grey[400]!, width: 2),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Colors.black87,
+        style: TextStyle(
+          color: widget.isDarkMode ? Colors.white : Colors.black87,
           fontSize: 14,
           height: 1.5,
         ),
@@ -267,9 +268,9 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[600]!, width: 2),
+        border: Border.all(color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.2) : Colors.grey[600]!, width: 2),
       ),
       child: Wrap(
         alignment: WrapAlignment.start,
@@ -284,7 +285,7 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
                 Expanded(
                   child: Text(
                     item.label,
-                    style: const TextStyle(fontSize: 14, color: Colors.black87),
+                    style: TextStyle(fontSize: 14, color: widget.isDarkMode ? Colors.white : Colors.black87),
                   ),
                 ),
               ],
@@ -429,7 +430,8 @@ final List<List<_SlideData>> _slideGroups = [
 
 class WalkthroughCarousel extends StatefulWidget {
   final int groupIndex;
-  const WalkthroughCarousel({super.key, required this.groupIndex});
+  final bool isDarkMode;
+  const WalkthroughCarousel({super.key, required this.groupIndex, this.isDarkMode = false});
 
   @override
   State<WalkthroughCarousel> createState() => _WalkthroughCarouselState();
@@ -458,8 +460,9 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
     final lastIndex = _slides.length - 1;
 
     return MobileFrame(
+      isDarkMode: widget.isDarkMode,
       child: Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: widget.isDarkMode ? const Color(0xFF121212) : Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -526,7 +529,7 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
                       height: 8,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isSelected ? tealColor : Colors.grey[300],
+                        color: isSelected ? tealColor : (widget.isDarkMode ? Colors.white.withValues(alpha: 0.3) : Colors.grey[300]),
                       ),
                     );
                   }),
@@ -601,7 +604,7 @@ class _WalkthroughCarouselState extends State<WalkthroughCarousel> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey[600],
+              color: widget.isDarkMode ? Colors.white70 : Colors.grey[600],
               height: 1.5,
             ),
           ),
@@ -1074,203 +1077,4 @@ class AddStateIllustrationPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// Custom Barcode Scanner Simulator screen
-class BarcodeScannerSimulator extends StatefulWidget {
-  final Function(ScannedProduct) onScanComplete;
-
-  const BarcodeScannerSimulator({super.key, required this.onScanComplete});
-
-  @override
-  State<BarcodeScannerSimulator> createState() => _BarcodeScannerSimulatorState();
-}
-
-class _BarcodeScannerSimulatorState extends State<BarcodeScannerSimulator> {
-  late Timer _timer;
-  double _lineY = 0.2;
-  bool _movingDown = true;
-
-  final List<ScannedProduct> _scanPool = [
-    ScannedProduct(
-      name: 'Gelatin Gummy Bears',
-      barcode: '501234567890',
-      scanDate: DateTime.now(),
-      status: 'HARAM',
-      origin: 'animal (pork derivative)',
-      risk: 'Toxic',
-    ),
-    ScannedProduct(
-      name: 'Orange Carbonated Drink',
-      barcode: '400123456789',
-      scanDate: DateTime.now(),
-      status: 'HALAL',
-      origin: 'plant/chemical',
-      risk: 'Safe',
-    ),
-    ScannedProduct(
-      name: 'E471 emulsifier bakery bread',
-      barcode: '300987654321',
-      scanDate: DateTime.now(),
-      status: 'MUSHBOOH',
-      origin: 'mixed animal/plant',
-      risk: 'Do not abuse',
-    ),
-    ScannedProduct(
-      name: 'Organic Fruit Juice',
-      barcode: '880123456000',
-      scanDate: DateTime.now(),
-      status: 'HALAL',
-      origin: 'plant',
-      risk: 'Safe',
-    ),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    // Animate red scanning line
-    _timer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
-      setState(() {
-        if (_movingDown) {
-          _lineY += 0.015;
-          if (_lineY >= 0.8) _movingDown = false;
-        } else {
-          _lineY -= 0.015;
-          if (_lineY <= 0.2) _movingDown = true;
-        }
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
-  }
-
-  void _triggerScan() {
-    // Select random product from pool
-    final randomProduct = (_scanPool..shuffle()).first;
-    Navigator.pop(context);
-    widget.onScanComplete(randomProduct);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Simulated camera view (dark green/blue futuristic overlay)
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.black, Color(0xFF0F2027), Colors.black],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ),
-
-          // Transparent scanning window
-          Center(
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  children: [
-                    // Moving red scanner line
-                    AnimatedPositioned(
-                      duration: const Duration(milliseconds: 30),
-                      top: 260 * _lineY,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        height: 3,
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.red,
-                              blurRadius: 8,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Back Button
-          Positioned(
-            top: 40,
-            left: 20,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ),
-
-          // Instruction label
-          Positioned(
-            bottom: 120,
-            left: 0,
-            right: 0,
-            child: Column(
-              children: [
-                const Text(
-                  'Align barcode within frame',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Keep the phone steady to auto-focus',
-                  style: TextStyle(color: Colors.grey[400], fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-
-          // Scan Trigger Button
-          Positioned(
-            bottom: 40,
-            left: 50,
-            right: 50,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF55A498),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-              ),
-              onPressed: _triggerScan,
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.camera, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text(
-                    'Simulate Product Detect',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
