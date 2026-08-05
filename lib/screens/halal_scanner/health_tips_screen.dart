@@ -27,7 +27,8 @@ class HealthTipArticle {
 }
 
 class HealthTipsScreen extends StatefulWidget {
-  const HealthTipsScreen({super.key});
+  final bool isDarkMode;
+  const HealthTipsScreen({super.key, this.isDarkMode = false});
 
   @override
   State<HealthTipsScreen> createState() => _HealthTipsScreenState();
@@ -124,7 +125,7 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => HealthTipDetailScreen(article: article),
+        builder: (context) => HealthTipDetailScreen(article: article, isDarkMode: widget.isDarkMode),
       ),
     );
   }
@@ -136,8 +137,11 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
     return MobileFrame(
       child: Scaffold(
         key: _scaffoldKey,
-        backgroundColor: const Color(0xFFF9F9FA),
-        drawer: const HalalDrawer(activeRoute: 'Health tips'),
+        backgroundColor: widget.isDarkMode ? const Color(0xFF121212) : const Color(0xFFF9F9FA),
+        drawer: HalalDrawer(
+          activeRoute: 'Health tips',
+          isDarkMode: widget.isDarkMode,
+        ),
         appBar: AppBar(
           backgroundColor: tealColor,
           elevation: 0,
@@ -163,10 +167,10 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               elevation: 0,
-              color: Colors.white,
+              color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
+                side: BorderSide(color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)),
               ),
               child: InkWell(
                 onTap: () => _openArticle(article),
@@ -212,10 +216,10 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
                                 Expanded(
                                   child: Text(
                                     article.title,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
-                                      color: Colors.black87,
+                                      color: widget.isDarkMode ? Colors.white : Colors.black87,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -224,8 +228,8 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
                                 const SizedBox(width: 8),
                                 Text(
                                   article.date,
-                                  style: const TextStyle(
-                                    color: Colors.grey,
+                                  style: TextStyle(
+                                    color: widget.isDarkMode ? Colors.white70 : Colors.grey,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -235,7 +239,7 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
                             Text(
                               article.description,
                               style: TextStyle(
-                                color: Colors.grey[600],
+                                color: widget.isDarkMode ? Colors.white70 : Colors.grey[600],
                                 fontSize: 12,
                                 height: 1.3,
                               ),
@@ -262,8 +266,9 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
 // paragraph, all on a light mint background.
 class HealthTipDetailScreen extends StatelessWidget {
   final HealthTipArticle article;
+  final bool isDarkMode;
 
-  const HealthTipDetailScreen({super.key, required this.article});
+  const HealthTipDetailScreen({super.key, required this.article, this.isDarkMode = false});
 
   static const Color tealColor = Color(0xFF55A498);
   static const Color pageBg = Color(0xFFE3F2EC);
@@ -272,7 +277,7 @@ class HealthTipDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return MobileFrame(
       child: Scaffold(
-        backgroundColor: pageBg,
+        backgroundColor: isDarkMode ? const Color(0xFF121212) : pageBg,
         appBar: AppBar(
           backgroundColor: tealColor,
           elevation: 0,
@@ -341,16 +346,16 @@ class HealthTipDetailScreen extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: tealColor, width: 1.2),
                   ),
                   child: Text(
                     article.title,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
-                      color: Colors.black87,
+                      color: isDarkMode ? Colors.white : Colors.black87,
                     ),
                   ),
                 ),
@@ -361,15 +366,15 @@ class HealthTipDetailScreen extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: tealColor, width: 1.2),
                   ),
                   child: Text(
                     article.content,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
-                      color: Colors.black87,
+                      color: isDarkMode ? Colors.white : Colors.black87,
                       height: 1.6,
                     ),
                   ),

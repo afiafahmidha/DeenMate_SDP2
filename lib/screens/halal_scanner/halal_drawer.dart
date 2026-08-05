@@ -8,10 +8,12 @@ import 'guides_and_walkthrough.dart';
 
 class HalalDrawer extends StatelessWidget {
   final String activeRoute;
+  final bool isDarkMode;
 
   const HalalDrawer({
     super.key,
     required this.activeRoute,
+    required this.isDarkMode,
   });
 
   void _navigateTo(BuildContext context, Widget screen, String routeName) {
@@ -20,7 +22,7 @@ class HalalDrawer extends StatelessWidget {
 
     if (routeName == 'Home') {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const HalalScannerHomeScreen()),
+        MaterialPageRoute(builder: (context) => HalalScannerHomeScreen(isDarkMode: isDarkMode)),
         (route) => route.isFirst,
       );
     } else {
@@ -33,10 +35,11 @@ class HalalDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const tealColor = Color(0xFF55A498);
+    final drawerBg = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
 
     return Drawer(
       child: Container(
-        color: Colors.white,
+        color: drawerBg,
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -85,31 +88,35 @@ class HalalDrawer extends StatelessWidget {
               icon: Icons.local_offer_outlined,
               label: 'Home',
               routeName: 'Home',
-              destination: const HalalScannerHomeScreen(),
+              destination: HalalScannerHomeScreen(isDarkMode: isDarkMode),
             ),
             _buildDrawerItem(
               context,
               icon: Icons.list_alt_rounded,
               label: 'List additives',
               routeName: 'List additives',
-              destination: const AdditivesListScreen(),
+              destination: AdditivesListScreen(isDarkMode: isDarkMode),
             ),
             _buildDrawerItem(
               context,
               icon: Icons.history_rounded,
               label: 'Scanned history',
               routeName: 'Scanned history',
-              destination: const ScannedHistoryScreen(),
+              destination: ScannedHistoryScreen(isDarkMode: isDarkMode),
             ),
             _buildDrawerItem(
               context,
               icon: Icons.report_problem_outlined,
               label: 'Report product',
               routeName: 'Report product',
-              destination: const AnalyzeProductScreen(),
+              destination: AnalyzeProductScreen(isDarkMode: isDarkMode),
             ),
 
-            const Divider(),
+            Divider(
+              color: isDarkMode
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : Colors.grey.withValues(alpha: 0.2),
+            ),
             _buildSectionHeader('Health & Wellness'),
 
             _buildDrawerItem(
@@ -117,7 +124,7 @@ class HalalDrawer extends StatelessWidget {
               icon: Icons.notifications_none_rounded,
               label: 'Health tips',
               routeName: 'Health tips',
-              destination: const HealthTipsScreen(),
+              destination: HealthTipsScreen(isDarkMode: isDarkMode),
             ),
 
 
@@ -126,7 +133,7 @@ class HalalDrawer extends StatelessWidget {
               icon: Icons.help_outline_rounded,
               label: 'Guide',
               routeName: 'Guide',
-              destination: const GuidesAndWalkthroughScreen(),
+              destination: GuidesAndWalkthroughScreen(isDarkMode: isDarkMode),
             ),
 
 
@@ -143,7 +150,7 @@ class HalalDrawer extends StatelessWidget {
       child: Text(
         title,
         style: TextStyle(
-          color: Colors.grey[600],
+          color: isDarkMode ? Colors.white54 : Colors.grey[600],
           fontSize: 12,
           fontWeight: FontWeight.bold,
         ),
@@ -160,16 +167,19 @@ class HalalDrawer extends StatelessWidget {
   }) {
     final bool isSelected = activeRoute == routeName;
     const tealColor = Color(0xFF55A498);
+    final unselectedIconColor =
+        isDarkMode ? Colors.white70 : Colors.grey[700];
+    final unselectedTextColor = isDarkMode ? Colors.white : Colors.black87;
 
     return ListTile(
       leading: Icon(
         icon,
-        color: isSelected ? tealColor : Colors.grey[700],
+        color: isSelected ? tealColor : unselectedIconColor,
       ),
       title: Text(
         label,
         style: TextStyle(
-          color: isSelected ? tealColor : Colors.black87,
+          color: isSelected ? tealColor : unselectedTextColor,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         ),
       ),
@@ -185,15 +195,18 @@ class HalalDrawer extends StatelessWidget {
     required String label,
     required VoidCallback onTap,
   }) {
+    final unselectedIconColor =
+        isDarkMode ? Colors.white70 : Colors.grey[700];
+    final unselectedTextColor = isDarkMode ? Colors.white : Colors.black87;
     return ListTile(
       leading: Icon(
         icon,
-        color: Colors.grey[700],
+        color: unselectedIconColor,
       ),
       title: Text(
         label,
-        style: const TextStyle(
-          color: Colors.black87,
+        style: TextStyle(
+          color: unselectedTextColor,
         ),
       ),
       onTap: onTap,

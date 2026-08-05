@@ -1287,10 +1287,10 @@ class _PrayerTabState extends State<PrayerTab> {
                         const SizedBox(height: 14),
                         ...['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((
                           salat,
-                        ) {
-                          final count = widget.qazaCounts[salat] ?? 0;
-                          final bool dark = _isDark(context);
-                          return Container(
+                         ) {
+                            final count = widget.qazaCounts[salat] ?? 0;
+                            final bool dark = _isDark(context);
+      return Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
@@ -1386,6 +1386,10 @@ class _PrayerTabState extends State<PrayerTab> {
                       ],
                     ),
                   ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: const _QazaReferenceCard(),
                 ),
                 const SizedBox(height: 80),
               ],
@@ -1918,6 +1922,7 @@ class _PrayerOverviewCard extends StatelessWidget {
     ];
 
     final bool dark = _isDark(context);
+    final shadowColor = dark ? Colors.black.withValues(alpha: 0.5) : AppColors.navyBlue.withValues(alpha: 0.08);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1931,11 +1936,9 @@ class _PrayerOverviewCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: dark
-                ? Colors.black.withValues(alpha: 0.5)
-                : AppColors.navyBlue.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: shadowColor,
+            blurRadius: 16,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -2230,6 +2233,16 @@ class _PrayerOverviewCard extends StatelessWidget {
           Divider(color: _onSurface(context, alpha: 0.1), height: 1),
           const SizedBox(height: 12),
 
+          Text(
+            'Forbidden times for prayer',
+            style: GoogleFonts.inter(
+              color: _onSurface(context, alpha: 0.6),
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+
           // Sunrise / Mid Day / Sunset row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -2375,6 +2388,178 @@ class _SunTimeItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Reference card explaining valid reasons for Qaza prayers with
+/// Quranic and Hadith references.
+class _QazaReferenceCard extends StatelessWidget {
+  const _QazaReferenceCard();
+
+  static const _hadithBukhari = 'Sahih Bukhari 597';
+  static const _hadithMuslim = 'Sahih Muslim 684c';
+  static const _hadithIbnMajah = 'Sunan Ibn Majah 698';
+
+  static const _hadithText =
+      '"Whoever forgets a prayer or sleeps and misses it, its expiation is to make it up as soon as he remembers it."';
+
+  static const _forgetfulnessText =
+      '"There is no negligence when one is sleeping, rather negligence is when one is awake. If anyone of you forgets to pray, or sleeps and misses a prayer, then let him pray when he remembers..."';
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = _isDark(context);
+    final surfaceColor = dark ? Colors.black : Colors.white.withValues(alpha: 0.72);
+    final textColor = _onSurface(context);
+    final subtleColor = _onSurface(context, alpha: 0.6);
+    final accentColor = dark ? AppColors.coralOrange : AppColors.navyBlue;
+    final iconBgColor = dark ? AppColors.coralOrange.withValues(alpha: 0.18) : AppColors.navyBlue.withValues(alpha: 0.14);
+    final shadowColor = dark ? AppColors.coralOrange.withValues(alpha: 0.25) : AppColors.navyBlue.withValues(alpha: 0.07);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: dark
+              ? Colors.white.withValues(alpha: 0.16)
+              : const Color(0x261A2E40),
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 16,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.menu_book_rounded,
+                    color: accentColor, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Qaza Prayer Reference',
+                  style: GoogleFonts.poppins(
+                    color: textColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildSectionTitle('Valid Reasons for Qaza Salat', Icons.check_circle_rounded, accentColor),
+          const SizedBox(height: 6),
+          _buildBulletPoint(
+              'Oversleeping: Falling asleep genuinely before the prayer time begins or without intending to miss it, and waking up only after the time has ended.',
+              dark, textColor),
+          const SizedBox(height: 4),
+          _buildBulletPoint(
+              'Forgetfulness: Completely forgetting to perform the prayer due to extreme distraction, unconsciousness, or a genuine lapse in memory until the time has elapsed.',
+              dark, textColor),
+          const SizedBox(height: 14),
+          _buildSectionTitle('Hadith References', Icons.verified_rounded, accentColor),
+          const SizedBox(height: 6),
+          _buildHadithItem(_hadithBukhari, _hadithText, dark, textColor, subtleColor),
+          _buildHadithItem(_hadithMuslim, _hadithText, dark, textColor, subtleColor),
+          const SizedBox(height: 8),
+          _buildHadithItem(_hadithIbnMajah, _forgetfulnessText, dark, textColor, subtleColor),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, IconData icon, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            color: color,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBulletPoint(String text, bool dark, Color textColor) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '•',
+            style: GoogleFonts.inter(
+              color: textColor,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.inter(
+                color: textColor.withValues(alpha: 0.85),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHadithItem(String reference, String text, bool dark, Color textColor, Color subtleColor) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            reference,
+            style: GoogleFonts.inter(
+              color: AppColors.dustyBlueTeal,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            text,
+            style: GoogleFonts.inter(
+              color: subtleColor,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
