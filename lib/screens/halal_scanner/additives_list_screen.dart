@@ -46,7 +46,8 @@ Color riskColorOf(String riskText) {
 // ---------------------------------------------------------------------------
 class MobileFrame extends StatelessWidget {
   final Widget child;
-  const MobileFrame({super.key, required this.child});
+  final bool isDarkMode;
+  const MobileFrame({super.key, required this.child, this.isDarkMode = false});
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +56,7 @@ class MobileFrame extends StatelessWidget {
       return child;
     }
     return Container(
-      color: const Color(0xFFE7E9EB),
+      color: isDarkMode ? const Color(0xFF0F1216) : const Color(0xFFE7E9EB),
       child: Center(
         child: Container(
           width: 430,
@@ -125,7 +126,8 @@ class Additive {
 }
 
 class AdditivesListScreen extends StatefulWidget {
-  const AdditivesListScreen({super.key});
+  final bool isDarkMode;
+  const AdditivesListScreen({super.key, this.isDarkMode = false});
 
   @override
   State<AdditivesListScreen> createState() => _AdditivesListScreenState();
@@ -334,7 +336,7 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
   void _openDetail(Additive additive) async {
     final updated = await Navigator.push<Additive>(
       context,
-      MaterialPageRoute(builder: (context) => AdditiveDetailScreen(additive: additive)),
+      MaterialPageRoute(builder: (context) => AdditiveDetailScreen(additive: additive, isDarkMode: widget.isDarkMode)),
     );
     if (updated != null) {
       setState(() {
@@ -349,9 +351,10 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
     final list = _filteredAdditives;
 
     return MobileFrame(
+      isDarkMode: widget.isDarkMode,
       child: Scaffold(
       key: _scaffoldKey,
-      backgroundColor: kBg,
+      backgroundColor: widget.isDarkMode ? const Color(0xFF121212) : kBg,
       appBar: AppBar(
         backgroundColor: kTeal,
         elevation: 0,
@@ -375,7 +378,7 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: widget.isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
@@ -410,7 +413,7 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
               children: [
                 Text(
                   '${list.length} additives',
-                  style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.w600, fontSize: 15),
+                  style: TextStyle(color: widget.isDarkMode ? Colors.white70 : Colors.grey[700], fontWeight: FontWeight.w600, fontSize: 15),
                 ),
                 Row(
                   children: [
@@ -461,7 +464,7 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : (label == 'All' ? Colors.grey[600] : activeColor),
+            color: isSelected ? Colors.white : (label == 'All' ? (widget.isDarkMode ? Colors.white70 : Colors.grey[600]) : activeColor),
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
@@ -477,10 +480,10 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 0,
-      color: Colors.white,
+      color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: Colors.grey.withValues(alpha: 0.08)),
+        side: BorderSide(color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.08)),
       ),
       child: InkWell(
         onTap: () => _openDetail(additive),
@@ -496,14 +499,14 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      additive.code,
-                      style: const TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
+                     Text(
+                       additive.code,
+                       style: TextStyle(
+                         fontSize: 19,
+                         fontWeight: FontWeight.bold,
+                         color: widget.isDarkMode ? Colors.white : Colors.black87,
+                       ),
+                     ),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 0,
@@ -523,14 +526,14 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      additive.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black87,
-                        height: 1.2,
-                      ),
+                     Text(
+                       additive.name,
+                       style: TextStyle(
+                         fontSize: 16,
+                         fontWeight: FontWeight.w500,
+                         color: widget.isDarkMode ? Colors.white : Colors.black87,
+                         height: 1.2,
+                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -595,7 +598,7 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
       height: 13,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: Colors.grey[300]!, width: 0.5),
+        border: Border.all(color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.2) : Colors.grey[300]!, width: 0.5),
       ),
       child: Stack(
         children: [
@@ -635,7 +638,8 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
 // ---------------------------------------------------------------------------
 class AdditiveDetailScreen extends StatefulWidget {
   final Additive additive;
-  const AdditiveDetailScreen({super.key, required this.additive});
+  final bool isDarkMode;
+  const AdditiveDetailScreen({super.key, required this.additive, this.isDarkMode = false});
 
   @override
   State<AdditiveDetailScreen> createState() => _AdditiveDetailScreenState();
@@ -780,7 +784,7 @@ class _AdditiveDetailScreenState extends State<AdditiveDetailScreen> {
         return false;
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: widget.isDarkMode ? const Color(0xFF121212) : Colors.white,
         appBar: AppBar(
           backgroundColor: kTeal,
           elevation: 0,
@@ -873,22 +877,22 @@ class _AdditiveDetailScreenState extends State<AdditiveDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Text(
-                      _additive.description,
-                      textAlign: TextAlign.left,
-                      style: const TextStyle(fontSize: 15, color: Colors.black87, height: 1.5),
-                    ),
+                     Text(
+                       _additive.description,
+                       textAlign: TextAlign.left,
+                       style: TextStyle(fontSize: 15, color: widget.isDarkMode ? Colors.white : Colors.black87, height: 1.5),
+                     ),
 
                     if (_additive.mushboohNote != null) ...[
                       const SizedBox(height: 18),
-                      Text(
-                        'This additive is ${_additive.status == 'MUSHBOOH' ? 'Mushbooh' : _additive.status[0]}${_additive.status.substring(1).toLowerCase()},',
-                        style: const TextStyle(fontSize: 15, color: Colors.black87, height: 1.5),
-                      ),
-                      Text(
-                        _additive.mushboohNote!,
-                        style: const TextStyle(fontSize: 15, color: Colors.black87, height: 1.5),
-                      ),
+                       Text(
+                         'This additive is ${_additive.status == 'MUSHBOOH' ? 'Mushbooh' : _additive.status[0]}${_additive.status.substring(1).toLowerCase()},',
+                         style: TextStyle(fontSize: 15, color: widget.isDarkMode ? Colors.white : Colors.black87, height: 1.5),
+                       ),
+                       Text(
+                         _additive.mushboohNote!,
+                         style: TextStyle(fontSize: 15, color: widget.isDarkMode ? Colors.white : Colors.black87, height: 1.5),
+                       ),
                     ],
 
                     if (_additive.certifications.isNotEmpty) ...[
@@ -978,7 +982,7 @@ class _AdditiveDetailScreenState extends State<AdditiveDetailScreen> {
           ),
         ),
         const SizedBox(width: 12),
-        Text(label, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+        Text(label, style: TextStyle(fontSize: 14, color: widget.isDarkMode ? Colors.white : Colors.black87)),
       ],
     );
   }

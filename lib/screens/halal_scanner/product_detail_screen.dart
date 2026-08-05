@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'additives_list_screen.dart';
 import 'halal_scanner_home.dart';
+import '../../services/halal_analyzer_service.dart';
 
 class ProductIngredient {
   final String code;
@@ -18,96 +18,131 @@ class ProductIngredient {
     required this.riskScore,
     required this.origin,
   });
+
+  Color get statusColor {
+    switch (status) {
+      case 'HARAM':
+        return Colors.red;
+      case 'MUSHBOOH':
+        return Colors.orange;
+      default:
+        return Colors.green;
+    }
+  }
+
+  IconData get statusIcon {
+    switch (status) {
+      case 'HARAM':
+        return Icons.cancel;
+      case 'MUSHBOOH':
+        return Icons.warning;
+      default:
+        return Icons.check_circle;
+    }
+  }
 }
 
-class ProductDetailScreen extends StatelessWidget {
+class ProductDetailScreen extends StatefulWidget {
   final ScannedProduct product;
+  final bool isDarkMode;
+  final List<IngredientAnalysisResult>? analysisResults;
 
-  const ProductDetailScreen({super.key, required this.product});
+  const ProductDetailScreen({
+    super.key,
+    required this.product,
+    this.isDarkMode = false,
+    this.analysisResults,
+  });
 
-  static List<ProductIngredient> sampleIngredientsFor(ScannedProduct product) {
-    if (product.status == 'HARAM') {
-      return const [
-        ProductIngredient(
-          code: 'E120',
-          name: 'Cochineal / Carmine',
-          status: 'HARAM',
-          riskText: 'Toxic',
-          riskScore: 0.65,
-          origin: 'insect',
-        ),
-        ProductIngredient(
-          code: 'E428',
-          name: 'Gelatin',
-          status: 'HARAM',
-          riskText: 'Do not abuse',
-          riskScore: 0.25,
-          origin: 'animal',
-        ),
-        ProductIngredient(
-          code: 'E330',
-          name: 'Citric acid',
-          status: 'HALAL',
-          riskText: 'Safe',
-          riskScore: 0.05,
-          origin: 'plant',
-        ),
-      ];
+  @override
+  State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  late List<ProductIngredient> _ingredients;
+
+  @override
+  void initState() {
+    super.initState();
+    _ingredients = _buildIngredients();
+  }
+
+  List<ProductIngredient> _buildIngredients() {
+    if (widget.analysisResults != null && widget.analysisResults!.isNotEmpty) {
+      return widget.analysisResults!.map((result) {
+        return ProductIngredient(
+          code: HalalAnalyzerService.extractCode(result.ingredient),
+          name: result.ingredient,
+          status: result.status,
+          riskText: _getRiskText(result.status),
+          riskScore: _getRiskScore(result.status),
+          origin: _getOriginFromIngredient(result.ingredient, result.status),
+        );
+      }).toList();
     }
-    if (product.status == 'MUSHBOOH') {
-      return const [
-        ProductIngredient(
-          code: 'E471',
-          name: 'Mono- and diglycerides',
-          status: 'MUSHBOOH',
-          riskText: 'Safe',
-          riskScore: 0.1,
-          origin: 'animal',
-        ),
-        ProductIngredient(
-          code: 'E322',
-          name: 'Lecithin',
-          status: 'MUSHBOOH',
-          riskText: 'Do not abuse',
-          riskScore: 0.3,
-          origin: 'plant',
-        ),
-        ProductIngredient(
-          code: 'E500',
-          name: 'Sodium carbonates',
-          status: 'HALAL',
-          riskText: 'Safe',
-          riskScore: 0.05,
-          origin: 'chemical',
-        ),
-      ];
+
+    final analysis = HalalAnalyzerService.analyzeIngredients(
+      ingredients: widget.product.ingredients,
+      additives: widget.product.additives,
+      productName: widget.product.name,
+      barcode: widget.product.barcode,
+      imageUrl: widget.product.imageUrl,
+    );
+
+    return analysis.results.map((result) {
+      return ProductIngredient(
+        code: HalalAnalyzerService.extractCode(result.ingredient),
+        name: result.ingredient,
+        status: result.status,
+        riskText: _getRiskText(result.status),
+        riskScore: _getRiskScore(result.status),
+        origin: _getOriginFromIngredient(result.ingredient, result.status),
+      );
+    }).toList();
+  }
+
+  String _getRiskText(String status) {
+    switch (status) {
+      case 'HARAM':
+        return 'Avoid';
+      case 'MUSHBOOH':
+        return 'Do not abuse';
+      default:
+        return 'Safe';
     }
-    return const [
-      ProductIngredient(
-        code: 'E300',
-        name: 'Ascorbic acid (Vitamin C)',
-        status: 'HALAL',
-        riskText: 'Safe',
-        riskScore: 0.05,
-        origin: 'plant',
-      ),
-      ProductIngredient(
-        code: 'E440',
-        name: 'Pectins',
-        status: 'HALAL',
-        riskText: 'Safe',
-        riskScore: 0.08,
-        origin: 'plant',
-      ),
-      ProductIngredient(
-        code: 'E330',
-        name: 'Citric acid',
-        status: 'HALAL',
-        riskText: 'Safe',
-        riskScore: 0.05,
-        origin: 'plant',
-      ),
-    ];
+  }
+
+  double _getRiskScore(String status) {
+    switch (status) {
+      case 'HARAM':
+        return 0.8;
+      case 'MUSHBOOH':
+        return 0.4;
+      default:
+        return 0.1;
+    }
+  }
+
+  String _getOriginFromIngredient(String ingredient, String status) {
+    String lower = ingredient.toLowerCase();
+    if (status == 'HARAM') {
+      if (lower.contains('pork') || lower.contains('pig') || lower.contains('bacon') ||
+          lower.contains('ham') || lower.contains('gelatin') || lower.contains('tallow')) {
+        return 'Animal';
+      }
+      if (lower.contains('cochineal') || lower.contains('carmine') || lower.contains('insect')) {
+        return 'Insect';
+      }
+      if (lower.contains('alcohol') || lower.contains('ethanol') || lower.contains('beer') ||
+          lower.contains('wine') || lower.contains('vodka')) {
+        return 'Alcohol';
+      }
+      return 'Animal';
+    }
+    if (status == 'MUSHBOOH') {
+      return 'Unknown';
+    }
+    return 'Plant/Chemical';
   }
 
   Color _statusColor(String status) {
@@ -125,11 +160,18 @@ class ProductDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const tealColor = Color(0xFF55A498);
-    final statusColor = _statusColor(product.status);
-    final ingredients = sampleIngredientsFor(product);
+    final statusColor = _statusColor(widget.product.status);
+    final isDarkMode = widget.isDarkMode;
+    final bgColor = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF9F9FA);
+    final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+
+    final haramCount = _ingredients.where((i) => i.status == 'HARAM').length;
+    final mushboohCount = _ingredients.where((i) => i.status == 'MUSHBOOH').length;
+    final halalCount = _ingredients.where((i) => i.status == 'HALAL').length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F9FA),
+      backgroundColor: bgColor,
       appBar: AppBar(
         backgroundColor: tealColor,
         elevation: 0,
@@ -150,7 +192,7 @@ class ProductDetailScreen extends StatelessWidget {
             icon: const Icon(Icons.share_outlined, color: Colors.white),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Sharing ${product.name}...')),
+                SnackBar(content: Text('Sharing ${widget.product.name}...')),
               );
             },
           ),
@@ -173,10 +215,10 @@ class ProductDetailScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  Icon(_statusIcon(product.status), color: Colors.white, size: 56),
+                  Icon(_statusIcon(widget.product.status), color: Colors.white, size: 56),
                   const SizedBox(height: 12),
                   Text(
-                    product.status,
+                    widget.product.status,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 28,
@@ -186,7 +228,7 @@ class ProductDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    product.name,
+                    widget.product.name,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Colors.white,
@@ -196,12 +238,30 @@ class ProductDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Barcode: ${product.barcode}',
+                    'Barcode: ${widget.product.barcode}',
                     style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13),
                   ),
+                  if (_ingredients.isNotEmpty)
+                    Text(
+                      '${_ingredients.length} ingredients analyzed',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+                    ),
                 ],
               ),
             ),
+            if (widget.product.imageUrl.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    widget.product.imageUrl,
+                    height: 100,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -214,8 +274,9 @@ class ProductDetailScreen extends StatelessWidget {
                         child: _buildInfoCard(
                           icon: Icons.public,
                           label: 'Origin',
-                          value: product.origin,
+                          value: widget.product.origin,
                           color: tealColor,
+                          isDarkMode: isDarkMode,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -223,43 +284,158 @@ class ProductDetailScreen extends StatelessWidget {
                         child: _buildInfoCard(
                           icon: Icons.health_and_safety_outlined,
                           label: 'Risk level',
-                          value: product.risk,
-                          color: product.risk == 'Safe'
+                          value: widget.product.risk,
+                          color: widget.product.risk == 'Safe' || widget.product.risk.contains('Safe')
                               ? Colors.green
-                              : product.risk == 'Toxic'
+                              : widget.product.risk.contains('Haram')
                                   ? Colors.red
                                   : Colors.orange,
+                          isDarkMode: isDarkMode,
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 24),
 
+                  // INGREDIENTS LIST
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Detected additives',
+                      Text(
+                        'Ingredients',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: textColor,
                         ),
                       ),
                       Text(
-                        '${ingredients.length} items',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        '${_ingredients.length} items',
+                        style: TextStyle(
+                          color: isDarkMode ? Colors.white70 : Colors.grey[600],
+                          fontSize: 13,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
 
-                  // Ingredient list
-                  ...ingredients.map((ing) => _buildIngredientCard(ing)),
+                  if (_ingredients.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.search_off, size: 48, color: Colors.grey),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No ingredients found',
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white70 : Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'This product may not have ingredient data available',
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white54 : Colors.grey[400],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ..._ingredients.map((ing) => _buildIngredientCard(ing, isDarkMode)),
 
                   const SizedBox(height: 16),
 
-                  // Report / analyze actions
+                  // SUMMARY CARDS
+                  if (haramCount > 0)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.cancel, color: Colors.red, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '$haramCount Haram ingredient(s) found',
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  if (mushboohCount > 0)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning, color: Colors.orange, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '$mushboohCount Mushbooh ingredient(s) found',
+                              style: TextStyle(
+                                color: Colors.orange.shade700,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  if (_ingredients.isNotEmpty && halalCount == _ingredients.length)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '✅ All $halalCount ingredients are Halal',
+                              style: TextStyle(
+                                color: Colors.green.shade700,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Report button
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -292,20 +468,21 @@ class ProductDetailScreen extends StatelessWidget {
     required String label,
     required String value,
     required Color color,
+    required bool isDarkMode,
   }) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        border: Border.all(color: isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: color, size: 22),
           const SizedBox(height: 8),
-          Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+          Text(label, style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.grey[600], fontSize: 12)),
           const SizedBox(height: 2),
           Text(
             value,
@@ -318,19 +495,38 @@ class ProductDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildIngredientCard(ProductIngredient ing) {
-    final badgeColor = _statusColor(ing.status);
+  Widget _buildIngredientCard(ProductIngredient ing, bool isDarkMode) {
+    final badgeColor = ing.statusColor;
+    final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: badgeColor.withValues(alpha: 0.3),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: badgeColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              ing.statusIcon,
+              color: badgeColor,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,39 +535,33 @@ class ProductDetailScreen extends StatelessWidget {
                   children: [
                     Text(
                       ing.code,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: textColor,
+                      ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         ing.name,
-                        style: TextStyle(color: Colors.grey[700], fontSize: 13),
-                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                        ),
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 28,
-                      height: 14,
-                      child: CustomPaint(
-                        painter: GaugeArcPainter(
-                          score: ing.riskScore,
-                          color: ing.riskScore < 0.4
-                              ? Colors.green
-                              : ing.riskScore < 0.7
-                                  ? Colors.orange
-                                  : Colors.red,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(ing.riskText, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                  ],
+                const SizedBox(height: 2),
+                Text(
+                  ing.riskText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDarkMode ? Colors.white54 : Colors.grey[500],
+                  ),
                 ),
               ],
             ),
@@ -381,17 +571,19 @@ class ProductDetailScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: badgeColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: badgeColor.withValues(alpha: 0.3),
+              ),
             ),
             child: Text(
               ing.status,
-              style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11),
+              style: TextStyle(
+                color: badgeColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
-          CustomPaint(
-            size: const Size(24, 24),
-            painter: OriginPainter(origin: ing.origin),
           ),
         ],
       ),

@@ -4,7 +4,8 @@ import 'product_detail_screen.dart';
 import 'guides_and_walkthrough.dart';
 
 class ScannedHistoryScreen extends StatefulWidget {
-  const ScannedHistoryScreen({super.key});
+  final bool isDarkMode;
+  const ScannedHistoryScreen({super.key, this.isDarkMode = false});
 
   @override
   State<ScannedHistoryScreen> createState() => _ScannedHistoryScreenState();
@@ -63,7 +64,7 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
 
     return MobileFrame(
       child: Scaffold(
-      backgroundColor: const Color(0xFFF9F9FA),
+      backgroundColor: widget.isDarkMode ? const Color(0xFF121212) : const Color(0xFFF9F9FA),
       appBar: AppBar(
         backgroundColor: tealColor,
         elevation: 0,
@@ -94,11 +95,11 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
-                ),
+              decoration: BoxDecoration(
+                color: widget.isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)),
+              ),
                 child: TextField(
                   onChanged: (val) {
                     setState(() {
@@ -141,7 +142,7 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.history_rounded, size: 80, color: Colors.grey[300]),
+            Icon(Icons.history_rounded, size: 80, color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.2) : Colors.grey[300]),
             const SizedBox(height: 20),
             const Text(
               'No results found for your search.',
@@ -157,7 +158,7 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
               _searchQuery.isEmpty
                   ? 'Products scanned by you will appear here.'
                   : 'Try typing different keywords.',
-              style: TextStyle(color: Colors.grey[400], fontSize: 13),
+              style: TextStyle(color: widget.isDarkMode ? Colors.white70 : Colors.grey[400], fontSize: 13),
               textAlign: TextAlign.center,
             ),
           ],
@@ -179,16 +180,16 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 0,
-      color: Colors.white,
+      color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
+        side: BorderSide(color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         title: Text(
           product.name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: widget.isDarkMode ? Colors.white : Colors.black87),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,12 +197,12 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
             const SizedBox(height: 4),
             Text(
               'Barcode: ${product.barcode}',
-              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+              style: TextStyle(color: widget.isDarkMode ? Colors.white70 : Colors.grey[500], fontSize: 12),
             ),
             const SizedBox(height: 2),
             Text(
               'Scanned: ${_formatDate(product.scanDate)}',
-              style: TextStyle(color: Colors.grey[400], fontSize: 11),
+              style: TextStyle(color: widget.isDarkMode ? Colors.white70 : Colors.grey[400], fontSize: 11),
             ),
           ],
         ),
@@ -224,7 +225,7 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ProductDetailScreen(product: product),
+              builder: (context) => ProductDetailScreen(product: product, isDarkMode: widget.isDarkMode),
             ),
           );
         },

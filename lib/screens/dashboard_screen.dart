@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -553,7 +554,12 @@ Future<void> _onPositionUpdate(Position position) async {
     final double appWidth = math.min(size.width, maxAppWidth);
 
     return PopScope(
-      canPop: false, // Prevent accidental back navigation that causes red error
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          SystemNavigator.pop();
+        }
+      },
       child: Scaffold(
       backgroundColor: _isDarkMode ? const Color(0xFF121212) : Colors.white,
       body: Center(
@@ -1377,7 +1383,7 @@ _buildAnimatedEntry(
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const HalalScannerHomeScreen(),
+                        builder: (_) => HalalScannerHomeScreen(isDarkMode: _isDarkMode),
                       ),
                     );
                   },

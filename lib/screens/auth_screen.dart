@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -24,6 +25,7 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   AppScreenState _screenState = AppScreenState.loading;
+  StreamSubscription<User?>? _authSubscription;
 
   @override
   void initState() {
@@ -71,7 +73,8 @@ class _AuthScreenState extends State<AuthScreen> {
 
   // ── Realtime listener (fires when user object changes) ──────────
   void _listenToAuthChanges() {
-    FirebaseAuth.instance.authStateChanges().listen((User? user) async {
+    _authSubscription?.cancel();
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) async {
       if (!mounted) return;
       if (user == null) {
         setState(() => _screenState = AppScreenState.login);
@@ -104,6 +107,12 @@ class _AuthScreenState extends State<AuthScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _listenToAuthChanges();
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   @override
