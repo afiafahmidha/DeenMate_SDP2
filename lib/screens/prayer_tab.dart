@@ -833,12 +833,12 @@ class _PrayerTabState extends State<PrayerTab> {
                             final bool isSalatMissed = isExpired && !isDone;
                             final bool dark = _isDark(context);
 
-                            return GestureDetector(
-                              onTap: () {
-                                if (isSalatMissed || isFuture) return;
-                                widget.onSalatToggle(salat, !isDone);
-                              },
-                              child: Column(
+                              return GestureDetector(
+                                onTap: () {
+                                  if (isSalatMissed || isFuture) return;
+                                  widget.onSalatToggle(salat, !isDone);
+                                },
+                                child: Column(
                                 children: [
                                   AnimatedContainer(
                                     duration: const Duration(milliseconds: 300),
