@@ -3179,11 +3179,17 @@ class _InheritanceScreenState extends State<InheritanceScreen>
                     color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    'وَلِكُلٍّ جَعَلْنَا مَوَالِيَ مِمَّا تَرَكَ الْوَالِدَانِ وَالْأَقْرَبُونَ',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.amiriQuran(fontSize: 13, color: Colors.white, height: 1.6),
-                  ),
+                  child: // AFTER
+                     Text(
+                        'وَلِكُلٍّ جَعَلْنَا مَوَالِيَ مِمَّا تَرَكَ الْوَالِدَانِ وَالْأَقْرَبُونَ',
+                        textAlign: TextAlign.center,
+                         style: GoogleFonts.amiri(
+                          fontSize: 15,
+                          color: Colors.white,
+                          height: 1.9,
+                          fontWeight: FontWeight.w600,
+                                                ),
+                          ),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -3324,11 +3330,12 @@ class _InheritanceScreenState extends State<InheritanceScreen>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(rule['quranAyat'] as String,
-                            textAlign: TextAlign.right,
-                            style: GoogleFonts.amiriQuran(
-                                fontSize: 14,
-                                color: _isDarkMode ? Colors.white : AppColors.navyBlue,
-                                height: 1.8)),
+                      textAlign: TextAlign.right,
+                      style: GoogleFonts.amiri(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                        height: 1.9)),
                     const SizedBox(height: 6),
                     Text(rule['quranTranslation'] as String,
                         style: GoogleFonts.inter(
@@ -3349,6 +3356,7 @@ class _InheritanceScreenState extends State<InheritanceScreen>
               ),
               const SizedBox(height: 10),
             ],
+
 
             // Hadith reference
             if ((rule['hadith'] as String).isNotEmpty) ...[
