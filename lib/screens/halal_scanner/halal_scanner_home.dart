@@ -6,7 +6,9 @@ import 'product_detail_screen.dart';
 import 'scanned_history_screen.dart';
 import 'health_tips_screen.dart';
 import 'additives_list_screen.dart';
+import 'real_barcode_scanner.dart';
 import '../../widgets/auth_header.dart';
+import '../../services/halal_analyzer_service.dart';
 
 class ScannedProduct {
   final String name;
@@ -15,6 +17,10 @@ class ScannedProduct {
   final String status; // 'HALAL', 'HARAM', 'MUSHBOOH'
   final String origin; // 'Plant', 'Animal', 'Chemical', etc.
   final String risk;   // 'Safe', 'Toxic', 'Do not abuse'
+  final List<String> ingredients;
+  final List<String> additives;
+  final String imageUrl;
+  final List<IngredientAnalysisResult>? analysisResults;
 
   ScannedProduct({
     required this.name,
@@ -23,6 +29,10 @@ class ScannedProduct {
     required this.status,
     required this.origin,
     required this.risk,
+    this.ingredients = const [],
+    this.additives = const [],
+    this.imageUrl = '',
+    this.analysisResults,
   });
 }
 
@@ -55,7 +65,8 @@ class HalalScannerState {
 }
 
 class HalalScannerHomeScreen extends StatefulWidget {
-  const HalalScannerHomeScreen({super.key});
+  final bool isDarkMode;
+  const HalalScannerHomeScreen({super.key, required this.isDarkMode});
 
   @override
   State<HalalScannerHomeScreen> createState() => _HalalScannerHomeScreenState();
@@ -67,50 +78,56 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
   void _showScanIngredientsSheet() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
+      backgroundColor: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: widget.isDarkMode ? BorderSide(color: Colors.white.withValues(alpha: 0.12)) : BorderSide.none,
       ),
       builder: (context) {
+        final primaryTextColor = widget.isDarkMode ? Colors.white : Colors.black87;
+
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Scan Ingredients Instead',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: primaryTextColor,
                 ),
               ),
               const SizedBox(height: 20),
               ListTile(
-                leading: const Icon(Icons.camera_alt_outlined, color: Color(0xFF55A498), size: 28),
-                title: const Text('Take photo', style: TextStyle(fontSize: 16)),
+                leading: Icon(Icons.camera_alt_outlined, color: const Color(0xFF55A498), size: 28),
+                title: Text('Take photo', style: TextStyle(fontSize: 16, color: primaryTextColor)),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const AnalyzeProductScreen(
+                      builder: (context) => AnalyzeProductScreen(
+                        isDarkMode: widget.isDarkMode,
                         prefillType: 'Ingredient (Camera)',
                       ),
                     ),
                   ).then((_) => setState(() {}));
                 },
               ),
-              const Divider(),
+              Divider(color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.2)),
               ListTile(
-                leading: const Icon(Icons.image_outlined, color: Color(0xFF55A498), size: 28),
-                title: const Text('Choose from gallery', style: TextStyle(fontSize: 16)),
+                leading: Icon(Icons.image_outlined, color: const Color(0xFF55A498), size: 28),
+                title: Text('Choose from gallery', style: TextStyle(fontSize: 16, color: primaryTextColor)),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const AnalyzeProductScreen(
+                      builder: (context) => AnalyzeProductScreen(
+                        isDarkMode: widget.isDarkMode,
                         prefillType: 'Ingredient (Gallery)',
                       ),
                     ),
@@ -125,43 +142,48 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
   }
 
   void _simulateBarcodeScan() {
-    // Show barcode scanner walkthrough first if needed, or directly open simulator
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => BarcodeScannerSimulator(
+        builder: (context) => RealBarcodeScannerScreen(
           onScanComplete: (product) {
             setState(() {
               HalalScannerState.addProduct(product);
             });
             _openProductDetail(product);
           },
+          isDarkMode: widget.isDarkMode,
         ),
       ),
     );
   }
 
   void _openProductDetail(ScannedProduct product) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProductDetailScreen(product: product),
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => ProductDetailScreen(
+        isDarkMode: widget.isDarkMode,
+        product: product,
+        analysisResults: product.analysisResults, // Pass analysis results
       ),
-    );
-  }
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
     const tealColor = AppColors.midTeal;
+    final bgColor = widget.isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F7F5);
 
     return Container(
-      color: const Color(0xFFE8E8E8),
+      color: bgColor,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
           child: Scaffold(
             key: _scaffoldKey,
-            backgroundColor: const Color(0xFFF7F7F5),
+            backgroundColor: bgColor,
             body: SafeArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
@@ -269,12 +291,12 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
                           border: Border.all(color: tealColor.withValues(alpha: 0.25), width: 1.4),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.navyBlue.withValues(alpha: 0.05),
+                              color: widget.isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.05),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -295,30 +317,30 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                               ),
                             ),
                             const SizedBox(width: 16),
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     'Scan ingredients',
                                     style: TextStyle(
-                                      color: tealColor,
+                                      color: widget.isDarkMode ? Colors.white : tealColor,
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  SizedBox(height: 2),
+                                  const SizedBox(height: 2),
                                   Text(
                                     'Ingredient list',
                                     style: TextStyle(
-                                      color: Colors.grey,
+                                      color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.7) : Colors.grey,
                                       fontSize: 14,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            const Icon(
+                            Icon(
                               Icons.chevron_right_rounded,
                               color: tealColor,
                               size: 28,
@@ -338,7 +360,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.navyBlue,
+                            color: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
                           ),
                         ),
                         GestureDetector(
@@ -346,7 +368,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const ScannedHistoryScreen(),
+                                builder: (context) => ScannedHistoryScreen(isDarkMode: widget.isDarkMode),
                               ),
                             ).then((_) => setState(() {}));
                           },
@@ -390,11 +412,11 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: AppColors.navyBlue.withValues(alpha: 0.06),
+            color: widget.isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -404,9 +426,9 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         children: [
           IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 20),
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue, size: 20),
             style: IconButton.styleFrom(
-              backgroundColor: AppColors.navyBlue.withValues(alpha: 0.08),
+              backgroundColor: widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.navyBlue.withValues(alpha: 0.08),
               shape: const CircleBorder(),
             ),
           ),
@@ -429,14 +451,14 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.navyBlue,
+                    color: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
                   ),
                 ),
                 Text(
                   'Scan, learn and stay mindful',
                   style: GoogleFonts.inter(
                     fontSize: 12,
-                    color: AppColors.navyBlue.withValues(alpha: 0.6),
+                    color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.7) : AppColors.navyBlue.withValues(alpha: 0.6),
                   ),
                 ),
               ],
@@ -455,7 +477,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         color: AppColors.midTeal,
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const AdditivesListScreen()),
+          MaterialPageRoute(builder: (_) => AdditivesListScreen(isDarkMode: widget.isDarkMode)),
         ),
       ),
       _QuickAccessItem(
@@ -464,7 +486,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         color: AppColors.coralOrange,
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const ScannedHistoryScreen()),
+          MaterialPageRoute(builder: (_) => ScannedHistoryScreen(isDarkMode: widget.isDarkMode)),
         ),
       ),
       _QuickAccessItem(
@@ -473,7 +495,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         color: Colors.purple,
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const GuidesAndWalkthroughScreen()),
+          MaterialPageRoute(builder: (_) => GuidesAndWalkthroughScreen(isDarkMode: widget.isDarkMode)),
         ),
       ),
       _QuickAccessItem(
@@ -482,10 +504,12 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         color: Colors.teal,
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const HealthTipsScreen()),
+          MaterialPageRoute(builder: (_) => HealthTipsScreen(isDarkMode: widget.isDarkMode)),
         ),
       ),
     ];
+
+    final primaryTextColor = widget.isDarkMode ? Colors.white : AppColors.navyBlue;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -495,7 +519,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
           style: GoogleFonts.poppins(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: AppColors.navyBlue,
+            color: primaryTextColor,
           ),
         ),
         const SizedBox(height: 10),
@@ -513,6 +537,11 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
   }
 
   Widget _buildQuickAccessCard(_QuickAccessItem item) {
+    final surfaceColor = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryTextColor = widget.isDarkMode ? Colors.white : AppColors.navyBlue;
+    final borderColor = widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.1);
+    final shadowColor = widget.isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.04);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -521,12 +550,12 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: surfaceColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.12)),
+            border: Border.all(color: borderColor),
             boxShadow: [
               BoxShadow(
-                color: AppColors.navyBlue.withValues(alpha: 0.04),
+                color: shadowColor,
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -549,7 +578,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                 style: GoogleFonts.poppins(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.navyBlue,
+                  color: primaryTextColor,
                 ),
               ),
             ],
@@ -565,15 +594,21 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
     required int count,
     required String label,
   }) {
+    final surfaceColor = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryTextColor = widget.isDarkMode ? Colors.white : Colors.black87;
+    final secondaryTextColor = widget.isDarkMode ? Colors.white.withValues(alpha: 0.7) : Colors.grey[600];
+    final borderColor = widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.1);
+    final shadowColor = widget.isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.04);
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: AppColors.navyBlue.withValues(alpha: 0.04),
+            color: shadowColor,
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -592,10 +627,10 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
           const SizedBox(height: 12),
           Text(
             '$count',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: primaryTextColor,
             ),
           ),
           const SizedBox(height: 4),
@@ -604,7 +639,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 11,
-              color: Colors.grey[600],
+              color: secondaryTextColor,
               height: 1.2,
             ),
           ),
@@ -622,13 +657,13 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
             Icon(
               Icons.qr_code_scanner_rounded,
               size: 64,
-              color: Colors.grey[300],
+              color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.15) : Colors.grey[300],
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No scanned products',
               style: TextStyle(
-                color: Colors.grey,
+                color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.7) : Colors.grey,
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
               ),
@@ -637,7 +672,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
             Text(
               'Scan your first product to get started',
               style: TextStyle(
-                color: Colors.grey[400],
+                color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.5) : Colors.grey[400],
                 fontSize: 13,
               ),
             ),
@@ -657,21 +692,27 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
       badgeColor = Colors.orange;
     }
 
+    final surfaceColor = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryTextColor = widget.isDarkMode ? Colors.white : Colors.black87;
+    final borderColor = widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.1);
+    final secondaryTextColor = widget.isDarkMode ? Colors.white.withValues(alpha: 0.5) : Colors.grey[500];
+    final chevronColor = widget.isDarkMode ? Colors.white.withValues(alpha: 0.3) : Colors.grey;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        border: Border.all(color: borderColor),
       ),
       child: ListTile(
         title: Text(
           product.name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: primaryTextColor),
         ),
         subtitle: Text(
           'Barcode: ${product.barcode}',
-          style: TextStyle(color: Colors.grey[500], fontSize: 12),
+          style: TextStyle(color: secondaryTextColor, fontSize: 12),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -692,7 +733,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
               ),
             ),
             const SizedBox(width: 4),
-            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            Icon(Icons.chevron_right_rounded, color: chevronColor),
           ],
         ),
         onTap: () => _openProductDetail(product),
