@@ -54,6 +54,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   String _countdownStr = "1h 12m"; // Safe countdown string for the home page card (prevents splitting errors!)
   String _liveCountdownStr = "00:00:00"; // Exact ticking countdown formatted as HH:mm:ss for prayer tab
   Timer? _realTimeTimer;
+  StreamSubscription<Position>? _positionStreamSub;
 
   // Selected prayer scene for dynamic prayer tab header
   String _selectedPrayerScene = "Asr";
@@ -269,94 +270,105 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   @override
-  void dispose() {
-    _staggerController.dispose();
-    _pulseController.dispose();
-    _floatController.dispose();
-    _cloudsController.dispose();
-    _realTimeTimer?.cancel();
-    super.dispose();
-  }
+void dispose() {
+  _staggerController.dispose();
+  _pulseController.dispose();
+  _floatController.dispose();
+  _cloudsController.dispose();
+  _realTimeTimer?.cancel();
+  _positionStreamSub?.cancel(); // NEW — cancel live location stream
+  super.dispose();
+}
 
   // ===== LOCATION & TRACKING INITIALIZATION =====
-  Future<void> _initLocationAndTracking() async {
-    // 1. Initial calculation using default coordinates (Dhaka)
-    _updatePrayerTimes();
+Future<void> _initLocationAndTracking() async {
+  // 1. Initial calculation using default coordinates (Dhaka)
+  _updatePrayerTimes();
 
-    // 2. Determine GPS Location of the device
-    try {
-      final Position? position = await _determinePosition();
-      if (position != null) {
-        if (mounted) {
-          setState(() {
-            _latitude = position.latitude;
-            _longitude = position.longitude;
-          });
-        }
+  // 2. Kick off continuous, real-time GPS tracking (replaces one-shot fetch)
+  await _startLocationStream();
 
-        // Reverse geocoding to get City name
-        try {
-          final geocoding = Geocoding();
-          final List<Placemark> placemarks =
-              await geocoding.placemarkFromCoordinates(position.latitude, position.longitude);
-          if (placemarks.isNotEmpty && mounted) {
-            final pm = placemarks.first;
-            final city = pm.locality ?? pm.subAdministrativeArea ?? pm.administrativeArea ?? "My Location";
-            final country = pm.country ?? "";
-            setState(() {
-              _locationName = country.isNotEmpty ? "$city, $country" : city;
-            });
-          }
-        } catch (e) {
-          debugPrint("Failed to get address from coordinates: $e");
-        }
-
-        // Recalculate prayer times for the new position
-        _updatePrayerTimes();
-        // Sync real system notifications now that we have accurate prayer times
-        _syncAlarms();
-      }
-    } catch (e) {
-      debugPrint("Failed to get location: $e");
+  // 3. Periodic timer to update countdown & time every 1 second
+  _realTimeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    if (mounted) {
+      _updatePrayerTimes();
     }
+  });
+}
 
-    // 3. Periodic timer to update countdown & time every 1 second (essential for live ticking clock!)
-    _realTimeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        _updatePrayerTimes();
-      }
-    });
+// Requests permission, gets an immediate fix, then subscribes to a live
+// position stream so location keeps updating in real time as the device
+// moves (instead of only fetching once at app start).
+Future<void> _startLocationStream() async {
+  bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+  if (!serviceEnabled) return;
+
+  LocationPermission permission = await Geolocator.checkPermission();
+  if (permission == LocationPermission.denied) {
+    permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied) return;
   }
+  if (permission == LocationPermission.deniedForever) return;
 
-  // Request & check GPS position permission
-  Future<Position?> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+  const locationSettings = LocationSettings(
+    accuracy: LocationAccuracy.high,
+    distanceFilter: 100, // meters — only fires when the user has actually moved
+  );
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return null;
-    }
+  // Cancel any previous subscription before starting a new one.
+  await _positionStreamSub?.cancel();
 
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return null;
-      }
-    }
+  _positionStreamSub =
+      Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+    (Position position) => _onPositionUpdate(position),
+    onError: (e) => debugPrint("Location stream error: $e"),
+  );
 
-    if (permission == LocationPermission.deniedForever) {
-      return null;
-    }
-
-    return await Geolocator.getCurrentPosition(
+  // Also grab an immediate fix so we don't wait for the first stream event.
+  try {
+    final Position initial = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.low,
         timeLimit: Duration(seconds: 8),
       ),
     );
+    await _onPositionUpdate(initial);
+  } catch (e) {
+    debugPrint("Failed to get initial location: $e");
   }
+}
+
+// Called every time we get a new real-time GPS fix (initial + stream).
+Future<void> _onPositionUpdate(Position position) async {
+  if (!mounted) return;
+  setState(() {
+    _latitude = position.latitude;
+    _longitude = position.longitude;
+  });
+
+  // Reverse geocode to get the current City name
+  try {
+    final geocoding = Geocoding();
+    final List<Placemark> placemarks =
+        await geocoding.placemarkFromCoordinates(position.latitude, position.longitude);
+    if (placemarks.isNotEmpty && mounted) {
+      final pm = placemarks.first;
+      final city = pm.locality ?? pm.subAdministrativeArea ?? pm.administrativeArea ?? "My Location";
+      final country = pm.country ?? "";
+      setState(() {
+        _locationName = country.isNotEmpty ? "$city, $country" : city;
+      });
+    }
+  } catch (e) {
+    debugPrint("Failed to get address from coordinates: $e");
+  }
+
+  // Recalculate prayer times for the new position and re-sync notifications
+  _updatePrayerTimes();
+  _syncAlarms();
+}
+
+  
 
   // Calculate actual prayer times based on current date, coordinates & timezone
   void _updatePrayerTimes() {
