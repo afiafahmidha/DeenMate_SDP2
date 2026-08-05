@@ -615,7 +615,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         _completedAyahsToday = prefs.getInt('quran_completed_ayahs_today') ?? 0;
         _targetDailyAyahs = prefs.getInt('quran_target_daily_ayahs') ?? 208;
 
-        _isDarkMode = prefs.getBool('quran_settings_dark') ?? false;
+        _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
         
         final fontVal = prefs.get('quran_settings_font_size');
         if (fontVal is double) {
@@ -735,7 +735,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     await prefs.setInt('quran_completed_ayahs_today', _completedAyahsToday);
     await prefs.setInt('quran_target_daily_ayahs', _targetDailyAyahs);
     await prefs.setInt('quran_khatm_juz_completed', _khatmTotalJuzCompleted);
-    await prefs.setBool('quran_settings_dark', _isDarkMode);
+    await prefs.setBool('is_dark_mode', _isDarkMode);
     await prefs.setDouble('quran_settings_font_size', _arabicFontSize);
 
     await prefs.setInt('quran_continue_surah', _continueSurahId);
@@ -896,8 +896,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         scaffoldBackgroundColor: themeBg,
       ),
       child: Container(
-        color: const Color(0xFFE8E8E8),
-        child: Center(
+           color: _isDarkMode ? const Color(0xFF000000) : const Color(0xFFE8E8E8),
+      child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 430),
             child: Scaffold(
@@ -2807,13 +2807,12 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 value: _isDarkMode,
                 activeTrackColor: AppColors.coralOrange.withValues(alpha: 0.5),
                 activeThumbColor: AppColors.coralOrange,
-                onChanged: (v) {
-                  setState(() {
-                    _isDarkMode = v;
-                    _saveState();
-                  });
-                },
-              ),
+                onChanged: (v) async {
+                  setState(() => _isDarkMode = v);
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('is_dark_mode', v);
+                                     },
+                              ),             
               const Divider(height: 16),
 
               SwitchListTile(
