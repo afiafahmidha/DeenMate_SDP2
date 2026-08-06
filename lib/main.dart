@@ -1,14 +1,19 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth_screen.dart';
 import 'firebase_options.dart';
 import 'services/theme_service.dart';
+import 'services/language_service.dart';
+import 'l10n/app_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await LanguageService.loadLanguagePreference();
 
   try {
     await Firebase.initializeApp(
@@ -63,18 +68,31 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'DeenMate',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primaryColor: const Color(0xFF1A2E40),
-        scaffoldBackgroundColor: Colors.white,
-      ),
-      home: _splashDone
-          ? const AuthScreen()
-          : SplashScreen(
-              onFinished: () => setState(() => _splashDone = true),
-            ),
+    return ValueListenableBuilder<Locale>(
+      valueListenable: appLanguageNotifier,
+      builder: (context, locale, child) {
+        return MaterialApp(
+          title: 'DeenMate',
+          debugShowCheckedModeBanner: false,
+          locale: locale,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: ThemeData(
+            primaryColor: const Color(0xFF1A2E40),
+            scaffoldBackgroundColor: Colors.white,
+          ),
+          home: _splashDone
+              ? const AuthScreen()
+              : SplashScreen(
+                  onFinished: () => setState(() => _splashDone = true),
+                ),
+        );
+      },
     );
   }
 }

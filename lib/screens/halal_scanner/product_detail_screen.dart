@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'halal_scanner_home.dart';
 import '../../services/halal_analyzer_service.dart';
+import '../../l10n/app_localizations.dart';
 
 class ProductIngredient {
   final String code;
@@ -61,12 +62,6 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   late List<ProductIngredient> _ingredients;
 
-  @override
-  void initState() {
-    super.initState();
-    _ingredients = _buildIngredients();
-  }
-
   List<ProductIngredient> _buildIngredients() {
     if (widget.analysisResults != null && widget.analysisResults!.isNotEmpty) {
       return widget.analysisResults!.map((result) {
@@ -101,64 +96,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }).toList();
   }
 
-  String _getRiskText(String status) {
-    switch (status) {
-      case 'HARAM':
-        return 'Avoid';
-      case 'MUSHBOOH':
-        return 'Do not abuse';
-      default:
-        return 'Safe';
-    }
-  }
-
-  double _getRiskScore(String status) {
-    switch (status) {
-      case 'HARAM':
-        return 0.8;
-      case 'MUSHBOOH':
-        return 0.4;
-      default:
-        return 0.1;
-    }
-  }
-
-  String _getOriginFromIngredient(String ingredient, String status) {
-    String lower = ingredient.toLowerCase();
-    if (status == 'HARAM') {
-      if (lower.contains('pork') || lower.contains('pig') || lower.contains('bacon') ||
-          lower.contains('ham') || lower.contains('gelatin') || lower.contains('tallow')) {
-        return 'Animal';
-      }
-      if (lower.contains('cochineal') || lower.contains('carmine') || lower.contains('insect')) {
-        return 'Insect';
-      }
-      if (lower.contains('alcohol') || lower.contains('ethanol') || lower.contains('beer') ||
-          lower.contains('wine') || lower.contains('vodka')) {
-        return 'Alcohol';
-      }
-      return 'Animal';
-    }
-    if (status == 'MUSHBOOH') {
-      return 'Unknown';
-    }
-    return 'Plant/Chemical';
-  }
-
-  Color _statusColor(String status) {
-    if (status == 'HALAL') return Colors.green;
-    if (status == 'HARAM') return Colors.red;
-    return Colors.orange;
-  }
-
-  IconData _statusIcon(String status) {
-    if (status == 'HALAL') return Icons.check_circle_rounded;
-    if (status == 'HARAM') return Icons.cancel_rounded;
-    return Icons.warning_rounded;
-  }
-
   @override
   Widget build(BuildContext context) {
+    _ingredients ??= _buildIngredients();
     const tealColor = Color(0xFF55A498);
     final statusColor = _statusColor(widget.product.status);
     final isDarkMode = widget.isDarkMode;
@@ -179,8 +119,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Product details',
+        title: Text(
+          AppLocalizations.of(context)!.tr('product_details'),
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -238,12 +178,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Barcode: ${widget.product.barcode}',
+                     '${AppLocalizations.of(context)!.tr("barcode")}: ${widget.product.barcode}',
                     style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13),
                   ),
                   if (_ingredients.isNotEmpty)
                     Text(
-                      '${_ingredients.length} ingredients analyzed',
+                        '${_ingredients.length} ${AppLocalizations.of(context)!.tr("ingredients_analyzed")}',
                       style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
                     ),
                 ],
@@ -273,7 +213,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       Expanded(
                         child: _buildInfoCard(
                           icon: Icons.public,
-                          label: 'Origin',
+                           label: AppLocalizations.of(context)!.tr('origin'),
                           value: widget.product.origin,
                           color: tealColor,
                           isDarkMode: isDarkMode,
@@ -283,7 +223,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       Expanded(
                         child: _buildInfoCard(
                           icon: Icons.health_and_safety_outlined,
-                          label: 'Risk level',
+                           label: AppLocalizations.of(context)!.tr('risk_level'),
                           value: widget.product.risk,
                           color: widget.product.risk == 'Safe' || widget.product.risk.contains('Safe')
                               ? Colors.green
@@ -301,8 +241,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Ingredients',
+                     Text(
+                        AppLocalizations.of(context)!.tr('ingredients'),
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -310,7 +250,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                       ),
                       Text(
-                        '${_ingredients.length} items',
+                         '${_ingredients.length} ${AppLocalizations.of(context)!.tr("items")}',
                         style: TextStyle(
                           color: isDarkMode ? Colors.white70 : Colors.grey[600],
                           fontSize: 13,
@@ -333,7 +273,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           Icon(Icons.search_off, size: 48, color: Colors.grey),
                           const SizedBox(height: 8),
                           Text(
-                            'No ingredients found',
+                              AppLocalizations.of(context)!.tr('no_ingredients'),
                             style: TextStyle(
                               color: isDarkMode ? Colors.white70 : Colors.grey[600],
                               fontSize: 14,
@@ -341,7 +281,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'This product may not have ingredient data available',
+                             AppLocalizations.of(context)!.tr('no_ingredient_data'),
                             style: TextStyle(
                               color: isDarkMode ? Colors.white54 : Colors.grey[400],
                               fontSize: 12,
@@ -371,7 +311,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '$haramCount Haram ingredient(s) found',
+                              '$haramCount ${AppLocalizations.of(context)!.tr("haram_ingredients_found")}',
                               style: TextStyle(
                                 color: Colors.red.shade700,
                                 fontWeight: FontWeight.w500,
@@ -397,7 +337,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '$mushboohCount Mushbooh ingredient(s) found',
+                              '$mushboohCount ${AppLocalizations.of(context)!.tr("mushbooh_ingredients_found")}',
                               style: TextStyle(
                                 color: Colors.orange.shade700,
                                 fontWeight: FontWeight.w500,
@@ -422,11 +362,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '✅ All $halalCount ingredients are Halal',
-                              style: TextStyle(
-                                color: Colors.green.shade700,
-                                fontWeight: FontWeight.w500,
-                              ),
+                           '✅ All $halalCount ${AppLocalizations.of(context)!.tr("all_halal_ingredients")}',
+                            style: TextStyle(
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
                             ),
                           ),
                         ],
@@ -446,12 +386,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Report submitted. Thank you!')),
-                        );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                             SnackBar(content: Text(AppLocalizations.of(context)!.tr('report_submitted'))),
+                           );
                       },
                       icon: const Icon(Icons.flag_outlined),
-                      label: const Text('Report incorrect status'),
+                      label: Text(AppLocalizations.of(context)!.tr('report_incorrect')),
                     ),
                   ),
                 ],
@@ -588,5 +528,63 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ],
       ),
     );
+  }
+
+  String _getRiskText(String status) {
+    final l10n = AppLocalizations.of(context);
+    switch (status) {
+      case 'HARAM':
+        return l10n.tr('avoid');
+      case 'MUSHBOOH':
+        return l10n.tr('do_not_abuse');
+      default:
+        return l10n.tr('safe');
+    }
+  }
+
+  double _getRiskScore(String status) {
+    switch (status) {
+      case 'HARAM':
+        return 0.8;
+      case 'MUSHBOOH':
+        return 0.4;
+      default:
+        return 0.1;
+    }
+  }
+
+  String _getOriginFromIngredient(String ingredient, String status) {
+    final l10n = AppLocalizations.of(context);
+    String lower = ingredient.toLowerCase();
+    if (status == 'HARAM') {
+      if (lower.contains('pork') || lower.contains('pig') || lower.contains('bacon') ||
+          lower.contains('ham') || lower.contains('gelatin') || lower.contains('tallow')) {
+        return l10n.tr('animal');
+      }
+      if (lower.contains('cochineal') || lower.contains('carmine') || lower.contains('insect')) {
+        return l10n.tr('insect');
+      }
+      if (lower.contains('alcohol') || lower.contains('ethanol') || lower.contains('beer') ||
+          lower.contains('wine') || lower.contains('vodka')) {
+        return l10n.tr('alcohol');
+      }
+      return l10n.tr('animal');
+    }
+    if (status == 'MUSHBOOH') {
+      return l10n.tr('unknown');
+    }
+    return l10n.tr('plant_chemical');
+  }
+
+  Color _statusColor(String status) {
+    if (status == 'HALAL') return Colors.green;
+    if (status == 'HARAM') return Colors.red;
+    return Colors.orange;
+  }
+
+  IconData _statusIcon(String status) {
+    if (status == 'HALAL') return Icons.check_circle_rounded;
+    if (status == 'HARAM') return Icons.cancel_rounded;
+    return Icons.warning_rounded;
   }
 }

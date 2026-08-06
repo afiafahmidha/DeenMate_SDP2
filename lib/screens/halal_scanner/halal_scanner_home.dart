@@ -9,6 +9,7 @@ import 'additives_list_screen.dart';
 import 'real_barcode_scanner.dart';
 import '../../widgets/auth_header.dart';
 import '../../services/halal_analyzer_service.dart';
+import '../../l10n/app_localizations.dart';
 
 class ScannedProduct {
   final String name;
@@ -92,8 +93,8 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Scan Ingredients Instead',
+                 Text(
+                AppLocalizations.of(context)!.tr('scan_ingredients_instead'),
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -103,15 +104,15 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
               const SizedBox(height: 20),
               ListTile(
                 leading: Icon(Icons.camera_alt_outlined, color: const Color(0xFF55A498), size: 28),
-                title: Text('Take photo', style: TextStyle(fontSize: 16, color: primaryTextColor)),
+                                 title: Text(AppLocalizations.of(context)!.tr('take_photo'), style: TextStyle(fontSize: 16, color: primaryTextColor)),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => AnalyzeProductScreen(
+                       builder: (context) => AnalyzeProductScreen(
                         isDarkMode: widget.isDarkMode,
-                        prefillType: 'Ingredient (Camera)',
+                        prefillType: AppLocalizations.of(context)!.tr('ingredient_camera'),
                       ),
                     ),
                   ).then((_) => setState(() {}));
@@ -120,15 +121,15 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
               Divider(color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.2)),
               ListTile(
                 leading: Icon(Icons.image_outlined, color: const Color(0xFF55A498), size: 28),
-                title: Text('Choose from gallery', style: TextStyle(fontSize: 16, color: primaryTextColor)),
+                                 title: Text(AppLocalizations.of(context)!.tr('choose_from_gallery'), style: TextStyle(fontSize: 16, color: primaryTextColor)),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => AnalyzeProductScreen(
+                       builder: (context) => AnalyzeProductScreen(
                         isDarkMode: widget.isDarkMode,
-                        prefillType: 'Ingredient (Gallery)',
+                        prefillType: AppLocalizations.of(context)!.tr('ingredient_gallery'),
                       ),
                     ),
                   ).then((_) => setState(() {}));
@@ -199,7 +200,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                             icon: Icons.check_circle_rounded,
                             iconColor: Colors.green[400]!,
                             count: HalalScannerState.halalCount,
-                            label: 'Halal\nProducts',
+                             label: AppLocalizations.of(context)!.tr('halal_products'),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -208,7 +209,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                             icon: Icons.cancel_rounded,
                             iconColor: Colors.red[400]!,
                             count: HalalScannerState.haramCount,
-                            label: 'Haram Items\nAvoided',
+                             label: AppLocalizations.of(context)!.tr('haram_avoided'),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -217,7 +218,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                             icon: Icons.warning_rounded,
                             iconColor: Colors.orange[400]!,
                             count: HalalScannerState.mushboohCount,
-                            label: 'Mushbooh Items\nAvoided',
+                             label: AppLocalizations.of(context)!.tr('mushbooh_avoided'),
                           ),
                         ),
                       ],
@@ -253,12 +254,12 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                               ),
                             ),
                             const SizedBox(width: 16),
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Scan code',
+                                  AppLocalizations.of(context)!.tr('scan_code'),
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 18,
@@ -267,7 +268,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                                   ),
                                   SizedBox(height: 2),
                                   Text(
-                                    'By barcode',
+                                    AppLocalizations.of(context)!.tr('by_barcode'),
                                     style: TextStyle(
                                       color: Colors.white70,
                                       fontSize: 14,
@@ -321,8 +322,8 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'Scan ingredients',
+                                   Text(
+                                  AppLocalizations.of(context)!.tr('scan_ingredients'),
                                     style: TextStyle(
                                       color: widget.isDarkMode ? Colors.white : tealColor,
                                       fontSize: 18,
@@ -331,7 +332,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Ingredient list',
+                                    AppLocalizations.of(context)!.tr('ingredient_list'),
                                     style: TextStyle(
                                       color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.7) : Colors.grey,
                                       fontSize: 14,
@@ -356,7 +357,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Last Scanned Products',
+                          AppLocalizations.of(context)!.tr('last_scanned'),
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -373,7 +374,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                             ).then((_) => setState(() {}));
                           },
                           child: Text(
-                            'See more >',
+                             AppLocalizations.of(context)!.tr('see_more'),
                             style: GoogleFonts.poppins(
                               color: tealColor,
                               fontWeight: FontWeight.bold,
@@ -447,7 +448,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Halal Scanner',
+                  AppLocalizations.of(context)!.tr('halal_scanner'),
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -455,7 +456,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                   ),
                 ),
                 Text(
-                  'Scan, learn and stay mindful',
+                  AppLocalizations.of(context)!.tr('scan_and_learn'),
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.7) : AppColors.navyBlue.withValues(alpha: 0.6),
@@ -472,7 +473,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
   Widget _buildQuickAccessSection() {
     final items = [
       _QuickAccessItem(
-        title: 'Additives List',
+        title: AppLocalizations.of(context)!.tr('additives_list'),
         icon: Icons.list_alt_rounded,
         color: AppColors.midTeal,
         onTap: () => Navigator.push(
@@ -481,7 +482,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         ),
       ),
       _QuickAccessItem(
-        title: 'Scanned History',
+        title: AppLocalizations.of(context)!.tr('scanned_history'),
         icon: Icons.history_rounded,
         color: AppColors.coralOrange,
         onTap: () => Navigator.push(
@@ -490,7 +491,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         ),
       ),
       _QuickAccessItem(
-        title: 'Guide',
+        title: AppLocalizations.of(context)!.tr('guide'),
         icon: Icons.menu_book_rounded,
         color: Colors.purple,
         onTap: () => Navigator.push(
@@ -499,7 +500,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         ),
       ),
       _QuickAccessItem(
-        title: 'Health Tips',
+        title: AppLocalizations.of(context)!.tr('health_tips'),
         icon: Icons.health_and_safety_rounded,
         color: Colors.teal,
         onTap: () => Navigator.push(
@@ -515,7 +516,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Quick access',
+           AppLocalizations.of(context)!.tr('quick_access'),
           style: GoogleFonts.poppins(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -661,7 +662,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'No scanned products',
+                AppLocalizations.of(context)!.tr('no_scanned_products'),
               style: TextStyle(
                 color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.7) : Colors.grey,
                 fontWeight: FontWeight.bold,
@@ -670,7 +671,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Scan your first product to get started',
+                AppLocalizations.of(context)!.tr('scan_first_product'),
               style: TextStyle(
                 color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.5) : Colors.grey[400],
                 fontSize: 13,
@@ -710,8 +711,8 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
           product.name,
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: primaryTextColor),
         ),
-        subtitle: Text(
-          'Barcode: ${product.barcode}',
+         subtitle: Text(
+          '${AppLocalizations.of(context)!.tr("barcode")}: ${product.barcode}',
           style: TextStyle(color: secondaryTextColor, fontSize: 12),
         ),
         trailing: Row(

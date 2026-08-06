@@ -15,9 +15,16 @@ class QurbaniPlannerSheet extends StatefulWidget {
   @override
   State<QurbaniPlannerSheet> createState() => _QurbaniPlannerSheetState();
 }
-class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
+  int _tab = 0;
+  static const _tabLabels = ['Eligibility', 'Calculators', 'Shares', 'Distribution', 'Tasks'];
+  static const _tabIcons = [
+    Icons.check_circle_rounded,
+    Icons.calculate_rounded,
+    Icons.people_alt_rounded,
+    Icons.restaurant_menu_rounded,
+    Icons.task_rounded,
+  ];
 
 
   final TextEditingController _savingsCtrl = TextEditingController(text: '0');
@@ -90,7 +97,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
     _loadTheme();
     _calculateCosts();
     _calculateAqiqahCosts();
@@ -104,7 +110,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
   }
   @override
   void dispose() {
-    _tabController.dispose();
     _savingsCtrl.dispose();
     _metalsCtrl.dispose();
     _cashCtrl.dispose();
@@ -385,44 +390,87 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet>
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          
-          const SizedBox(height: 16),
-        
-          TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelColor: _isDarkMode ? Colors.white : AppColors.navyBlue,
-            unselectedLabelColor: _isDarkMode ? Colors.white38 : Colors.grey[600],
-            indicatorColor: AppColors.midTeal,
-            labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-            unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            tabs: const [
-              Tab(text: 'Eligibility & Rules'),
-              Tab(text: 'Calculators & Aqiqah'),
-              Tab(text: 'Share Manager'),
-              Tab(text: 'Meat Distribution'),
-              Tab(text: 'Tasks & Expenses'),
-            ],
-          ),
-        
+const SizedBox(height: 16),
+
+          _buildTabBar(),
+
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildEligibilityAndRulesTab(currencyFormat),
-                _buildCalculatorsTab(currencyFormat),
-                _buildShareManagerTab(),
-                _buildMeatDistributionTab(),
-                _buildTasksAndExpensesTab(currencyFormat),
-              ],
-            ),
+            child: _buildTabContent(currencyFormat),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildTabBar() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
+        ],
+      ),
+      child: Row(
+        children: List.generate(_tabLabels.length, (i) {
+          final active = i == _tab;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _tab = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: active ? AppColors.navyBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Icon(_tabIcons[i],
+                        size: 16,
+                        color: active
+                            ? Colors.white
+                            : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
+                    const SizedBox(height: 2),
+                    Text(_tabLabels[i],
+                        style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: active
+                                ? Colors.white
+                                : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)))),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildTabContent(NumberFormat fmt) {
+    switch (_tab) {
+      case 0:
+        return _buildEligibilityAndRulesTab(fmt);
+      case 1:
+        return _buildCalculatorsTab(fmt);
+      case 2:
+        return _buildShareManagerTab();
+      case 3:
+        return _buildMeatDistributionTab();
+      case 4:
+        return _buildTasksAndExpensesTab(fmt);
+      default:
+        return _buildEligibilityAndRulesTab(fmt);
+    }
   }
   
   Widget _buildEligibilityAndRulesTab(NumberFormat fmt) {
