@@ -919,40 +919,48 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   }
 
   Widget _buildTopHeader(Color themeText) {
+    final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.arrow_back_ios_new_rounded, color: themeText, size: 20),
-                onPressed: () {
-                  if (_activeReaderSurahId != null) {
-                    setState(() => _activeReaderSurahId = null);
-                  } else if (_activeMoreSubView != null) {
-                    setState(() => _activeMoreSubView = null);
-                  } else {
-                    Navigator.pop(context);
-                  }
-                },
-              ),
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: AppColors.midTeal,
-                  shape: BoxShape.circle,
+          IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: themeText, size: 20),
+            onPressed: () {
+              if (_activeReaderSurahId != null) {
+                setState(() => _activeReaderSurahId = null);
+              } else if (_activeMoreSubView != null) {
+                setState(() => _activeMoreSubView = null);
+              } else {
+                Navigator.pop(context);
+              }
+            },
+          ),
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.star_rounded, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Quran Journey',
+                  style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: themeText),
                 ),
-                child: const Icon(Icons.star_rounded, color: Colors.white, size: 16),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Quran Journey',
-                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: themeText),
-              ),
-            ],
+                Text(
+                  'Track your recitation & progress',
+                  style: GoogleFonts.inter(fontSize: 11, color: subtextColor),
+                ),
+              ],
+            ),
           ),
           if (_ramadanMode)
             Container(

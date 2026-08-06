@@ -2397,15 +2397,20 @@ class _SunTimeItem extends StatelessWidget {
 class _QazaReferenceCard extends StatelessWidget {
   const _QazaReferenceCard();
 
-  static const _hadithBukhari = 'Sahih Bukhari 597';
-  static const _hadithMuslim = 'Sahih Muslim 684c';
-  static const _hadithIbnMajah = 'Sunan Ibn Majah 698';
+  static const _quranRef = 'Surah An-Nisa 4:103';
+
+  static const _quranText =
+      '"Indeed, prayer has been decreed upon the believers a decree of specified times."';
+
+  static const _hadithRef = 'Sahih Bukhari 597, Sahih Muslim 684c';
 
   static const _hadithText =
       '"Whoever forgets a prayer or sleeps and misses it, its expiation is to make it up as soon as he remembers it."';
 
   static const _forgetfulnessText =
       '"There is no negligence when one is sleeping, rather negligence is when one is awake. If anyone of you forgets to pray, or sleeps and misses a prayer, then let him pray when he remembers..."';
+
+  static const _hadithIbnMajah = 'Sunan Ibn Majah 698';
 
   @override
   Widget build(BuildContext context) {
@@ -2475,10 +2480,13 @@ class _QazaReferenceCard extends StatelessWidget {
               'Forgetfulness: Completely forgetting to perform the prayer due to extreme distraction, unconsciousness, or a genuine lapse in memory until the time has elapsed.',
               dark, textColor),
           const SizedBox(height: 14),
+          _buildSectionTitle('Quranic Reference', Icons.menu_book_rounded, accentColor),
+          const SizedBox(height: 6),
+          _buildQuranItem(_quranRef, _quranText, dark, textColor, subtleColor),
+          const SizedBox(height: 10),
           _buildSectionTitle('Hadith References', Icons.verified_rounded, accentColor),
           const SizedBox(height: 6),
-          _buildHadithItem(_hadithBukhari, _hadithText, dark, textColor, subtleColor),
-          _buildHadithItem(_hadithMuslim, _hadithText, dark, textColor, subtleColor),
+          _buildHadithItem(_hadithRef, _hadithText, dark, textColor, subtleColor),
           const SizedBox(height: 8),
           _buildHadithItem(_hadithIbnMajah, _forgetfulnessText, dark, textColor, subtleColor),
         ],
@@ -2527,6 +2535,35 @@ class _QazaReferenceCard extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 height: 1.5,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuranItem(String reference, String text, bool dark, Color textColor, Color subtleColor) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            reference,
+            style: GoogleFonts.inter(
+              color: AppColors.dustyBlueTeal,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            text,
+            style: GoogleFonts.inter(
+              color: subtleColor,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+              height: 1.5,
             ),
           ),
         ],

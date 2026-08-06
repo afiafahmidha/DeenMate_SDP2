@@ -40,9 +40,15 @@ class EmergencySosScreen extends StatefulWidget {
   State<EmergencySosScreen> createState() => _EmergencySosScreenState();
 }
 
-class _EmergencySosScreenState extends State<EmergencySosScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _EmergencySosScreenState extends State<EmergencySosScreen> {
+  int _tab = 0;
+  static const _tabLabels = ['SOS', 'Medical', 'Maps', 'Group'];
+  static const _tabIcons = [
+    Icons.emergency_recording_rounded,
+    Icons.medical_services_rounded,
+    Icons.map_rounded,
+    Icons.group_rounded,
+  ];
 
   // ===== SOS ACTIVATION STATES =====
   bool _isSosTriggered = false;
@@ -147,7 +153,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
     _loadProfileData();
     _loadIncidentLogs();
     _initLocationTracking();
@@ -155,7 +160,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
     _holdTimer?.cancel();
     _cancelTimer?.cancel();
     _positionStreamSubscription?.cancel();
@@ -678,17 +682,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
               child: Column(
                 children: [
                   _buildHeader(textThemeColor),
+                  const SizedBox(height: 12),
                   _buildTabBar(cardBg, textThemeColor),
                   Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildSosTriggerTab(primaryBg, cardBg, textThemeColor),
-                        _buildMedicalProfileTab(cardBg, textThemeColor),
-                        _buildGuidesAndContactsTab(cardBg, textThemeColor),
-                        _buildGroupHubTab(cardBg, textThemeColor),
-                      ],
-                    ),
+                    child: _buildTabContent(primaryBg, cardBg, textThemeColor),
                   ),
                 ],
               ),
@@ -747,35 +744,73 @@ class _EmergencySosScreenState extends State<EmergencySosScreen>
 
   // ===== TAB BAR =====
   Widget _buildTabBar(Color bg, Color activeColor) {
+    final cardBg = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final isDark = widget.isDarkMode;
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(14),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
         ],
       ),
-      child: TabBar(
-        controller: _tabController,
-        labelColor: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
-        unselectedLabelColor: widget.isDarkMode ? Colors.white38 : AppColors.placeholder,
-        indicatorColor: widget.isDarkMode ? Colors.red[800] : AppColors.midTeal,
-        indicatorWeight: 3,
-        labelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold),
-        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w500),
-        tabs: const [
-          Tab(text: 'SOS Button'),
-          Tab(text: 'Medical Card'),
-          Tab(text: 'Maps & Guides'),
-          Tab(text: 'Group Hub'),
-        ],
+      child: Row(
+        children: List.generate(_tabLabels.length, (i) {
+          final active = i == _tab;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _tab = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: active ? AppColors.navyBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Icon(_tabIcons[i],
+                        size: 16,
+                        color: active
+                            ? Colors.white
+                            : (isDark ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
+                    const SizedBox(height: 2),
+                    Text(_tabLabels[i],
+                        style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: active
+                                ? Colors.white
+                                : (isDark ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)))),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
+  }
+
+  Widget _buildTabContent(Color primaryBg, Color cardBg, Color textThemeColor) {
+    switch (_tab) {
+      case 0:
+        return _buildSosTriggerTab(primaryBg, cardBg, textThemeColor);
+      case 1:
+        return _buildMedicalProfileTab(cardBg, textThemeColor);
+      case 2:
+        return _buildGuidesAndContactsTab(cardBg, textThemeColor);
+      case 3:
+        return _buildGroupHubTab(cardBg, textThemeColor);
+      default:
+        return _buildSosTriggerTab(primaryBg, cardBg, textThemeColor);
+    }
   }
 
   // ===== TAB 1: SOS TRIGGER PANEL =====

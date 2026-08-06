@@ -230,7 +230,14 @@ const List<_Badge> _badges = [
 ];
 
 class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProviderStateMixin {
-  late TabController _tabController;
+  int _tab = 0;
+  static const _tabLabels = ['Counter', 'Adhkar', 'Stats', 'Reminders'];
+  static const _tabIcons = [
+    Icons.touch_app_rounded,
+    Icons.menu_book_rounded,
+    Icons.analytics_rounded,
+    Icons.notifications_rounded,
+  ];
 
   int _selectedPresetIndex = 0;
   int _count = 0;
@@ -287,7 +294,6 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
     _tapPulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
     _breathController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..repeat(reverse: true);
     _loadStats();
@@ -296,7 +302,6 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
 
   @override
   void dispose() {
-    _tabController.dispose();
     _tapPulseController.dispose();
     _breathController.dispose();
     super.dispose();
@@ -540,7 +545,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     }
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Container(
       color: _letterboxBg(),
@@ -549,25 +554,18 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
           constraints: const BoxConstraints(maxWidth: 430),
           child: Scaffold(
             backgroundColor: _pageBg(),
-            body: SafeArea(
-              child: Column(
-                children: [
-                  _buildHeader(),
-                  _buildTabBar(),
-                  Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildCounterTab(),
-                        _buildAdhkarTab(),
-                        _buildStatsHistoryTab(),
-                        _buildRemindersAchievementsTab(),
-                      ],
+body: SafeArea(
+                child: Column(
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 12),
+                    _buildTabBar(),
+                    Expanded(
+                      child: _buildTabContent(),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
           ),
         ),
       ),
@@ -606,52 +604,78 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-            decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: _dark ? 0.18 : 0.1), borderRadius: BorderRadius.circular(20)),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.cloud_done_rounded, size: 13, color: AppColors.midTeal),
-                const SizedBox(width: 4),
-                Text('Auto-saved', style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.w600, color: AppColors.midTeal)),
-              ],
-            ),
-          ),
         ],
       ),
     );
   }
 
   Widget _buildTabBar() {
+    final cardBg = _dark ? const Color(0xFF1E1E1E) : Colors.white;
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: _tabBarBg(),
-        borderRadius: BorderRadius.circular(14),
-        border: _dark ? Border.all(color: Colors.white.withValues(alpha: 0.14), width: 1) : null,
-        boxShadow: _dark
-            ? []
-            : [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: TabBar(
-        controller: _tabController,
-        isScrollable: true,
-        tabAlignment: TabAlignment.start,
-        labelColor: _primaryText(),
-        unselectedLabelColor: _dark ? Colors.white.withValues(alpha: 0.4) : AppColors.placeholder,
-        indicatorColor: AppColors.midTeal,
-        indicatorWeight: 3,
-        labelStyle: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.w700),
-        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.w500),
-        tabs: const [
-          Tab(text: 'Counter'),
-          Tab(text: 'Adhkar'),
-          Tab(text: 'Stats & History'),
-          Tab(text: 'Reminders & Badges'),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
         ],
       ),
+      child: Row(
+        children: List.generate(_tabLabels.length, (i) {
+          final active = i == _tab;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _tab = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: active ? AppColors.navyBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Icon(_tabIcons[i],
+                        size: 16,
+                        color: active
+                            ? Colors.white
+                            : (_dark ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
+                    const SizedBox(height: 2),
+                    Text(_tabLabels[i],
+                        style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: active
+                                ? Colors.white
+                                : (_dark ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)))),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
     );
+  }
+
+  Widget _buildTabContent() {
+    switch (_tab) {
+      case 0:
+        return _buildCounterTab();
+      case 1:
+        return _buildAdhkarTab();
+      case 2:
+        return _buildStatsHistoryTab();
+      case 3:
+        return _buildRemindersAchievementsTab();
+      default:
+        return _buildCounterTab();
+    }
   }
 
   Widget _sectionLabel(String title, IconData icon) {
