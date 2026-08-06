@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/auth_header.dart';
+import '../l10n/app_localizations.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final VoidCallback onVerified;
@@ -76,15 +77,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       } else if (!auto) {
         setState(() => _checkCount++);
         if (mounted && _checkCount > 0) {
-          _showSnack(
-            'Email not verified yet. Please click the link in your email.',
+         _showSnack(
+        _t('email_not_verified'),
             color: Colors.orange.shade700,
           );
         }
       }
     } catch (e) {
       if (!auto && mounted) {
-        _showSnack('Error checking verification. Please try again.');
+        _showSnack(_t('error_checking_verification'));
       }
     } finally {
       if (!auto && mounted) setState(() => _isChecking = false);
@@ -104,19 +105,19 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       }
       await user.sendEmailVerification();
       _showSnack(
-        'Verification email sent! Check your inbox.',
+        _t('verification_email_sent'),
         color: AppColors.midTeal,
       );
       _startCooldown(60);
     } on FirebaseAuthException catch (e) {
       if (e.code == 'too-many-requests') {
-        _showSnack('Too many requests. Please wait a moment.');
+        _showSnack(_t('too_many_requests_wait'));
         _startCooldown(60);
       } else {
-        _showSnack(e.message ?? 'Failed to send email.');
+        _showSnack(e.message ?? _t('failed_to_send_email'));
       }
     } catch (e) {
-      _showSnack('An error occurred. Please try again.');
+      _showSnack(_t('error_try_again'));
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -140,6 +141,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       });
     });
   }
+
+  String _t(String key) => AppLocalizations.of(context)!.tr(key);
 
   void _showSnack(String msg, {Color color = Colors.red}) {
     if (!mounted) return;
@@ -207,8 +210,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  Text(
-                    'Verify Your Email',
+                   Text(
+                    _t('verify_your_email'),
                     style: GoogleFonts.poppins(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
@@ -217,8 +220,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                   const SizedBox(height: 8),
 
-                  Text(
-                    'We\'ve sent a verification link to your registered email address:',
+                   Text(
+                    _t('verification_sent'),
                     style: GoogleFonts.inter(
                       fontSize: 12.5,
                       color: AppColors.navyBlue.withValues(alpha: 0.75),
@@ -262,19 +265,19 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   const SizedBox(height: 24),
 
                   // Instructions
-                  const _InstructionStep(
+                   _InstructionStep(
                     number: '1',
-                    text: 'Open your email inbox',
+                    text: _t('check_inbox'),
                   ),
                   const SizedBox(height: 10),
-                  const _InstructionStep(
+                  _InstructionStep(
                     number: '2',
-                    text: 'Click the "Verify Email" link sent by DeenMate',
+                    text: _t('click_verify_link'),
                   ),
                   const SizedBox(height: 10),
-                  const _InstructionStep(
+                  _InstructionStep(
                     number: '3',
-                    text: 'Return here and tap "I\'ve Verified My Email"',
+                    text: _t('return_here'),
                   ),
                   const SizedBox(height: 28),
 
@@ -308,8 +311,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                                 const Icon(Icons.check_circle_outline,
                                     size: 18),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'I\'ve Verified My Email',
+                           Text(
+                            _t('ive_verified'),
                                   style: GoogleFonts.poppins(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
@@ -361,9 +364,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  _cooldownSeconds > 0
-                                      ? 'Resend in ${_cooldownSeconds}s'
-                                      : 'Resend Verification Email',
+                                    _cooldownSeconds > 0
+                                       ? '${_t("resend_in")} ${_cooldownSeconds}s'
+                                       : _t('resend_verification'),
                                   style: GoogleFonts.poppins(
                                     fontWeight: FontWeight.w500,
                                     fontSize: 13,
@@ -392,7 +395,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Auto-checking every 5 seconds...',
+                        _t('auto_checking'),
                         style: GoogleFonts.inter(
                           fontSize: 11,
                           color: AppColors.placeholder,
@@ -413,7 +416,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Wrong email? ',
+                         _t('wrong_email'),
                         style: GoogleFonts.inter(
                           fontSize: 12.5,
                           color: AppColors.navyBlue.withValues(alpha: 0.7),
@@ -422,7 +425,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                       GestureDetector(
                         onTap: _signOut,
                         child: Text(
-                          'Sign out & try again',
+                           _t('sign_out_try_again'),
                           style: GoogleFonts.inter(
                             fontSize: 12.5,
                             color: Colors.red.shade600,
@@ -452,7 +455,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Can\'t find the email? Check your Spam or Junk folder.',
+                             _t('cant_find_email'),
                             style: GoogleFonts.inter(
                               fontSize: 11.5,
                               color: AppColors.navyBlue.withValues(alpha: 0.8),
@@ -526,8 +529,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
               children: [
                 const AppLogo(size: 60),
                 const SizedBox(height: 10),
-                Text(
-                  'DeenMate',
+                 Text(
+                _t('app_name'),
                   style: GoogleFonts.playfairDisplay(
                     fontSize: 26,
                     fontWeight: FontWeight.w700,

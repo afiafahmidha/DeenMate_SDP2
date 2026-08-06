@@ -870,14 +870,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55);
 
     return Container(
-      decoration: BoxDecoration(
-        color: _isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: _isDarkMode ? Colors.white.withValues(alpha: 0.08) : AppColors.navyBlue.withValues(alpha: 0.08),
-          ),
-        ),
-      ),
       child: SafeArea(
         bottom: false,
         child: Padding(

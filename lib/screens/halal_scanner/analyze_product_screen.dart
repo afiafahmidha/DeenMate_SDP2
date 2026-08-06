@@ -1,10 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'halal_scanner_home.dart';
 import '../../services/halal_analyzer_service.dart';
+import '../../l10n/app_localizations.dart';
 
 class AnalyzeProductScreen extends StatefulWidget {
   final String? prefillType;
@@ -43,33 +44,62 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
     super.dispose();
   }
 
+  bool _isPicking = false;
+  final ImagePicker _picker = ImagePicker();
+
   Future<void> _pickImage(ImageSource source) async {
-    final status = await Permission.camera.request();
-    if (!mounted) return;
-    if (status.isDenied || status.isPermanentlyDenied) {
+    if (_isPicking) return;
+    _isPicking = true;
+
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1920,
+      );
+
+      _isPicking = false;
+      if (!mounted || image == null) return;
+
+      String imagePath = image.path;
+
+      if (source == ImageSource.camera) {
+        final CroppedFile? cropped = await _cropImage(image.path);
+        if (cropped == null) return;
+        imagePath = cropped.path;
+      }
+
       setState(() {
-        _errorMessage = 'Camera permission is required to scan ingredients.';
+        _selectedImage = File(imagePath);
+        _errorMessage = null;
+        _analysisResult = null;
+        _recognizedText = null;
       });
-      return;
+
+      await _recognizeText(imagePath);
+    } catch (e) {
+      _isPicking = false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open ${source == ImageSource.camera ? 'camera' : 'gallery'}: $e')),
+        );
+      }
     }
+  }
 
-    final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(
-      source: source,
-      imageQuality: 85,
+  Future<CroppedFile?> _cropImage(String sourcePath) async {
+    return await ImageCropper().cropImage(
+      sourcePath: sourcePath,
+      compressQuality: 85,
       maxWidth: 1920,
+      uiSettings: [
+        AndroidUiSettings(
+          initAspectRatio: CropAspectRatioPreset.original,
+          lockAspectRatio: false,
+          hideBottomControls: true,
+        ),
+      ],
     );
-
-    if (!mounted || image == null) return;
-
-    setState(() {
-      _selectedImage = File(image.path);
-      _errorMessage = null;
-      _analysisResult = null;
-      _recognizedText = null;
-    });
-
-    await _recognizeText(image.path);
   }
 
   Future<void> _recognizeText(String imagePath) async {
@@ -94,7 +124,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
 
       if (fullText.trim().isEmpty) {
         setState(() {
-          _errorMessage = 'No text found in image. Please try again with a clearer photo.';
+          _errorMessage = AppLocalizations.of(context)!.tr('no_text_found');
         });
         return;
       }
@@ -105,7 +135,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       if (mounted) {
         setState(() {
           _isAnalyzing = false;
-          _errorMessage = 'Failed to recognize text. Please try again.';
+          _errorMessage = AppLocalizations.of(context)!.tr('recognition_failed');
         });
       }
     }
@@ -122,7 +152,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       if (ingredients.isEmpty) {
         setState(() {
           _isAnalyzing = false;
-          _errorMessage = 'Could not detect ingredients from text. Please enter them manually.';
+          _errorMessage = AppLocalizations.of(context)!.tr('could_not_detect');
         });
         return;
       }
@@ -146,7 +176,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       if (mounted) {
         setState(() {
           _isAnalyzing = false;
-          _errorMessage = 'Failed to analyze ingredients. Please try again.';
+          _errorMessage = AppLocalizations.of(context)!.tr('analysis_failed');
         });
       }
     }
@@ -201,16 +231,16 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
 
   void _submitAnalysis() {
     if (_barcodeController.text.trim().isEmpty && _analysisResult == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please scan ingredients or enter a barcode.')),
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.tr('scan_or_enter'))),
+        );
       return;
     }
 
     final email = _emailController.text.trim();
     if (email.isNotEmpty && !email.contains('@')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid email address.')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.tr('valid_email_entry'))),
       );
       return;
     }
@@ -219,12 +249,12 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return const AlertDialog(
+        return AlertDialog(
           content: Row(
             children: [
-              CircularProgressIndicator(color: Color(0xFF55A498)),
-              SizedBox(width: 20),
-              Text('Submitting analysis...'),
+              const CircularProgressIndicator(color: Color(0xFF55A498)),
+              const SizedBox(width: 20),
+              Text(AppLocalizations.of(context)!.tr('submitting')),
             ],
           ),
         );
@@ -239,15 +269,15 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         context: context,
         builder: (context) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+            title: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green),
-              SizedBox(width: 8),
-              Text('Request Submitted'),
+              const Icon(Icons.check_circle, color: Colors.green),
+              const SizedBox(width: 8),
+              Text(AppLocalizations.of(context)!.tr('request_submitted')),
             ],
           ),
-          content: const Text(
-            'Thank you! Our expert food scientists will analyze your product and notify you once it\'s added to our database.',
+          content: Text(
+            AppLocalizations.of(context)!.tr('thank_you'),
           ),
           actions: [
             ElevatedButton(
@@ -291,7 +321,9 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          _analysisResult != null ? 'Analysis Results' : 'Scan Ingredients',
+          _analysisResult != null
+              ? AppLocalizations.of(context)!.tr('analysis_results')
+              : AppLocalizations.of(context)!.tr('scan_ingredients'),
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -349,7 +381,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       prefixIcon: Icon(Icons.qr_code_2_rounded, color: tealColor),
-                      hintText: 'Barcode number (optional)',
+                      hintText: AppLocalizations.of(context)!.tr('barcode_optional'),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       filled: true,
@@ -364,7 +396,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                     Icon(Icons.camera_alt_outlined, color: secondaryTextColor, size: 22),
                     const SizedBox(width: 8),
                     Text(
-                      'Scan ingredient list',
+                      AppLocalizations.of(context)!.tr('scan_ingredient_list'),
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -380,7 +412,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                       child: ElevatedButton.icon(
                         onPressed: () => _pickImage(ImageSource.camera),
                         icon: const Icon(Icons.camera_alt, color: Colors.white),
-                        label: const Text('Take Photo'),
+                         label: Text(AppLocalizations.of(context)!.tr('take_photo')),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: tealColor,
                           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -393,7 +425,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () => _pickImage(ImageSource.gallery),
                         icon: Icon(Icons.image_outlined, color: tealColor),
-                        label: Text('Gallery', style: TextStyle(color: primaryTextColor)),
+                        label: Text(AppLocalizations.of(context)!.tr('gallery'), style: TextStyle(color: primaryTextColor)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: tealColor,
                           side: BorderSide(color: tealColor),
@@ -452,8 +484,8 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Recognized Text:',
+                         Text(
+                           AppLocalizations.of(context)!.tr('recognized_text_label'),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
@@ -479,8 +511,8 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                   children: [
                     Icon(Icons.person_outline_rounded, color: secondaryTextColor, size: 22),
                     const SizedBox(width: 8),
-                    Text(
-                      'Anything you would like to tell us?',
+                     Text(
+                       AppLocalizations.of(context)!.tr('tell_us'),
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -494,7 +526,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    hintText: 'Email',
+                     hintText: AppLocalizations.of(context)!.tr('email'),
                     hintStyle: TextStyle(color: secondaryTextColor),
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     filled: true,
@@ -512,7 +544,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                   controller: _explainController,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    hintText: 'Explain us here...',
+                     hintText: AppLocalizations.of(context)!.tr('explain_here'),
                     hintStyle: TextStyle(color: secondaryTextColor),
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     filled: true,
@@ -590,7 +622,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            '${analysis.results.length} ingredients analyzed',
+             AppLocalizations.of(context)!.tr('ingredients_analyzed'),
             style: TextStyle(
               color: textColor,
               fontSize: 12,
@@ -661,6 +693,45 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
               ),
             ),
           ],
+          const SizedBox(height: 12),
+          Text(
+            AppLocalizations.of(context)!.tr('all_ingredients'),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...analysis.results.map((result) => Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                Icon(result.statusIcon, color: result.statusColor, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    result.ingredient,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: textColor,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  result.status,
+                  style: TextStyle(
+                    color: result.statusColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          )),
         ],
       ),
     );

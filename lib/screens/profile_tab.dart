@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import '../services/theme_service.dart';
+import '../services/language_service.dart';
+import '../l10n/app_localizations.dart';
 
 /// ===== PROFILE TAB =====
 /// NOTE ON DEPENDENCIES: this file uses `image_picker` to let the user pick
@@ -34,7 +36,6 @@ class ProfileTab extends StatefulWidget {
 }
 
 class _ProfileTabState extends State<ProfileTab> {
-  bool _isBengali = false;
   bool _isEditing = false;
 
   // Profile photo — a real picked file now, instead of a preset gradient avatar.
@@ -49,12 +50,12 @@ class _ProfileTabState extends State<ProfileTab> {
   bool _notificationsEnabled = true;
 
   // ===== EDITABLE FIELDS ===== (email is intentionally NOT included — it's locked)
-  final _fullNameController = TextEditingController(text: "Muhammad Ali");
+  final _fullNameController = TextEditingController(text: "Rahim Uddin");
   final _phoneController = TextEditingController(text: "+880 1712-345678");
   final _addressController = TextEditingController(text: "Dhaka, Bangladesh");
 
   // Locked — shown as plain text everywhere, never becomes a TextField.
-  String _email = "muhammad.ali@deenmate.com";
+  String _email = "rahimuddin@gmail.com";
 
   final ImagePicker _picker = ImagePicker();
 
@@ -62,13 +63,15 @@ class _ProfileTabState extends State<ProfileTab> {
   void initState() {
     super.initState();
     _loadSettings();
+    appLanguageNotifier.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final savedImagePath = prefs.getString('profile_avatar_path');
     setState(() {
-      _isBengali = prefs.getBool('is_bengali') ?? false;
 
       _fullNameController.text = prefs.getString('profile_name') ?? "Muhammad Ali";
       _phoneController.text = prefs.getString('profile_phone') ?? "+880 1712-345678";
@@ -89,7 +92,6 @@ class _ProfileTabState extends State<ProfileTab> {
 
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_bengali', _isBengali);
 
     await prefs.setString('profile_name', _fullNameController.text);
     await prefs.setString('profile_phone', _phoneController.text);
@@ -123,8 +125,9 @@ class _ProfileTabState extends State<ProfileTab> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open ${source == ImageSource.camera ? 'camera' : 'gallery'}: $e')),
+          SnackBar(content: Text('${l10n.tr("could_not_open")} ${source == ImageSource.camera ? l10n.tr("take_photo") : l10n.tr("gallery")}: $e')),
         );
       }
     }
@@ -140,67 +143,8 @@ class _ProfileTabState extends State<ProfileTab> {
 
   Color _getSubtextColor() => widget.isDarkMode ? Colors.white70 : Colors.black54;
 
-  final Map<String, Map<String, String>> _localizedText = {
-    'en': {
-      'profile': 'My Profile',
-      'subtitle': 'Personal settings & account information',
-      'language': 'App Language',
-      'theme_mode': 'Dark Mode Theme',
-      'personal_info': 'Account Information',
-      'full_name': 'Full Name',
-      'email': 'Email Address',
-      'phone': 'Phone Number',
-      'address': 'Address',
-      'quran_settings': 'Quran Reading Settings',
-      'arabic_font_size': 'Arabic Font Size',
-      'bangla_translation': 'Bangla Translation',
-      'english_translation': 'English Translation',
-      'notifications': 'Notifications',
-      'app_notifications': 'App Notifications',
-      'help_support': 'Help & Support',
-      'contact_us': 'Contact Support Team',
-      'about': 'About DeenMate',
-      'save': 'Save Profile',
-      'edit': 'Edit Profile',
-      'logout': 'Sign Out',
-      'change_photo': 'Change Profile Photo',
-      'take_photo': 'Take Photo',
-      'choose_gallery': 'Choose from Gallery',
-      'email_locked': 'Email cannot be changed',
-    },
-    'bn': {
-      'profile': 'আমার প্রোফাইল',
-      'subtitle': 'ব্যক্তিগত তথ্য ও অ্যাপ সেটিংস',
-      'language': 'অ্যাপের ভাষা',
-      'theme_mode': 'ডার্ক মোড থিম',
-      'personal_info': 'অ্যাকাউন্টের তথ্য',
-      'full_name': 'সম্পূর্ণ নাম',
-      'email': 'ইমেইল ঠিকানা',
-      'phone': 'ফোন নম্বর',
-      'address': 'ঠিকানা',
-      'quran_settings': 'কুরআন পড়ার সেটিংস',
-      'arabic_font_size': 'আরবি ফন্ট সাইজ',
-      'bangla_translation': 'বাংলা অনুবাদ',
-      'english_translation': 'ইংরেজি অনুবাদ',
-      'notifications': 'নোটিফিকেশন',
-      'app_notifications': 'অ্যাপ নোটিফিকেশন',
-      'help_support': 'সহায়তা ও সাপোর্ট',
-      'contact_us': 'সহায়তা টিমের সাথে যোগাযোগ',
-      'about': 'দীনমেট সম্পর্কে',
-      'save': 'প্রোফাইল সংরক্ষণ',
-      'edit': 'প্রোফাইল সম্পাদন',
-      'logout': 'লগ আউট',
-      'change_photo': 'প্রোফাইল ছবি পরিবর্তন',
-      'take_photo': 'ছবি তুলুন',
-      'choose_gallery': 'গ্যালারি থেকে বাছাই করুন',
-      'email_locked': 'ইমেইল পরিবর্তন করা যাবে না',
-    }
-  };
-
-  String _t(String key) {
-    final lang = _isBengali ? 'bn' : 'en';
-    return _localizedText[lang]![key] ?? key;
-  }
+  bool get _isBengali => LanguageService.currentLanguage == LanguageService.bn;
+  String _t(String key) => AppLocalizations.of(context)!.tr(key);
 
   @override
   Widget build(BuildContext context) {
@@ -502,7 +446,7 @@ class _ProfileTabState extends State<ProfileTab> {
             children: [
               Icon(Icons.tune_rounded, color: primaryColor, size: 18),
               const SizedBox(width: 8),
-              Text(_isBengali ? 'অ্যাপ সেটিংস' : 'App Settings',
+              Text(_t('app_settings'),
                   style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
             ],
           ),
@@ -520,12 +464,9 @@ class _ProfileTabState extends State<ProfileTab> {
                   DropdownMenuItem(value: false, child: Text("English")),
                   DropdownMenuItem(value: true, child: Text("বাংলা")),
                 ],
-                onChanged: (val) {
+                onChanged: (val) async {
                   if (val != null) {
-                    setState(() {
-                      _isBengali = val;
-                      _saveSettings();
-                    });
+                    await LanguageService.setLanguage(val ? 'bn' : 'en');
                   }
                 },
               ),
@@ -548,12 +489,12 @@ class _ProfileTabState extends State<ProfileTab> {
             contentPadding: EdgeInsets.zero,
             dense: true,
             leading: Icon(Icons.style_rounded, color: primaryColor, size: 18),
-            title: Text(
-              _isBengali ? 'প্রার্থনা কার্ড থিম সিলেকশন' : 'Prayer Card Theme Selection',
+             title: Text(
+              _t('prayer_card_theme_selection'),
               style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor),
             ),
             subtitle: Text(
-              _isBengali ? 'ভিডিও ও ভেক্টর ব্যাকগ্রাউন্ড বেছে নিন' : 'Choose hero video or vector theme',
+              _t('hero_video_or_vector'),
               style: GoogleFonts.inter(fontSize: 10, color: subtextColor),
             ),
             trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
@@ -563,7 +504,6 @@ class _ProfileTabState extends State<ProfileTab> {
                 MaterialPageRoute(
                   builder: (ctx) => PrayerCardThemeSelectionScreen(
                     isDarkMode: widget.isDarkMode,
-                    isBengali: _isBengali,
                   ),
                 ),
               );
@@ -808,12 +748,10 @@ class _ProfileTabState extends State<ProfileTab> {
 // Shows only 2 options: actual playing video, actual vector art.
 class PrayerCardThemeSelectionScreen extends StatefulWidget {
   final bool isDarkMode;
-  final bool isBengali;
 
   const PrayerCardThemeSelectionScreen({
     super.key,
     required this.isDarkMode,
-    required this.isBengali,
   });
 
   @override
@@ -885,18 +823,16 @@ class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectio
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                widget.isBengali ? 'প্রার্থনা কার্ড থিম' : 'Prayer Card Theme',
+                               Text(
+                                 AppLocalizations.of(context)!.tr('prayer_card_theme_selection'),
                                 style: GoogleFonts.poppins(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
                                   color: textColor,
                                 ),
                               ),
-                              Text(
-                                widget.isBengali
-                                    ? 'ভিডিও বা ভেক্টর আর্ট — যেটা পছন্দ বেছে নিন'
-                                    : 'Select Video or Vector Art for your Prayer tab',
+                               Text(
+                                 AppLocalizations.of(context)!.tr('hero_video_or_vector'),
                                 style: GoogleFonts.inter(fontSize: 10.5, color: subtextColor),
                               ),
                             ],
@@ -963,7 +899,7 @@ class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectio
         await savePrayerCardThemePreference('video');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(widget.isBengali ? 'ভিডিও থিম নির্বাচিত হয়েছে ✓' : 'Video theme selected ✓'),
+            content: Text(AppLocalizations.of(context)!.tr('video_theme_selected')),
             duration: const Duration(seconds: 1),
             backgroundColor: primaryColor,
           ));
@@ -1056,15 +992,13 @@ class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectio
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.isBengali ? 'ভিডিও থিম' : 'Video Theme',
+                     Text(
+                      AppLocalizations.of(context)!.tr('video_theme'),
                       style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      widget.isBengali
-                          ? 'ওয়াক্ত অনুযায়ী আসল ভিডিও বদলাবে'
-                          : 'Real prayer video changes with each prayer time',
+                      AppLocalizations.of(context)!.tr('video_theme_desc'),
                       style: GoogleFonts.inter(fontSize: 10, color: subtextColor, height: 1.3),
                     ),
                   ],
@@ -1090,7 +1024,7 @@ class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectio
         await savePrayerCardThemePreference('vector');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(widget.isBengali ? 'ভেক্টর থিম নির্বাচিত হয়েছে ✓' : 'Vector theme selected ✓'),
+            content: Text(AppLocalizations.of(context)!.tr('vector_theme_selected')),
             duration: const Duration(seconds: 1),
             backgroundColor: primaryColor,
           ));
@@ -1185,15 +1119,13 @@ class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectio
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.isBengali ? 'ভেক্টর আর্ট' : 'Vector Art',
+                     Text(
+                      AppLocalizations.of(context)!.tr('vector_art'),
                       style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      widget.isBengali
-                          ? 'চাঁদ, তারা ও মসজিদ সিলুয়েট সহ অ্যানিমেটেড ভেক্টর'
-                          : 'Animated mosque silhouette with moon, stars & sun',
+                      AppLocalizations.of(context)!.tr('vector_theme_desc'),
                       style: GoogleFonts.inter(fontSize: 10, color: subtextColor, height: 1.3),
                     ),
                   ],
@@ -1517,4 +1449,4 @@ class _ActualVectorPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ActualVectorPainter old) => old.animValue != animValue;
-}
+}

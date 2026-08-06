@@ -338,9 +338,38 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
       _glassCard(child: Text(d['overviewEn'] ?? '',
           style: GoogleFonts.inter(fontSize: 12.5, height: 1.65, color: _textColor))),
       const SizedBox(height: 14),
-      _arabicBanner(d['overviewAr'] ?? '', d['dayAr'] ?? ''),
+      if (d['overviewEn'] != null) _historySourceCard('Quran', 'The Holy Quran', 'The Quran is the central religious text of Islam, believed by Muslims to be the literal word of God (Allah) revealed to Prophet Muhammad (peace be upon him) through the angel Jibreel (Gabriel) over a period of 23 years. It was compiled into its final written form during the caliphate of Uthman ibn Affan (may Allah be pleased with him) in approximately 650 CE.'),
     ],
   );
+
+  Widget _historySourceCard(String sourceType, String sourceName, String history) {
+    final accentColor = sourceType == 'Quran' ? _gold : sourceType == 'Hadith' ? _amber : _accent;
+    final icon = sourceType == 'Quran' ? Icons.menu_book_rounded : sourceType == 'Hadith' ? Icons.format_quote_rounded : Icons.history_edu_rounded;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+        boxShadow: [BoxShadow(color: accentColor.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 3))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: accentColor, size: 18),
+              const SizedBox(width: 8),
+              Text(sourceName, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: accentColor)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(history, style: GoogleFonts.inter(fontSize: 12, color: _textColor.withValues(alpha: 0.88), height: 1.55)),
+        ],
+      ),
+    );
+  }
 
   // ── Actions ────────────────────────────────────────────────────────────────
   Widget _actionsSection(Map<String, dynamic> d) {
@@ -391,41 +420,17 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
       const SizedBox(height: 10),
       _referenceHeader(
         refEn: q['referenceEn'] ?? '',
-        refAr: q['referenceAr'] ?? '',
         color: _gold,
         icon: Icons.bookmark_rounded,
       ),
       const SizedBox(height: 12),
-      Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: _dark
-                ? [const Color(0xFF1A2820), const Color(0xFF12201A)]
-                : [const Color(0xFFEAFBF4), const Color(0xFFD6F5E8)],
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _accent.withValues(alpha: 0.3)),
-          boxShadow: [BoxShadow(color: _accent.withValues(alpha: 0.1), blurRadius: 12, offset: const Offset(0, 4))],
-        ),
-        child: Column(children: [
-          _ornamentRow(false),
-          const SizedBox(height: 12),
-          Directionality(
-            textDirection: TextDirection.rtl,
-            child: Text('﴿ ${q['textAr']} ﴾', textAlign: TextAlign.center,
-              style: GoogleFonts.scheherazadeNew(fontSize: 18, fontWeight: FontWeight.bold, height: 1.9,
-                color: _dark ? const Color(0xFFCEF0E4) : const Color(0xFF1A3D30))),
-          ),
-          const SizedBox(height: 10),
-          Divider(color: _accent.withValues(alpha: 0.25)),
-          const SizedBox(height: 6),
-          Text('"${q['textEn']}"', textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: 11.5, fontStyle: FontStyle.italic,
-              color: _textColor.withValues(alpha: 0.88), height: 1.5)),
-        ]),
-      ),
+      _historySourceCard('Quran', 'The Holy Quran', 'This verse is from the Holy Quran, the literal word of God (Allah) revealed to Prophet Muhammad (peace be upon him) through the angel Jibreel (Gabriel). The Quran was revealed over 23 years and serves as the primary source of Islamic law and guidance. It was compiled into its final written form during the caliphate of Uthman ibn Affan (may Allah be pleased with him).'),
+      const SizedBox(height: 10),
+      Divider(color: _gold.withValues(alpha: 0.3)),
+      const SizedBox(height: 6),
+      Text('"${q['textEn']}"', textAlign: TextAlign.center,
+        style: GoogleFonts.inter(fontSize: 11.5, fontStyle: FontStyle.italic,
+          color: _textColor.withValues(alpha: 0.88), height: 1.5)),
       if (q['explanationEn'] != null) ...[
         const SizedBox(height: 12),
         _glassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -434,12 +439,6 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
           const SizedBox(height: 5),
           Text(q['explanationEn'] ?? '',
             style: GoogleFonts.inter(fontSize: 12, color: _textColor.withValues(alpha: 0.88), height: 1.5)),
-          if (q['explanationAr'] != null) ...[
-            const SizedBox(height: 7),
-            Directionality(textDirection: TextDirection.rtl,
-              child: Text(q['explanationAr'] ?? '',
-                style: GoogleFonts.amiri(fontSize: 13, color: _gold, height: 1.6))),
-          ],
         ])),
       ],
     ],
@@ -453,40 +452,16 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
       const SizedBox(height: 10),
       _referenceHeader(
         refEn: h['referenceEn'] ?? '',
-        refAr: h['referenceAr'] ?? '',
         color: _amber,
         icon: Icons.history_edu_rounded,
       ),
       const SizedBox(height: 12),
-      Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: _dark
-                ? [const Color(0xFF261F10), const Color(0xFF1F1A0E)]
-                : [const Color(0xFFFFFBEB), const Color(0xFFFEF0C7)],
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _amber.withValues(alpha: 0.35)),
-          boxShadow: [BoxShadow(color: _amber.withValues(alpha: 0.1), blurRadius: 12, offset: const Offset(0, 4))],
-        ),
-        child: Column(children: [
-          _ornamentRow(true),
-          const SizedBox(height: 12),
-          Directionality(
-            textDirection: TextDirection.rtl,
-            child: Text(h['textAr'] ?? '', textAlign: TextAlign.right,
-              style: GoogleFonts.scheherazadeNew(fontSize: 15.5, fontWeight: FontWeight.w600, height: 1.9,
-                color: _dark ? const Color(0xFFFDE68A) : const Color(0xFF78350F))),
-          ),
-          const SizedBox(height: 10),
-          Divider(color: _amber.withValues(alpha: 0.25)),
-          const SizedBox(height: 6),
-          Text(h['textEn'] ?? '',
-            style: GoogleFonts.inter(fontSize: 11.5, color: _textColor.withValues(alpha: 0.88), height: 1.5)),
-        ]),
-      ),
+      _historySourceCard('Hadith', 'Sahih al-Bukhari & Sahih Muslim', 'This hadith is recorded in Sahih al-Bukhari, compiled by Imam Muhammad ibn Ismail al-Bukhari (810-870 CE), and Sahih Muslim, compiled by Imam Muslim ibn al-Hajjaj (815-875 CE). These are the two most authentic collections of hadith in Sunni Islam. Al-Bukhari traveled extensively across the Islamic world, collecting and verifying the chains of narration (isnad) for each hadith, ensuring their authenticity through rigorous scholarly standards.'),
+      const SizedBox(height: 10),
+      Divider(color: _amber.withValues(alpha: 0.3)),
+      const SizedBox(height: 6),
+      Text(h['textEn'] ?? '',
+        style: GoogleFonts.inter(fontSize: 11.5, color: _textColor.withValues(alpha: 0.88), height: 1.5)),
       if (h['explanationEn'] != null) ...[
         const SizedBox(height: 12),
         _glassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -617,7 +592,6 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
 
   Widget _referenceHeader({
     required String refEn,
-    required String refAr,
     required Color color,
     required IconData icon,
   }) {
@@ -629,77 +603,27 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Icon(icon, size: 13, color: color),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  refEn,
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 13, color: color),
           ),
-          if (refAr.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Directionality(
-              textDirection: TextDirection.rtl,
-              child: Text(
-                refAr,
-                style: GoogleFonts.amiri(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                  height: 1.4,
-                ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              refEn,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+                height: 1.35,
               ),
             ),
-          ],
+          ),
         ],
       ),
-    );
-  }
-
-  Widget _arabicBanner(String arabic, String dayAr) {
-    if (arabic.isEmpty) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: _dark ? [const Color(0xFF1A2820), const Color(0xFF12201A)] : [const Color(0xFFECFDF5), const Color(0xFFD1FAE5)],
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _accent.withValues(alpha: 0.18)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Icon(Icons.translate_rounded, size: 13, color: _accent),
-          const SizedBox(width: 5),
-          Text('Arabic Reference', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w600, color: _accent)),
-        ]),
-        if (dayAr.isNotEmpty) ...[
-          const SizedBox(height: 7),
-          Directionality(textDirection: TextDirection.rtl,
-            child: Text(dayAr, style: GoogleFonts.amiri(fontSize: 12.5, color: _gold, fontWeight: FontWeight.bold))),
-        ],
-        const SizedBox(height: 5),
-        Directionality(textDirection: TextDirection.rtl,
-          child: Text(arabic, style: GoogleFonts.amiri(fontSize: 13.5, color: _textColor.withValues(alpha: 0.85), height: 1.7))),
-      ]),
     );
   }
 
