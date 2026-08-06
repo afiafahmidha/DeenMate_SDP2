@@ -13,7 +13,14 @@ class HajjUmrahPlannerScreen extends StatefulWidget {
 
 class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     with TickerProviderStateMixin {
-  late TabController _tabController;
+  int _tab = 0;
+  static const _tabLabels = ['Rituals', 'Packing', 'Documents', 'Duas'];
+  static const _tabIcons = [
+    Icons.auto_awesome_rounded,
+    Icons.local_offer_rounded,
+    Icons.folder_open_rounded,
+    Icons.chat_bubble_rounded,
+  ];
   String _mode = 'Hajj'; // 'Hajj' or 'Umrah'
   String _hajjType = 'Tamattu'; // 'Tamattu', 'Qiran', or 'Ifrad'
   bool _isDarkMode = false;
@@ -1197,7 +1204,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tab = 0;
     _loadState();
   }
 
@@ -1228,7 +1235,6 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
     for (final controller in _segmentControllers.values) {
       controller.dispose();
     }
@@ -1286,17 +1292,10 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               child: Column(
                 children: [
                   _buildHeader(),
+                  const SizedBox(height: 12),
                   _buildTabBar(),
                   Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildRitualsTab(),
-                        _buildPackingTab(),
-                        _buildDocumentsTab(),
-                        _buildDuasTab(),
-                      ],
-                    ),
+                    child: _buildTabContent(),
                   ),
                 ],
               ),
@@ -1342,44 +1341,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: _isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: ['Hajj', 'Umrah'].map((m) {
-                final bool selected = _mode == m;
-                return GestureDetector(
-                  onTap: () {
-                    if (_mode != m) {
-                      setState(() {
-                        _mode = m;
-                        _initSegmentControllersForCurrentMode();
-                      });
-                    }
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: selected ? (_isDarkMode ? AppColors.midTeal : AppColors.navyBlue) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      m,
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: selected ? Colors.white : (_isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.6)),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
+          _buildModeToggle(),
         ],
       ),
     );
@@ -1387,34 +1349,107 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
 
   Widget _buildTabBar() {
     final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-    final labelColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
-    final unselectedColor = _isDarkMode ? Colors.white38 : AppColors.placeholder;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
         ],
       ),
-      child: TabBar(
-        controller: _tabController,
-        labelColor: labelColor,
-        unselectedLabelColor: unselectedColor,
-        indicatorColor: AppColors.midTeal,
-        indicatorWeight: 3,
-        labelStyle: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.w700),
-        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.w500),
-        tabs: const [
-          Tab(text: 'Rituals'),
-          Tab(text: 'Packing'),
-          Tab(text: 'Documents'),
-          Tab(text: 'Duas'),
-        ],
+      child: Row(
+        children: List.generate(_tabLabels.length, (i) {
+          final active = i == _tab;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _tab = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: active ? AppColors.navyBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Icon(_tabIcons[i],
+                        size: 16,
+                        color: active
+                            ? Colors.white
+                            : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
+                    const SizedBox(height: 2),
+                    Text(_tabLabels[i],
+                        style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: active
+                                ? Colors.white
+                                : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)))),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
+  }
+
+  Widget _buildModeToggle() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: ['Hajj', 'Umrah'].map((m) {
+        final bool selected = _mode == m;
+        return GestureDetector(
+          onTap: () {
+            if (_mode != m) {
+              setState(() {
+                _mode = m;
+                _initSegmentControllersForCurrentMode();
+              });
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: selected
+                  ? (_isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Text(
+              m,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: selected ? Colors.white : (_isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.6)),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildTabContent() {
+    switch (_tab) {
+      case 0:
+        return _buildRitualsTab();
+      case 1:
+        return _buildPackingTab();
+      case 2:
+        return _buildDocumentsTab();
+      case 3:
+        return _buildDuasTab();
+      default:
+        return _buildRitualsTab();
+    }
   }
 
   // ===== RITUALS TAB =====

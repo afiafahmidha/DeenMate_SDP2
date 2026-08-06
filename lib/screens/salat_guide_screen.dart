@@ -20,7 +20,17 @@ class SalatGuideScreen extends StatefulWidget {
 
 class _SalatGuideScreenState extends State<SalatGuideScreen>
     with TickerProviderStateMixin {
-  late TabController _tabController;
+  int _tab = 0;
+  static const _tabLabels = ['Guide', 'Wudu', 'Steps', 'Rules', 'Other', 'Mistakes', 'Qibla'];
+  static const _tabIcons = [
+    Icons.menu_book_rounded,
+    Icons.water_drop_rounded,
+    Icons.list_rounded,
+    Icons.gavel_rounded,
+    Icons.more_horiz_rounded,
+    Icons.warning_rounded,
+    Icons.place_rounded,
+  ];
   bool _isDark = false;
 
   // Star positions for dashboard-style dark mode twinkling background
@@ -44,12 +54,10 @@ class _SalatGuideScreenState extends State<SalatGuideScreen>
   void initState() {
     super.initState();
     _isDark = widget.isDarkMode;
-    _tabController = TabController(length: 7, vsync: this);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -85,23 +93,13 @@ class _SalatGuideScreenState extends State<SalatGuideScreen>
                   ],
 
                   // Main UI Content
-                  Column(
-                    children: [
-                      _buildHeader(),
-                      _buildNarrowTabBar(),
+Column(
+	                     children: [
+	                       _buildHeader(),
+	                       const SizedBox(height: 12),
+	                       _buildTabBar(),
                       Expanded(
-                        child: TabBarView(
-                          controller: _tabController,
-                          children: [
-                            _SalatGuideTab(isDark: _isDark),
-                            _WuduGuideTab(isDark: _isDark),
-                            _SalatStepsTab(isDark: _isDark),
-                            _RulesTab(isDark: _isDark),
-                            _OtherSalatsTab(isDark: _isDark),
-                            _CommonMistakesTab(isDark: _isDark),
-                            _QiblaTab(isDark: _isDark),
-                          ],
-                        ),
+                        child: _buildTabContent(),
                       ),
                     ],
                   ),
@@ -124,13 +122,14 @@ class _SalatGuideScreenState extends State<SalatGuideScreen>
             onPressed: () => Navigator.pop(context),
           ),
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: _isDark ? Colors.black : AppColors.navyBlue,
-              borderRadius: BorderRadius.circular(12),
-              border: _isDark
-                  ? Border.all(color: Colors.white.withValues(alpha: 0.2))
-                  : null,
+gradient: _isDark
+                   ? null
+                   : const LinearGradient(colors: [AppColors.navyBlue, Color(0xFF1D3550)]),
+              color: _isDark ? Colors.white.withValues(alpha: 0.15) : null,
+              borderRadius: BorderRadius.circular(14),
+              border: _isDark ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) : null,
             ),
             child: const Icon(Icons.mosque_rounded, color: Colors.white, size: 20),
           ),
@@ -147,69 +146,85 @@ class _SalatGuideScreenState extends State<SalatGuideScreen>
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.midTeal.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text('سُنَّة',
-                style: GoogleFonts.scheherazadeNew(
-                    color: AppColors.midTeal, fontSize: 16, fontWeight: FontWeight.bold)),
-          ),
+          
         ],
       ),
     );
   }
 
-  Widget _buildNarrowTabBar() {
+  Widget _buildTabBar() {
+    final cardBg = _isDark ? const Color(0xFF1E1E1E) : Colors.white;
+
     return Container(
-      height: 38,
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: _isDark ? Colors.black : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: _isDark
-            ? Border.all(color: Colors.white.withValues(alpha: 0.16))
-            : null,
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          )
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
         ],
       ),
-      child: TabBar(
-        controller: _tabController,
-        isScrollable: true,
-        tabAlignment: TabAlignment.start,
-        indicator: BoxDecoration(
-          color: _isDark ? const Color(0xFF1E293B) : AppColors.navyBlue,
-          borderRadius: BorderRadius.circular(10),
-          border: _isDark
-              ? Border.all(color: AppColors.midTeal.withValues(alpha: 0.5))
-              : null,
-        ),
-        indicatorSize: TabBarIndicatorSize.tab,
-        labelColor: Colors.white,
-        unselectedLabelColor: _subText,
-        labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 11),
-        unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 11),
-        dividerColor: Colors.transparent,
-        padding: const EdgeInsets.all(3),
-        labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-        tabs: const [
-          Tab(text: 'Guide'),
-          Tab(text: 'Wudu'),
-          Tab(text: 'Steps'),
-          Tab(text: 'Rules'),
-          Tab(text: 'Other Salats'),
-          Tab(text: 'Mistakes'),
-          Tab(text: 'Qibla'),
-        ],
+      child: Row(
+        children: List.generate(_tabLabels.length, (i) {
+          final active = i == _tab;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _tab = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: active ? AppColors.navyBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Icon(_tabIcons[i],
+                        size: 16,
+                        color: active
+                            ? Colors.white
+                            : (_isDark ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
+                    const SizedBox(height: 2),
+                    Text(_tabLabels[i],
+                        style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: active
+                                ? Colors.white
+                                : (_isDark ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)))),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
+  }
+
+  Widget _buildTabContent() {
+    switch (_tab) {
+      case 0:
+        return _SalatGuideTab(isDark: _isDark);
+      case 1:
+        return _WuduGuideTab(isDark: _isDark);
+      case 2:
+        return _SalatStepsTab(isDark: _isDark);
+      case 3:
+        return _RulesTab(isDark: _isDark);
+      case 4:
+        return _OtherSalatsTab(isDark: _isDark);
+      case 5:
+        return _CommonMistakesTab(isDark: _isDark);
+      case 6:
+        return _QiblaTab(isDark: _isDark);
+      default:
+        return _SalatGuideTab(isDark: _isDark);
+    }
   }
 }
 

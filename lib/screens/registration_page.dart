@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../widgets/auth_header.dart';
+import '../l10n/app_localizations.dart';
 
 class RegistrationPage extends StatefulWidget {
   final VoidCallback onShowLogin;
@@ -66,8 +67,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
     // Validate passwords match
     if (passwordController.text != confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Passwords do not match'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.tr('passwords_do_not_match')),
           backgroundColor: Colors.red,
         ),
       );
@@ -95,20 +96,20 @@ class _RegistrationPageState extends State<RegistrationPage> {
         widget.onRegisterSuccess();
       }
     } on FirebaseAuthException catch (e) {
-      String message = 'Registration failed';
+      String message = AppLocalizations.of(context)!.tr('registration_failed');
 
       switch (e.code) {
         case 'email-already-in-use':
-          message = 'This email is already registered. Please login.';
+          message = AppLocalizations.of(context)!.tr('email_already_in_use');
           break;
         case 'invalid-email':
-          message = 'Invalid email address.';
+          message = AppLocalizations.of(context)!.tr('invalid_email');
           break;
         case 'weak-password':
-          message = 'Password is too weak. Please use a stronger password.';
+          message = AppLocalizations.of(context)!.tr('password_too_weak');
           break;
         default:
-          message = e.message ?? 'Registration failed. Please try again.';
+          message = e.message ?? AppLocalizations.of(context)!.tr('registration_failed') + '.';
       }
 
       if (mounted) {
@@ -123,8 +124,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('An unexpected error occurred.'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.tr('unexpected_error')),
             backgroundColor: Colors.red,
           ),
         );
@@ -171,7 +172,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message ?? 'Google sign-in failed'),
+             content: Text(e.message ?? AppLocalizations.of(context)!.tr('google_sign_in_failed')),
             backgroundColor: Colors.red,
           ),
         );
@@ -224,8 +225,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Center(
-                      child: Text(
-                        'Create Your Account',
+                     child: Text(
+                      AppLocalizations.of(context)!.tr('create_account'),
                         style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -235,8 +236,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     ),
                     const SizedBox(height: 8),
                     Center(
-                      child: Text(
-                        'Join DeenMate to manage your worship, Islamic\nwealth, and daily spiritual journey.',
+                   child: Text(
+                      AppLocalizations.of(context)!.tr('register_welcome'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 12.5,
@@ -247,60 +248,60 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     ),
                     const SizedBox(height: 24),
                     _buildLabeledField(
-                      label: 'Full Name',
+                      label: AppLocalizations.of(context)!.tr('full_name'),
                       controller: nameController,
                       icon: Icons.account_circle_outlined,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter your full name';
+                          return AppLocalizations.of(context)!.tr('please_enter_full_name');
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 16),
                     _buildLabeledField(
-                      label: 'Email Address',
+                      label: AppLocalizations.of(context)!.tr('email_address'),
                       controller: emailController,
                       icon: Icons.alternate_email_rounded,
                       keyboardType: TextInputType.emailAddress,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter your email';
+                          return AppLocalizations.of(context)!.tr('please_enter_email');
                         }
                         if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
-                          return 'Please enter a valid email address';
+                          return AppLocalizations.of(context)!.tr('valid_email');
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 16),
                     _buildLabeledField(
-                      label: 'Phone Number',
+                      label: AppLocalizations.of(context)!.tr('phone_number'),
                       controller: phoneController,
                       icon: Icons.phone_iphone_rounded,
                       keyboardType: TextInputType.phone,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter your phone number';
+                          return AppLocalizations.of(context)!.tr('please_enter_phone');
                         }
                         if (value.trim().length < 10) {
-                          return 'Please enter a valid phone number';
+                          return AppLocalizations.of(context)!.tr('valid_phone');
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 16),
                     _buildLabeledField(
-                      label: 'Password',
+                      label: AppLocalizations.of(context)!.tr('password'),
                       controller: passwordController,
                       icon: Icons.lock_outlined,
                       obscureText: obscurePassword,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter a password';
+                          return AppLocalizations.of(context)!.tr('please_enter_password');
                         }
                         if (value.length < 6) {
-                          return 'Password must be at least 6 characters';
+                          return AppLocalizations.of(context)!.tr('password_too_short');
                         }
                         return null;
                       },
@@ -319,16 +320,16 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     ),
                     const SizedBox(height: 16),
                     _buildLabeledField(
-                      label: 'Confirm Password',
+                      label: AppLocalizations.of(context)!.tr('confirm_password'),
                       controller: confirmPasswordController,
                       icon: Icons.lock_reset_rounded,
                       obscureText: obscureConfirmPassword,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please confirm your password';
+                          return AppLocalizations.of(context)!.tr('please_confirm_password');
                         }
                         if (value != passwordController.text) {
-                          return 'Passwords do not match';
+                          return AppLocalizations.of(context)!.tr('passwords_do_not_match');
                         }
                         return null;
                       },
@@ -424,8 +425,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
               children: [
                 const AppLogo(size: 64),
                 const SizedBox(height: 12),
-                Text(
-                  'DeenMate',
+                 Text(
+                  AppLocalizations.of(context)!.tr('app_name'),
                   style: GoogleFonts.playfairDisplay(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -435,7 +436,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Your AI-Powered Islamic Lifestyle Companion',
+                   AppLocalizations.of(context)!.tr('app_subtitle'),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontSize: 12,
@@ -529,8 +530,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Select Fiqh (Madhhab)',
+                   Text(
+                      AppLocalizations.of(context)!.tr('select_fiqh'),
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -596,8 +597,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
           ),
         ),
         const SizedBox(height: 6),
-        Text(
-          'Used for personalized Islamic rulings.',
+         Text(
+           AppLocalizations.of(context)!.tr('fiqh_info'),
           style: GoogleFonts.inter(fontSize: 11, color: AppColors.placeholder),
         ),
       ],
@@ -613,8 +614,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
           children: [
             const Icon(Icons.language, color: AppColors.midTeal, size: 18),
             const SizedBox(width: 8),
-            Text(
-              'Preferred Language',
+             Text(
+                AppLocalizations.of(context)!.tr('app_language'),
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -699,7 +700,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
               children: [
                 const TextSpan(text: 'I agree to the '),
                 TextSpan(
-                  text: 'Terms & Privacy Policy',
+                   text: AppLocalizations.of(context)!.tr('terms_privacy'),
                   style: GoogleFonts.inter(
                     color: AppColors.midTeal,
                     fontWeight: FontWeight.w600,
@@ -749,8 +750,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    'Create Account',
+                   Text(
+                    AppLocalizations.of(context)!.tr('create_account'),
                     style: GoogleFonts.poppins(
                       color: AppColors.white,
                       fontSize: 15,
@@ -773,7 +774,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
         Expanded(child: Divider(color: AppColors.placeholder.withValues(alpha: 0.3))),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text('OR',
+          child: Text(AppLocalizations.of(context)!.tr('or'),
               style: GoogleFonts.inter(color: AppColors.placeholder, fontSize: 12, fontWeight: FontWeight.w600)),
         ),
         Expanded(child: Divider(color: AppColors.placeholder.withValues(alpha: 0.3))),
@@ -807,7 +808,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             ),
             const SizedBox(width: 10),
             Text(
-              'Continue with Google',
+              AppLocalizations.of(context)!.tr('continue_with_google'),
               style: GoogleFonts.inter(color: AppColors.navyBlue, fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ],
@@ -825,7 +826,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           children: [
             const TextSpan(text: 'Already have an account? '),
             TextSpan(
-              text: 'Login',
+              text: AppLocalizations.of(context)!.tr('login'),
               style: GoogleFonts.inter(
                 color: AppColors.midTeal,
                 fontWeight: FontWeight.w600,

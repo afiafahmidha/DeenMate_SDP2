@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../widgets/auth_header.dart';
+import '../l10n/app_localizations.dart';
 
 class LoginPage extends StatefulWidget {
   final VoidCallback onShowRegister;
@@ -69,8 +70,8 @@ class _LoginPageState extends State<LoginPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'Please verify your email first. A new verification link has been sent to $email.',
+          content: Text(
+                 '${AppLocalizations.of(context)!.tr("please_verify_email")} $email',
               ),
               backgroundColor: Colors.orange.shade700,
               duration: const Duration(seconds: 5),
@@ -86,24 +87,24 @@ class _LoginPageState extends State<LoginPage> {
         widget.onLoginSuccess();
       }
     } on FirebaseAuthException catch (e) {
-      String message = 'Login failed';
+      String message = AppLocalizations.of(context)!.tr('login_failed');
       
       switch (e.code) {
         case 'user-not-found':
-          message = 'No account found with this email.';
+          message = AppLocalizations.of(context)!.tr('no_account_found');
           break;
         case 'wrong-password':
         case 'invalid-credential':
-          message = 'Incorrect password. Please try again.';
+          message = AppLocalizations.of(context)!.tr('incorrect_password');
           break;
         case 'invalid-email':
-          message = 'Invalid email address.';
+            message = AppLocalizations.of(context)!.tr('invalid_email');
           break;
         case 'too-many-requests':
-          message = 'Too many attempts. Please try again later.';
+          message = AppLocalizations.of(context)!.tr('too_many_requests');
           break;
         default:
-          message = e.message ?? 'Login failed. Please try again.';
+          message = e.message ?? AppLocalizations.of(context)!.tr('login_failed');
       }
       
       if (mounted) {
@@ -118,8 +119,8 @@ class _LoginPageState extends State<LoginPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('An unexpected error occurred.'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.tr('unexpected_error')),
             backgroundColor: Colors.red,
           ),
         );
@@ -167,7 +168,7 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message ?? 'Google sign-in failed'),
+             content: Text(e.message ?? AppLocalizations.of(context)!.tr('google_sign_in_failed')),
             backgroundColor: Colors.red,
           ),
         );
@@ -176,7 +177,7 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('An unexpected error occurred.'),
+              content: Text(AppLocalizations.of(context)!.tr('unexpected_error')),
             backgroundColor: Colors.red,
           ),
         );
@@ -220,8 +221,8 @@ class _LoginPageState extends State<LoginPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Center(
-                      child: Text(
-                        'Assalamu Alaikum',
+                       child: Text(
+                         AppLocalizations.of(context)!.tr('assalamu_alaikum'),
                         style: GoogleFonts.amiri(
                           fontSize: 26,
                           fontWeight: FontWeight.bold,
@@ -232,8 +233,8 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 4),
                     Center(
-                      child: Text(
-                        'Welcome Back',
+                       child: Text(
+                         AppLocalizations.of(context)!.tr('welcome_back'),
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -243,8 +244,8 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 8),
                     Center(
-                      child: Text(
-                        'Login to continue your spiritual journey with DeenMate.',
+                       child: Text(
+                         AppLocalizations.of(context)!.tr('login_continue'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 12.5,
@@ -255,32 +256,32 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 28),
                     _buildLabeledField(
-                      label: 'Email Address',
+                      label: AppLocalizations.of(context)!.tr('email_address'),
                       controller: emailController,
                       icon: Icons.alternate_email_rounded,
                       keyboardType: TextInputType.emailAddress,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter your email';
+                          return AppLocalizations.of(context)!.tr('please_enter_email');
                         }
                         if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
-                          return 'Please enter a valid email address';
+                          return AppLocalizations.of(context)!.tr('valid_email');
                         }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    _buildLabeledField(
-                      label: 'Password',
+                       return null;
+                       },
+                     ),
+                     const SizedBox(height: 20),
+                     _buildLabeledField(
+                       label: AppLocalizations.of(context)!.tr('password'),
                       controller: passwordController,
                       icon: Icons.lock_outlined,
                       obscureText: obscurePassword,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your password';
+                          return AppLocalizations.of(context)!.tr('please_enter_password');
                         }
                         if (value.length < 6) {
-                          return 'Password must be at least 6 characters';
+                          return AppLocalizations.of(context)!.tr('password_too_short');
                         }
                         return null;
                       },
@@ -307,8 +308,8 @@ class _LoginPageState extends State<LoginPage> {
                           minimumSize: const Size(0, 0),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        child: Text(
-                          'Forgot Password?',
+                         child: Text(
+                           AppLocalizations.of(context)!.tr('forgot_password'),
                           style: GoogleFonts.inter(
                             color: AppColors.midTeal,
                             fontSize: 13,
@@ -375,7 +376,7 @@ class _LoginPageState extends State<LoginPage> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
-              title: Row(
+                   title: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
@@ -391,7 +392,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'Reset Password',
+                    AppLocalizations.of(context)!.tr('reset_password'),
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -419,7 +420,7 @@ class _LoginPageState extends State<LoginPage> {
                       controller: resetEmailController,
                       keyboardType: TextInputType.emailAddress,
                       decoration: InputDecoration(
-                        labelText: 'Email Address',
+                        labelText: AppLocalizations.of(context)!.tr('email_address'),
                         prefixIcon: const Icon(Icons.alternate_email_rounded, color: AppColors.placeholder),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -431,10 +432,10 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter your email';
+                          return AppLocalizations.of(context)!.tr('please_enter_email');
                         }
                         if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
-                          return 'Please enter a valid email address';
+                          return AppLocalizations.of(context)!.tr('valid_email');
                         }
                         return null;
                       },
@@ -555,7 +556,7 @@ class _LoginPageState extends State<LoginPage> {
                 const AppLogo(size: 64),
                 const SizedBox(height: 12),
                 Text(
-                  'DeenMate',
+                  AppLocalizations.of(context)!.tr('app_name'),
                   style: GoogleFonts.playfairDisplay(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -565,7 +566,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Your AI-Powered Islamic Lifestyle Companion',
+                  AppLocalizations.of(context)!.tr('app_subtitle'),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontSize: 12,
@@ -686,8 +687,8 @@ class _LoginPageState extends State<LoginPage> {
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    'Log In',
+                   Text(
+                    AppLocalizations.of(context)!.tr('login'),
                     style: GoogleFonts.poppins(
                       color: AppColors.white,
                       fontSize: 15,
@@ -710,7 +711,7 @@ class _LoginPageState extends State<LoginPage> {
         Expanded(child: Divider(color: AppColors.placeholder.withValues(alpha: 0.3))),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text('OR',
+          child: Text(AppLocalizations.of(context)!.tr('or'),
               style: GoogleFonts.inter(color: AppColors.placeholder, fontSize: 12, fontWeight: FontWeight.w600)),
         ),
         Expanded(child: Divider(color: AppColors.placeholder.withValues(alpha: 0.3))),
@@ -744,7 +745,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
             const SizedBox(width: 10),
             Text(
-              'Continue with Google',
+              AppLocalizations.of(context)!.tr('continue_with_google'),
               style: GoogleFonts.inter(color: AppColors.navyBlue, fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ],
@@ -760,9 +761,9 @@ class _LoginPageState extends State<LoginPage> {
         text: TextSpan(
           style: GoogleFonts.inter(fontSize: 13, color: AppColors.navyBlue),
           children: [
-            const TextSpan(text: "Don't have an account? "),
+              const TextSpan(text: "Don't have an account? "),
             TextSpan(
-              text: 'Register',
+              text: AppLocalizations.of(context)!.tr('register'),
               style: GoogleFonts.inter(
                 color: AppColors.midTeal,
                 fontWeight: FontWeight.w600,

@@ -8,6 +8,7 @@ import 'halal_scanner_home.dart';
 import '../../widgets/auth_header.dart';
 import '../../services/open_food_facts_service.dart';
 import '../../services/halal_analyzer_service.dart';
+import '../../l10n/app_localizations.dart';
 import 'product_detail_screen.dart';
 
 // ============================================================
@@ -251,7 +252,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
         final allItems = [...productData.ingredients, ...productData.additives];
         apiResults = await _apiService.checkIngredientsWithApi(allItems);
         apiUsed = true;
-        apiResponse = 'AI analysis completed';
+        apiResponse = 'AI analysis completed'; // keep internal, not shown directly
       } catch (e) {
         print('API failed: $e');
         apiUsed = false;
@@ -384,8 +385,10 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          _showResults ? 'Results' : 'Scan Barcode',
+         title: Text(
+          _showResults
+              ? AppLocalizations.of(context)!.tr('analysis_results')
+              : AppLocalizations.of(context)!.tr('scan_code'),
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -397,7 +400,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
             IconButton(
               icon: Icon(Icons.qr_code_scanner, color: Colors.white),
               onPressed: _scanAgain,
-              tooltip: 'Scan Again',
+               tooltip: AppLocalizations.of(context)!.tr('scan_again'),
             ),
           if (ApiConfig.useApifyApi && ApiConfig.apifyApiToken.isNotEmpty)
             Container(
@@ -463,12 +466,12 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
                       CircularProgressIndicator(color: AppColors.midTeal),
                       const SizedBox(height: 16),
                       Text(
-                        'Analyzing product...',
+                        AppLocalizations.of(context)!.tr('analyzing_product'),
                         style: TextStyle(color: textColor, fontSize: 16),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Checking each ingredient individually',
+                        AppLocalizations.of(context)!.tr('checking_each_ingredient'),
                         style: TextStyle(color: secondaryTextColor, fontSize: 12),
                       ),
                     ],
@@ -520,8 +523,8 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
                           right: 0,
                           child: Column(
                             children: [
-                              Text(
-                                'Align barcode within frame',
+                               Text(
+                                AppLocalizations.of(context)!.tr('align_barcode_frame'),
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
@@ -530,8 +533,8 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Text(
-                                'Keep the phone steady to auto-focus',
+                               Text(
+                                AppLocalizations.of(context)!.tr('keep_steady'),
                                 style: TextStyle(
                                   color: Colors.white70,
                                   fontSize: 13,
@@ -673,7 +676,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${analysis.results.length} ingredients analyzed',
+                   '${analysis.results.length} ${AppLocalizations.of(context)!.tr("ingredients_analyzed")}',
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
@@ -725,7 +728,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        'Barcode: ${analysis.barcode}',
+                         '${AppLocalizations.of(context)!.tr("barcode")}: ${analysis.barcode}',
                         style: TextStyle(
                           color: isDarkMode ? Colors.white70 : Colors.grey[600],
                           fontSize: 12,
@@ -761,8 +764,8 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
             ),
           const SizedBox(height: 16),
 
-          Text(
-            'All Ingredients',
+           Text(
+            AppLocalizations.of(context)!.tr('all_ingredients'),
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -802,86 +805,72 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
               ),
             )
           else
-            ...analysis.results.map((result) => Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: result.statusColor.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: result.statusColor.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      result.statusIcon,
-                      color: result.statusColor,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              HalalAnalyzerService.extractCode(result.ingredient),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: textColor,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                result.ingredient,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: isDarkMode ? Colors.white70 : Colors.grey[700],
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: result.statusColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: result.statusColor.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      result.status,
-                      style: TextStyle(
-                        color: result.statusColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )),
+           ...analysis.results.map((result) => Container(
+               margin: const EdgeInsets.only(bottom: 8),
+               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+               decoration: BoxDecoration(
+                 color: cardColor,
+                 borderRadius: BorderRadius.circular(10),
+                 border: Border.all(
+                   color: result.statusColor.withValues(alpha: 0.3),
+                   width: 1,
+                 ),
+               ),
+               child: Row(
+                 children: [
+                   Container(
+                     width: 28,
+                     height: 28,
+                     decoration: BoxDecoration(
+                       color: result.statusColor.withValues(alpha: 0.1),
+                       shape: BoxShape.circle,
+                     ),
+                     child: Icon(
+                       result.statusIcon,
+                       color: result.statusColor,
+                       size: 18,
+                     ),
+                   ),
+                   const SizedBox(width: 12),
+                   Expanded(
+                     child: Row(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         Text(
+                           HalalAnalyzerService.extractCode(result.ingredient),
+                           style: TextStyle(
+                             fontWeight: FontWeight.bold,
+                             fontSize: 13,
+                             color: textColor,
+                           ),
+                         ),
+                         const SizedBox(width: 6),
+                         Flexible(
+                           child: Text(
+                             result.ingredient,
+                             style: TextStyle(
+                               fontSize: 13,
+                               color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                             ),
+                             maxLines: 2,
+                             overflow: TextOverflow.ellipsis,
+                           ),
+                         ),
+                         const SizedBox(width: 12),
+                         Text(
+                           result.status,
+                           style: TextStyle(
+                             color: result.statusColor,
+                             fontWeight: FontWeight.bold,
+                             fontSize: 11,
+                           ),
+                         ),
+                       ],
+                     ),
+                   ),
+                 ],
+               ),
+             )),
 
           const SizedBox(height: 16),
 
@@ -972,7 +961,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _scanAgain,
                   icon: Icon(Icons.qr_code_scanner, color: Colors.white),
-                  label: const Text('Scan Again'),
+                  label: Text(AppLocalizations.of(context)!.tr('scan_again')),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.midTeal,
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -996,7 +985,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
                     );
                   },
                   icon: Icon(Icons.info_outline, color: AppColors.midTeal),
-                  label: const Text('View Details'),
+                  label: Text(AppLocalizations.of(context)!.tr('view_details')),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.midTeal,
                     side: BorderSide(color: AppColors.midTeal),

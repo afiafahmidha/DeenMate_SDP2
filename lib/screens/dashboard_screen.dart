@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -18,6 +19,8 @@ import 'zakat_manager_screen.dart';
 import 'quran_tracker_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/theme_service.dart';
+import '../services/language_service.dart';
+import '../l10n/app_localizations.dart';
 import 'emergency_sos_screen.dart';
 import 'dhikr_counter_screen.dart';
 import 'profile_tab.dart';
@@ -495,7 +498,7 @@ Future<void> _onPositionUpdate(Position position) async {
     String countdown;
     String liveCountdown;
     if (durationLeft.isNegative) {
-      countdown = "any moment";
+      countdown = AppLocalizations.of(context)!.tr('any_moment');
       liveCountdown = "00:00:00";
     } else {
       final hours = durationLeft.inHours;
@@ -668,7 +671,7 @@ Future<void> _onPositionUpdate(Position position) async {
                               ),
                               const SizedBox(height: 20),
                               Text(
-                                'Prayer Time',
+                                 AppLocalizations.of(context)!.tr('prayer_time'),
                                 style: GoogleFonts.playfairDisplay(
                                   fontSize: 13,
                                   letterSpacing: 3,
@@ -700,7 +703,7 @@ Future<void> _onPositionUpdate(Position position) async {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'It is time for $_alarmPrayerName prayer.',
+                                 '${AppLocalizations.of(context)!.tr("it_is_time_for")} $_alarmPrayerName ${AppLocalizations.of(context)!.tr("prayer_dot")}',
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
@@ -726,7 +729,7 @@ Future<void> _onPositionUpdate(Position position) async {
                                     elevation: 0,
                                   ),
                                   child: Text(
-                                    'Dismiss',
+                                     AppLocalizations.of(context)!.tr('dismiss'),
                                     style: GoogleFonts.inter(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w600,
@@ -773,11 +776,11 @@ Future<void> _onPositionUpdate(Position position) async {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildNavItem(0, Icons.home_rounded, 'Home'),
-            _buildNavItem(1, Icons.access_time_rounded, 'Prayer'),
-            _buildNavItem(2, Icons.calendar_month_rounded, 'Calendar'),
-            _buildNavItem(3, Icons.auto_awesome_rounded, 'Assistant'),
-            _buildNavItem(4, Icons.person_outline_rounded, 'Profile'),
+            _buildNavItem(0, Icons.home_rounded, AppLocalizations.of(context)!.tr('home')),
+            _buildNavItem(1, Icons.access_time_rounded, AppLocalizations.of(context)!.tr('prayer')),
+            _buildNavItem(2, Icons.calendar_month_rounded, AppLocalizations.of(context)!.tr('calendar')),
+            _buildNavItem(3, Icons.auto_awesome_rounded, AppLocalizations.of(context)!.tr('assistant')),
+            _buildNavItem(4, Icons.person_outline_rounded, AppLocalizations.of(context)!.tr('profile')),
           ],
         ),
       ),
@@ -945,7 +948,7 @@ const SizedBox(height: 28),
 // Islamic Wealth Section
 _buildAnimatedEntry(
   delay: 0.3,
-            child: _buildSectionTitle('Islamic Wealth'),
+                child: _buildSectionTitle(AppLocalizations.of(context)!.tr('islamic_wealth')),
           ),
           const SizedBox(height: 14),
 
@@ -958,7 +961,7 @@ _buildAnimatedEntry(
           // Worship Section
           _buildAnimatedEntry(
             delay: 0.35,
-            child: _buildSectionTitle('Worship'),
+            child: _buildSectionTitle(AppLocalizations.of(context)!.tr('worship')),
           ),
           const SizedBox(height: 14),
 
@@ -1013,7 +1016,7 @@ _buildAnimatedEntry(
                 Row(
                   children: [
                     Text(
-                      'Assalamu Alaikum, ',
+                      AppLocalizations.of(context)!.tr('assalamu_alaikum'),
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -1190,8 +1193,8 @@ _buildAnimatedEntry(
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
-                                  'Next Prayer',
+                         Text(
+                           AppLocalizations.of(context)!.tr('next_prayer'),
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
@@ -1272,7 +1275,7 @@ _buildAnimatedEntry(
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.calculate_rounded,
-                  label: 'Zakat Calculator',
+                   label: AppLocalizations.of(context)!.tr('zakat_calculator'),
                   iconPainter: _ZakatIconPainter(isDark: _isDarkMode),
                   onTap: _showZakatCalculatorSheet,
                 ),
@@ -1281,7 +1284,7 @@ _buildAnimatedEntry(
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.pets_rounded,
-                  label: 'Qurbani Planner',
+                   label: AppLocalizations.of(context)!.tr('qurbani_planner'),
                   iconPainter: _QurbaniIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
@@ -1300,7 +1303,7 @@ _buildAnimatedEntry(
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.flight_takeoff_rounded,
-                  label: 'Hajj & Umrah',
+                   label: AppLocalizations.of(context)!.tr('hajj_umrah'),
                   iconPainter: _HajjIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
@@ -1315,7 +1318,7 @@ _buildAnimatedEntry(
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.account_balance_rounded,
-                  label: 'Inheritance',
+                   label: AppLocalizations.of(context)!.tr('inheritance'),
                   iconPainter: _InheritanceIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
@@ -1344,7 +1347,7 @@ _buildAnimatedEntry(
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.menu_book_rounded,
-                  label: 'Quran Tracker',
+                   label: AppLocalizations.of(context)!.tr('quran_tracker'),
                   iconPainter: _QuranIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
@@ -1359,7 +1362,7 @@ _buildAnimatedEntry(
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.fingerprint_rounded,
-                  label: 'Dhikr Counter',
+                   label: AppLocalizations.of(context)!.tr('dhikr_counter'),
                   iconPainter: _DhikrIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
@@ -1378,7 +1381,7 @@ _buildAnimatedEntry(
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.qr_code_scanner_rounded,
-                  label: 'Halal Scanner',
+                   label: AppLocalizations.of(context)!.tr('halal_scanner'),
                   iconPainter: _HalalIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
@@ -1393,7 +1396,7 @@ _buildAnimatedEntry(
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.health_and_safety_rounded,
-                  label: 'Emergency SOS',
+                   label: AppLocalizations.of(context)!.tr('emergency_sos'),
                   iconPainter: _EmergencyIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.push(
@@ -1413,7 +1416,7 @@ _buildAnimatedEntry(
               Expanded(
                 child: _buildFeatureCard(
                   icon: Icons.crop_portrait_rounded,
-                  label: 'Salat Guide',
+                   label: AppLocalizations.of(context)!.tr('salat_guide'),
                   iconPainter: _SalatGuideIconPainter(isDark: _isDarkMode),
                   onTap: () {
                     Navigator.of(context).push(
@@ -1570,7 +1573,13 @@ _buildAnimatedEntry(
 
   // ===== PLACEHOLDER TAB =====
   Widget _buildPlaceholderTab() {
-    final List<String> tabNames = ['Home', 'Prayer', 'Calendar', 'Assistant', 'Profile'];
+    final List<String> tabNames = [
+      AppLocalizations.of(context)!.tr('home'),
+      AppLocalizations.of(context)!.tr('prayer'),
+      AppLocalizations.of(context)!.tr('calendar'),
+      AppLocalizations.of(context)!.tr('assistant'),
+      AppLocalizations.of(context)!.tr('profile'),
+    ];
     return Center(
       key: ValueKey('PlaceholderTab_$_currentIndex'),
       child: Column(
@@ -1583,7 +1592,7 @@ _buildAnimatedEntry(
           ),
           const SizedBox(height: 16),
           Text(
-            '${tabNames[_currentIndex]} Coming Soon',
+            '${tabNames[_currentIndex]} ${AppLocalizations.of(context)!.tr("coming_soon")}',
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -1591,8 +1600,8 @@ _buildAnimatedEntry(
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            'This feature is under development',
+            Text(
+              AppLocalizations.of(context)!.tr('under_development'),
             style: GoogleFonts.inter(
               fontSize: 13,
               color: AppColors.navyBlue.withValues(alpha: 0.35),

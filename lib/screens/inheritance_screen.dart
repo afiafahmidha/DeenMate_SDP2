@@ -907,7 +907,14 @@ class InheritanceScreen extends StatefulWidget {
 
 class _InheritanceScreenState extends State<InheritanceScreen>
     with TickerProviderStateMixin {
-  late TabController _tabController;
+  int _tab = 0;
+  static const _tabLabels = ['Family Tree', 'Calculation', 'Scenarios', 'Rules'];
+  static const _tabIcons = [
+    Icons.account_tree_rounded,
+    Icons.calculate_rounded,
+    Icons.auto_awesome_rounded,
+    Icons.menu_book_rounded,
+  ];
   late AnimationController _lineAnimationController;
   bool _isDarkMode = false;
   bool _boardLocked = false;
@@ -957,7 +964,6 @@ class _InheritanceScreenState extends State<InheritanceScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
     _lineAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -967,7 +973,6 @@ class _InheritanceScreenState extends State<InheritanceScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
     _lineAnimationController.dispose();
     _treeTransformController.dispose();
     super.dispose();
@@ -1141,17 +1146,10 @@ class _InheritanceScreenState extends State<InheritanceScreen>
               child: Column(
                 children: [
                   _buildHeader(),
+                  const SizedBox(height: 12),
                   _buildTabBar(),
                   Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildFamilyTreeTab(),
-                        _buildCalculationTab(),
-                        _buildScenariosTab(),
-                        _buildRulesTab(),
-                      ],
-                    ),
+                    child: _buildTabContent(),
                   ),
                 ],
               ),
@@ -1206,31 +1204,71 @@ class _InheritanceScreenState extends State<InheritanceScreen>
 
   Widget _buildTabBar() {
     final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
         ],
       ),
-      child: TabBar(
-        controller: _tabController,
-        labelColor: _isDarkMode ? Colors.white : AppColors.navyBlue,
-        unselectedLabelColor: _isDarkMode ? Colors.white38 : AppColors.placeholder,
-        indicatorColor: AppColors.midTeal,
-        indicatorWeight: 3,
-        labelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w700),
-        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w500),
-        tabs: const [
-          Tab(text: 'Family Tree'),
-          Tab(text: 'Calculation'),
-          Tab(text: 'Scenarios'),
-          Tab(text: 'Rules'),
-        ],
+      child: Row(
+        children: List.generate(_tabLabels.length, (i) {
+          final active = i == _tab;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _tab = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: active ? AppColors.navyBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Icon(_tabIcons[i],
+                        size: 16,
+                        color: active
+                            ? Colors.white
+                            : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
+                    const SizedBox(height: 2),
+                    Text(_tabLabels[i],
+                        style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: active
+                                ? Colors.white
+                                : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)))),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
+  }
+
+  Widget _buildTabContent() {
+    switch (_tab) {
+      case 0:
+        return _buildFamilyTreeTab();
+      case 1:
+        return _buildCalculationTab();
+      case 2:
+        return _buildScenariosTab();
+      case 3:
+        return _buildRulesTab();
+      default:
+        return _buildFamilyTreeTab();
+    }
   }
 
   // ============================================================
