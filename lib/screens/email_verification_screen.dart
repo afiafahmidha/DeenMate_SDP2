@@ -42,6 +42,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   void initState() {
     super.initState();
     _startPolling();
+    _startCooldown(150); // Start 2 min 30 sec timer when arriving after registration
   }
 
   @override
@@ -108,11 +109,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         _t('verification_email_sent'),
         color: AppColors.midTeal,
       );
-      _startCooldown(60);
+      _startCooldown(150);
     } on FirebaseAuthException catch (e) {
       if (e.code == 'too-many-requests') {
         _showSnack(_t('too_many_requests_wait'));
-        _startCooldown(60);
+        _startCooldown(150);
       } else {
         _showSnack(e.message ?? _t('failed_to_send_email'));
       }
@@ -140,6 +141,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         }
       });
     });
+  }
+
+  String _formatCooldown(int totalSeconds) {
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (minutes > 0) {
+      return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
+    }
+    return '${seconds}s';
   }
 
   String _t(String key) => AppLocalizations.of(context)!.tr(key);
@@ -363,10 +373,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                                       : AppColors.midTeal,
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                    _cooldownSeconds > 0
-                                       ? '${_t("resend_in")} ${_cooldownSeconds}s'
-                                       : _t('resend_verification'),
+                                 Text(
+                                     _cooldownSeconds > 0
+                                        ? '${_t("resend_in")} ${_formatCooldown(_cooldownSeconds)}'
+                                        : _t('resend_verification'),
                                   style: GoogleFonts.poppins(
                                     fontWeight: FontWeight.w500,
                                     fontSize: 13,

@@ -24,6 +24,7 @@ class ZakatPayment {
   final String category; // one of 8 Quran categories
   final DateTime date;
   final String note;
+  final String? animalDescription;
 
   ZakatPayment({
     required this.id,
@@ -33,6 +34,7 @@ class ZakatPayment {
     required this.category,
     required this.date,
     required this.note,
+    this.animalDescription,
   });
 
   Map<String, dynamic> toJson() => {
@@ -43,6 +45,7 @@ class ZakatPayment {
         'category': category,
         'date': date.toIso8601String(),
         'note': note,
+        'animalDescription': animalDescription,
       };
 
   factory ZakatPayment.fromJson(Map<String, dynamic> j) => ZakatPayment(
@@ -53,6 +56,7 @@ class ZakatPayment {
         category: j['category'] as String,
         date: DateTime.parse(j['date'] as String),
         note: j['note'] as String? ?? '',
+        animalDescription: j['animalDescription'] as String?,
       );
 }
 
@@ -61,12 +65,14 @@ class ZakatYearSnapshot {
   final double wealth;
   final double zakatDue;
   final double zakatPaid;
+  final String? livestockZakat;
 
   ZakatYearSnapshot({
     required this.year,
     required this.wealth,
     required this.zakatDue,
     required this.zakatPaid,
+    this.livestockZakat,
   });
 
   Map<String, dynamic> toJson() => {
@@ -74,6 +80,7 @@ class ZakatYearSnapshot {
         'wealth': wealth,
         'zakatDue': zakatDue,
         'zakatPaid': zakatPaid,
+        'livestockZakat': livestockZakat,
       };
 
   factory ZakatYearSnapshot.fromJson(Map<String, dynamic> j) =>
@@ -82,6 +89,7 @@ class ZakatYearSnapshot {
         wealth: (j['wealth'] as num).toDouble(),
         zakatDue: (j['zakatDue'] as num).toDouble(),
         zakatPaid: (j['zakatPaid'] as num).toDouble(),
+        livestockZakat: j['livestockZakat'] as String?,
       );
 }
 
@@ -725,11 +733,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     final receivable = (double.tryParse(_receivableCtrl.text.replaceAll(',', '')) ?? 0) * rate;
     final liabilities = (double.tryParse(_liabilitiesCtrl.text.replaceAll(',', '')) ?? 0) * rate;
 
-    // Livestock market value (only included if meets its own nisab)
-    final livestockVal = _livestockMeetsNisab ? _livestockTotalBDT : 0.0;
-
     final gross = cash + goldVal + silverVal + stocks + business + receivable
-        + livestockVal + _customAssetsTotalBDT;
+        + _customAssetsTotalBDT;
     final net = (gross - liabilities - _customLiabilitiesTotalBDT).clamp(0.0, double.infinity);
 
     setState(() {
@@ -738,6 +743,35 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     });
 
     _savePrefs();
+  }
+
+  /// List of animal zakat obligations for animals meeting Nisab
+  List<String> get _livestockZakatDueItems {
+    final List<String> items = [];
+    final camel = _computeCamelZakat(_livestockCamels);
+    if (camel.isNotEmpty) items.add(camel);
+    final cattle = _computeCattleZakat(_livestockCattle);
+    if (cattle.isNotEmpty) items.add(cattle);
+    final sheep = _computeSheepZakat(_livestockSheep);
+    if (sheep.isNotEmpty) items.add(sheep);
+    return items;
+  }
+
+  String get _livestockZakatSummary => _livestockZakatDueItems.join(' + ');
+
+  /// Formatted total zakat string combining monetary amount and livestock zakat
+  String _formattedZakatDueText({double? dueAmount, String? livestockSummary}) {
+    final double amount = dueAmount ?? _zakatDue;
+    final String livestock = livestockSummary ?? _livestockZakatSummary;
+
+    if (amount > 0 && livestock.isNotEmpty) {
+      return 'Tk ${amount.toStringAsFixed(0)} + $livestock (or equivalent value)';
+    } else if (amount > 0) {
+      return 'Tk ${amount.toStringAsFixed(0)}';
+    } else if (livestock.isNotEmpty) {
+      return '$livestock (or equivalent value)';
+    }
+    return 'Tk 0';
   }
 
   /// True if any livestock type meets its own Islamic nisab threshold.
@@ -918,10 +952,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     );
   }
 
-  static const _tabLabels = ['Calculator', 'Haul', 'Al-Fitr', 'Payments', 'History'];
+  static const _tabLabels = ['Calculator', 'Haul', 'Rules', 'Al-Fitr', 'Payments', 'History'];
   static const _tabIcons = [
     Icons.calculate_rounded,
     Icons.hourglass_bottom_rounded,
+    Icons.menu_book_rounded,
     Icons.people_alt_rounded,
     Icons.receipt_long_rounded,
     Icons.bar_chart_rounded,
@@ -986,10 +1021,12 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       case 1:
         return _buildHaulTab();
       case 2:
-        return _buildFitraTab();
+        return _buildRulesTab();
       case 3:
-        return _buildPaymentsTab();
+        return _buildFitraTab();
       case 4:
+        return _buildPaymentsTab();
+      case 5:
         return _buildHistoryTab();
       default:
         return _buildCalculatorTab();
@@ -1766,14 +1803,41 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Zakat Due (2.5%)',
                     style: GoogleFonts.poppins(
                         fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
-                Text('Tk ${_zakatDue.toStringAsFixed(0)}',
-                    style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Tk ${_zakatDue.toStringAsFixed(0)}',
+                        textAlign: TextAlign.end,
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                      ),
+                      if (_livestockZakatSummary.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '+ $_livestockZakatSummary',
+                          textAlign: TextAlign.end,
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600, fontSize: 11, color: const Color(0xFFA5D6A7)),
+                        ),
+                        Text(
+                          '(or equivalent value)',
+                          textAlign: TextAlign.end,
+                          style: GoogleFonts.inter(fontSize: 9, color: Colors.white70),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -2066,6 +2130,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: currency,
+                      dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
                       style: GoogleFonts.poppins(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -2190,7 +2255,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             label: 'Camels',
             count: _livestockCamels,
             nisab: 5,
-            valueCtrl: _camelValueCtrl,
             zakatText: camelZakat,
             onDecrement: () {
               if (_livestockCamels > 0) {
@@ -2209,7 +2273,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             label: 'Cattle / Buffalo',
             count: _livestockCattle,
             nisab: 30,
-            valueCtrl: _cattleValueCtrl,
             zakatText: cattleZakat,
             onDecrement: () {
               if (_livestockCattle > 0) {
@@ -2228,7 +2291,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             label: 'Sheep / Goats',
             count: _livestockSheep,
             nisab: 40,
-            valueCtrl: _sheepValueCtrl,
             zakatText: sheepZakat,
             onDecrement: () {
               if (_livestockSheep > 0) {
@@ -2252,11 +2314,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               child: Row(
                 children: [
                   const Icon(Icons.info_outline_rounded,
-                      color: Color(0xFF2E7D32), size: 15),
+                      color: Color(0xFF2E7D32), size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Livestock meeting nisab has been included in your total zakatable wealth. Enter market value per animal to calculate the correct amount.',
+                      'Livestock Zakat is fulfilled by giving the specified animal(s) or paying their equivalent market value to eligible recipients.',
                       style: GoogleFonts.inter(
                           fontSize: 10.5,
                           color: const Color(0xFF2E7D32),
@@ -2277,7 +2339,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     required String label,
     required int count,
     required int nisab,
-    required TextEditingController valueCtrl,
     required String zakatText,
     required VoidCallback onDecrement,
     required VoidCallback onIncrement,
@@ -2331,49 +2392,32 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             ),
           ],
         ),
-        if (count > 0) ...[
+        if (meetsNisab && zakatText.isNotEmpty) ...[
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: valueCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
-                  decoration: InputDecoration(
-                    hintText: 'Market value per animal (Tk)',
-                    hintStyle: GoogleFonts.inter(
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2E7D32).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Zakat due: $zakatText (or equivalent monetary value)',
+                    style: GoogleFonts.inter(
                         fontSize: 11,
-                        color: _isDarkMode ? Colors.white.withValues(alpha: 0.25) : AppColors.navyBlue.withValues(alpha: 0.25)),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    filled: true,
-                    fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none),
+                        color: const Color(0xFF2E7D32),
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
-              ),
-            ],
-          ),
-          if (meetsNisab && zakatText.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2E7D32).withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '📋 Zakat due: $zakatText',
-                style: GoogleFonts.inter(
-                    fontSize: 10.5,
-                    color: const Color(0xFF2E7D32),
-                    fontWeight: FontWeight.w600),
-              ),
+              ],
             ),
-          ],
+          ),
         ],
       ],
     );
@@ -2382,44 +2426,41 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   /// Camel Zakat calculation per classical Hanafi/Shafi'i fiqh tiers.
   String _computeCamelZakat(int n) {
     if (n < 5) return '';
-    if (n <= 9)  return '${(n ~/ 5)} sheep/goat (1 per 5 camels)';
-    if (n <= 14) return '2 sheep/goats';
-    if (n <= 19) return '3 sheep/goats';
-    if (n <= 24) return '4 sheep/goats';
-    if (n <= 35) return '1 bint makhad (1-yr she-camel)';
-    if (n <= 45) return '1 bint labun (2-yr she-camel)';
-    if (n <= 60) return '1 hiqqah (3-yr she-camel)';
-    if (n <= 75) return '1 jadha\'ah (4-yr she-camel)';
-    if (n <= 90) return '2 bint labun';
-    if (n <= 120) return '2 hiqqah';
-    // Above 120: for every 40 → 1 bint labun; for every 50 → 1 hiqqah
+    if (n <= 9) return '1 Sheep/Goat';
+    if (n <= 14) return '2 Sheep/Goats';
+    if (n <= 19) return '3 Sheep/Goats';
+    if (n <= 24) return '4 Sheep/Goats';
+    if (n <= 35) return '1 Bint Makhad (1-yr female camel)';
+    if (n <= 45) return '1 Bint Labun (2-yr female camel)';
+    if (n <= 60) return '1 Hiqqah (3-yr female camel)';
+    if (n <= 75) return '1 Jadh\'ah (4-yr female camel)';
+    if (n <= 90) return '2 Bint Labun';
+    if (n <= 120) return '2 Hiqqah';
     final labun = (n ~/ 40);
     final hiqqah = (n ~/ 50);
-    return '~$labun bint labun + ~$hiqqah hiqqah (per 40/50 rule)';
+    return '$labun Bint Labun + $hiqqah Hiqqah';
   }
 
   /// Cattle Zakat per classical fiqh tiers.
   String _computeCattleZakat(int n) {
     if (n < 30) return '';
-    if (n <= 39) return '1 tabi\' (1-yr calf)';
-    if (n <= 59) return '1 musinnah (2-yr cow)';
-    if (n <= 69) return '2 tabi\'';
-    if (n <= 79) return '1 musinnah + 1 tabi\'';
-    if (n <= 89) return '2 musinnah';
-    // 90+: per 30 → 1 tabi'; per 40 → 1 musinnah
+    if (n <= 39) return '1 Tabi\' (1-yr calf)';
+    if (n <= 59) return '1 Musinnah (2-yr cow)';
+    if (n <= 69) return '2 Tabi\'';
+    if (n <= 79) return '1 Musinnah + 1 Tabi\'';
+    if (n <= 89) return '2 Musinnah';
     final tabi = (n ~/ 30);
     final musinnah = (n ~/ 40);
-    return '~$tabi tabi\' + ~$musinnah musinnah (per 30/40 rule)';
+    return '$tabi Tabi\' + $musinnah Musinnah';
   }
 
   /// Sheep/Goat Zakat per classical fiqh tiers.
   String _computeSheepZakat(int n) {
     if (n < 40) return '';
-    if (n <= 120) return '1 sheep/goat';
-    if (n <= 200) return '2 sheep/goats';
-    if (n <= 300) return '3 sheep/goats';
-    // 301+: 1 per every 100
-    return '${(n ~/ 100)} sheep/goats';
+    if (n <= 120) return '1 Sheep/Goat';
+    if (n <= 200) return '2 Sheep/Goats';
+    if (n <= 300) return '3 Sheep/Goats';
+    return '${(n ~/ 100)} Sheep/Goats';
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -2700,7 +2741,708 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // TAB 2 — ZAKAT AL-FITR (Fitra)
+  // TAB 2 — RULES OF ZAKAT (أَحْكَامُ الزَّكَاةِ)
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildRulesTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header Banner
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1B4D3E), Color(0xFF0D281E)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF1B4D3E).withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Islamic Rules of Zakat',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'أَحْكَامُ الزَّكَاةِ فِي الشَّرِيعَةِ الإِسْلَامِيَّةِ',
+                            style: GoogleFonts.amiri(
+                              color: const Color(0xFFA5D6A7),
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Zakat is the 3rd Pillar of Islam — an obligatory act of worship and charity purifying wealth and supporting the needy.',
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 11.5,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 1. Obligation of Zakat
+          _buildRuleSectionCard(
+            title: '1. Obligation of Zakat',
+            subtitle: 'The 3rd Pillar of Islam',
+            icon: Icons.star_rounded,
+            iconColor: const Color(0xFF1B4D3E),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Paying Zakat is mandatory (Fard) upon every sane, adult Muslim who possesses Nisab-threshold wealth for one full lunar year (Hawl).',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    height: 1.45,
+                    color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue,
+                  ),
+                ),
+                _buildQuranReferenceCard(
+                  arabicText: 'وَأَقِيمُوا الصَّلَاةَ وَآتُوا الزَّكَاةَ وَارْكَعُوا مَعَ الرَّاكِعِينَ',
+                  englishText: 'And establish prayer and give Zakat and bow with those who bow [in worship].',
+                  reference: 'Quran - Surah Al-Baqarah (2:43)',
+                ),
+                _buildHadithReferenceCard(
+                  arabicText: 'بُنِيَ الإِسْلاَمُ عَلَى خَمْسٍ: شَهَادَةِ أَنْ لاَ إِلَهَ إِلاَّ اللَّهُ وَأَنَّ مُحَمَّدًا رَسُولُ اللَّهِ، وَإِقَامِ الصَّلاَةِ، وَإِيتَاءِ الزَّكَاةِ، وَالحَجِّ، وَصَوْمِ رَمَضَانَ',
+                  englishText: 'Islam is built upon five pillars: Testifying that there is no god but Allah and that Muhammad is the Messenger of Allah, establishing prayer, paying Zakat, performing Hajj, and fasting Ramadan.',
+                  reference: 'Sahih al-Bukhari (8), Sahih Muslim (16)',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 2. Conditions of Zakat
+          _buildRuleSectionCard(
+            title: '2. Conditions of Zakat (Shurut)',
+            subtitle: 'When Zakat becomes obligatory',
+            icon: Icons.rule_folder_rounded,
+            iconColor: Colors.deepOrange,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildBulletPoint('1. Islam & Freedom: Must be a Muslim possessing ownership.'),
+                _buildBulletPoint('2. Nisab Threshold: Net wealth must meet or exceed the Nisab minimum.'),
+                _buildBulletPoint('3. Completion of Hawl: Wealth must be held for 1 full lunar year (354 days).'),
+                _buildBulletPoint('4. Fully Owned & Productive: Wealth must be unencumbered by immediate essential debts.'),
+                _buildHadithReferenceCard(
+                  arabicText: 'لاَ زَكَاةَ فِي مَالٍ حَتَّى يَحُولَ عَلَيْهِ الْحَوْلُ',
+                  englishText: 'No Zakat is due on wealth until a full lunar year (Hawl) has passed over it.',
+                  reference: 'Sunan Ibn Majah (1789), Sunan al-Tirmidhi (631)',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 3. Monetary & Asset Nisab
+          _buildRuleSectionCard(
+            title: '3. Gold, Silver, Cash & Business Assets',
+            subtitle: 'Nisab values & standard 2.5% rate',
+            icon: Icons.monetization_on_rounded,
+            iconColor: Colors.amber.shade800,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildNisabTable(),
+                const SizedBox(height: 8),
+                Text(
+                  'Rate of Zakat on Cash, Gold, Silver, Stocks, Trade Inventory, & Business Net Assets is exactly 2.5% (1/40th) of net value.',
+                  style: GoogleFonts.inter(
+                    fontSize: 11.5,
+                    height: 1.4,
+                    color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue,
+                  ),
+                ),
+                _buildHadithReferenceCard(
+                  arabicText: 'لَيْسَ فِيمَا دُونَ خَمْسِ أَوَاقٍ صَدَقَةٌ',
+                  englishText: 'No Zakat is due on silver weighing less than five Uqiyahs (595 grams).',
+                  reference: 'Sahih al-Bukhari (1405), Sahih Muslim (979)',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 4. Livestock Zakat Rules
+          _buildRuleSectionCard(
+            title: '4. Livestock Zakat (Al-An\'am)',
+            subtitle: 'Camels, Cattle, & Sheep/Goats',
+            icon: Icons.pets_rounded,
+            iconColor: const Color(0xFF2E7D32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Livestock Zakat applies to free-grazing animals (Sa\'imah) kept for milk or breeding for a full lunar year.',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    height: 1.45,
+                    color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _buildLivestockRuleBox(
+                  icon: Icons.landscape_outlined,
+                  type: 'Camels (Nisab = 5)',
+                  details: [
+                    '5 - 9 camels → 1 Sheep/Goat',
+                    '10 - 14 camels → 2 Sheep/Goats',
+                    '15 - 19 camels → 3 Sheep/Goats',
+                    '20 - 24 camels → 4 Sheep/Goats',
+                    '25 - 35 camels → 1 Bint Makhad (1-yr she-camel)',
+                    '36 - 45 camels → 1 Bint Labun (2-yr she-camel)',
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _buildLivestockRuleBox(
+                  icon: Icons.agriculture_outlined,
+                  type: 'Cattle & Buffaloes (Nisab = 30)',
+                  details: [
+                    '30 - 39 cattle → 1 Tabi\' (1-yr calf)',
+                    '40 - 59 cattle → 1 Musinnah (2-yr cow)',
+                    '60 - 69 cattle → 2 Tabi\' (1-yr calves)',
+                    '70 - 79 cattle → 1 Musinnah + 1 Tabi\'',
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _buildLivestockRuleBox(
+                  icon: Icons.grass_outlined,
+                  type: 'Sheep & Goats (Nisab = 40)',
+                  details: [
+                    '40 - 120 sheep/goats → 1 Sheep/Goat',
+                    '121 - 200 sheep/goats → 2 Sheep/Goats',
+                    '201 - 300 sheep/goats → 3 Sheep/Goats',
+                    '301+ sheep/goats → 1 Sheep/Goat per 100 animals',
+                  ],
+                ),
+                _buildHadithReferenceCard(
+                  arabicText: 'فِي صَدَقَةِ الْغَنَمِ فِي سَائِمَتِهَا إِذَا كَانَتْ أَرْبَعِينَ إِلَى عِشْرِينَ وَمِائَةٍ شَاةٌ',
+                  englishText: 'Regarding Zakat on free-grazing sheep: when they number between 40 and 120, one sheep is due.',
+                  reference: 'Sahih al-Bukhari (1454)',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 5. Agricultural Produce (Ushr)
+          _buildRuleSectionCard(
+            title: '5. Agricultural Produce (Ushr)',
+            subtitle: 'Harvest & Crop Zakat',
+            icon: Icons.grass_rounded,
+            iconColor: Colors.teal,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildBulletPoint('Nisab for Crops: 5 Awsaq (approx. 653 kg / 1,440 lbs of grain/dates).'),
+                _buildBulletPoint('Rain-watered / Natural Stream crops: 10% (Full Ushr) due at harvest.'),
+                _buildBulletPoint('Artificially Irrigated crops (pumps/wells): 5% (Half Ushr) due at harvest.'),
+                _buildQuranReferenceCard(
+                  arabicText: 'وَآتُوا حَقَّهُ يَوْمَ حَصَادِهِ',
+                  englishText: 'And pay its due [Zakat] on the day of its harvest.',
+                  reference: 'Quran - Surah Al-An\'am (6:141)',
+                ),
+                _buildHadithReferenceCard(
+                  arabicText: 'فِيمَا سَقَتِ السَّمَاءُ وَالْعُيُونُ أَوْ كَانَ عَثَرِيًّا الْعُشْرُ، وَمَا سُقِيَ بِالنَّضْحِ نِصْفُ الْعُشْرِ',
+                  englishText: 'On land watered by rain, springs, or natural streams, a tenth (10%) is due. On land watered by irrigation wells or pumps, a half-tenth (5%) is due.',
+                  reference: 'Sahih al-Bukhari (1483)',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 6. 8 Eligible Categories (Asnaf)
+          _buildRuleSectionCard(
+            title: '6. The 8 Eligible Recipients (Asnaf)',
+            subtitle: 'Who is entitled to receive Zakat',
+            icon: Icons.people_outline_rounded,
+            iconColor: Colors.indigo,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildQuranReferenceCard(
+                  arabicText: 'إِنَّمَا الصَّدَقَاتُ لِلْفُقَرَاءِ وَالْمَسَاكِينِ وَالْعَامِلِينَ عَلَيْهَا وَالْمُؤَلَّفَةِ قُلُوبُهُمْ وَفِي الرِّقَابِ وَالْغَارِمِينَ وَفِي سَبِيلِ اللَّهِ وَابْنِ السَّبِيلِ ۖ فَرِيضَةً مِّنَ اللَّهِ ۗ وَاللَّهُ عَلِيمٌ حَكِيمٌ',
+                  englishText: 'Zakat expenditures are only for the poor (Al-Fuqara\'), the needy (Al-Masakin), those employed to collect it (Al-\'Amilina \'Alayha), bringing hearts together (Al-Mu\'allafati Qulubuhum), freeing captives (Fi al-Riqab), those in debt (Al-Gharimin), in the cause of Allah (Fi Sabilillah), and the stranded traveler (Ibn al-Sabil) — an obligation imposed by Allah.',
+                  reference: 'Quran - Surah At-Tawbah (9:60)',
+                ),
+                const SizedBox(height: 10),
+                _buildAsnafItem('1. Al-Fuqara\' (The Poor)', 'People who have no money or income to meet basic needs.'),
+                _buildAsnafItem('2. Al-Masakin (The Needy)', 'People whose income falls short of meeting essential living costs.'),
+                _buildAsnafItem('3. Al-\'Amilina \'Alayha (Administrators)', 'Official collectors and distributors of Zakat funds.'),
+                _buildAsnafItem('4. Al-Mu\'allafati Qulubuhum', 'New Muslims or those whose hearts are being reconciled to Islam.'),
+                _buildAsnafItem('5. Fi al-Riqab (Freeing Captives)', 'Assisting captives or enslaved individuals to gain freedom.'),
+                _buildAsnafItem('6. Al-Gharimin (Debtors)', 'Individuals burdened with legitimate debt they cannot repay.'),
+                _buildAsnafItem('7. Fi Sabilillah (In Allah\'s Cause)', 'Striving in Islamic causes, education, and community defense.'),
+                _buildAsnafItem('8. Ibn al-Sabil (Travelers)', 'Travelers stranded away from home without financial means.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 7. Ineligible Recipients
+          _buildRuleSectionCard(
+            title: '7. Ineligible Recipients',
+            subtitle: 'Who cannot receive Zakat',
+            icon: Icons.cancel_outlined,
+            iconColor: Colors.red.shade700,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildBulletPoint('Immediate Ascendants: Parents, grandparents.'),
+                _buildBulletPoint('Immediate Descendants: Children, grandchildren.'),
+                _buildBulletPoint('Spouse: Husband or wife (financial responsibility applies).'),
+                _buildBulletPoint('Wealthy Individuals: Anyone possessing Nisab wealth or capable of earning.'),
+                _buildBulletPoint('Non-Muslims: Obligatory Zakat is specific to Muslims (voluntary Sadaqah may be given).'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuranReferenceCard({
+    required String arabicText,
+    required String englishText,
+    required String reference,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(top: 10, bottom: 6),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B4D3E).withValues(alpha: _isDarkMode ? 0.25 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF1B4D3E).withValues(alpha: _isDarkMode ? 0.4 : 0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B4D3E),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.menu_book_rounded, color: Colors.white, size: 12),
+                    const SizedBox(width: 4),
+                    Text(
+                      'QURAN',
+                      style: GoogleFonts.inter(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  reference,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _isDarkMode ? const Color(0xFF80CBC4) : const Color(0xFF1B4D3E),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            arabicText,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.amiri(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: _isDarkMode ? const Color(0xFFA5D6A7) : const Color(0xFF0D3B2E),
+              height: 1.8,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '"$englishText"',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+              color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.85),
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHadithReferenceCard({
+    required String arabicText,
+    required String englishText,
+    required String reference,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(top: 10, bottom: 6),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.navyBlue.withValues(alpha: _isDarkMode ? 0.25 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.navyBlue.withValues(alpha: _isDarkMode ? 0.4 : 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.navyBlue,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.bookmark_rounded, color: Colors.white, size: 12),
+                    const SizedBox(width: 4),
+                    Text(
+                      'HADITH',
+                      style: GoogleFonts.inter(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  reference,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _isDarkMode ? const Color(0xFF90CAF9) : AppColors.navyBlue,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            arabicText,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.amiri(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: _isDarkMode ? const Color(0xFF90CAF9) : AppColors.navyBlue,
+              height: 1.8,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '"$englishText"',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+              color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.85),
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuleSectionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: _isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.navyBlue.withValues(alpha: 0.12),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBulletPoint(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 6, right: 8),
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: _isDarkMode ? AppColors.midTeal : AppColors.navyBlue,
+              shape: BoxShape.circle,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.85),
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNisabTable() {
+    final headerStyle = GoogleFonts.poppins(
+      fontSize: 11,
+      fontWeight: FontWeight.bold,
+      color: _isDarkMode ? Colors.white70 : AppColors.navyBlue,
+    );
+    return Container(
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Asset Category', style: headerStyle),
+              Text('Nisab Minimum', style: headerStyle),
+              Text('Zakat Rate', style: headerStyle),
+            ],
+          ),
+          Divider(height: 14, color: _isDarkMode ? Colors.white12 : const Color(0xFFEEEEEE)),
+          _nisabTableRow('Pure Gold (24k)', '85 grams', '2.5%'),
+          _nisabTableRow('Silver', '595 grams', '2.5%'),
+          _nisabTableRow('Cash & Bank', 'Gold/Silver Nisab', '2.5%'),
+          _nisabTableRow('Trade Inventory', 'Gold/Silver Nisab', '2.5%'),
+        ],
+      ),
+    );
+  }
+
+  Widget _nisabTableRow(String category, String nisab, String rate) {
+    final textStyle = GoogleFonts.inter(
+      fontSize: 11,
+      color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(flex: 2, child: Text(category, style: textStyle)),
+          Expanded(flex: 2, child: Text(nisab, style: textStyle.copyWith(fontWeight: FontWeight.w600))),
+          Text(rate, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? const Color(0xFF80CBC4) : AppColors.midTeal)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLivestockRuleBox({
+    required IconData icon,
+    required String type,
+    required List<String> details,
+  }) {
+    final textStyle = GoogleFonts.inter(
+      fontSize: 11,
+      height: 1.35,
+      color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue,
+    );
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF0F4F2),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: _isDarkMode ? const Color(0xFF80CBC4) : const Color(0xFF2E7D32),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                type,
+                style: GoogleFonts.poppins(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold,
+                  color: _isDarkMode ? const Color(0xFF80CBC4) : const Color(0xFF2E7D32),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ...details.map((d) => Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('• $d', style: textStyle),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAsnafItem(String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF8FAF9),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: _isDarkMode ? const Color(0xFF80CBC4) : AppColors.midTeal,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              description,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: _isDarkMode ? Colors.white.withValues(alpha: 0.85) : Colors.black87,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // TAB 3 — ZAKAT AL-FITR (Fitra)
   // ═══════════════════════════════════════════════════════════════
 
   Widget _buildFitraTab() {
@@ -3216,9 +3958,23 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       Text('Zakat Due',
                           style: GoogleFonts.inter(color: Colors.white54, fontSize: 11)),
                       const SizedBox(height: 2),
-                      Text('Tk ${_zakatDue.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(
-                              color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      Text(
+                        'Tk ${_zakatDue.toStringAsFixed(0)}',
+                        style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      if (_livestockZakatSummary.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '+ $_livestockZakatSummary',
+                          style: GoogleFonts.inter(
+                              color: const Color(0xFFA5D6A7),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -3232,11 +3988,16 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         Text('Total Paid',
                           style: GoogleFonts.inter(color: Colors.white54, fontSize: 11)),
                         const SizedBox(height: 2),
-                        Text('Tk ${_totalPaid.toStringAsFixed(0)}',
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Tk ${_totalPaid.toStringAsFixed(0)}',
                             style: GoogleFonts.poppins(
                                 color: const Color(0xFF81C784),
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold)),
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -3251,13 +4012,18 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         Text('Still Owed',
                           style: GoogleFonts.inter(color: Colors.white54, fontSize: 11)),
                         const SizedBox(height: 2),
-                        Text('Tk ${_stillOwed.toStringAsFixed(0)}',
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Tk ${_stillOwed.toStringAsFixed(0)}',
                             style: GoogleFonts.poppins(
                                 color: _stillOwed > 0
                                     ? AppColors.coralOrange
                                     : const Color(0xFF81C784),
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold)),
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -3477,6 +4243,31 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       Text(p.note,
                           style: GoogleFonts.inter(
                               fontSize: 11, color: _isDarkMode ? Colors.white.withValues(alpha: 0.5) : AppColors.navyBlue.withValues(alpha: 0.5))),
+                    if (p.animalDescription != null && p.animalDescription!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2E7D32).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.pets_rounded, size: 12, color: Color(0xFF2E7D32)),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Paid via Animal: ${p.animalDescription}',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF2E7D32),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -3562,6 +4353,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     String currency = _selectedCurrency;
     String category = prefilledCategory ?? _zakatCategories.first;
 
+    final bool hasLivestockObligation = !isFitra && _livestockMeetsNisab && _livestockZakatDueItems.isNotEmpty;
+    bool isAnimalPayment = false;
+    String selectedAnimal = hasLivestockObligation ? _livestockZakatDueItems.first : '';
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -3592,16 +4387,90 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     style: GoogleFonts.poppins(
                         fontWeight: FontWeight.bold, fontSize: 16, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                 const SizedBox(height: 16),
+
+                if (hasLivestockObligation) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2E7D32).withValues(alpha: _isDarkMode ? 0.2 : 0.08),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.pets_rounded, color: Color(0xFF2E7D32), size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Fulfill via Animal Payment',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: _isDarkMode ? const Color(0xFF80CBC4) : const Color(0xFF2E7D32),
+                                ),
+                              ),
+                            ),
+                            Switch(
+                              value: isAnimalPayment,
+                              activeThumbColor: const Color(0xFF2E7D32),
+                              onChanged: (v) => setModalState(() => isAnimalPayment = v),
+                            ),
+                          ],
+                        ),
+                        if (isAnimalPayment) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Select Animal Given:',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _isDarkMode ? Colors.white70 : AppColors.navyBlue,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<String>(
+                            initialValue: _livestockZakatDueItems.contains(selectedAnimal) ? selectedAnimal : _livestockZakatDueItems.first,
+                            style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
+                            dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              filled: true,
+                              fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                            ),
+                            items: _livestockZakatDueItems
+                                .map((item) => DropdownMenuItem(
+                                      value: item,
+                                      child: Text(item,
+                                          style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                                    ))
+                                .toList(),
+                            onChanged: (v) => setModalState(() => selectedAnimal = v!),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 Row(
                   children: [
                     Expanded(
-                      child: _sheetField(amountCtrl, 'Amount',
+                      child: _sheetField(amountCtrl, isAnimalPayment ? 'Equivalent Value (optional)' : 'Amount',
                           keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                     ),
                     const SizedBox(width: 10),
                     DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: currency,
+                        dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
                         style: GoogleFonts.poppins(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -3628,6 +4497,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   DropdownButtonFormField<String>(
                     initialValue: category,
                     style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
+                    dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
                     decoration: InputDecoration(
                       isDense: true,
                       contentPadding:
@@ -3640,7 +4510,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     items: _zakatCategories
                         .map((c) => DropdownMenuItem(
                               value: c,
-                              child: Text(c, style: GoogleFonts.inter(fontSize: 12)),
+                              child: Text(c,
+                                  style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                             ))
                         .toList(),
                     onChanged: (v) => setModalState(() => category = v!),
@@ -3652,7 +4525,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 InkWell(
                   onTap: () {
                     final amount = double.tryParse(amountCtrl.text) ?? 0;
-                    if (amount <= 0 || recipientCtrl.text.trim().isEmpty) return;
+                    if (!isAnimalPayment && amount <= 0) return;
+                    if (recipientCtrl.text.trim().isEmpty) return;
                     final pay = ZakatPayment(
                       id: DateTime.now().millisecondsSinceEpoch.toString(),
                       amount: amount,
@@ -3661,6 +4535,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       category: isFitra ? 'The Poor (Al-Fuqara)' : category,
                       date: DateTime.now(),
                       note: noteCtrl.text.trim(),
+                      animalDescription: isAnimalPayment ? selectedAnimal : null,
                     );
                     setState(() {
                       if (isFitra) {
@@ -3723,6 +4598,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     final currencySymbol = _currencies
         .firstWhere((c) => c.code == p.currency, orElse: () => _currencies.first)
         .symbol;
+    final bool isAnimal = p.animalDescription != null && p.animalDescription!.isNotEmpty;
 
     pdf.addPage(
       pw.Page(
@@ -3778,14 +4654,37 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     pw.Text(p.category, style: const pw.TextStyle(fontSize: 10)),
                   ],
                 ),
-                pw.SizedBox(height: 6),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Amount:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.teal)),
-                    pw.Text('$currencySymbol ${p.amount.toStringAsFixed(2)} ${p.currency}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.teal)),
-                  ],
-                ),
+                if (isAnimal) ...[
+                  pw.SizedBox(height: 6),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Payment Type:', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                      pw.Text('Livestock Animal', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.green)),
+                    ],
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Animal Given:', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                      pw.Text(p.animalDescription!, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.green)),
+                    ],
+                  ),
+                ],
+                if (p.amount > 0) ...[
+                  pw.SizedBox(height: 6),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text(
+                        isAnimal ? 'Equivalent Value:' : 'Amount:',
+                        style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.teal),
+                      ),
+                      pw.Text('$currencySymbol ${p.amount.toStringAsFixed(2)} ${p.currency}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.teal)),
+                    ],
+                  ),
+                ],
                 if (p.note.isNotEmpty) ...[
                   pw.SizedBox(height: 6),
                   pw.Row(
@@ -3885,8 +4784,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Zakat Obligation (2.5%):'),
-                      pw.Text('Tk ${_zakatDue.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Zakat Obligation:'),
+                      pw.Text(_formattedZakatDueText(), style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                     ],
                   ),
                   pw.Row(
@@ -3982,6 +4881,23 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             ),
             pw.SizedBox(height: 20),
 
+            if (_livestockMeetsNisab && _livestockZakatSummary.isNotEmpty) ...[
+              pw.Text('LIVESTOCK ZAKAT OBLIGATION', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 8),
+              pw.Container(
+                padding: const pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.green50,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                ),
+                child: pw.Text(
+                  '$_livestockZakatSummary (or equivalent monetary value)',
+                  style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.green800),
+                ),
+              ),
+              pw.SizedBox(height: 20),
+            ],
+
             if (_payments.isNotEmpty) ...[
               pw.Text('ZAKAT PAYMENT HISTORY', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 8),
@@ -3994,7 +4910,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       DateFormat('dd MMM yyyy').format(p.date),
                       p.recipient,
                       p.category,
-                      '${p.currency == "BDT" ? "Tk" : p.currency} ${p.amount.toStringAsFixed(0)}',
+                      (p.animalDescription != null && p.animalDescription!.isNotEmpty)
+                          ? (p.amount > 0
+                              ? 'Animal: ${p.animalDescription} (+${p.currency == "BDT" ? "Tk" : p.currency} ${p.amount.toStringAsFixed(0)})'
+                              : 'Animal: ${p.animalDescription}')
+                          : '${p.currency == "BDT" ? "Tk" : p.currency} ${p.amount.toStringAsFixed(0)}',
                     ),
                 ],
               ),
@@ -4163,6 +5083,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       wealth: _totalWealth,
       zakatDue: _zakatDue,
       zakatPaid: _totalPaid,
+      livestockZakat: _livestockZakatSummary.isNotEmpty ? _livestockZakatSummary : null,
     );
     setState(() {
       if (existing >= 0) {
@@ -4226,6 +5147,31 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               _historyChip('Paid', 'Tk ${s.zakatPaid.toStringAsFixed(0)}'),
             ],
           ),
+          if (s.livestockZakat != null && s.livestockZakat!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2E7D32).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.pets_rounded, size: 14, color: Color(0xFF2E7D32)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Livestock Obligation: ${s.livestockZakat}',
+                      style: GoogleFonts.inter(
+                          fontSize: 10.5,
+                          color: const Color(0xFF2E7D32),
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
@@ -4811,8 +5757,3 @@ class CardBackgroundPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
-
-
-
-

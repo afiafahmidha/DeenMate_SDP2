@@ -58,7 +58,7 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, MediaQuery.of(context).padding.bottom + 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
