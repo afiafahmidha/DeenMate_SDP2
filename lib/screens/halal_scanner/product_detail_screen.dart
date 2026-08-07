@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'halal_scanner_home.dart';
@@ -110,6 +111,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final mushboohCount = ingredientsList.where((i) => i.status == 'MUSHBOOH').length;
     final halalCount = ingredientsList.where((i) => i.status == 'HALAL').length;
 
+    final halalMeatKeywords = [
+      'chicken', 'beef', 'mutton', 'lamb', 'sheep', 'goat', 'turkey', 'duck',
+      'poultry', 'meat', 'veal'
+    ];
+    final hasHalalMeat = ingredientsList.any((ing) {
+      final nameLower = ing.name.toLowerCase();
+      return halalMeatKeywords.any((kw) => nameLower.contains(kw));
+    }) || halalMeatKeywords.any((kw) => widget.product.name.toLowerCase().contains(kw));
+
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
@@ -139,6 +149,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ],
       ),
       body: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -169,15 +180,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
               child: Column(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(_statusIcon(widget.product.status), color: Colors.white, size: 48),
-                  ),
-                  const SizedBox(height: 12),
+                  // Product image
+                  _buildProductImage(statusColor),
+                  const SizedBox(height: 14),
                   Text(
                     widget.product.status,
                     style: GoogleFonts.poppins(
@@ -283,6 +288,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 return _buildIngredientCard(ing, cardColor, textColor, widget.isDarkMode);
               },
             ),
+            if (hasHalalMeat) ...[
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: widget.isDarkMode ? 0.15 : 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.amber.withValues(alpha: widget.isDarkMode ? 0.4 : 0.5),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          AppLocalizations.of(context)!.tr('halal_slaughter_note'),
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: widget.isDarkMode ? Colors.amber.shade200 : Colors.amber.shade900,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
           ],
         ),
@@ -381,11 +421,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   children: [
                     Icon(originIcon, size: 14, color: Colors.grey.shade600),
                     const SizedBox(width: 4),
-                    Text(
-                      '${ing.origin} • Risk: ${ing.riskText}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: isDarkMode ? Colors.white60 : Colors.grey.shade600,
+                    Expanded(
+                      child: Text(
+                        ing.origin,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: isDarkMode ? Colors.white60 : Colors.grey.shade600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, size: 14, color: Colors.grey.shade600),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Risk: ${ing.riskText}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: isDarkMode ? Colors.white60 : Colors.grey.shade600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -416,11 +476,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   IconData _getOriginIcon(String origin) {
     String lower = origin.toLowerCase();
+    final animalStr = AppLocalizations.of(context)!.tr('animal').toLowerCase();
+    if (lower.contains('animal') || lower.contains('pork') || lower == animalStr) {
+      return Icons.pets_rounded;
+    }
     if (lower.contains('plant') || lower.contains('vegetable') || lower.contains('fruit')) {
       return Icons.eco_rounded;
-    }
-    if (lower.contains('animal') || lower.contains('pork')) {
-      return Icons.pets_rounded;
     }
     if (lower.contains('alcohol')) {
       return Icons.local_bar_rounded;
@@ -457,11 +518,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   String _getOriginFromIngredient(String ingredient, String status) {
     final l10n = AppLocalizations.of(context);
     String lower = ingredient.toLowerCase();
-    if (status == 'HARAM') {
-      if (lower.contains('pork') || lower.contains('pig') || lower.contains('bacon') ||
-          lower.contains('ham') || lower.contains('gelatin') || lower.contains('tallow')) {
+
+    final animalKeywords = [
+      'chicken', 'beef', 'mutton', 'lamb', 'sheep', 'goat', 'turkey', 'duck',
+      'poultry', 'meat', 'veal', 'pork', 'pig', 'bacon', 'ham', 'gelatin',
+      'tallow', 'lard', 'suet', 'bone'
+    ];
+
+    for (String kw in animalKeywords) {
+      if (lower.contains(kw)) {
         return l10n.tr('animal');
       }
+    }
+
+    if (status == 'HARAM') {
       if (lower.contains('cochineal') || lower.contains('carmine') || lower.contains('insect')) {
         return l10n.tr('insect');
       }
@@ -475,6 +545,80 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return l10n.tr('unknown');
     }
     return l10n.tr('plant_chemical');
+  }
+
+  /// Builds the product image widget for the hero banner.
+  /// Handles: network URL, local file path, and empty/missing image.
+  Widget _buildProductImage(Color statusColor) {
+    final imageUrl = widget.product.imageUrl;
+    final isNetwork = imageUrl.startsWith('http');
+    final isLocalFile = imageUrl.isNotEmpty && !isNetwork;
+
+    Widget imageChild;
+
+    if (isNetwork) {
+      imageChild = Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                  : null,
+              color: Colors.white,
+              strokeWidth: 2,
+            ),
+          );
+        },
+        errorBuilder: (_, _a, _b) => _imageFallbackIcon(statusColor),
+      );
+    } else if (isLocalFile) {
+      imageChild = Image.file(
+        File(imageUrl),
+        fit: BoxFit.cover,
+        errorBuilder: (_, _a, _b) => _imageFallbackIcon(statusColor),
+      );
+    } else {
+      imageChild = _imageFallbackIcon(statusColor);
+    }
+
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.6),
+          width: 2.5,
+        ),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: imageChild,
+    );
+  }
+
+  Widget _imageFallbackIcon(Color statusColor) {
+    return Container(
+      color: statusColor.withValues(alpha: 0.15),
+      child: Center(
+        child: Icon(
+          _statusIcon(widget.product.status),
+          color: statusColor,
+          size: 52,
+        ),
+      ),
+    );
   }
 
   Color _statusColor(String status) {

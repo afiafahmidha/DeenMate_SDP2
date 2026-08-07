@@ -434,7 +434,7 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
           // Additives List
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 16),
               itemCount: list.length,
               itemBuilder: (context, index) {
                 final additive = list[index];

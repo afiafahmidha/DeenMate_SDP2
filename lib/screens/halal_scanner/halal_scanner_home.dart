@@ -45,6 +45,25 @@ class HalalScannerState {
   static List<ScannedProduct> history = [];
 
   static void addProduct(ScannedProduct product) {
+    // Remove existing duplicate if present
+    final existingIndex = history.indexWhere((h) {
+      if (product.barcode.isNotEmpty && h.barcode.isNotEmpty) {
+        return h.barcode == product.barcode;
+      }
+      return h.name.trim().toLowerCase() == product.name.trim().toLowerCase();
+    });
+
+    if (existingIndex != -1) {
+      final oldProduct = history.removeAt(existingIndex);
+      if (oldProduct.status == 'HALAL' && halalCount > 0) {
+        halalCount--;
+      } else if (oldProduct.status == 'HARAM' && haramCount > 0) {
+        haramCount--;
+      } else if (mushboohCount > 0) {
+        mushboohCount--;
+      }
+    }
+
     history.insert(0, product);
     if (product.status == 'HALAL') {
       halalCount++;
@@ -151,12 +170,11 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
             setState(() {
               HalalScannerState.addProduct(product);
             });
-            _openProductDetail(product);
           },
           isDarkMode: widget.isDarkMode,
         ),
       ),
-    );
+    ).then((_) => setState(() {}));
   }
 
   void _openProductDetail(ScannedProduct product) {
@@ -201,6 +219,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                             iconColor: Colors.green[400]!,
                             count: HalalScannerState.halalCount,
                              label: AppLocalizations.of(context)!.tr('halal_products'),
+                            subtitle: AppLocalizations.of(context)!.tr('safe'),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -594,6 +613,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
     required Color iconColor,
     required int count,
     required String label,
+    String? subtitle,
   }) {
     final surfaceColor = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final primaryTextColor = widget.isDarkMode ? Colors.white : Colors.black87;
@@ -644,6 +664,17 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
               height: 1.2,
             ),
           ),
+          if (subtitle != null) ...[  
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                color: secondaryTextColor,
+                height: 1.2,
+              ),
+            ),
+          ],
         ],
       ),
     );

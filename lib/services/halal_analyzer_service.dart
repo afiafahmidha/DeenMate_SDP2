@@ -126,6 +126,20 @@ class ProductAnalysisResult {
         }
       }
     }
+
+    final halalMeatKeywords = [
+      'chicken', 'beef', 'mutton', 'lamb', 'sheep', 'goat', 'turkey', 'duck',
+      'poultry', 'meat', 'veal'
+    ];
+    for (String ingredient in halalIngredients) {
+      String lower = ingredient.toLowerCase();
+      for (String kw in halalMeatKeywords) {
+        if (lower.contains(kw)) {
+          return 'Animal (Halal Meat)';
+        }
+      }
+    }
+
     return overallStatus == 'HALAL' ? 'Plant/Chemical (Halal)' : 'Unclear Origin (Mushbooh)';
   }
 }
@@ -465,6 +479,20 @@ class HalalAnalyzerService {
       );
     }
 
+    // 9. Halal Meat / Poultry (Animal origin)
+    final halalMeatKeywords = [
+      'chicken', 'beef', 'mutton', 'lamb', 'sheep', 'goat', 'turkey', 'duck',
+      'poultry', 'meat', 'veal'
+    ];
+    if (_containsWord(lower, halalMeatKeywords)) {
+      return IngredientAnalysisResult(
+        ingredient: ingredient,
+        status: 'HALAL',
+        reason: 'Halal Meat / Poultry (Verify halal slaughter)',
+        source: 'Animal',
+      );
+    }
+
     // Default Permissible
     return IngredientAnalysisResult(
       ingredient: ingredient,
@@ -604,9 +632,64 @@ class HalalAnalyzerService {
       }
     }
 
+    // Cross-reference: collect E-numbers already confirmed HALAL from ingredients.
+    // Maps e.g. 'E322' → 'HALAL' so the additive loop can skip duplicates.
+    final Map<String, String> resolvedENumbers = {};
+    for (final r in results) {
+      final eLower = r.ingredient.toLowerCase();
+      // Lecithin → E322
+      if (eLower.contains('lecithin')) {
+        resolvedENumbers['E322'] = r.status;
+      }
+      // Glycerin / Glycerol → E422
+      if (eLower.contains('glycerin') || eLower.contains('glycerol')) {
+        resolvedENumbers['E422'] = r.status;
+      }
+      // Mono- & Diglycerides → E471
+      if (eLower.contains('monoglyceride') || eLower.contains('diglyceride')) {
+        resolvedENumbers['E471'] = r.status;
+      }
+      // Polysorbate 80 → E433
+      if (eLower.contains('polysorbate')) {
+        resolvedENumbers['E433'] = r.status;
+      }
+      // Gelatin → E441
+      if (eLower.contains('gelatin')) {
+        resolvedENumbers['E441'] = r.status;
+      }
+      // Also capture any bare E-number already in the ingredient text
+      final eMatch = RegExp(r'\bE\d{3,4}\b', caseSensitive: false).firstMatch(r.ingredient);
+      if (eMatch != null) {
+        resolvedENumbers[eMatch.group(0)!.toUpperCase()] = r.status;
+      }
+    }
+
     for (int i = 0; i < translatedAdditives.length; i++) {
       String original = translatedAdditives[i];
       if (original.trim().isEmpty) continue;
+
+      // Check if this additive's E-number was already resolved by an ingredient
+      final eMatch = RegExp(r'\bE\d{3,4}\b', caseSensitive: false).firstMatch(original);
+      if (eMatch != null) {
+        final eKey = eMatch.group(0)!.toUpperCase();
+        if (resolvedENumbers.containsKey(eKey)) {
+          final inheritedStatus = resolvedENumbers[eKey]!;
+          // Only skip/upgrade if the ingredient already confirmed HALAL.
+          // This prevents bare "E322" from adding a separate MUSHBOOH entry
+          // when "Sunflower Lecithin" was already analyzed as HALAL.
+          if (inheritedStatus == 'HALAL') {
+            results.add(IngredientAnalysisResult(
+              ingredient: original,
+              status: 'HALAL',
+              reason: 'Source confirmed Halal by ingredient list (same compound)',
+              isAdditive: true,
+              source: 'Plant Additive',
+            ));
+            halalIngredients.add(original);
+            continue;
+          }
+        }
+      }
 
       IngredientAnalysisResult result = _analyzeSingleAdditive(original);
       results.add(result);

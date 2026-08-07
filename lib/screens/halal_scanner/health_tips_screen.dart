@@ -160,7 +160,7 @@ class _HealthTipsScreenState extends State<HealthTipsScreen> {
           ),
         ),
         body: ListView.builder(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, MediaQuery.of(context).padding.bottom + 16.0),
           itemCount: _articles.length,
           itemBuilder: (context, index) {
             final article = _articles[index];

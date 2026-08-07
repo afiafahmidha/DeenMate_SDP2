@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -10,6 +10,7 @@ import '../../services/open_food_facts_service.dart';
 import '../../services/halal_analyzer_service.dart';
 import '../../l10n/app_localizations.dart';
 import 'product_detail_screen.dart';
+import 'analyze_product_screen.dart';
 
 // ============================================================
 // Configuration
@@ -171,8 +172,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
   bool _isScanning = true;
   bool _isLoading = false;
   String? _errorMessage;
-  ProductAnalysisResult? _analysisResult;
-  bool _showResults = false;
+  bool _productNotFound = false;
 
   @override
   void initState() {
@@ -204,8 +204,6 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
       _isScanning = false;
       _isLoading = true;
       _errorMessage = null;
-      _showResults = false;
-      _analysisResult = null;
     });
 
     _controller.stop();
@@ -220,18 +218,39 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
 
       if (productData != null) {
         final analysisResult = await _analyzeProduct(productData, code);
-        
-        setState(() {
-          _analysisResult = analysisResult;
-          _isLoading = false;
-          _showResults = true;
-        });
-        
         final product = analysisResult.toScannedProduct();
         widget.onScanComplete(product);
-        
+
+        if (!mounted) return;
+        // Navigate directly to ProductDetailScreen — skip the intermediate results page
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailScreen(
+              isDarkMode: widget.isDarkMode,
+              product: product,
+              analysisResults: analysisResult.results,
+            ),
+          ),
+        ).then((_) {
+          // Resume scanner when user comes back
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              _isScanning = true;
+            });
+            _controller.start();
+          }
+        });
+
       } else {
-        _showError('Product not found in database. Try a different barcode.');
+        if (mounted) {
+          setState(() {
+            _productNotFound = true;
+            _isLoading = false;
+            _isScanning = false;
+          });
+        }
       }
     } on TimeoutException {
       if (mounted) _showError('Lookup timed out. Check your connection and try again.');
@@ -344,22 +363,180 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
     return result;
   }
 
+  Widget _buildProductNotFoundUI(Color textColor, Color? secondaryTextColor) {
+    final isDark = widget.isDarkMode;
+    final cardColor = isDark ? const Color(0xFF1A2633) : Colors.white;
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.grey.withValues(alpha: 0.15);
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Icon
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.search_off_rounded,
+                size: 52,
+                color: Colors.orange,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Title
+            Text(
+              'Product Not Found',
+              style: TextStyle(
+                color: textColor,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Subtitle
+            Text(
+              'We couldn\'t find this barcode in our database.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: secondaryTextColor, fontSize: 14),
+            ),
+            const SizedBox(height: 28),
+
+            // Suggestion card
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: borderColor),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.midTeal.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.document_scanner_rounded,
+                          color: AppColors.midTeal,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Try Ingredient Scan',
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'You can scan the ingredient list on the packaging to analyze the food.',
+                              style: TextStyle(
+                                color: secondaryTextColor,
+                                fontSize: 12,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  // Scan Ingredients button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AnalyzeProductScreen(
+                              isDarkMode: widget.isDarkMode,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 20),
+                      label: const Text(
+                        'Scan Ingredients',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.midTeal,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Try again button
+            TextButton.icon(
+              onPressed: _scanAgain,
+              icon: Icon(Icons.qr_code_scanner_rounded, color: secondaryTextColor, size: 18),
+              label: Text(
+                'Try Another Barcode',
+                style: TextStyle(color: secondaryTextColor, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showError(String message) {
     setState(() {
       _errorMessage = message;
       _isScanning = true;
       _isLoading = false;
-      _showResults = false;
       _controller.start();
     });
   }
 
   void _scanAgain() {
     setState(() {
-      _showResults = false;
-      _analysisResult = null;
       _isScanning = true;
       _errorMessage = null;
+      _productNotFound = false;
     });
     _controller.start();
   }
@@ -386,9 +563,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
           onPressed: () => Navigator.pop(context),
         ),
          title: Text(
-          _showResults
-              ? AppLocalizations.of(context)!.tr('analysis_results')
-              : AppLocalizations.of(context)!.tr('scan_code'),
+          AppLocalizations.of(context)!.tr('scan_code'),
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -396,12 +571,6 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
           ),
         ),
         actions: [
-          if (_showResults)
-            IconButton(
-              icon: Icon(Icons.qr_code_scanner, color: Colors.white),
-              onPressed: _scanAgain,
-               tooltip: AppLocalizations.of(context)!.tr('scan_again'),
-            ),
           if (ApiConfig.useApifyApi && ApiConfig.apifyApiToken.isNotEmpty)
             Container(
               margin: const EdgeInsets.only(right: 16),
@@ -420,7 +589,9 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
             ),
         ],
       ),
-      body: _errorMessage != null && !_isLoading && !_showResults
+      body: _productNotFound
+          ? _buildProductNotFoundUI(textColor, secondaryTextColor)
+          : _errorMessage != null && !_isLoading
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
@@ -477,9 +648,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
                     ],
                   ),
                 )
-              : _showResults && _analysisResult != null
-                  ? _buildResultsView()
-                  : Stack(
+              : Stack(
                       children: [
                         MobileScanner(
                           controller: _controller,
@@ -620,384 +789,6 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildResultsView() {
-    final analysis = _analysisResult!;
-    final isDarkMode = widget.isDarkMode;
-    final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = isDarkMode ? Colors.white : Colors.black87;
-
-    Color statusColor;
-    IconData statusIcon;
-    if (analysis.overallStatus == 'HALAL') {
-      statusColor = Colors.green;
-      statusIcon = Icons.check_circle;
-    } else if (analysis.overallStatus == 'MUSHBOOH') {
-      statusColor = Colors.orange;
-      statusIcon = Icons.warning;
-    } else {
-      statusColor = Colors.red;
-      statusIcon = Icons.cancel;
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: statusColor,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                Icon(statusIcon, color: Colors.white, size: 48),
-                const SizedBox(height: 8),
-                Text(
-                  analysis.overallStatus,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                Text(
-                  analysis.riskLevel,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                   '${analysis.results.length} ${AppLocalizations.of(context)!.tr("ingredients_analyzed")}',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)),
-            ),
-            child: Row(
-              children: [
-                if (analysis.imageUrl.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      analysis.imageUrl,
-                      width: 60,
-                      height: 60,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 60,
-                        height: 60,
-                        color: Colors.grey.shade200,
-                        child: Icon(Icons.image, color: Colors.grey.shade400),
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        analysis.productName,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: textColor,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                         '${AppLocalizations.of(context)!.tr("barcode")}: ${analysis.barcode}',
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white70 : Colors.grey[600],
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          if (analysis.apiResponse != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.auto_awesome, size: 16, color: Colors.blue.shade700),
-                  const SizedBox(width: 8),
-                  Text(
-                    analysis.apiResponse!,
-                    style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 16),
-
-           Text(
-            AppLocalizations.of(context)!.tr('all_ingredients'),
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          if (analysis.results.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)),
-              ),
-              child: Column(
-                children: [
-                  Icon(Icons.search_off, size: 48, color: Colors.grey),
-                  const SizedBox(height: 8),
-                  Text(
-                    'No ingredients found',
-                    style: TextStyle(
-                      color: isDarkMode ? Colors.white70 : Colors.grey[600],
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'This product may not have ingredient data available',
-                    style: TextStyle(
-                      color: isDarkMode ? Colors.white54 : Colors.grey[400],
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-           ...analysis.results.map((result) => Container(
-               margin: const EdgeInsets.only(bottom: 8),
-               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-               decoration: BoxDecoration(
-                 color: cardColor,
-                 borderRadius: BorderRadius.circular(10),
-                 border: Border.all(
-                   color: result.statusColor.withValues(alpha: 0.3),
-                   width: 1,
-                 ),
-               ),
-               child: Row(
-                 children: [
-                   Container(
-                     width: 28,
-                     height: 28,
-                     decoration: BoxDecoration(
-                       color: result.statusColor.withValues(alpha: 0.1),
-                       shape: BoxShape.circle,
-                     ),
-                     child: Icon(
-                       result.statusIcon,
-                       color: result.statusColor,
-                       size: 18,
-                     ),
-                   ),
-                   const SizedBox(width: 12),
-                   Expanded(
-                     child: Row(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Text(
-                           HalalAnalyzerService.extractCode(result.ingredient),
-                           style: TextStyle(
-                             fontWeight: FontWeight.bold,
-                             fontSize: 13,
-                             color: textColor,
-                           ),
-                         ),
-                         const SizedBox(width: 6),
-                         Flexible(
-                           child: Text(
-                             result.ingredient,
-                             style: TextStyle(
-                               fontSize: 13,
-                               color: isDarkMode ? Colors.white70 : Colors.grey[700],
-                             ),
-                             maxLines: 2,
-                             overflow: TextOverflow.ellipsis,
-                           ),
-                         ),
-                         const SizedBox(width: 12),
-                         Text(
-                           result.status,
-                           style: TextStyle(
-                             color: result.statusColor,
-                             fontWeight: FontWeight.bold,
-                             fontSize: 11,
-                           ),
-                         ),
-                       ],
-                     ),
-                   ),
-                 ],
-               ),
-             )),
-
-          const SizedBox(height: 16),
-
-          if (analysis.haramIngredients.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.red.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.cancel, color: Colors.red, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${analysis.haramIngredients.length} Haram ingredient(s) found',
-                      style: TextStyle(
-                        color: Colors.red.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          
-          const SizedBox(height: 8),
-
-          if (analysis.mushboohIngredients.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.warning, color: Colors.orange, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${analysis.mushboohIngredients.length} Mushbooh ingredient(s) found',
-                      style: TextStyle(
-                        color: Colors.orange.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          
-          const SizedBox(height: 8),
-
-          if (analysis.halalIngredients.isNotEmpty && analysis.overallStatus == 'HALAL')
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.green.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '✅ All ${analysis.halalIngredients.length} ingredients are Halal',
-                      style: TextStyle(
-                        color: Colors.green.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          const SizedBox(height: 16),
-
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _scanAgain,
-                  icon: Icon(Icons.qr_code_scanner, color: Colors.white),
-                  label: Text(AppLocalizations.of(context)!.tr('scan_again')),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.midTeal,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProductDetailScreen(
-                          isDarkMode: isDarkMode,
-                          product: analysis.toScannedProduct(),
-                          analysisResults: analysis.results,
-                        ),
-                      ),
-                    );
-                  },
-                  icon: Icon(Icons.info_outline, color: AppColors.midTeal),
-                  label: Text(AppLocalizations.of(context)!.tr('view_details')),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.midTeal,
-                    side: BorderSide(color: AppColors.midTeal),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }
