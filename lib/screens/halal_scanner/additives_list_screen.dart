@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../widgets/auth_header.dart';
 
 // ---------------------------------------------------------------------------
 // Shared colors (matches the app's teal / green / red / orange palette)
@@ -970,8 +972,8 @@ class _AdditiveDetailScreenState extends State<AdditiveDetailScreen> {
             alignment: Alignment.center,
             children: [
               Text(
-                flagCode == 'EU' ? '🇪🇺' : flagCode == 'US' ? '🇺🇸' : '🇦🇺',
-                style: const TextStyle(fontSize: 13),
+                flagCode,
+                style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
               ),
               if (!approved)
                 Container(

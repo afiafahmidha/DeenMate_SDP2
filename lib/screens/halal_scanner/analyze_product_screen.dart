@@ -1,10 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'halal_scanner_home.dart';
+import '../../widgets/auth_header.dart';
 import '../../services/halal_analyzer_service.dart';
+import '../../services/ingredient_ocr_cleaner.dart';
+import '../../services/gemini_halal_service.dart';
 import '../../l10n/app_localizations.dart';
 
 class AnalyzeProductScreen extends StatefulWidget {
@@ -24,6 +28,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
 
   File? _selectedImage;
   String? _recognizedText;
+  List<String> _cleanIngredientsList = [];
   bool _isAnalyzing = false;
   ProductAnalysisResult? _analysisResult;
   String? _errorMessage;
@@ -54,7 +59,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
     try {
       final XFile? image = await _picker.pickImage(
         source: source,
-        imageQuality: 85,
+        imageQuality: 90,
         maxWidth: 1920,
       );
 
@@ -74,9 +79,10 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         _errorMessage = null;
         _analysisResult = null;
         _recognizedText = null;
+        _cleanIngredientsList = [];
       });
 
-      await _recognizeText(imagePath);
+      await _processImageAndAnalyze(imagePath);
     } catch (e) {
       _isPicking = false;
       if (mounted) {
@@ -90,7 +96,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
   Future<CroppedFile?> _cropImage(String sourcePath) async {
     return await ImageCropper().cropImage(
       sourcePath: sourcePath,
-      compressQuality: 85,
+      compressQuality: 90,
       maxWidth: 1920,
       uiSettings: [
         AndroidUiSettings(
@@ -102,54 +108,57 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
     );
   }
 
-  Future<void> _recognizeText(String imagePath) async {
+  Future<void> _processImageAndAnalyze(String imagePath) async {
     setState(() {
       _isAnalyzing = true;
     });
 
     try {
+      final imageFile = File(imagePath);
+      final barcode = _barcodeController.text.trim().isEmpty ? 'N/A' : _barcodeController.text.trim();
+
+      // 1. Try Gemini Vision AI analysis first (if key set)
+      final aiResult = await GeminiHalalService.analyzeImageWithGemini(
+        imageFile: imageFile,
+        productName: 'Scanned Ingredients',
+        barcode: barcode,
+      );
+
+      if (aiResult != null && mounted) {
+        setState(() {
+          _analysisResult = aiResult;
+          _cleanIngredientsList = aiResult.ingredients;
+          _isAnalyzing = false;
+        });
+        return;
+      }
+
+      // 2. Perform ML Kit Text Recognition
       final inputImage = InputImage.fromFilePath(imagePath);
       final textRecognizer = TextRecognizer();
       final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-      
-      String fullText = recognizedText.text;
+      String rawText = recognizedText.text;
       await textRecognizer.close();
 
       if (!mounted) return;
 
       setState(() {
-        _recognizedText = fullText;
-        _isAnalyzing = false;
+        _recognizedText = rawText;
       });
 
-      if (fullText.trim().isEmpty) {
+      if (rawText.trim().isEmpty) {
         setState(() {
+          _isAnalyzing = false;
           _errorMessage = AppLocalizations.of(context)!.tr('no_text_found');
         });
         return;
       }
 
-      await _analyzeRecognizedText(fullText);
-    } catch (e) {
-      print('OCR error: $e');
-      if (mounted) {
-        setState(() {
-          _isAnalyzing = false;
-          _errorMessage = AppLocalizations.of(context)!.tr('recognition_failed');
-        });
-      }
-    }
-  }
+      // 3. Clean OCR text with IngredientOcrCleaner
+      List<String> cleanedIngredients = IngredientOcrCleaner.cleanAndExtract(rawText);
+      _cleanIngredientsList = cleanedIngredients;
 
-  Future<void> _analyzeRecognizedText(String text) async {
-    setState(() {
-      _isAnalyzing = true;
-    });
-
-    try {
-      List<String> ingredients = _parseIngredientsFromText(text);
-      
-      if (ingredients.isEmpty) {
+      if (cleanedIngredients.isEmpty) {
         setState(() {
           _isAnalyzing = false;
           _errorMessage = AppLocalizations.of(context)!.tr('could_not_detect');
@@ -157,12 +166,29 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         return;
       }
 
+      // 4. Try Gemini Text AI analysis
+      final textAiResult = await GeminiHalalService.analyzeTextWithGemini(
+        rawText: cleanedIngredients.join(', '),
+        productName: 'Scanned Ingredients',
+        barcode: barcode,
+        imageUrl: imagePath,
+      );
+
+      if (textAiResult != null && mounted) {
+        setState(() {
+          _analysisResult = textAiResult;
+          _isAnalyzing = false;
+        });
+        return;
+      }
+
+      // 5. Fallback to Enhanced Rule-Based HalalAnalyzerService
       ProductAnalysisResult result = HalalAnalyzerService.analyzeIngredients(
-        ingredients: ingredients,
+        ingredients: cleanedIngredients,
         additives: const [],
         productName: 'Scanned Ingredients',
-        barcode: _barcodeController.text.trim().isEmpty ? 'N/A' : _barcodeController.text.trim(),
-        imageUrl: _selectedImage != null ? _selectedImage!.path : '',
+        barcode: barcode,
+        imageUrl: imagePath,
       );
 
       if (!mounted) return;
@@ -172,7 +198,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         _isAnalyzing = false;
       });
     } catch (e) {
-      print('Analysis error: $e');
+      print('OCR Analysis error: $e');
       if (mounted) {
         setState(() {
           _isAnalyzing = false;
@@ -182,58 +208,11 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
     }
   }
 
-  List<String> _parseIngredientsFromText(String text) {
-    List<String> ingredients = [];
-    
-    String cleaned = text.replaceAll(RegExp(r'\*+'), ' ').replaceAll(RegExp(r'\n+'), '\n');
-    
-    List<String> lines = cleaned.split('\n');
-    for (String line in lines) {
-      line = line.trim();
-      if (line.isEmpty) continue;
-      
-      if (line.toLowerCase().contains('ingredient') && 
-          (line.toLowerCase().contains(':') || line.toLowerCase().contains('list'))) {
-        continue;
-      }
-      
-      List<String> parts = line.split(RegExp(r'[,;•\-\*]'));
-      for (String part in parts) {
-        String ingredient = part.trim();
-        if (ingredient.isNotEmpty && ingredient.length > 1) {
-          ingredients.add(ingredient);
-        }
-      }
-    }
-
-    if (ingredients.isEmpty) {
-      List<String> words = cleaned.split(RegExp(r'\s+'));
-      for (String word in words) {
-        word = word.trim();
-        if (word.isNotEmpty && word.length > 2 && !_isCommonWord(word)) {
-          ingredients.add(word);
-        }
-      }
-    }
-
-    return ingredients;
-  }
-
-  bool _isCommonWord(String word) {
-    final commonWords = {
-      'ingredients', 'contains', 'product', 'list', 'per', 'serving', 'size',
-      'nutrition', 'facts', 'information', 'manufactured', 'distributed', 'by',
-      'the', 'and', 'for', 'with', 'from', 'may', 'contain', 'allergen',
-      'warning', 'caution', 'store', 'keep', 'refrigerated', 'after', 'opening',
-    };
-    return commonWords.contains(word.toLowerCase());
-  }
-
   void _submitAnalysis() {
     if (_barcodeController.text.trim().isEmpty && _analysisResult == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.tr('scan_or_enter'))),
-        );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.tr('scan_or_enter'))),
+      );
       return;
     }
 
@@ -252,7 +231,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         return AlertDialog(
           content: Row(
             children: [
-              const CircularProgressIndicator(color: Color(0xFF55A498)),
+              const CircularProgressIndicator(color: AppColors.midTeal),
               const SizedBox(width: 20),
               Text(AppLocalizations.of(context)!.tr('submitting')),
             ],
@@ -269,9 +248,9 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         context: context,
         builder: (context) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
+          title: Row(
             children: [
-              const Icon(Icons.check_circle, color: Colors.green),
+              const Icon(Icons.check_circle_rounded, color: Colors.green),
               const SizedBox(width: 8),
               Text(AppLocalizations.of(context)!.tr('request_submitted')),
             ],
@@ -282,7 +261,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
           actions: [
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF55A498),
+                backgroundColor: AppColors.navyBlue,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () {
@@ -303,36 +282,34 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const tealColor = Color(0xFF55A498);
-    final bgColor = widget.isDarkMode ? const Color(0xFF121212) : Colors.white;
-    final cardColor = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-    final primaryTextColor = widget.isDarkMode ? Colors.white : Colors.black87;
-    final secondaryTextColor = widget.isDarkMode ? Colors.white54 : Colors.grey;
-    final borderColor = widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.grey[300]!;
-    final textFieldBg = widget.isDarkMode ? const Color(0xFF2A2A2A) : Colors.white;
+    final bgColor = widget.isDarkMode ? const Color(0xFF101923) : const Color(0xFFF8FAF9);
+    final cardColor = widget.isDarkMode ? const Color(0xFF1A2633) : Colors.white;
+    final primaryTextColor = widget.isDarkMode ? Colors.white : AppColors.navyBlue;
+    final borderColor = widget.isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.shade300;
+    final textFieldBg = widget.isDarkMode ? const Color(0xFF243447) : Colors.white;
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: tealColor,
+        backgroundColor: AppColors.navyBlue,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           _analysisResult != null
               ? AppLocalizations.of(context)!.tr('analysis_results')
               : AppLocalizations.of(context)!.tr('scan_ingredients'),
-          style: const TextStyle(
+          style: GoogleFonts.poppins(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 20,
+            fontSize: 19,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.send, color: Colors.white),
+            icon: const Icon(Icons.send_rounded, color: Colors.white),
             onPressed: _submitAnalysis,
           ),
         ],
@@ -345,20 +322,20 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
             children: [
               if (_errorMessage != null)
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.red.shade200),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
-                      const SizedBox(width: 8),
+                      Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 22),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           _errorMessage!,
-                          style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                          style: GoogleFonts.poppins(color: Colors.red.shade700, fontSize: 13),
                         ),
                       ),
                     ],
@@ -367,21 +344,23 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
               if (_errorMessage != null) const SizedBox(height: 16),
 
               if (_analysisResult != null) ...[
-                _buildResultsCard(_analysisResult!, tealColor, primaryTextColor, cardColor),
+                _buildResultsCard(_analysisResult!, primaryTextColor, cardColor),
                 const SizedBox(height: 24),
               ] else ...[
                 Container(
                   decoration: BoxDecoration(
                     color: cardColor,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: tealColor.withValues(alpha: 0.3)),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.3)),
                   ),
                   child: TextField(
                     controller: _barcodeController,
                     keyboardType: TextInputType.number,
+                    style: GoogleFonts.poppins(color: primaryTextColor),
                     decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.qr_code_2_rounded, color: tealColor),
+                      prefixIcon: const Icon(Icons.qr_code_2_rounded, color: AppColors.midTeal),
                       hintText: AppLocalizations.of(context)!.tr('barcode_optional'),
+                      hintStyle: GoogleFonts.poppins(color: Colors.grey),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       filled: true,
@@ -389,15 +368,15 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
                 Row(
                   children: [
-                    Icon(Icons.camera_alt_outlined, color: secondaryTextColor, size: 22),
+                    const Icon(Icons.camera_alt_outlined, color: AppColors.midTeal, size: 22),
                     const SizedBox(width: 8),
                     Text(
                       AppLocalizations.of(context)!.tr('scan_ingredient_list'),
-                      style: TextStyle(
+                      style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: primaryTextColor,
@@ -411,10 +390,11 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () => _pickImage(ImageSource.camera),
-                        icon: const Icon(Icons.camera_alt, color: Colors.white),
-                         label: Text(AppLocalizations.of(context)!.tr('take_photo')),
+                        icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 20),
+                        label: Text(AppLocalizations.of(context)!.tr('take_photo'), style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: tealColor,
+                          backgroundColor: AppColors.navyBlue,
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
@@ -424,11 +404,11 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _pickImage(ImageSource.gallery),
-                        icon: Icon(Icons.image_outlined, color: tealColor),
-                        label: Text(AppLocalizations.of(context)!.tr('gallery'), style: TextStyle(color: primaryTextColor)),
+                        icon: const Icon(Icons.photo_library_rounded, color: AppColors.midTeal, size: 20),
+                        label: Text(AppLocalizations.of(context)!.tr('gallery'), style: GoogleFonts.poppins(color: primaryTextColor, fontWeight: FontWeight.bold)),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: tealColor,
-                          side: BorderSide(color: tealColor),
+                          foregroundColor: AppColors.midTeal,
+                          side: const BorderSide(color: AppColors.midTeal),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
@@ -443,11 +423,11 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                     width: double.infinity,
                     height: 200,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: borderColor),
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       child: Image.file(
                         _selectedImage!,
                         fit: BoxFit.cover,
@@ -461,59 +441,71 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: tealColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.midTeal.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.3)),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        CircularProgressIndicator(color: tealColor, strokeWidth: 2),
-                        SizedBox(width: 16),
-                        Text('Analyzing ingredients...', style: TextStyle(color: tealColor)),
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(color: AppColors.midTeal, strokeWidth: 2.5),
+                        ),
+                        const SizedBox(width: 16),
+                        Text(
+                          'Analyzing & translating ingredients...',
+                          style: GoogleFonts.poppins(color: AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 13.5),
+                        ),
                       ],
                     ),
                   ),
 
-                if (_recognizedText != null && _analysisResult == null)
+                if (_cleanIngredientsList.isNotEmpty && _analysisResult == null) ...[
+                  const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.shade200),
+                      color: AppColors.dustyBlueTeal.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                         Text(
-                           AppLocalizations.of(context)!.tr('recognized_text_label'),
-                          style: TextStyle(
+                        Text(
+                          'Clean Extracted Ingredients (${_cleanIngredientsList.length}):',
+                          style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            color: Colors.blue.shade700,
+                            fontSize: 13,
+                            color: AppColors.navyBlue,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _recognizedText!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue.shade900,
-                          ),
-                          maxLines: 5,
-                          overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _cleanIngredientsList
+                              .map((ing) => Chip(
+                                    label: Text(ing, style: GoogleFonts.poppins(fontSize: 11.5)),
+                                    backgroundColor: cardColor,
+                                    visualDensity: VisualDensity.compact,
+                                  ))
+                              .toList(),
                         ),
                       ],
                     ),
                   ),
+                ],
                 const SizedBox(height: 28),
 
                 Row(
                   children: [
-                    Icon(Icons.person_outline_rounded, color: secondaryTextColor, size: 22),
+                    const Icon(Icons.mark_email_read_outlined, color: AppColors.midTeal, size: 22),
                     const SizedBox(width: 8),
-                     Text(
-                       AppLocalizations.of(context)!.tr('tell_us'),
-                      style: TextStyle(
+                    Text(
+                      AppLocalizations.of(context)!.tr('tell_us'),
+                      style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: primaryTextColor,
@@ -525,9 +517,10 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  style: GoogleFonts.poppins(color: primaryTextColor),
                   decoration: InputDecoration(
-                     hintText: AppLocalizations.of(context)!.tr('email'),
-                    hintStyle: TextStyle(color: secondaryTextColor),
+                    hintText: AppLocalizations.of(context)!.tr('email'),
+                    hintStyle: GoogleFonts.poppins(color: Colors.grey),
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     filled: true,
                     fillColor: textFieldBg,
@@ -535,7 +528,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                       borderSide: BorderSide(color: borderColor),
                     ),
                     focusedBorder: const UnderlineInputBorder(
-                      borderSide: BorderSide(color: tealColor),
+                      borderSide: BorderSide(color: AppColors.midTeal),
                     ),
                   ),
                 ),
@@ -543,9 +536,10 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                 TextField(
                   controller: _explainController,
                   maxLines: 3,
+                  style: GoogleFonts.poppins(color: primaryTextColor),
                   decoration: InputDecoration(
-                     hintText: AppLocalizations.of(context)!.tr('explain_here'),
-                    hintStyle: TextStyle(color: secondaryTextColor),
+                    hintText: AppLocalizations.of(context)!.tr('explain_here'),
+                    hintStyle: GoogleFonts.poppins(color: Colors.grey),
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     filled: true,
                     fillColor: textFieldBg,
@@ -553,7 +547,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                       borderSide: BorderSide(color: borderColor),
                     ),
                     focusedBorder: const UnderlineInputBorder(
-                      borderSide: BorderSide(color: tealColor),
+                      borderSide: BorderSide(color: AppColors.midTeal),
                     ),
                   ),
                 ),
@@ -566,53 +560,54 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
     );
   }
 
-  Widget _buildResultsCard(ProductAnalysisResult analysis, Color tealColor, Color textColor, Color cardColor) {
+  Widget _buildResultsCard(ProductAnalysisResult analysis, Color textColor, Color cardColor) {
     Color statusColor;
     IconData statusIcon;
     if (analysis.overallStatus == 'HALAL') {
       statusColor = Colors.green;
-      statusIcon = Icons.check_circle;
+      statusIcon = Icons.check_circle_rounded;
     } else if (analysis.overallStatus == 'MUSHBOOH') {
-      statusColor = Colors.orange;
-      statusIcon = Icons.warning;
+      statusColor = AppColors.coralOrange;
+      statusIcon = Icons.warning_rounded;
     } else {
-      statusColor = Colors.red;
-      statusIcon = Icons.cancel;
+      statusColor = Colors.redAccent;
+      statusIcon = Icons.cancel_rounded;
     }
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: statusColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(statusIcon, color: statusColor, size: 28),
-              const SizedBox(width: 12),
+              Icon(statusIcon, color: statusColor, size: 36),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       analysis.overallStatus,
-                      style: TextStyle(
+                      style: GoogleFonts.poppins(
                         color: statusColor,
-                        fontSize: 20,
+                        fontSize: 24,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.2,
                       ),
                     ),
                     Text(
                       analysis.riskLevel,
-                      style: TextStyle(
-                        color: statusColor.withValues(alpha: 0.8),
+                      style: GoogleFonts.poppins(
+                        color: statusColor.withValues(alpha: 0.9),
                         fontSize: 13,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -620,115 +615,142 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Text(
-             AppLocalizations.of(context)!.tr('ingredients_analyzed'),
-            style: TextStyle(
+            'Translated Ingredients Analysis (in English):',
+            style: GoogleFonts.poppins(
               color: textColor,
-              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              fontSize: 13.5,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           if (analysis.haramIngredients.isNotEmpty)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.cancel, color: Colors.red, size: 16),
-                  const SizedBox(width: 6),
+                  const Icon(Icons.cancel_rounded, color: Colors.red, size: 18),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '${analysis.haramIngredients.length} Haram',
-                      style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.w500),
+                      '${analysis.haramIngredients.length} Haram Ingredient(s) Detected',
+                      style: GoogleFonts.poppins(color: Colors.red.shade800, fontSize: 12.5, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
             ),
-          if (analysis.mushboohIngredients.isNotEmpty) ...[
-            const SizedBox(height: 6),
+          if (analysis.mushboohIngredients.isNotEmpty)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning, color: Colors.orange, size: 16),
-                  const SizedBox(width: 6),
+                  const Icon(Icons.warning_rounded, color: Colors.orange, size: 18),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '${analysis.mushboohIngredients.length} Mushbooh',
-                      style: TextStyle(color: Colors.orange.shade700, fontSize: 12, fontWeight: FontWeight.w500),
+                      '${analysis.mushboohIngredients.length} Mushbooh (Doubtful) Ingredient(s)',
+                      style: GoogleFonts.poppins(color: Colors.orange.shade900, fontSize: 12.5, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-          if (analysis.halalIngredients.isNotEmpty && analysis.overallStatus == 'HALAL') ...[
-            const SizedBox(height: 6),
+          if (analysis.halalIngredients.isNotEmpty && analysis.overallStatus == 'HALAL')
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 16),
-                  const SizedBox(width: 6),
+                  const Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'All ${analysis.halalIngredients.length} Halal',
-                      style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.w500),
+                      'All ${analysis.halalIngredients.length} Ingredient(s) Verified Halal',
+                      style: GoogleFonts.poppins(color: Colors.green.shade800, fontSize: 12.5, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Text(
             AppLocalizations.of(context)!.tr('all_ingredients'),
-            style: TextStyle(
+            style: GoogleFonts.poppins(
               fontWeight: FontWeight.bold,
-              fontSize: 14,
+              fontSize: 14.5,
               color: textColor,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           ...analysis.results.map((result) => Container(
-            margin: const EdgeInsets.only(bottom: 6),
-            child: Row(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: result.statusColor.withValues(alpha: 0.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(result.statusIcon, color: result.statusColor, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    result.ingredient,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: textColor,
+                Row(
+                  children: [
+                    Icon(result.statusIcon, color: result.statusColor, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        result.ingredient,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: result.statusColor,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        result.status,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  result.status,
-                  style: TextStyle(
-                    color: result.statusColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
+                if (result.reason != null && result.reason!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '• ${result.reason}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: textColor.withValues(alpha: 0.75),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           )),

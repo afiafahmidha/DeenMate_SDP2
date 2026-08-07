@@ -166,6 +166,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'This Hadith establishes that pilgrims performing Tamattu\' should enter Ihram for Hajj from their location of stay in Makkah on the 8th of Dhul Hijjah.',
         'explanationAr': 'يوضح الحديث سنة الإحرام بالحج من مكة عند التوجه إلى منى في يوم التروية.',
       },
+      'originStory': {
+        'title': 'Rooted in Ibrahim\'s Call',
+        'source': 'Sahih Muslim 1218 · Ibn Kathir, Al-Bidayah wa\'n-Nihayah',
+        'textEn': 'Hajj was first instituted when Allah commanded Ibrahim (AS) to "proclaim to mankind the Hajj" (Surah Al-Hajj 22:27). Over centuries the rites were mixed with idolatry by the pre-Islamic Quraysh. In 10 AH, the Prophet Muhammad (ﷺ) performed his only complete Hajj — the Hajjat al-Wada\' (Farewell Pilgrimage) — restoring every step to its original form. His companion Jabir ibn Abdullah narrated this journey move-by-move, including entering Ihram for Hajj from Makkah on the 8th of Dhul Hijjah; this narration (Sahih Muslim 1218) is the primary source scholars use to reconstruct the Tamattu\' sequence.',
+      },
       'dua': {
         'title': 'Intention for Hajj (Tamattu\')',
         'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا',
@@ -210,6 +215,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'This Hadith provides direct evidence for the legality of Qiran (combining Hajj and Umrah in one Ihram).',
         'explanationAr': 'دليل صريح على مشروعية حج القران وهو ما فعله النبي صلى الله عليه وسلم في حجته.',
       },
+      'originStory': {
+        'title': 'Rooted in Ibrahim\'s Call',
+        'source': 'Sahih Muslim 1251 · Sahih al-Bukhari 1562',
+        'textEn': 'Combining the intentions of Hajj and Umrah in a single Ihram (Qiran) is directly attributed to the Prophet (ﷺ) himself. Anas ibn Malik reported hearing him say the talbiyah for "Umrah and Hajj together" (Sahih Muslim 1251), and Ibn Umar confirmed this was one of the three valid ways the companions entered Ihram during the Farewell Pilgrimage (Sahih al-Bukhari 1562), preserving it as a recognised Sunnah alongside Tamattu\' and Ifrad.',
+      },
       'dua': {
         'title': 'Intention for Hajj Qiran',
         'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا وَعُمْرَةً',
@@ -253,6 +263,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'referenceEn': 'Sahih al-Bukhari & Sahih Muslim',
         'explanationEn': 'This confirms that all three types of Hajj (Tamattu\', Qiran, and Ifrad) are valid and were practiced by the Companions under the guidance of the Prophet.',
         'explanationAr': 'دليل على جواز الإفراد وتخيير الحاج بين الأنساك الثلاثة.',
+      },
+      'originStory': {
+        'title': 'Rooted in Ibrahim\'s Call',
+        'source': 'Sahih al-Bukhari 1562 · Sahih Muslim 1211',
+        'textEn': 'Aisha (RA) narrated that when the companions set out with the Prophet (ﷺ) for his Farewell Pilgrimage, some intended Umrah alone, some intended both Hajj and Umrah together, and some intended Hajj alone (Ifrad) — and the Prophet approved of all three (Sahih al-Bukhari 1562, Sahih Muslim 1211). This companion-era testimony is the historical basis for Ifrad remaining a valid, distinct path through Hajj to this day.',
       },
       'dua': {
         'title': 'Intention for Hajj Ifrad',
@@ -299,6 +314,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'Prophetic action showing head shaving is the optimal way to conclude the pilgrimage.',
         'explanationAr': 'اقتداء الحجاج بالنبي صلى الله عليه وسلم بالحلق يوم النحر.',
       },
+      'originStory': {
+        'title': 'A Vision Fulfilled',
+        'source': 'Surah Al-Fath 48:27 · Sahih al-Bukhari 2731',
+        'textEn': 'Before the Treaty of Hudaybiyyah (6 AH), the Prophet (ﷺ) had seen in a vision that he and his companions would enter Makkah "with heads shaved and hair shortened." The treaty delayed that entry by a year, but the vision was fulfilled exactly as described when the pilgrims shaved their heads at the end of their rites (Surah Al-Fath 48:27; the background is recorded in Sahih al-Bukhari\'s account of Hudaybiyyah, no. 2731-2732). Ibn Umar confirmed the Prophet himself shaved his head during his own Hajj (Sahih al-Bukhari & Muslim).',
+      },
       'dua': {
         'title': 'Dua of Gratitude upon Shaving',
         'arabic': 'الْحَمْدُ لِلَّهِ الَّذِي قَضَى عَنَّا نُسُكَنَا',
@@ -344,6 +364,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'referenceEn': 'Sahih Muslim 1218',
         'explanationEn': 'This Hadith confirms the obligation of starting the Sa’i from Mount Safa as demonstrated by the Prophet (ﷺ).',
         'explanationAr': 'يبين الحديث وجوب البداية بالصفا اقتداءً بفعله صلى الله عليه وسلم وتفسيره للقرآن.',
+      },
+      'originStory': {
+        'title': 'Hajar\'s Search for Water',
+        'source': 'Sahih al-Bukhari 3364 (Hadith of Ibn Abbas)',
+        'textEn': 'Long before Ibrahim (AS) rebuilt the Kaaba, he left his wife Hajar and infant son Ismail in the barren valley of Makkah on Allah\'s command. When their water ran out, Hajar ran back and forth between the hills of Safa and Marwah seven times searching desperately for help, until Allah caused the spring of Zamzam to burst forth beneath baby Ismail\'s feet. Ibn Abbas narrates this story at length in Sahih al-Bukhari (3364). Allah later immortalised her run as a rite for every pilgrim, declaring in the Quran that "Safa and Marwah are among the symbols of Allah" (2:158).',
       },
       'dua': {
         'title': 'Dua on Safa & Marwah',
@@ -461,6 +486,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationAr':
             'يوضح الحديث هيئة طواف النبي صلى الله عليه وسلم وصفة الرمل والصلاة خلف المقام.',
       },
+      'originStory': {
+        'title': 'Raising the House',
+        'source': 'Surah Al-Baqarah 2:127 · Al-Azraqi, Akhbar Makkah',
+        'textEn': 'Tawaf traces back to Ibrahim (AS) and his son Ismail (AS) raising the foundations of the Kaaba and being commanded to "purify My House for those who circumambulate" (Surah Al-Baqarah 2:125, 127). The early Makkan historian Al-Azraqi (d. c. 837 CE) recorded in Akhbar Makkah how this rite of circling the House was practised by the descendants of Ibrahim\'s line and preserved — despite later idolatrous additions by the Quraysh — until the Prophet (ﷺ) cleared the Kaaba of idols and restored pure Tawaf in 8 AH.',
+      },
       'dua': {
         'title': 'Dua Between Yamani Corner & Black Stone',
         'arabic':
@@ -505,7 +535,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             'And remember Allah during specific numbered days. Then whoever hastens [his departure] in two days, there is no sin upon him; and whoever delays, there is no sin upon him - for him who fears Allah.',
         'referenceEn': 'Surah Al-Baqarah (2:203)',
         'explanationEn':
-            'The numbered days refer to the days spent in Mina, highlighting the importance of constant Remembrance (Dhikr) of Allah during this stay.',
+            'The Quran does not name the 8th of Dhul Hijjah specifically — this day\'s itinerary is preserved entirely through the Sunnah (see the Origin Story tab). This verse instead refers to the numbered days of Mina overall, highlighting the importance of constant Remembrance (Dhikr) of Allah throughout the stay.',
         'explanationAr':
             'الأيام المعدودات هي أيام التشريق ومنى، وأمر الله فيها بإكثار الذكر والتقوى.',
       },
@@ -520,6 +550,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             'This establishes the Sunnah of traveling to Mina on the 8th and performing shortened prayers before advancing to Arafah.',
         'explanationAr':
             'يؤكد الحديث حرص النبي صلى الله عليه وسلم على المبيت بمنى وأداء الصلوات الخمس مقصورة فيها.',
+      },
+      'originStory': {
+        'title': 'A Day of Preparation',
+        'source': 'Sahih Muslim 1218 (Hadith of Jabir) · Al-Fakihi, Akhbar Makkah',
+        'textEn': 'There is no verse of the Quran naming the 8th of Dhul Hijjah specifically; the day\'s practice comes entirely from the Prophet\'s ﷺ own example. Jabir ibn Abdullah\'s detailed account of the Farewell Pilgrimage (Sahih Muslim 1218) describes how the Prophet rode to Mina on this day and led five consecutive shortened prayers there before departing for Arafat at sunrise. Early Makkan historians such as Al-Fakihi (Akhbar Makkah) note the day was traditionally called \'Yawm al-Tarwiyah\' (the Day of Watering), as pilgrims once used it to draw and carry water before the waterless plain of Arafat ahead.',
       },
       'dua': {
         'title': 'Dua of Remembrance in Mina',
@@ -559,15 +594,15 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       ],
       'quran': {
         'textAr':
-            'الْيَوْمَ أَكْمَلْتُ لَكُمْ دِينَكُمْ وَأَتْمَمْتُ عَلَيْكُمْ نِعْمَتِي وَرَضِيتُ لَكُمُ الْإِسْلَامَ دِينًا',
-        'referenceAr': 'سورة المائدة - الآية ٣ (نزلت بعرفة)',
+            'فَإِذَا أَفَضْتُمْ مِّنْ عَرَفَاتٍ فَاذْكُرُوا اللَّهَ عِندَ الْمَشْعَرِ الْحَرَامِ',
+        'referenceAr': 'سورة البقرة - الآية ١٩٨',
         'textEn':
-            'This day I have perfected for you your religion and completed My favor upon you and have approved for you Islam as your religion.',
-        'referenceEn': 'Surah Al-Ma\'idah (5:3)',
+            'Then when you depart from Arafat, remember Allah at Al-Mash\'ar al-Haram.',
+        'referenceEn': 'Surah Al-Baqarah (2:198)',
         'explanationEn':
-            'This monumental verse was revealed to Prophet Muhammad (ﷺ) on the Day of Arafah at Jabal al-Rahmah, signifying the completion of divine revelation.',
+            'This is the only verse in the Quran that names Arafat directly, commanding pilgrims to stand and remember Allah there before departing toward Muzdalifah. (The famous verse "This day I have perfected your religion for you," Surah Al-Ma\'idah 5:3, was also revealed while the Prophet ﷺ stood at Arafat — see the Origin Story tab.)',
         'explanationAr':
-            'نزلت هذه الآية العظيمة على النبي صلى الله عليه وسلم وهو واقف بعرفة يوم الجمعة، إعلاناً بتمام الدين وكمال النعمة.',
+            'هذه هي الآية الوحيدة في القرآن التي تسمي عرفة صراحةً، وتأمر الحجاج بالوقوف وذكر الله فيها قبل الانصراف إلى المزدلفة.',
       },
       'hadith': {
         'textAr':
@@ -580,6 +615,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             'Standing at Arafat is the single non-negotiable pillar (Rukn) of Hajj without which Hajj is invalid.',
         'explanationAr':
             'يبين الحديث أن الوقوف بعرفة هو الركن الأعظم للحج، وبدونه لا يصح الحج.',
+      },
+      'originStory': {
+        'title': 'Correcting a Pre-Islamic Practice',
+        'source': 'Surah Al-Baqarah 2:198-199 · Sahih al-Bukhari 1664',
+        'textEn': 'Standing at Arafat predates Islam, but the Quraysh — who called themselves \'Al-Hums\' — considered themselves too noble to leave the Haram boundary and would stop short at Muzdalifah instead of going all the way to Arafat like the rest of the Arabs. The Quran corrected this in Surah Al-Baqarah (2:199): "Then depart from the place from where all the people depart." The Prophet (ﷺ) himself stood at Arafat with the entire nation, unifying the rite for everyone, as recorded by Aisha in Sahih al-Bukhari (1664). Arafat is literally named in the Quran at 2:198, the only verse in which the place is mentioned by name.',
       },
       'dua': {
         'title': 'The Supreme Dua of Arafah (خَيْرُ الدُّعَاءِ دُعَاءُ يَوْمِ عَرَفَةَ)',
@@ -641,6 +681,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationAr':
             'يبين الحديث استثناء النبي صلى الله عليه وسلم لصلاتي المغرب والعشاء بجمعهما بالمزدلفة وصلاة الفجر بغلس.',
       },
+      'originStory': {
+        'title': 'A Night of Remembrance',
+        'source': 'Surah Al-Baqarah 2:198 · Sahih al-Bukhari 1675',
+        'textEn': 'Muzdalifah is named in the Quran through its landmark, Al-Mash\'ar al-Haram: "When you depart from Arafat, remember Allah at Al-Mash\'ar al-Haram" (2:198). Ibn Mas\'ud reported that the Prophet (ﷺ) combined Maghrib and Isha there and prayed Fajr earlier than usual — the only two occasions Ibn Mas\'ud ever saw him pray outside a prayer\'s normal time (Sahih al-Bukhari 1675, Sahih Muslim 1280), fixing the practice pilgrims follow today.',
+      },
       'dua': {
         'title': 'Dua at Al-Mash\'ar Al-Haram (دعاء المشعر الحرام)',
         'arabic':
@@ -685,7 +730,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             'And whoever honors the symbols of Allah - indeed, it is from the piety of hearts.',
         'referenceEn': 'Surah Al-Hajj (22:32)',
         'explanationEn':
-            'Throwing pebbles at the Jamarat is among the sacred symbols (Sha’a’ir) of Allah performed to commemorate Ibrahim’s steadfastness.',
+            'The Quran does not name Rami or the Jamarat directly — the act itself is preserved through the Sunnah, re-enacting Ibrahim\'s (AS) rejection of Shaytan (see the Origin Story tab). This verse establishes the broader principle that honouring the symbols and rites Allah has appointed for Hajj is an act of piety.',
         'explanationAr':
             'رمي الجمار وتعظيم مناسك الحج من دلالات تقوى القلوب وإجلال أمر الله.',
       },
@@ -700,6 +745,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             'This establishes the timing (Dhuha) and fundamental rule that all Hajj rituals must mirror the Prophet’s demonstration.',
         'explanationAr':
             'أمر النبي صلى الله عليه وسلم الأمة بالأخذ عنه في أفعال الحج ومناسك الرمي.',
+      },
+      'originStory': {
+        'title': 'Ibrahim\'s Rejection of Shaytan',
+        'source': 'A well-known tradition (not in Bukhari/Muslim) · recorded in Sunan Ibn Majah 3029 & Musnad Ahmad; the ritual itself is fixed by the Sunnah in Sahih Muslim 1297',
+        'textEn': 'The reason widely taught for this rite is that when Ibrahim (AS) set out to fulfil Allah\'s command to sacrifice his son Ismail (AS) (Surah As-Saffat 37:102), Shaytan appeared to him three times at three separate spots to dissuade him, and each time Ibrahim drove him off by pelting him with seven stones. This account is popular and appears in early sources such as Sunan Ibn Majah and Musnad Ahmad, but scholars note its chain of narration is not as strong as Sahih al-Bukhari or Sahih Muslim, so it is usually taught as the traditional reason behind Rami rather than a fully authenticated hadith. What is firmly established, regardless of that story, is that the Prophet ﷺ himself pelted Jamarat al-Aqabah in this exact manner during his Farewell Pilgrimage (Sahih Muslim 1297), which is why the ritual is obligatory by clear Sunnah and scholarly consensus.',
       },
       'dua': {
         'title': 'Takbeer During Rami (التكبير عند الرمي)',
@@ -739,15 +789,15 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       ],
       'quran': {
         'textAr':
-            'لَّقَدْ صَدَقَ اللَّهُ رَسُولَهُ الرُّؤْيَا بِالْحَقِّ ۖ لَتَدْخُلُنَّ الْمَسْجِدَ الْحَرَامَ إِن شَاءَ اللَّهُ آمِنِينَ مُحَلِّقِينَ رُءُوسَكُمْ وَمُقَصِّرِينَ لَا تَخَافُونَ',
-        'referenceAr': 'سورة الفتح - الآية ٢٧',
+            'وَفَدَيْنَاهُ بِذِبْحٍ عَظِيمٍ',
+        'referenceAr': 'سورة الصافات - الآية ١٠٧',
         'textEn':
-            'Certainly has Allah showed to His Messenger the vision in truth. You will surely enter al-Masjid al-Haram, if Allah wills, in safety, with your heads shaved and hair shortened, not fearing.',
-        'referenceEn': 'Surah Al-Fath (48:27)',
+            'And We ransomed him with a great sacrifice.',
+        'referenceEn': 'Surah As-Saffat (37:107)',
         'explanationEn':
-            'Quranic prophecy highlighting head shaving (Halq) and shortening (Taqsir) as sacred symbols marking the completion of pilgrimage.',
+            'This verse is the origin of the Qurbani itself: after Ibrahim (AS) and his son Ismail (AS) submitted fully to Allah\'s command, Allah ransomed Ismail\'s life with an animal sacrifice. Every Hady offered during Hajj Tamattu\' or Qiran re-enacts that ransom in gratitude. (The shaving/trimming that follows the sacrifice is covered separately in Surah Al-Fath 48:27.)',
         'explanationAr':
-            'بشر الله نبيه بدخول المسجد الحرام وأداء النسك مع الحلق والتقصير.',
+            'هذه الآية هي أصل مشروعية الأضحية والهدي، حيث فدى الله إسماعيل عليه السلام بذبح عظيم بعد امتثاله وأبيه لأمر الله.',
       },
       'hadith': {
         'textAr':
@@ -760,6 +810,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             'Demonstrates the superior reward for men who shave their heads completely (Halq) compared to trimming.',
         'explanationAr':
             'فضل الحلق ومضاعفة الدعاء للمحلقين ثلاثاً بالرحمة والمغفرة.',
+      },
+      'originStory': {
+        'title': 'The Ransom of Ismail',
+        'source': 'Surah As-Saffat 37:102-107',
+        'textEn': 'This ritual commemorates the climax of Ibrahim\'s trial: after both father and son submitted fully to Allah\'s command to sacrifice Ismail (AS), Allah intervened and ransomed him with a great sacrifice — "and We ransomed him with a great sacrifice" (Surah As-Saffat 37:107). Muslims re-enact that ransom every year at the end of Hajj and on Eid al-Adha, offering an animal in place of a human life as Ibrahim once did, in gratitude for Allah\'s mercy on that day.',
       },
       'dua': {
         'title': 'Dua Upon Shaving/Trimming Hair',
@@ -799,15 +854,15 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       ],
       'quran': {
         'textAr':
-            'إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ ۖ فَمَنْ حَجَّ الْبَيْتَ أَوِ اعْتَمَرَ فَلَا جُنَاحَ عَلَيْهِ أَن يَطَّوَّفَ بِهِمَا',
-        'referenceAr': 'سورة البقرة - الآية ١٥٨',
+            'ثُمَّ لْيَقْضُوا تَفَثَهُمْ وَلْيُوفُوا نُذُورَهُمْ وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
+        'referenceAr': 'سورة الحج - الآية ٢٩',
         'textEn':
-            'Indeed, Safa and Marwah are among the symbols of Allah. So whoever makes Hajj to the House or performs Umrah - there is no blame upon him for walking between them.',
-        'referenceEn': 'Surah Al-Baqarah (2:158)',
+            'Then let them end their untidiness and fulfil their vows and perform Tawaf around the Ancient House.',
+        'referenceEn': 'Surah Al-Hajj (22:29)',
         'explanationEn':
-            'Allah enshrines Sa\'i between Safa and Marwah as an obligatory symbol commemorating Hajar’s devotion to saving baby Ismail.',
+            'This is the direct command to perform Tawaf. Tawaf al-Ifadah is the occasion on which every school of Islamic law agrees this verse is fulfilled as an absolute pillar (Rukn) of Hajj — unlike other Hajj acts, it cannot be substituted with a penalty if missed. (The Sa\'i that follows, mentioned in the overview above, is separately commanded in Surah Al-Baqarah 2:158 — see the Sa\'i of Hajj step.)',
         'explanationAr':
-            'تشريع السعي بين الصفا والمروة واعتبارهما من شعائر الله الدالة على طاعته والإخلاص له.',
+            'هذا هو الأمر المباشر بالطواف، وطواف الإفاضة هو الركن الذي يتحقق فيه هذا الأمر، ولا يجزئ عنه دم إن تُرك.',
       },
       'hadith': {
         'textAr':
@@ -820,6 +875,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             'Confirms that Tawaf al-Ifadah is performed on the 10th of Dhul Hijjah before returning to Mina for Tashreeq nights.',
         'explanationAr':
             'بيان وقت طواف الإفاضة للنبي صلى الله عليه وسلم يوم النحر ورجوعه للمبيت بمنى.',
+      },
+      'originStory': {
+        'title': 'The Pillar of the Pilgrimage',
+        'source': 'Surah Al-Hajj 22:29 · Sahih al-Bukhari 1733',
+        'textEn': 'Also called Tawaf al-Ziyarah, this circuit around the Kaaba is the one act every school of Islamic law agrees is an absolute pillar (Rukn) of Hajj — a Hajj is not valid without it, even if performed late. The Quran commands pilgrims to conclude their rites with "Tawaf around the Ancient House" (Surah Al-Hajj 22:29). Aisha reported that the Prophet (ﷺ) performed it on the afternoon of the 10th of Dhul Hijjah before returning to Mina (Sahih al-Bukhari 1733), fixing its place in the sequence of Hajj.',
       },
       'dua': {
         'title': 'Dua at Mount Safa (دعاء الصفا والمروة)',
@@ -867,7 +927,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             'Whoever hastens [his departure] in two days, there is no sin upon him; and whoever delays, there is no sin upon him - for him who fears Allah. And fear Allah and know that unto Him you will be gathered.',
         'referenceEn': 'Surah Al-Baqarah (2:203)',
         'explanationEn':
-            'Divine permission for pilgrims to either complete Tashreeq on the 12th (Ta\'ajjul) or complete the 13th day (Takhar), provided it is done with Taqwa.',
+            'As with the 10th, the Quran does not name the stoning ritual on the Days of Tashreeq directly — the act itself comes from the Sunnah (see the Origin Story tab). This verse instead gives the explicit permission pilgrims rely on to leave Mina after the 12th (Ta\'ajjul) or stay for the 13th (Takhar).',
         'explanationAr':
             'تبيح الآية التعجل في اليوم الثاني عشر أو التأخر لليوم الثالث عشر لمن اتقى الله.',
       },
@@ -882,6 +942,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             'Details the Sunnah method of standing for prolonged Dua after the Small and Medium Jamarat during Tashreeq days.',
         'explanationAr':
             'شرح وتطبييق سنة النبي صلى الله عليه وسلم في الوقوف للدعاء الطويل بين الجمار.',
+      },
+      'originStory': {
+        'title': 'Ibrahim\'s Rejection of Shaytan, Renewed Daily',
+        'source': 'Traditional account (see the 10th Dhul Hijjah step for its grading) · ritual sequence fixed by Sahih al-Bukhari 1751',
+        'textEn': 'The same traditional account of Ibrahim (AS) driving off Shaytan at three spots — popular in early sources though not narrated with a Bukhari/Muslim-grade chain — is what pilgrims commemorate across the Days of Tashreeq, staying on in Mina to pelt all three pillars each day. What is firmly documented is the Prophet\'s ﷺ own practice: Ibn Umar described in detail how he paused for long supplication after the first two Jamarat but not the third, "just as I saw the Prophet do it" (Sahih al-Bukhari 1751) — the model pilgrims still follow today.',
       },
       'dua': {
         'title': 'Dua Between Jamarat (الدعاء الطويل بين الجمرتين)',
@@ -943,6 +1008,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationAr':
             'وجوب كون طواف الوداع آخر أعمال الحاج بمكة والتخفيف عن الحائض.',
       },
+      'originStory': {
+        'title': 'The Last Word at the House',
+        'source': 'Sahih al-Bukhari 1755 · Sahih Muslim 1327',
+        'textEn': 'Unlike most Hajj rites, the Farewell Tawaf has no dedicated Quranic verse — it survives purely through the Prophet\'s (ﷺ) instruction. Ibn Abbas reported that "the people were commanded that their last engagement should be with the House," with an exemption granted only to menstruating women (Sahih al-Bukhari 1755, Sahih Muslim 1327). This hadith alone established it as the closing, obligatory act of every pilgrim\'s Hajj.',
+      },
       'dua': {
         'title': 'Dua of Departure & Farewell',
         'arabic':
@@ -998,6 +1068,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             'Highlights the immense spiritual purification and expiation of sins obtained through Umrah.',
         'explanationAr': 'فضل العمرة ومحوها للذنوب والخطايا.',
       },
+      'originStory': {
+        'title': 'Rooted in Ibrahim\'s Call',
+        'source': 'Surah Al-Baqarah 2:196 · Sahih al-Bukhari 1773',
+        'textEn': 'Umrah shares its origin with Hajj in Ibrahim\'s (AS) mission to "proclaim the pilgrimage to mankind" (22:27). The Quran commands believers to "complete the Hajj and Umrah for Allah" (2:196), and the Prophet (ﷺ) himself performed Umrah four times in his life. Abu Hurairah reported his saying that "an Umrah to another Umrah is an expiation for what occurred between them" (Sahih al-Bukhari 1773), which is why so many Muslims repeat this journey throughout their lives.',
+      },
       'dua': {
         'title': 'Intention for Umrah',
         'arabic': 'لَبَّيْكَ اللَّهُمَّ عُمْرَةً، لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ...',
@@ -1045,6 +1120,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'referenceEn': 'Jami\' at-Tirmidhi 959',
         'explanationEn': 'Virtue and great reward of performing 7 rounds of Tawaf.',
         'explanationAr': 'عظيم ثواب الطواف بالبيت الحرام.',
+      },
+      'originStory': {
+        'title': 'Raising the House',
+        'source': 'Surah Al-Baqarah 2:127 · Jami\' at-Tirmidhi 959',
+        'textEn': 'As with every Tawaf, this circuit re-enacts the purpose for which Ibrahim (AS) and Ismail (AS) raised the Kaaba\'s foundations — "that it may be purified for those who circumambulate" (2:125). Ibn Umar reported the Prophet\'s (ﷺ) teaching that completing seven full circuits properly carries reward equal to freeing a slave (Jami\' at-Tirmidhi 959), underscoring the weight given to this single rite.',
       },
       'dua': {
         'title': 'Dua Between Corners',
@@ -1094,6 +1174,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'The exact Sunnah guidance for initiating Sa\'i at Safa.',
         'explanationAr': 'سنة النبي صلى الله عليه وسلم في أداء السعي.',
       },
+      'originStory': {
+        'title': 'Hajar\'s Search for Water',
+        'source': 'Sahih al-Bukhari 3364 (Hadith of Ibn Abbas)',
+        'textEn': 'The same running of Hajar (RA) between Safa and Marwah in search of water for baby Ismail — narrated at length by Ibn Abbas in Sahih al-Bukhari (3364) — is re-enacted in every Umrah. Jabir reported that the Prophet (ﷺ) began at Safa, faced the Kaaba, and said "I begin with what Allah began with," quoting the Quran\'s own wording in Surah Al-Baqarah 2:158 (Sahih Muslim 1218).',
+      },
       'dua': {
         'title': 'Dua on Safa & Marwah',
         'arabic': 'لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ...',
@@ -1141,6 +1226,11 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'referenceEn': 'Sahih al-Bukhari 1727',
         'explanationEn': 'Prophetic mercy for pilgrims upon shaving or trimming.',
         'explanationAr': 'الدعاء بالرحمة للمحلقين والمقصرين.',
+      },
+      'originStory': {
+        'title': 'A Vision Fulfilled',
+        'source': 'Surah Al-Fath 48:27 · Sahih al-Bukhari 1727',
+        'textEn': 'As with Hajj, shaving or trimming the hair closes the state of Ihram in fulfilment of the Prophet\'s (ﷺ) vision described in Surah Al-Fath (48:27). He prayed for Allah\'s mercy on those who shave three times before including those who merely trim, showing his preference for a full shave (Sahih al-Bukhari 1727) — a preference still followed by pilgrims completing Umrah today.',
       },
       'dua': {
         'title': 'Dua of Gratitude upon Completion',
