@@ -48,7 +48,7 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
 
   // ── Theme ───────────────────────────────────────────────────────────────────
   bool  get _dark        => widget.isDarkMode;
-  Color get _bg          => _dark ? const Color(0xFF0F1923) : const Color(0xFFF5F7FA);
+  Color get _bg          => _dark ? const Color(0xFF121212) : const Color(0xFFF5F7FA);
   Color get _cardBg      => _dark ? const Color(0xFF1C2733) : Colors.white;
   Color get _textColor   => _dark ? const Color(0xFFE8EDF2) : AppColors.navyBlue;
   Color get _subtext     => _dark ? const Color(0xFF8FA3B3) : const Color(0xFF607080);
