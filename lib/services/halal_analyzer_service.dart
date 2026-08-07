@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screens/halal_scanner/halal_scanner_home.dart';
+import 'ingredient_ocr_cleaner.dart';
 
 class IngredientAnalysisResult {
   final String ingredient;
@@ -113,7 +114,7 @@ class ProductAnalysisResult {
             lower.contains('bacon') || lower.contains('ham') ||
             lower.contains('gelatin') || lower.contains('tallow') ||
             lower.contains('lard') || lower.contains('suet')) {
-          return 'Animal (Haram)';
+          return 'Animal (Haram Pork)';
         }
         if (lower.contains('cochineal') || lower.contains('carmine') || 
             lower.contains('insect') || lower.contains('shellac')) {
@@ -125,125 +126,187 @@ class ProductAnalysisResult {
         }
       }
     }
-    return overallStatus == 'HALAL' ? 'Plant/Chemical (Halal)' : 'Unknown/Unclear';
+    return overallStatus == 'HALAL' ? 'Plant/Chemical (Halal)' : 'Unclear Origin (Mushbooh)';
   }
 }
 
 class HalalAnalyzerService {
-  static String _translateToEnglish(String ingredient) {
-    final Map<String, String> translations = {
-      'tarwegluten': 'Wheat Gluten',
-      'tarwemeel': 'Wheat Flour',
-      'palmolie': 'Palm Oil',
-      'zout': 'Salt',
-      'water': 'Water',
-      'suiker': 'Sugar',
-      'zetmeel': 'Starch',
-      'verdikkingsmiddel': 'Thickener',
-      'emulgator': 'Emulsifier',
-      'conserveermiddel': 'Preservative',
-      'kleurstof': 'Colorant',
-      'antioxidant': 'Antioxidant',
-      'zuurteregelaar': 'Acidity Regulator',
-      'gist': 'Yeast',
-      'boter': 'Butter',
-      'melk': 'Milk',
-      'kaas': 'Cheese',
-      'vlees': 'Meat',
-      'kip': 'Chicken',
-      'rundvlees': 'Beef',
-      'varkensvlees': 'Pork',
-      'vis': 'Fish',
+  /// Translates multi-language ingredient names into standardized English names.
+  static String translateToEnglish(String ingredient) {
+    String text = IngredientOcrCleaner.convertBengaliNumerals(ingredient).trim();
+    String lower = text.toLowerCase();
+
+    // Comprehensive multi-language ingredient dictionary
+    final Map<String, String> dictionary = {
+      // Bangla Food Ingredients & Additives
+      'ভোজ্য তেল (পাম তেল)': 'Edible Oil (Palm Oil)',
+      'ভোজ্য তেল': 'Edible Oil',
+      'পাম তেল': 'Palm Oil',
+      'সয়াবিন তেল': 'Soybean Oil',
+      'সরিষার তেল': 'Mustard Oil',
+      'উদ্ভিজ্জ তেল': 'Vegetable Oil',
+      'সয়াবিন লেসিথিন': 'Soy Lecithin',
+      'সূর্যমুখী লেসিথিন': 'Sunflower Lecithin',
+      'সয়া লেসিথিন': 'Soy Lecithin',
+      'লেসিথিন': 'Lecithin',
+      'ট্যাপিওকা স্টার্চ': 'Tapioca Starch',
+      'সোডিয়াম বাইকার্বোনেট (ই ৫০০ (ii))': 'Sodium Bicarbonate (E500(ii))',
+      'সোডিয়াম বাইকার্বোনেট (ই ৫০০)': 'Sodium Bicarbonate (E500)',
+      'সোডিয়াম বাইকার্বোনেট': 'Sodium Bicarbonate',
+      'সাইট্রিক অ্যাসিড (ই ৩৩০)': 'Citric Acid (E330)',
+      'সাইট্রিক অ্যাসিড': 'Citric Acid',
+      'ই ৫০০ (ii)': 'E500(ii) (Sodium Bicarbonate)',
+      'ই ৫০০': 'E500 (Sodium Bicarbonate)',
+      'ই ৩৩০': 'E330 (Citric Acid)',
+      'বিট লবণ': 'Black Salt',
+      'লবণ': 'Salt',
+      'মটর': 'Peas',
+      'বাদাম': 'Nuts',
+      'চিঁড়া': 'Flattened Rice',
+      'চিড়া': 'Flattened Rice',
+      'মরিচ': 'Chili',
+      'এলাচ': 'Cardamom',
+      'দারচিনি': 'Cinnamon',
+      'জিরা': 'Cumin',
+      'লবঙ্গ': 'Clove',
+      'হলুদ': 'Turmeric',
+      'গোলমরিচ': 'Black Pepper',
+      'জোয়ান': 'Carom Seeds (Ajwain)',
+      'গমের আটা': 'Wheat Flour',
+      'আটা': 'Flour',
+      'ময়দা': 'Wheat Flour',
+      'সুজি': 'Semolina',
+      'পানি': 'Water',
+      'চিনি': 'Sugar',
+      'দুধ': 'Milk',
+      'মাখন': 'Butter',
+      'পনির': 'Cheese',
+      'ডিম': 'Egg',
+      'ঘি': 'Ghee',
+      'সরিষা': 'Mustard',
+      'তিল': 'Sesame',
+      'ধনে': 'Coriander',
+      'ধনিয়া': 'Coriander',
+      'পেঁয়াজ': 'Onion',
+      'রসুন': 'Garlic',
+      'আদা': 'Ginger',
+      'চাট মসলা': 'Chaat Masala',
+      'সিরকা': 'Vinegar',
+      'ভিনেগার': 'Vinegar',
+      'গুড়': 'Jaggery',
+      'শূকরের মাংস': 'Pork',
+      'শূকরের চর্বি': 'Pork Lard',
+      'শুয়োরের মাংস': 'Pork',
+      'মাংস': 'Meat',
+      'মুরগি': 'Chicken',
+      'গরুর মাংস': 'Beef',
+      'মদ': 'Alcohol',
+      'অ্যালকোহল': 'Alcohol',
+      'জেলটিন': 'Gelatin',
+      'সয়াবিন': 'Soybean',
+      'উদ্ভিজ্জ': 'Vegetable',
+      'ইমালসিফায়ার': 'Emulsifier',
+      'অ্যারোমা': 'Flavoring',
+
+      // Arabic
+      'ليسيثين الصويا': 'Soy Lecithin',
+      'ليسيثين عباد الشمس': 'Sunflower Lecithin',
+      'ليسيثين': 'Lecithin',
+      'دقيق القمح': 'Wheat Flour',
+      'دقيق': 'Flour',
+      'زيت النخيل': 'Palm Oil',
+      'زيت نباتي': 'Vegetable Oil',
+      'ملح': 'Salt',
+      'ماء': 'Water',
+      'سكر': 'Sugar',
+      'حليب': 'Milk',
+      'زبدة': 'Butter',
+      'جبن': 'Cheese',
+      'بيض': 'Egg',
+      'لحم الخنزير': 'Pork',
+      'دهن الخنزير': 'Pork Lard',
+      'كحول': 'Alcohol',
+      'جيلاتين': 'Gelatin',
+      'مستحلب': 'Emulsifier',
+
+      // French
+      'lécithine de soja': 'Soy Lecithin',
+      'lécolithine de soja': 'Soy Lecithin',
+      'lécithine de tournesol': 'Sunflower Lecithin',
+      'lécithine': 'Lecithin',
+      'farine de blé': 'Wheat Flour',
       'farine': 'Flour',
       'blé': 'Wheat',
+      'huile de palme': 'Palm Oil',
+      'huile végétale': 'Vegetable Oil',
       'sucre': 'Sugar',
       'sel': 'Salt',
-      'huile': 'Oil',
-      'beurre': 'Butter',
-      'lait': 'Milk',
-      'fromage': 'Cheese',
-      'viande': 'Meat',
-      'poulet': 'Chicken',
-      'bœuf': 'Beef',
-      'porc': 'Pork',
-      'poisson': 'Fish',
       'eau': 'Water',
-      'épaississant': 'Thickener',
+      'lait': 'Milk',
+      'beurre': 'Butter',
+      'fromage': 'Cheese',
+      'porc': 'Pork',
+      'viande de porc': 'Pork',
+      'saindoux': 'Pork Lard',
+      'gélatine': 'Gelatin',
+      'alcool': 'Alcohol',
       'émulsifiant': 'Emulsifier',
-      'conservateur': 'Preservative',
-      'colorant': 'Colorant',
+
+      // German
+      'sojalecithin': 'Soy Lecithin',
+      'sonnenblumenlecithin': 'Sunflower Lecithin',
+      'lecithin': 'Lecithin',
+      'weizenmehl': 'Wheat Flour',
       'weizen': 'Wheat',
       'mehl': 'Flour',
+      'palmöl': 'Palm Oil',
+      'pflanzenöl': 'Vegetable Oil',
       'zucker': 'Sugar',
       'salz': 'Salt',
-      'öl': 'Oil',
-      'butter': 'Butter',
-      'milch': 'Milk',
-      'käse': 'Cheese',
-      'fleisch': 'Meat',
-      'huhn': 'Chicken',
-      'rindfleisch': 'Beef',
-      'schweinefleisch': 'Pork',
-      'fisch': 'Fish',
       'wasser': 'Water',
-       'verdickungsmittel': 'Thickener',
-       'konservierungsmittel': 'Preservative',
-      'farbstoff': 'Colorant',
+      'milch': 'Milk',
+      'butter': 'Butter',
+      'käse': 'Cheese',
+      'schweinefleisch': 'Pork',
+      'schweineschmalz': 'Pork Lard',
+      'schmalz': 'Lard',
+      'gelatine': 'Gelatin',
+      'alkohol': 'Alcohol',
+      'emulgator': 'Emulsifier',
+
+      // Spanish
+      'lecitina de soya': 'Soy Lecithin',
+      'lecitina de soja': 'Soy Lecithin',
+      'lecitina de girasol': 'Sunflower Lecithin',
+      'lecitina': 'Lecithin',
+      'harina de trigo': 'Wheat Flour',
       'harina': 'Flour',
       'trigo': 'Wheat',
+      'aceite de palma': 'Palm Oil',
+      'aceite vegetal': 'Vegetable Oil',
+      'aceite': 'Oil',
       'azúcar': 'Sugar',
       'sal': 'Salt',
-      'aceite': 'Oil',
-      'mantequilla': 'Butter',
-      'leche': 'Milk',
-      'queso': 'Cheese',
-      'carne': 'Meat',
-      'pollo': 'Chicken',
-      'cerdo': 'Pork',
-      'pescado': 'Fish',
       'agua': 'Water',
-      'espesante': 'Thickener',
+      'leche': 'Milk',
+      'mantequilla': 'Butter',
+      'queso': 'Cheese',
+      'cerdo': 'Pork',
+      'carne de cerdo': 'Pork',
+      'manteca de cerdo': 'Pork Lard',
+      'gelatina': 'Gelatin',
+      'alcohol': 'Alcohol',
       'emulsionante': 'Emulsifier',
-      'conservante': 'Preservative',
-      'colorante': 'Colorant',
-      'farina': 'Flour',
-      'grano': 'Wheat',
-      'zucchero': 'Sugar',
-      'sale': 'Salt',
-      'olio': 'Oil',
-      'burro': 'Butter',
-      'latte': 'Milk',
-      'formaggio': 'Cheese',
-      'maiale': 'Pork',
-      'pesce': 'Fish',
-       'acqua': 'Water',
-       'addensante': 'Thickener',
-       'mąka': 'Flour',
-      'pszenica': 'Wheat',
-      'cukier': 'Sugar',
-      'sól': 'Salt',
-      'olej': 'Oil',
-      'masło': 'Butter',
-      'mleko': 'Milk',
-      'ser': 'Cheese',
-      'mięso': 'Meat',
-      'kurczak': 'Chicken',
-      'wieprzowina': 'Pork',
-      'ryba': 'Fish',
-       'woda': 'Water',
-       'zagęszczacz': 'Thickener',
-       'konserwant': 'Preservative',
-       'barwnik': 'Colorant',
     };
 
-    String lower = ingredient.toLowerCase().trim();
-    for (var entry in translations.entries) {
-      if (lower.contains(entry.key) || lower == entry.key) {
-        return ingredient.replaceFirst(RegExp(entry.key, caseSensitive: false), entry.value);
+    // First check exact / phrase match in dictionary
+    for (var entry in dictionary.entries) {
+      if (lower.contains(entry.key.toLowerCase())) {
+        return text.replaceAll(RegExp(RegExp.escape(entry.key), caseSensitive: false), entry.value);
       }
     }
 
-    return ingredient;
+    return text;
   }
 
   static bool _containsWord(String text, List<String> words) {
@@ -266,79 +329,148 @@ class HalalAnalyzerService {
     return false;
   }
 
+  /// Contextual single ingredient auditor
   static IngredientAnalysisResult _analyzeSingleIngredient(String ingredient) {
     String lower = ingredient.toLowerCase().trim();
 
-    if (_containsWord(lower, ['pork', 'pig', 'bacon', 'ham', 'lard', 'tallow', 'suet', 'gelatin', 'collagen'])) {
+    // 1. Check for plant / vegetable / microbial / synthetic qualifiers FIRST
+    final plantQualifiers = [
+      'soy', 'soya', 'sunflower', 'rapeseed', 'canola', 'vegetable', 'plant',
+      'plant-based', 'vegan', 'microbial', 'fungal', 'synthetic', 'fruit',
+      'cottonseed', 'corn', 'coconut', 'halal certified', 'halal', 'palm',
+      'tapioca', 'peas', 'nuts', 'rice', 'salt', 'bicarbonate', 'citric', 'cardamom',
+      'cinnamon', 'cumin', 'clove', 'turmeric', 'pepper', 'wheat', 'flour'
+    ];
+
+    bool hasPlantQualifier = false;
+    for (String qual in plantQualifiers) {
+      if (lower.contains(qual)) {
+        hasPlantQualifier = true;
+        break;
+      }
+    }
+
+    // 2. Porcine / Pork derivatives (HARAM)
+    final porkKeywords = [
+      'pork', 'pig', 'porcine', 'bacon', 'ham', 'prosciutto', 'pancetta',
+      'lard', 'strutto', 'swine', 'pork fat', 'pork belly', 'tallow', 'suet'
+    ];
+
+    if (_containsWord(lower, porkKeywords)) {
       return IngredientAnalysisResult(
         ingredient: ingredient,
         status: 'HARAM',
-        reason: 'Contains pork/animal derivative',
-        source: 'local',
+        reason: 'Contains pork / porcine derivative - Strict Haram',
+        source: 'Animal (Pork)',
       );
     }
 
-    if (_containsWord(lower, ['alcohol', 'ethanol', 'wine', 'beer', 'vodka', 'whiskey', 'whisky',
-                              'rum', 'gin', 'liquor', 'booze', 'spirits', 'cider', 'mead', 'sake', 'soju', 'brandy'])) {
+    // 3. Alcohol & Intoxicants (HARAM)
+    final alcoholKeywords = [
+      'alcohol', 'ethanol', 'wine', 'beer', 'vodka', 'whiskey', 'whisky',
+      'rum', 'gin', 'liquor', 'spirits', 'cider', 'mead', 'sake', 'soju', 'brandy'
+    ];
+    if (_containsWord(lower, alcoholKeywords) &&
+        !lower.contains('cetyl alcohol') &&
+        !lower.contains('stearyl alcohol') &&
+        !lower.contains('fatty alcohol')) {
       return IngredientAnalysisResult(
         ingredient: ingredient,
         status: 'HARAM',
-        reason: 'Contains alcohol',
-        source: 'local',
+        reason: 'Contains alcohol / intoxicant - Haram',
+        source: 'Alcohol',
       );
     }
 
-    if (_containsWord(lower, ['cochineal', 'carmine', 'crimson', 'insect', 'beetle', 'shellac'])) {
+    // 4. Insects & Carmine E120 / Shellac (HARAM)
+    if (_containsWord(lower, ['cochineal', 'carmine', 'crimson', 'shellac']) ||
+        _containsENumber(lower, ['e120', 'e904'])) {
       return IngredientAnalysisResult(
         ingredient: ingredient,
         status: 'HARAM',
-        reason: 'Contains insect product',
-        source: 'local',
+        reason: 'Contains insect derivative (Carmine E120 / Shellac E904) - Haram',
+        source: 'Insect',
       );
     }
 
-    if (_containsWord(lower, ['rennet', 'pepsin', 'lipase', 'trypsin', 'chymosin'])) {
+    // 5. Gelatin (Check source)
+    if (lower.contains('gelatin') || _containsENumber(lower, ['e441'])) {
+      if (lower.contains('pork') || lower.contains('porcine')) {
+        return IngredientAnalysisResult(
+          ingredient: ingredient,
+          status: 'HARAM',
+          reason: 'Pork Gelatin - Haram',
+          source: 'Animal (Pork)',
+        );
+      }
+      if (lower.contains('fish') || lower.contains('pectin') || lower.contains('halal')) {
+        return IngredientAnalysisResult(
+          ingredient: ingredient,
+          status: 'HALAL',
+          reason: 'Halal/Fish/Plant-based Gelatin alternative - Halal',
+          source: 'Fish/Plant',
+        );
+      }
       return IngredientAnalysisResult(
         ingredient: ingredient,
         status: 'HARAM',
-        reason: 'Contains animal enzyme',
-        source: 'local',
+        reason: 'Gelatin source unstated (Usually porcine/non-dhabiha animal) - Haram/Mushbooh',
+        source: 'Animal (Unstated)',
       );
     }
 
-    if (_containsENumber(lower, ['e120', 'e441', 'e542', 'e901', 'e904', 'e1105', 'e422', 'e471', 'e920'])) {
-      return IngredientAnalysisResult(
-        ingredient: ingredient,
-        status: 'HARAM',
-        reason: 'Haram additive',
-        source: 'local',
-      );
-    }
-
-    if (_containsWord(lower, ['lecithin', 'glycerin', 'glycerol', 'natural flavor', 'natural flavour',
-                              'artificial flavor', 'artificial flavour', 'enzyme', 'emulsifier', 'stabilizer', 'thickener'])) {
+    // 6. Lecithin Context Handling (SOY / SUNFLOWER = HALAL, Unstated = MUSHBOOH)
+    if (lower.contains('lecithin') || _containsENumber(lower, ['e322'])) {
+      if (hasPlantQualifier) {
+        return IngredientAnalysisResult(
+          ingredient: ingredient,
+          status: 'HALAL',
+          reason: 'Plant-derived Lecithin (Soy/Sunflower/Vegetable) - Halal',
+          source: 'Plant',
+        );
+      }
       return IngredientAnalysisResult(
         ingredient: ingredient,
         status: 'MUSHBOOH',
-        reason: 'Source unclear',
-        source: 'local',
+        reason: 'Lecithin source unstated (Often soy, but verify plant source)',
+        source: 'Unclear',
       );
     }
 
-    if (_containsENumber(lower, ['e322', 'e433', 'e434', 'e435', 'e436'])) {
+    // 7. Glycerin / Glycerol Context Handling (VEGETABLE = HALAL, Unstated = MUSHBOOH)
+    if (lower.contains('glycerin') || lower.contains('glycerol') || _containsENumber(lower, ['e422'])) {
+      if (hasPlantQualifier) {
+        return IngredientAnalysisResult(
+          ingredient: ingredient,
+          status: 'HALAL',
+          reason: 'Vegetable Glycerin/Glycerol - Halal',
+          source: 'Plant',
+        );
+      }
       return IngredientAnalysisResult(
         ingredient: ingredient,
         status: 'MUSHBOOH',
-        reason: 'Source unclear',
-        source: 'local',
+        reason: 'Glycerin source unstated (May be animal or plant fat)',
+        source: 'Unclear',
       );
     }
 
+    // 8. E500, E330, E471 Additives
+    if (_containsENumber(lower, ['e500', 'e330', 'e500(ii)'])) {
+      return IngredientAnalysisResult(
+        ingredient: ingredient,
+        status: 'HALAL',
+        reason: 'Safe mineral/acid compound (Sodium Bicarbonate / Citric Acid) - Halal',
+        source: 'Mineral/Plant',
+      );
+    }
+
+    // Default Permissible
     return IngredientAnalysisResult(
       ingredient: ingredient,
       status: 'HALAL',
-      reason: 'No concerns detected',
-      source: 'local',
+      reason: 'No haram concerns detected',
+      source: 'Plant/General',
     );
   }
 
@@ -347,15 +479,11 @@ class HalalAnalyzerService {
     String lower = additive.toLowerCase().trim();
 
     final haramAdditives = {
-      'E120': 'Cochineal/Carmine (insect)',
-      'E441': 'Gelatin (animal)',
-      'E542': 'Bone phosphate (animal)',
-      'E901': 'Beeswax (insect)',
-      'E904': 'Shellac (insect)',
-      'E1105': 'Lysozyme (may be from eggs)',
-      'E422': 'Glycerol (may be animal)',
-      'E471': 'Mono- and diglycerides (may be animal)',
-      'E920': 'L-cysteine (may be from hair/feathers)',
+      'E120': 'Cochineal/Carmine (Insect derivative - Haram)',
+      'E441': 'Gelatin (Animal derivative - Usually Haram)',
+      'E542': 'Bone phosphate (Animal derivative - Haram)',
+      'E904': 'Shellac (Insect resin - Haram)',
+      'E920': 'L-cysteine (May be derived from human hair/feathers - Haram)',
     };
 
     if (haramAdditives.containsKey(upper)) {
@@ -364,44 +492,42 @@ class HalalAnalyzerService {
         status: 'HARAM',
         reason: haramAdditives[upper],
         isAdditive: true,
-        source: 'local',
+        source: 'Additive (Haram)',
       );
     }
 
     final mushboohAdditives = {
-      'E322': 'Lecithin (source unclear)',
-      'E433': 'Polysorbate 80 (source unclear)',
-      'E434': 'Polysorbate 40 (source unclear)',
-      'E435': 'Polysorbate 60 (source unclear)',
-      'E436': 'Polysorbate 65 (source unclear)',
+      'E322': 'Lecithin (Verify if soy/plant derived)',
+      'E422': 'Glycerol (Verify if vegetable derived)',
+      'E471': 'Mono- & Diglycerides (Verify if plant derived)',
+      'E433': 'Polysorbate 80 (Source unstated)',
     };
 
     if (mushboohAdditives.containsKey(upper)) {
+      if (lower.contains('soy') || lower.contains('plant') || lower.contains('vegetable')) {
+        return IngredientAnalysisResult(
+          ingredient: additive,
+          status: 'HALAL',
+          reason: '${mushboohAdditives[upper]} - Plant source specified (Halal)',
+          isAdditive: true,
+          source: 'Plant Additive',
+        );
+      }
       return IngredientAnalysisResult(
         ingredient: additive,
         status: 'MUSHBOOH',
         reason: mushboohAdditives[upper],
         isAdditive: true,
-        source: 'local',
-      );
-    }
-
-    if (_containsWord(lower, ['gelatin', 'cochineal', 'carmine', 'insect', 'shellac'])) {
-      return IngredientAnalysisResult(
-        ingredient: additive,
-        status: 'HARAM',
-        reason: 'Contains haram ingredient',
-        isAdditive: true,
-        source: 'local',
+        source: 'Additive (Doubtful)',
       );
     }
 
     return IngredientAnalysisResult(
       ingredient: additive,
       status: 'HALAL',
-      reason: 'No concerns detected',
+      reason: 'Safe additive',
       isAdditive: true,
-      source: 'local',
+      source: 'Additive (Halal)',
     );
   }
 
@@ -419,102 +545,47 @@ class HalalAnalyzerService {
 
     String nameLower = productName.toLowerCase().trim();
 
+    // Check product title for pork keywords
     final porkKeywords = [
       'bacon', 'pork', 'ham', 'prosciutto', 'pancetta', 'guanciale',
-      'speck', 'pepperoni', 'salami', 'chorizo', 'sausage',
-      'hot dog', 'frankfurter', 'bratwurst', 'kielbasa',
-      'lard', 'tallow', 'suet', 'strutto', 'pig', 'swine', 'porcine',
-      'cured meat', 'smoked meat', 'pork meat', 'pork belly'
+      'speck', 'pepperoni', 'salami', 'chorizo', 'lard', 'strutto', 'pig', 'swine'
     ];
 
-    bool isPorkProduct = false;
-    String porkReason = '';
-
     for (String keyword in porkKeywords) {
-      if (nameLower.contains(keyword)) {
-        isPorkProduct = true;
-        if (keyword == 'bacon') {
-          porkReason = 'Bacon is pork - Haram';
-        } else if (keyword == 'ham') {
-          porkReason = 'Ham is pork - Haram';
-        } else if (keyword == 'pork') {
-          porkReason = 'Pork product - Haram';
-        } else {
-          porkReason = 'Product contains $keyword - Haram';
-        }
-        break;
+      if (_containsWord(nameLower, [keyword])) {
+        String porkReason = 'Product title contains $keyword - Haram';
+        results.add(IngredientAnalysisResult(
+          ingredient: 'Product: $productName',
+          status: 'HARAM',
+          reason: porkReason,
+          source: 'Animal (Pork)',
+        ));
+        haramIngredients.add('$productName ($porkReason)');
+
+        return ProductAnalysisResult(
+          overallStatus: 'HARAM',
+          riskLevel: 'Contains pork - Haram',
+          results: results,
+          haramIngredients: haramIngredients,
+          mushboohIngredients: mushboohIngredients,
+          halalIngredients: halalIngredients,
+          apiResponse: 'Pork product detected in title',
+          productName: productName,
+          barcode: barcode,
+          imageUrl: imageUrl,
+          ingredients: ingredients,
+          additives: additives,
+        );
       }
     }
 
-    if (isPorkProduct) {
-      results.add(IngredientAnalysisResult(
-        ingredient: '⚠️ Product: $productName',
-        status: 'HARAM',
-        reason: porkReason,
-        source: 'local',
-      ));
-      haramIngredients.add('$productName ($porkReason)');
-
-      return ProductAnalysisResult(
-        overallStatus: 'HARAM',
-        riskLevel: 'Contains pork - Haram',
-        results: results,
-        haramIngredients: haramIngredients,
-        mushboohIngredients: mushboohIngredients,
-        halalIngredients: halalIngredients,
-        apiResponse: 'Pork product detected',
-        productName: productName,
-        barcode: barcode,
-        imageUrl: imageUrl,
-        ingredients: ingredients,
-        additives: additives,
-      );
-    }
-
-    final alcoholKeywords = ['beer', 'wine', 'vodka', 'whiskey', 'whisky', 'rum', 'gin', 'liquor',
-                             'ale', 'lager', 'stout', 'champagne', 'brandy', 'cider', 'mead', 'sake', 'soju'];
-    bool isAlcoholProduct = false;
-    String alcoholReason = '';
-
-    for (String keyword in alcoholKeywords) {
-      if (nameLower.contains(keyword)) {
-        isAlcoholProduct = true;
-        alcoholReason = 'Product contains alcohol - Haram';
-        break;
-      }
-    }
-
-    if (isAlcoholProduct) {
-      results.add(IngredientAnalysisResult(
-        ingredient: '⚠️ Product: $productName',
-        status: 'HARAM',
-        reason: alcoholReason,
-        source: 'local',
-      ));
-      haramIngredients.add('$productName (Alcohol product)');
-
-      return ProductAnalysisResult(
-        overallStatus: 'HARAM',
-        riskLevel: 'Contains alcohol - Haram',
-        results: results,
-        haramIngredients: haramIngredients,
-        mushboohIngredients: mushboohIngredients,
-        halalIngredients: halalIngredients,
-        apiResponse: 'Alcohol product detected',
-        productName: productName,
-        barcode: barcode,
-        imageUrl: imageUrl,
-        ingredients: ingredients,
-        additives: additives,
-      );
-    }
-
+    // Translate ingredients into English first
     List<String> translatedIngredients = ingredients
-        .map((ing) => _translateToEnglish(ing))
+        .map((ing) => translateToEnglish(ing))
         .toList();
 
     List<String> translatedAdditives = additives
-        .map((add) => _translateToEnglish(add))
+        .map((add) => translateToEnglish(add))
         .toList();
 
     for (int i = 0; i < translatedIngredients.length; i++) {
@@ -554,13 +625,13 @@ class HalalAnalyzerService {
 
     if (haramIngredients.isNotEmpty) {
       overallStatus = 'HARAM';
-      riskLevel = 'Contains Haram ingredients';
+      riskLevel = 'Contains ${haramIngredients.length} Haram ingredient(s)';
     } else if (mushboohIngredients.isNotEmpty) {
       overallStatus = 'MUSHBOOH';
-      riskLevel = 'Contains Mushbooh ingredients';
+      riskLevel = 'Contains ${mushboohIngredients.length} Mushbooh (doubtful) ingredient(s)';
     } else {
       overallStatus = 'HALAL';
-      riskLevel = additives.length > 5 ? 'Safe - Few additives' : 'Safe - No concerns';
+      riskLevel = 'All ${halalIngredients.length} ingredients verified Halal';
     }
 
     return ProductAnalysisResult(

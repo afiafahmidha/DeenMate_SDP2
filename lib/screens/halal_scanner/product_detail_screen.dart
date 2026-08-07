@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'halal_scanner_home.dart';
+import '../../widgets/auth_header.dart';
 import '../../services/halal_analyzer_service.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -23,9 +25,9 @@ class ProductIngredient {
   Color get statusColor {
     switch (status) {
       case 'HARAM':
-        return Colors.red;
+        return Colors.redAccent;
       case 'MUSHBOOH':
-        return Colors.orange;
+        return AppColors.coralOrange;
       default:
         return Colors.green;
     }
@@ -34,11 +36,11 @@ class ProductIngredient {
   IconData get statusIcon {
     switch (status) {
       case 'HARAM':
-        return Icons.cancel;
+        return Icons.cancel_rounded;
       case 'MUSHBOOH':
-        return Icons.warning;
+        return Icons.warning_rounded;
       default:
-        return Icons.check_circle;
+        return Icons.check_circle_rounded;
     }
   }
 }
@@ -60,7 +62,7 @@ class ProductDetailScreen extends StatefulWidget {
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
-  late List<ProductIngredient> _ingredients;
+  List<ProductIngredient>? _ingredients;
 
   List<ProductIngredient> _buildIngredients() {
     if (widget.analysisResults != null && widget.analysisResults!.isNotEmpty) {
@@ -98,38 +100,36 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    _ingredients ??= _buildIngredients();
-    const tealColor = Color(0xFF55A498);
+    final ingredientsList = _ingredients ??= _buildIngredients();
     final statusColor = _statusColor(widget.product.status);
-    final isDarkMode = widget.isDarkMode;
-    final bgColor = isDarkMode ? const Color(0xFF121212) : const Color(0xFFF9F9FA);
-    final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final bgColor = widget.isDarkMode ? const Color(0xFF101923) : const Color(0xFFF8FAF9);
+    final cardColor = widget.isDarkMode ? const Color(0xFF1A2633) : Colors.white;
+    final textColor = widget.isDarkMode ? Colors.white : AppColors.navyBlue;
 
-    final haramCount = _ingredients.where((i) => i.status == 'HARAM').length;
-    final mushboohCount = _ingredients.where((i) => i.status == 'MUSHBOOH').length;
-    final halalCount = _ingredients.where((i) => i.status == 'HALAL').length;
+    final haramCount = ingredientsList.where((i) => i.status == 'HARAM').length;
+    final mushboohCount = ingredientsList.where((i) => i.status == 'MUSHBOOH').length;
+    final halalCount = ingredientsList.where((i) => i.status == 'HALAL').length;
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: tealColor,
+        backgroundColor: AppColors.navyBlue,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           AppLocalizations.of(context)!.tr('product_details'),
-          style: TextStyle(
+          style: GoogleFonts.poppins(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 20,
+            fontSize: 19,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_outlined, color: Colors.white),
+            icon: const Icon(Icons.share_rounded, color: Colors.white),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Sharing ${widget.product.name}...')),
@@ -145,363 +145,250 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             // Status hero banner
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+              padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
               decoration: BoxDecoration(
-                color: statusColor,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(24),
-                  bottomRight: Radius.circular(24),
+                gradient: LinearGradient(
+                  colors: [
+                    statusColor,
+                    statusColor.withValues(alpha: 0.85),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(28),
+                  bottomRight: Radius.circular(28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: statusColor.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
               child: Column(
                 children: [
-                  Icon(_statusIcon(widget.product.status), color: Colors.white, size: 56),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(_statusIcon(widget.product.status), color: Colors.white, size: 48),
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     widget.product.status,
-                    style: const TextStyle(
+                    style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     widget.product.name,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                     '${AppLocalizations.of(context)!.tr("barcode")}: ${widget.product.barcode}',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13),
-                  ),
-                  if (_ingredients.isNotEmpty)
-                    Text(
-                        '${_ingredients.length} ${AppLocalizations.of(context)!.tr("ingredients_analyzed")}',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    child: Text(
+                      '${AppLocalizations.of(context)!.tr("barcode")}: ${widget.product.barcode}',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white70,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            if (widget.product.imageUrl.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    widget.product.imageUrl,
-                    height: 100,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                  ),
-                ),
-              ),
+            const SizedBox(height: 20),
+
+            // Summary stats cards
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
                 children: [
-                  // Origin & risk summary row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildInfoCard(
-                          icon: Icons.public,
-                           label: AppLocalizations.of(context)!.tr('origin'),
-                          value: widget.product.origin,
-                          color: tealColor,
-                          isDarkMode: isDarkMode,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildInfoCard(
-                          icon: Icons.health_and_safety_outlined,
-                           label: AppLocalizations.of(context)!.tr('risk_level'),
-                          value: widget.product.risk,
-                          color: widget.product.risk == 'Safe' || widget.product.risk.contains('Safe')
-                              ? Colors.green
-                              : widget.product.risk.contains('Haram')
-                                  ? Colors.red
-                                  : Colors.orange,
-                          isDarkMode: isDarkMode,
-                        ),
-                      ),
-                    ],
+                  Expanded(
+                    child: _buildStatCard(
+                      label: 'Halal',
+                      count: halalCount,
+                      color: Colors.green,
+                      isDarkMode: widget.isDarkMode,
+                    ),
                   ),
-                  const SizedBox(height: 24),
-
-                  // INGREDIENTS LIST
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                     Text(
-                        AppLocalizations.of(context)!.tr('ingredients'),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                      ),
-                      Text(
-                         '${_ingredients.length} ${AppLocalizations.of(context)!.tr("items")}',
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white70 : Colors.grey[600],
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildStatCard(
+                      label: 'Mushbooh',
+                      count: mushboohCount,
+                      color: AppColors.coralOrange,
+                      isDarkMode: widget.isDarkMode,
+                    ),
                   ),
-                  const SizedBox(height: 12),
-
-                  if (_ingredients.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(Icons.search_off, size: 48, color: Colors.grey),
-                          const SizedBox(height: 8),
-                          Text(
-                              AppLocalizations.of(context)!.tr('no_ingredients'),
-                            style: TextStyle(
-                              color: isDarkMode ? Colors.white70 : Colors.grey[600],
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                             AppLocalizations.of(context)!.tr('no_ingredient_data'),
-                            style: TextStyle(
-                              color: isDarkMode ? Colors.white54 : Colors.grey[400],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    ..._ingredients.map((ing) => _buildIngredientCard(ing, isDarkMode)),
-
-                  const SizedBox(height: 16),
-
-                  // SUMMARY CARDS
-                  if (haramCount > 0)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.red.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.cancel, color: Colors.red, size: 20),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '$haramCount ${AppLocalizations.of(context)!.tr("haram_ingredients_found")}',
-                              style: TextStyle(
-                                color: Colors.red.shade700,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  if (mushboohCount > 0)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.orange.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.warning, color: Colors.orange, size: 20),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '$mushboohCount ${AppLocalizations.of(context)!.tr("mushbooh_ingredients_found")}',
-                              style: TextStyle(
-                                color: Colors.orange.shade700,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  if (_ingredients.isNotEmpty && halalCount == _ingredients.length)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.green.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.check_circle, color: Colors.green, size: 20),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                           '✅ All $halalCount ${AppLocalizations.of(context)!.tr("all_halal_ingredients")}',
-                            style: TextStyle(
-                              color: Colors.green.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  const SizedBox(height: 16),
-
-                  // Report button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: tealColor,
-                        side: BorderSide(color: tealColor.withValues(alpha: 0.5)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                             SnackBar(content: Text(AppLocalizations.of(context)!.tr('report_submitted'))),
-                           );
-                      },
-                      icon: const Icon(Icons.flag_outlined),
-                      label: Text(AppLocalizations.of(context)!.tr('report_incorrect')),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildStatCard(
+                      label: 'Haram',
+                      count: haramCount,
+                      color: Colors.redAccent,
+                      isDarkMode: widget.isDarkMode,
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 24),
+
+            // Ingredients list section header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: [
+                  const Icon(Icons.list_alt_rounded, color: AppColors.midTeal, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${AppLocalizations.of(context)!.tr("ingredients")} (${ingredientsList.length})',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              itemCount: ingredientsList.length,
+              itemBuilder: (context, index) {
+                final ing = ingredientsList[index];
+                return _buildIngredientCard(ing, cardColor, textColor, widget.isDarkMode);
+              },
+            ),
+            const SizedBox(height: 32),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoCard({
-    required IconData icon,
+  Widget _buildStatCard({
     required String label,
-    required String value,
+    required int count,
     required Color color,
     required bool isDarkMode,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 8),
-          Text(label, style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.grey[600], fontSize: 12)),
+          Text(
+            '$count',
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
           const SizedBox(height: 2),
           Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildIngredientCard(ProductIngredient ing, bool isDarkMode) {
-    final badgeColor = ing.statusColor;
-    final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = isDarkMode ? Colors.white : Colors.black87;
+  Widget _buildIngredientCard(
+    ProductIngredient ing,
+    Color cardColor,
+    Color textColor,
+    bool isDarkMode,
+  ) {
+    Color badgeColor = ing.statusColor;
+    IconData originIcon = _getOriginIcon(ing.origin);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: badgeColor.withValues(alpha: 0.3),
-          width: 1,
+          color: isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade200,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 28,
-            height: 28,
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: badgeColor.withValues(alpha: 0.1),
+              color: badgeColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              ing.statusIcon,
-              color: badgeColor,
-              size: 18,
-            ),
+            child: Icon(ing.statusIcon, color: badgeColor, size: 22),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  ing.name,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Row(
                   children: [
+                    Icon(originIcon, size: 14, color: Colors.grey.shade600),
+                    const SizedBox(width: 4),
                     Text(
-                      ing.code,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: textColor,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        ing.name,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDarkMode ? Colors.white70 : Colors.grey[700],
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      '${ing.origin} • Risk: ${ing.riskText}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: isDarkMode ? Colors.white60 : Colors.grey.shade600,
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  ing.riskText,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDarkMode ? Colors.white54 : Colors.grey[500],
-                  ),
                 ),
               ],
             ),
@@ -510,15 +397,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: badgeColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: badgeColor.withValues(alpha: 0.3),
-              ),
+              color: badgeColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               ing.status,
-              style: TextStyle(
+              style: GoogleFonts.poppins(
                 color: badgeColor,
                 fontWeight: FontWeight.bold,
                 fontSize: 11,
@@ -528,6 +412,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ],
       ),
     );
+  }
+
+  IconData _getOriginIcon(String origin) {
+    String lower = origin.toLowerCase();
+    if (lower.contains('plant') || lower.contains('vegetable') || lower.contains('fruit')) {
+      return Icons.eco_rounded;
+    }
+    if (lower.contains('animal') || lower.contains('pork')) {
+      return Icons.pets_rounded;
+    }
+    if (lower.contains('alcohol')) {
+      return Icons.local_bar_rounded;
+    }
+    if (lower.contains('insect')) {
+      return Icons.bug_report_rounded;
+    }
+    return Icons.science_rounded;
   }
 
   String _getRiskText(String status) {
@@ -578,8 +479,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Color _statusColor(String status) {
     if (status == 'HALAL') return Colors.green;
-    if (status == 'HARAM') return Colors.red;
-    return Colors.orange;
+    if (status == 'HARAM') return Colors.redAccent;
+    return AppColors.coralOrange;
   }
 
   IconData _statusIcon(String status) {
