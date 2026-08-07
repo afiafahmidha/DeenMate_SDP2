@@ -153,7 +153,7 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
             child: historyList.isEmpty
                 ? _buildEmptyState(cardColor, primaryTextColor)
                 : ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
                     itemCount: historyList.length,
                     itemBuilder: (context, index) {
                       final product = historyList[index];
