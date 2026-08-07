@@ -3443,7 +3443,7 @@ class _InheritanceScreenState extends State<InheritanceScreen>
 
             if ((rule['awlNote'] as String).isNotEmpty)
               _textRow('Awl effect', rule['awlNote'] as String, textColor,
-                  labelColor: const Color(0xFF9C27B0)),
+                  labelColor: const Color(0xFF2196F3)),
             if ((rule['raddNote'] as String).isNotEmpty)
               _textRow('Radd effect', rule['raddNote'] as String, textColor,
                   labelColor: const Color(0xFF2196F3)),
@@ -3483,7 +3483,7 @@ class _InheritanceScreenState extends State<InheritanceScreen>
                   style: GoogleFonts.poppins(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.navyBlue)),
+                       color: labelColor ?? (_isDarkMode ? AppColors.midTeal : AppColors.navyBlue))),
               TextSpan(
                   text: value,
                   style: GoogleFonts.inter(
@@ -4047,3 +4047,4 @@ class FaraidDonutChartPainter extends CustomPainter {
   bool shouldRepaint(covariant FaraidDonutChartPainter old) =>
       old.results != results || old.isDarkMode != isDarkMode;
 }
+
