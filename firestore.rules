@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /emergencyGroups/{groupCode} {
+      // A signed-in user needs get access to validate a shared code. Listing
+      // groups is deliberately forbidden, so codes cannot be enumerated.
+      allow get: if request.auth != null;
+      allow list: if false;
+      allow create: if request.auth != null
+        && request.resource.data.leaderId == request.auth.uid;
+      allow update, delete: if request.auth != null
+        && resource.data.leaderId == request.auth.uid;
+
+      match /members/{memberId} {
+        allow read: if request.auth != null
+          && exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid));
+        allow create, update, delete: if request.auth != null
+          && request.auth.uid == memberId;
+      }
+    }
+  }
+}

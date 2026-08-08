@@ -298,6 +298,7 @@ class ZakatManagerScreen extends StatefulWidget {
 class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   int _tab = 0;
   bool _isDarkMode = false;
+  bool _isChangingCurrency = false;
   bool? _userPaymentsExpanded;
   bool get _isPaymentsExpanded => _userPaymentsExpanded ?? (_stillOwed > 0);
 
@@ -310,6 +311,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   double _silverPerGramBDT = 0.0;
   bool _pricesLoading = true;
   String _pricesLastUpdated = '--:-- --';
+  String? _priceFetchError;
   Timer? _priceRefreshTimer;
 
   bool _manualOverridePrices = false;
@@ -322,18 +324,42 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
 
   // ── Currency ─────────────────────────────────────────────────
   String _selectedCurrency = 'BDT';
+  final Map<String, double> _liveRatesToBDT = {
+    for (final currency in _currencies) currency.code: currency.toBDT,
+  };
   _Currency get _currency =>
       _currencies.firstWhere((c) => c.code == _selectedCurrency,
           orElse: () => _currencies.first);
-  double get _toBDT => _currency.toBDT;
+  double get _toBDT => _currencyRate(_selectedCurrency);
+
+  double _toDisplayCurrency(double amountBDT) => amountBDT / _toBDT;
+
+  String _formatMoney(double amountBDT, {int fractionDigits = 0}) {
+    final pattern = fractionDigits == 0
+        ? '#,##0'
+        : '#,##0.${List.filled(fractionDigits, '0').join()}';
+    return '${_currency.symbol} ${NumberFormat(pattern).format(_toDisplayCurrency(amountBDT))}';
+  }
+
+  String _formatCompactMoney(double amountBDT) {
+    final value = _toDisplayCurrency(amountBDT);
+    if (value >= 1000000) return '${_currency.symbol} ${(value / 1000000).toStringAsFixed(2)}M';
+    if (value >= 100000) return '${_currency.symbol} ${(value / 100000).toStringAsFixed(1)}L';
+    if (value >= 1000) return '${_currency.symbol} ${(value / 1000).toStringAsFixed(1)}K';
+    return '${_currency.symbol} ${value.toStringAsFixed(0)}';
+  }
 
   // ── Nisab ────────────────────────────────────────────────────
   String _nisabStandard = 'gold'; // 'gold' or 'silver'
   double get _effectiveGoldPrice => _manualOverridePrices
-      ? (double.tryParse(_manualGoldPriceCtrl.text) ?? _goldPerGramBDT)
+      ? (double.tryParse(_manualGoldPriceCtrl.text) ??
+              (_goldPerGramBDT / _toBDT)) *
+          _toBDT
       : _goldPerGramBDT;
   double get _effectiveSilverPrice => _manualOverridePrices
-      ? (double.tryParse(_manualSilverPriceCtrl.text) ?? _silverPerGramBDT)
+      ? (double.tryParse(_manualSilverPriceCtrl.text) ??
+              (_silverPerGramBDT / _toBDT)) *
+          _toBDT
       : _silverPerGramBDT;
 
   double get _nisabBDT => _nisabStandard == 'gold'
@@ -382,7 +408,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
 
   double get _fitraRatePerKg => double.tryParse(_fitraPriceCtrl.text) ?? 70.0;
   double get _fitraWeightPerHead => double.tryParse(_fitraWeightCtrl.text) ?? 3.0;
-  double get _fitraTotal => _fitraMembers * _fitraWeightPerHead * _fitraRatePerKg;
+  double get _fitraTotal =>
+      _fitraMembers * _fitraWeightPerHead * _fitraRatePerKg * _toBDT;
 
   // ── Payments ─────────────────────────────────────────────────
   List<ZakatPayment> _payments = [];
@@ -397,7 +424,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   double _currencyRate(String code) {
     final c = _currencies.firstWhere((x) => x.code == code,
         orElse: () => _currencies.first);
-    return c.toBDT;
+    return _liveRatesToBDT[code] ?? c.toBDT;
   }
 
   // ── History ──────────────────────────────────────────────────
@@ -437,8 +464,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     _goldPerGramBDT = (_goldSpotUSD / 31.1035) * _usdToBDT;
     _silverPerGramBDT = (_silverSpotUSD / 31.1035) * _usdToBDT;
 
-    _manualGoldPriceCtrl.text = _goldPerGramBDT.toStringAsFixed(0);
-    _manualSilverPriceCtrl.text = _silverPerGramBDT.toStringAsFixed(0);
+    _manualGoldPriceCtrl.text = (_goldPerGramBDT / _toBDT).toStringAsFixed(2);
+    _manualSilverPriceCtrl.text = (_silverPerGramBDT / _toBDT).toStringAsFixed(2);
 
     _recalculate();
     _loadPrefs();
@@ -495,6 +522,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   }
 
   void _onWealthChanged() {
+    if (_isChangingCurrency) return;
     _recalculate();
     _checkNisabCrossing();
   }
@@ -527,6 +555,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     if (_manualOverridePrices) {
       _manualGoldPriceCtrl.text = p.getString('zm_manual_gold_val') ?? '0';
       _manualSilverPriceCtrl.text = p.getString('zm_manual_silver_val') ?? '0';
+    } else {
+      _manualGoldPriceCtrl.text = (_goldPerGramBDT / _toBDT).toStringAsFixed(2);
+      _manualSilverPriceCtrl.text = (_silverPerGramBDT / _toBDT).toStringAsFixed(2);
     }
 
     // Haul start date
@@ -648,17 +679,63 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   // ─────────────────────────────────────────────────────────────
 
   Future<void> _fetchLivePrices() async {
+    if (mounted) {
+      setState(() {
+        _pricesLoading = true;
+        _priceFetchError = null;
+      });
+    }
+    var metalPriceUpdated = false;
+    var priceProvider = 'Saved rate';
+    String? primaryError;
+
+    // Gold API is the primary source: it is free, requires no API key, and
+    // returns USD per troy ounce for both XAU and XAG.
+    try {
+      final prices = await Future.wait([
+        _fetchGoldApiSpotPrice('XAU'),
+        _fetchGoldApiSpotPrice('XAG'),
+      ]);
+      if (prices[0] != null && prices[1] != null) {
+        _goldSpotUSD = prices[0]!;
+        _silverSpotUSD = prices[1]!;
+        metalPriceUpdated = true;
+        priceProvider = 'Gold API';
+      }
+    } catch (error) {
+      primaryError = error.toString();
+    }
+
+    // Secondary fallback for when Gold API is unavailable.
+    if (!metalPriceUpdated) {
     try {
       final metalRes = await http
           .get(Uri.parse('https://api.metals.live/v1/spot'))
           .timeout(const Duration(seconds: 8));
       if (metalRes.statusCode == 200) {
-        final List<dynamic> data = json.decode(metalRes.body);
-        final spot = data.first as Map<String, dynamic>;
-        _goldSpotUSD = (spot['gold'] as num).toDouble();
-        _silverSpotUSD = (spot['silver'] as num).toDouble();
+        final data = json.decode(metalRes.body);
+        final records = data is List ? data : [data];
+        for (final record in records.whereType<Map>()) {
+          final gold = record['gold'] ?? record['xau'];
+          final silver = record['silver'] ?? record['xag'];
+          final goldValue = _positiveNumber(gold);
+          final silverValue = _positiveNumber(silver);
+          if (goldValue != null) {
+            // metals.live returns spot prices in cents per troy ounce. Accept
+            // dollar responses too so a provider format change remains safe.
+            _goldSpotUSD = goldValue > 10000 ? goldValue / 100 : goldValue;
+            metalPriceUpdated = true;
+            priceProvider = 'Metals.live';
+          }
+          if (silverValue != null) {
+            _silverSpotUSD = silverValue > 1000 ? silverValue / 100 : silverValue;
+            metalPriceUpdated = true;
+            priceProvider = 'Metals.live';
+          }
+        }
       }
     } catch (_) {}
+    }
 
     try {
       final fxRes = await http
@@ -666,7 +743,18 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           .timeout(const Duration(seconds: 8));
       if (fxRes.statusCode == 200) {
         final fx = json.decode(fxRes.body) as Map<String, dynamic>;
-        _usdToBDT = (fx['rates']['BDT'] as num).toDouble();
+        final rates = fx['rates'] as Map<String, dynamic>?;
+        final bdtPerUsd = rates?['BDT'];
+        if (bdtPerUsd is num && bdtPerUsd > 0) {
+          _usdToBDT = bdtPerUsd.toDouble();
+          for (final currency in _currencies) {
+            final unitsPerUsd = rates?[currency.code];
+            if (unitsPerUsd is num && unitsPerUsd > 0) {
+              _liveRatesToBDT[currency.code] = _usdToBDT / unitsPerUsd.toDouble();
+            }
+          }
+          _liveRatesToBDT['BDT'] = 1.0;
+        }
       }
     } catch (_) {}
 
@@ -675,8 +763,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
 
     if (_goldHistory.isEmpty) {
       for (int i = 8; i >= 1; i--) {
-        _goldHistory.add(newGold * (1 + (math.Random().nextDouble() - 0.5) * 0.006));
-        _silverHistory.add(newSilver * (1 + (math.Random().nextDouble() - 0.5) * 0.008));
+        _goldHistory.add(
+            newGold * (1 + (math.Random().nextDouble() - 0.5) * 0.006));
+        _silverHistory.add(
+            newSilver * (1 + (math.Random().nextDouble() - 0.5) * 0.008));
       }
     }
     _goldHistory.add(newGold);
@@ -689,15 +779,77 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         _goldPerGramBDT = newGold;
         _silverPerGramBDT = newSilver;
         _pricesLoading = false;
-        _pricesLastUpdated = DateFormat('hh:mm a').format(DateTime.now());
+        _priceFetchError = metalPriceUpdated ? null : primaryError;
+        _pricesLastUpdated = metalPriceUpdated
+            ? '${DateFormat('hh:mm a').format(DateTime.now())} · $priceProvider'
+            : 'Live price unavailable';
 
         if (!_manualOverridePrices) {
-          _manualGoldPriceCtrl.text = _goldPerGramBDT.toStringAsFixed(0);
-          _manualSilverPriceCtrl.text = _silverPerGramBDT.toStringAsFixed(0);
+          _manualGoldPriceCtrl.text = (_goldPerGramBDT / _toBDT).toStringAsFixed(2);
+          _manualSilverPriceCtrl.text = (_silverPerGramBDT / _toBDT).toStringAsFixed(2);
         }
       });
       _recalculate();
     }
+  }
+
+  Future<double?> _fetchGoldApiSpotPrice(String symbol) async {
+    final response = await http
+        .get(
+          Uri.parse('https://api.gold-api.com/price/$symbol'),
+          headers: const {
+            'Accept': 'application/json',
+            'User-Agent': 'DeenMate/1.0',
+          },
+        )
+        .timeout(const Duration(seconds: 8));
+    if (response.statusCode != 200) {
+      throw StateError('Gold API returned ${response.statusCode}');
+    }
+    final data = json.decode(response.body) as Map<String, dynamic>;
+    final price = _positiveNumber(data['price']);
+    if (price == null) throw const FormatException('Gold API returned no price');
+    return price;
+  }
+
+  double? _positiveNumber(dynamic value) {
+    final number = value is num ? value.toDouble() : double.tryParse('$value');
+    return number != null && number > 0 ? number : null;
+  }
+
+  void _changeCurrency(String currencyCode) {
+    if (currencyCode == _selectedCurrency) return;
+    final oldRate = _toBDT;
+    final newRate = _currencyRate(currencyCode);
+    final controllers = [
+      _cashCtrl,
+      _stocksCtrl,
+      _businessCtrl,
+      _receivableCtrl,
+      _liabilitiesCtrl,
+      _camelValueCtrl,
+      _cattleValueCtrl,
+      _sheepValueCtrl,
+      _fitraPriceCtrl,
+      if (_manualOverridePrices) _manualGoldPriceCtrl,
+      if (_manualOverridePrices) _manualSilverPriceCtrl,
+    ];
+
+    _isChangingCurrency = true;
+    try {
+      for (final controller in controllers) {
+        final value = double.tryParse(controller.text.replaceAll(',', '')) ?? 0;
+        controller.text = (value * oldRate / newRate).toStringAsFixed(2);
+      }
+      setState(() => _selectedCurrency = currencyCode);
+      if (!_manualOverridePrices) {
+        _manualGoldPriceCtrl.text = (_goldPerGramBDT / _toBDT).toStringAsFixed(2);
+        _manualSilverPriceCtrl.text = (_silverPerGramBDT / _toBDT).toStringAsFixed(2);
+      }
+    } finally {
+      _isChangingCurrency = false;
+    }
+    _recalculate();
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -765,13 +917,13 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     final String livestock = livestockSummary ?? _livestockZakatSummary;
 
     if (amount > 0 && livestock.isNotEmpty) {
-      return 'Tk ${amount.toStringAsFixed(0)} + $livestock (or equivalent value)';
+      return '${_formatMoney(amount)} + $livestock (or equivalent value)';
     } else if (amount > 0) {
-      return 'Tk ${amount.toStringAsFixed(0)}';
+      return _formatMoney(amount);
     } else if (livestock.isNotEmpty) {
       return '$livestock (or equivalent value)';
     }
-    return 'Tk 0';
+    return _formatMoney(0);
   }
 
   /// True if any livestock type meets its own Islamic nisab threshold.
@@ -1091,12 +1243,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   }
 
   Widget _buildSummaryCard() {
-    String fmt(double v) {
-      if (v >= 1000000) return 'Tk ${(v / 1000000).toStringAsFixed(2)}M';
-      if (v >= 100000) return 'Tk ${(v / 100000).toStringAsFixed(1)}L';
-      if (v >= 1000) return 'Tk ${(v / 1000).toStringAsFixed(1)}K';
-      return 'Tk ${v.toStringAsFixed(0)}';
-    }
+    String fmt(double v) => _formatCompactMoney(v);
 
     final isCompleted = _zakatDue > 0 && _stillOwed <= 0;
     final hasPaidSome = _totalPaid > 0 && _zakatDue > 0;
@@ -1197,13 +1344,13 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Tk ${_totalPaid.toStringAsFixed(0)} logged in payments.',
+                      '${_formatMoney(_totalPaid)} logged in payments.',
                       style: GoogleFonts.inter(
                           color: Colors.white.withValues(alpha: 0.65), fontSize: 11.5),
                     ),
                   ] else ...[
                     Text(
-                      'Tk ${displayAmount.toStringAsFixed(0)}',
+                      _formatMoney(displayAmount),
                       style: GoogleFonts.poppins(
                           color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800),
                     ),
@@ -1220,7 +1367,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Paid: Tk ${_totalPaid.toStringAsFixed(0)} of Tk ${_zakatDue.toStringAsFixed(0)} due',
+                        'Paid: ${_formatMoney(_totalPaid)} of ${_formatMoney(_zakatDue)} due',
                         style: GoogleFonts.inter(
                             color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
                       ),
@@ -1320,32 +1467,67 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Icon(Icons.analytics_rounded, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 18),
                   const SizedBox(width: 8),
-                  Text('Metal Rates (BDT/g)',
-                      style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12.5,
-                          color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                  Expanded(
+                    child: Text('Metal Rates (${_currency.code}/g)',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                            color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                  ),
                 ],
               ),
-              _pricesLoading
-                  ? const SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.navyBlue)))
-                  : Text('Updated: $_pricesLastUpdated',
-                      style: GoogleFonts.inter(
-                          color: const Color(0xFF2E7D32),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _pricesLoading
+                      ? const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(AppColors.navyBlue)))
+                      : Flexible(
+                          child: Tooltip(
+                            message: _priceFetchError ?? 'Live price source: $_pricesLastUpdated',
+                            child: Text(
+                              _priceFetchError == null
+                                  ? 'Updated: $_pricesLastUpdated'
+                                  : 'Live price unavailable',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                  color: _priceFetchError == null
+                                      ? const Color(0xFF2E7D32)
+                                      : AppColors.coralOrange,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                  const SizedBox(width: 2),
+                  Tooltip(
+                    message: 'Refresh live metal prices',
+                    child: IconButton(
+                      onPressed: _pricesLoading ? null : _fetchLivePrices,
+                      icon: const Icon(Icons.refresh_rounded),
+                      iconSize: 13,
+                      color: _isDarkMode ? AppColors.midTeal : AppColors.navyBlue,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 20, height: 20),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -1368,8 +1550,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               setState(() {
                 _manualOverridePrices = !_manualOverridePrices;
                 if (!_manualOverridePrices) {
-                  _manualGoldPriceCtrl.text = _goldPerGramBDT.toStringAsFixed(0);
-                  _manualSilverPriceCtrl.text = _silverPerGramBDT.toStringAsFixed(0);
+                  _manualGoldPriceCtrl.text = (_goldPerGramBDT / _toBDT).toStringAsFixed(2);
+                  _manualSilverPriceCtrl.text = (_silverPerGramBDT / _toBDT).toStringAsFixed(2);
                 }
               });
               _recalculate();
@@ -1399,11 +1581,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               children: [
                 Expanded(
                   child: _buildOverrideField(
-                      _manualGoldPriceCtrl, '24K Gold (BDT/g)', () => _recalculate()),
+                      _manualGoldPriceCtrl, '24K Gold (${_currency.code}/g)', () => _recalculate()),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _buildOverrideField(_manualSilverPriceCtrl, 'Silver (BDT/g)',
+                  child: _buildOverrideField(_manualSilverPriceCtrl, 'Silver (${_currency.code}/g)',
                       () => _recalculate()),
                 ),
               ],
@@ -1443,7 +1625,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             style: GoogleFonts.inter(
                 fontSize: 11, color: _isDarkMode ? Colors.white.withValues(alpha: 0.5) : AppColors.navyBlue.withValues(alpha: 0.5))),
         const SizedBox(height: 3),
-        Text('Tk ${price.toStringAsFixed(1)}',
+        Text('${_formatMoney(price, fractionDigits: 1)}/g',
             style: GoogleFonts.poppins(
                 fontSize: 14.5, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
         const SizedBox(height: 8),
@@ -1466,7 +1648,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             children: [
               Icon(Icons.currency_exchange_rounded, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 16),
               const SizedBox(width: 8),
-              Text('Input Currency',
+              Text('Input & Display Currency',
                   style: GoogleFonts.poppins(
                       fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
             ],
@@ -1479,8 +1661,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               final active = c.code == _selectedCurrency;
               return GestureDetector(
                 onTap: () {
-                  setState(() => _selectedCurrency = c.code);
-                  _recalculate();
+                  _changeCurrency(c.code);
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
@@ -1502,7 +1683,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           ),
           if (_selectedCurrency != 'BDT') ...[
             const SizedBox(height: 8),
-            Text('1 ${super.widget.key != null ? "" : _currency.symbol} ≈ Tk ${_toBDT.toStringAsFixed(2)}',
+            Text('1 ${_currency.symbol} ≈ Tk ${_toBDT.toStringAsFixed(2)}',
                 style: GoogleFonts.inter(
                     fontSize: 10.5, color: _isDarkMode ? Colors.white.withValues(alpha: 0.45) : AppColors.navyBlue.withValues(alpha: 0.45))),
           ],
@@ -1612,7 +1793,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       fontWeight: FontWeight.w600,
                       color: _isDarkMode ? Colors.white.withValues(alpha: 0.7) : AppColors.navyBlue.withValues(alpha: 0.7))),
               Text(
-                'Tk ${(_pureGoldEquivalentGrams * _effectiveGoldPrice).toStringAsFixed(0)}',
+                _formatMoney(_pureGoldEquivalentGrams * _effectiveGoldPrice),
                 style: GoogleFonts.poppins(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
@@ -1769,15 +1950,15 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          _stmtLine('Cash & Bank', cash.toStringAsFixed(0)),
-          _stmtLine('Gold (${pureGold.toStringAsFixed(1)}g equivalent)', goldVal.toStringAsFixed(0)),
-          _stmtLine('Silver (${silverGrams.toStringAsFixed(1)}g)', silverVal.toStringAsFixed(0)),
-          _stmtLine('Stocks & Investments', stocks.toStringAsFixed(0)),
-          _stmtLine('Business Assets', business.toStringAsFixed(0)),
-          _stmtLine('Receivables', receivable.toStringAsFixed(0)),
+          _stmtLine('Cash & Bank', cash),
+          _stmtLine('Gold (${pureGold.toStringAsFixed(1)}g equivalent)', goldVal),
+          _stmtLine('Silver (${silverGrams.toStringAsFixed(1)}g)', silverVal),
+          _stmtLine('Stocks & Investments', stocks),
+          _stmtLine('Business Assets', business),
+          _stmtLine('Receivables', receivable),
           const Divider(height: 22, thickness: 1, color: Color(0xFFEEEEEE)),
-          _stmtLine('Total Gross Assets', gross.toStringAsFixed(0), bold: true),
-          _stmtLine('Less: Liabilities', liabilities.toStringAsFixed(0), isDeduction: true),
+          _stmtLine('Total Gross Assets', gross, bold: true),
+          _stmtLine('Less: Liabilities', liabilities, isDeduction: true),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -1789,7 +1970,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 Text('Net Zakatable Wealth',
                     style: GoogleFonts.poppins(
                         fontWeight: FontWeight.bold, fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
-                Text('Tk ${_totalWealth.toStringAsFixed(0)}',
+                Text(_formatMoney(_totalWealth),
                     style: GoogleFonts.poppins(
                         fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
               ],
@@ -1816,7 +1997,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Tk ${_zakatDue.toStringAsFixed(0)}',
+                        _formatMoney(_zakatDue),
                         textAlign: TextAlign.end,
                         style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
@@ -1846,7 +2027,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     );
   }
 
-  Widget _stmtLine(String label, String value,
+  Widget _stmtLine(String label, double value,
       {bool bold = false, bool isDeduction = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -1861,7 +2042,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: bold ? 0.85 : 0.6))),
           ),
           Text(
-            '${isDeduction ? '- ' : ''}Tk $value',
+            '${isDeduction ? '- ' : ''}${_formatMoney(value)}',
             style: GoogleFonts.poppins(
                 fontSize: 12.5,
                 fontWeight: bold ? FontWeight.bold : FontWeight.w600,
@@ -2037,7 +2218,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                         color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
-                Text('${asset.currency} ${asset.value.toStringAsFixed(0)}',
+                Text(_formatMoney(asset.value * _currencyRate(asset.currency)),
                     style: GoogleFonts.inter(
                         fontSize: 11,
                         color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.5))),
@@ -3767,10 +3948,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                             fontWeight: FontWeight.bold,
                             color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                         decoration: InputDecoration(
-                          labelText: 'Local Price per kg (BDT)',
+                          labelText: 'Local Price per kg (${_currency.code})',
                           labelStyle: GoogleFonts.inter(
                               fontSize: 11, color: AppColors.placeholder),
-                          suffixText: 'Tk',
+                          suffixText: _currency.symbol,
                           isDense: true,
                           contentPadding:
                               const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -3818,7 +3999,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                             children: [
                               const Icon(Icons.check_circle_rounded, color: Color(0xFF81C784), size: 28),
                               const SizedBox(width: 8),
-                              Text('Tk ${_fitraTotal.toStringAsFixed(0)} Paid',
+                              Text('${_formatMoney(_fitraTotal)} Paid',
                                   style: GoogleFonts.poppins(
                                       color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800)),
                             ],
@@ -3827,7 +4008,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                           Text('May Allah accept this purification of your fasts.',
                               style: GoogleFonts.inter(color: Colors.white60, fontSize: 11)),
                         ] else ...[
-                          Text('Tk ${_fitraStillOwed.toStringAsFixed(0)}',
+                          Text(_formatMoney(_fitraStillOwed),
                               style: GoogleFonts.poppins(
                                   color: Colors.white, fontSize: 30, fontWeight: FontWeight.w800)),
                           if (_fitraPaid > 0 && _fitraTotal > 0) ...[
@@ -3845,12 +4026,12 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                               ),
                             ),
                             const SizedBox(height: 6),
-                            Text('Paid: Tk ${_fitraPaid.toStringAsFixed(0)} of Tk ${_fitraTotal.toStringAsFixed(0)}',
+                            Text('Paid: ${_formatMoney(_fitraPaid)} of ${_formatMoney(_fitraTotal)}',
                                 style: GoogleFonts.inter(color: Colors.white54, fontSize: 10.5)),
                           ] else ...[
                             const SizedBox(height: 6),
                             Text(
-                                '$_fitraMembers members x ${_fitraWeightPerHead.toStringAsFixed(1)} kg x Tk ${_fitraRatePerKg.toStringAsFixed(0)}/kg',
+                                '$_fitraMembers members x ${_fitraWeightPerHead.toStringAsFixed(1)} kg x ${_currency.symbol} ${_fitraRatePerKg.toStringAsFixed(0)}/kg',
                                 style: GoogleFonts.inter(color: Colors.white54, fontSize: 11.5)),
                           ],
                         ],
@@ -3959,7 +4140,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                           style: GoogleFonts.inter(color: Colors.white54, fontSize: 11)),
                       const SizedBox(height: 2),
                       Text(
-                        'Tk ${_zakatDue.toStringAsFixed(0)}',
+                        _formatMoney(_zakatDue),
                         style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 16,
@@ -3991,7 +4172,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            'Tk ${_totalPaid.toStringAsFixed(0)}',
+                            _formatMoney(_totalPaid),
                             style: GoogleFonts.poppins(
                                 color: const Color(0xFF81C784),
                                 fontSize: 15,
@@ -4015,7 +4196,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            'Tk ${_stillOwed.toStringAsFixed(0)}',
+                            _formatMoney(_stillOwed),
                             style: GoogleFonts.poppins(
                                 color: _stillOwed > 0
                                     ? AppColors.coralOrange
@@ -4272,7 +4453,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 ),
               ),
               Text(
-                  '${p.currency == "BDT" ? "Tk" : p.currency} ${p.amount.toStringAsFixed(0)}',
+                  _formatMoney(p.amount * _currencyRate(p.currency)),
                   style: GoogleFonts.poppins(
                       fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
             ],
@@ -4771,14 +4952,14 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Text('Total Zakatable Wealth:'),
-                      pw.Text('Tk ${_totalWealth.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text(_formatMoney(_totalWealth, fractionDigits: 2), style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                     ],
                   ),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Text('Nisab Standard (${_nisabStandard.toUpperCase()}):'),
-                      pw.Text('Tk ${_nisabBDT.toStringAsFixed(2)}'),
+                      pw.Text(_formatMoney(_nisabBDT, fractionDigits: 2)),
                     ],
                   ),
                   pw.Row(
@@ -4792,14 +4973,14 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Text('Total Paid:'),
-                      pw.Text('Tk ${_totalPaid.toStringAsFixed(2)}', style: pw.TextStyle(color: PdfColors.green)),
+                      pw.Text(_formatMoney(_totalPaid, fractionDigits: 2), style: pw.TextStyle(color: PdfColors.green)),
                     ],
                   ),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Text('Remaining Zakat Owed:'),
-                      pw.Text('Tk ${_stillOwed.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: _stillOwed > 0 ? PdfColors.red : PdfColors.green)),
+                      pw.Text(_formatMoney(_stillOwed, fractionDigits: 2), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: _stillOwed > 0 ? PdfColors.red : PdfColors.green)),
                     ],
                   ),
                 ],
@@ -4836,21 +5017,21 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Text('Total Fitra Due:'),
-                      pw.Text('Tk ${_fitraTotal.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text(_formatMoney(_fitraTotal, fractionDigits: 2), style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                     ],
                   ),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Text('Total Fitra Paid:'),
-                      pw.Text('Tk ${_fitraPaid.toStringAsFixed(2)}', style: pw.TextStyle(color: PdfColors.green)),
+                      pw.Text(_formatMoney(_fitraPaid, fractionDigits: 2), style: pw.TextStyle(color: PdfColors.green)),
                     ],
                   ),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Text('Remaining Fitra Owed:'),
-                      pw.Text('Tk ${_fitraStillOwed.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: _fitraStillOwed > 0 ? PdfColors.red : PdfColors.green)),
+                      pw.Text(_formatMoney(_fitraStillOwed, fractionDigits: 2), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: _fitraStillOwed > 0 ? PdfColors.red : PdfColors.green)),
                     ],
                   ),
                 ],
@@ -4863,20 +5044,21 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300),
               children: [
-                _pdfTableRow('Asset Category', 'Value (BDT)', isHeader: true),
-                _pdfTableRow('Cash & Bank Savings', 'Tk ${cash.toStringAsFixed(0)}'),
-                _pdfTableRow('Gold Equivalent Value', 'Tk ${goldVal.toStringAsFixed(0)} (${pureGoldGrams.toStringAsFixed(1)}g pure)'),
-                _pdfTableRow('Silver Value', 'Tk ${silverVal.toStringAsFixed(0)} (${silverGrams.toStringAsFixed(1)}g)'),
-                _pdfTableRow('Stocks & Investments', 'Tk ${stocks.toStringAsFixed(0)}'),
-                _pdfTableRow('Business Assets & Inventory', 'Tk ${business.toStringAsFixed(0)}'),
-                _pdfTableRow('Receivables', 'Tk ${receivable.toStringAsFixed(0)}'),
+                _pdfTableRow('Asset Category', 'Value (${_currency.code})', isHeader: true),
+                _pdfTableRow('Cash & Bank Savings', _formatMoney(cash)),
+                _pdfTableRow('Gold Equivalent Value', '${_formatMoney(goldVal)} (${pureGoldGrams.toStringAsFixed(1)}g pure)'),
+                _pdfTableRow('Silver Value', '${_formatMoney(silverVal)} (${silverGrams.toStringAsFixed(1)}g)'),
+                _pdfTableRow('Stocks & Investments', _formatMoney(stocks)),
+                _pdfTableRow('Business Assets & Inventory', _formatMoney(business)),
+                _pdfTableRow('Receivables', _formatMoney(receivable)),
                 if (_livestockMeetsNisab)
-                  _pdfTableRow('Livestock Market Value', 'Tk ${livestockVal.toStringAsFixed(0)}'),
+                  _pdfTableRow('Livestock Market Value', _formatMoney(livestockVal)),
                 for (var ca in _customAssets)
-                  _pdfTableRow(ca.name, 'Tk ${(ca.value * _currencyRate(ca.currency)).toStringAsFixed(0)}'),
-                _pdfTableRow('Immediate Liabilities (Deduction)', '- Tk ${liabilities.toStringAsFixed(0)}'),
+                  _pdfTableRow(ca.name, _formatMoney(ca.value * _currencyRate(ca.currency))),
+                _pdfTableRow('Immediate Liabilities (Deduction)', '- ${_formatMoney(liabilities)}'),
                 for (var cl in _customLiabilities)
-                  _pdfTableRow('${cl.name} (Deduction)', '- Tk ${(cl.value * _currencyRate(cl.currency)).toStringAsFixed(0)}'),
+                  _pdfTableRow('${cl.name} (Deduction)',
+                      '- ${_formatMoney(cl.value * _currencyRate(cl.currency))}'),
               ],
             ),
             pw.SizedBox(height: 20),
@@ -4912,9 +5094,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       p.category,
                       (p.animalDescription != null && p.animalDescription!.isNotEmpty)
                           ? (p.amount > 0
-                              ? 'Animal: ${p.animalDescription} (+${p.currency == "BDT" ? "Tk" : p.currency} ${p.amount.toStringAsFixed(0)})'
+                              ? 'Animal: ${p.animalDescription} (+${_formatMoney(p.amount * _currencyRate(p.currency))})'
                               : 'Animal: ${p.animalDescription}')
-                          : '${p.currency == "BDT" ? "Tk" : p.currency} ${p.amount.toStringAsFixed(0)}',
+                          : _formatMoney(p.amount * _currencyRate(p.currency)),
                     ),
                 ],
               ),
@@ -4933,7 +5115,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       DateFormat('dd MMM yyyy').format(p.date),
                       p.recipient,
                       'Zakat al-Fitr',
-                      '${p.currency == "BDT" ? "Tk" : p.currency} ${p.amount.toStringAsFixed(0)}',
+                      _formatMoney(p.amount * _currencyRate(p.currency)),
                     ),
                 ],
               ),
@@ -5027,7 +5209,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.bold)),
                         Text(
-                            'Wealth: Tk ${_totalWealth.toStringAsFixed(0)} | Zakat: Tk ${_zakatDue.toStringAsFixed(0)}',
+                            'Wealth: ${_formatMoney(_totalWealth)} | Zakat: ${_formatMoney(_zakatDue)}',
                             style: GoogleFonts.inter(color: Colors.white60, fontSize: 11)),
                       ],
                     ),
@@ -5140,11 +5322,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           const SizedBox(height: 10),
           Row(
             children: [
-              _historyChip('Net Wealth', 'Tk ${(s.wealth / 1000).toStringAsFixed(1)}K'),
+              _historyChip('Net Wealth', _formatCompactMoney(s.wealth)),
               const SizedBox(width: 10),
-              _historyChip('Zakat Due', 'Tk ${s.zakatDue.toStringAsFixed(0)}'),
+              _historyChip('Zakat Due', _formatMoney(s.zakatDue)),
               const SizedBox(width: 10),
-              _historyChip('Paid', 'Tk ${s.zakatPaid.toStringAsFixed(0)}'),
+              _historyChip('Paid', _formatMoney(s.zakatPaid)),
             ],
           ),
           if (s.livestockZakat != null && s.livestockZakat!.isNotEmpty) ...[
