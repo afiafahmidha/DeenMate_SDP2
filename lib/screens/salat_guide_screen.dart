@@ -479,7 +479,7 @@ class _SalatGuideTab extends StatelessWidget {
       children: [
         _SectionHeader(
           icon: Icons.mosque_rounded,
-          iconColor: AppColors.navyBlue,
+          iconColor: isDark ? AppColors.midTeal : AppColors.navyBlue,
           title: 'Salat Guide',
           subtitle: 'Prayer types, schedules & authentic evidence',
           isDark: isDark,
@@ -526,7 +526,7 @@ class _SalatGuideTab extends StatelessWidget {
               ),
               _PrayerTypeLegend(
                 isDark: isDark, label: 'Witr — Necessary', arabic: 'الوتر',
-                color: const Color(0xFF9B1C1C),
+                color: const Color(0xFFB89445),
                 description: 'Wajib (Hanafi) or strongly emphasized Sunnah (other schools). Prayed as the final odd prayer of the night.',
                 quranHadith: 'Hadith: "Make Witr your last prayer at night." (Bukhari 998) | "Allah is Witr and loves Witr." (Tirmidhi 453)',
               ),
@@ -590,7 +590,7 @@ class _SalatGuideTab extends StatelessWidget {
                   _PrayerRow(type: 'Fard', typeColor: AppColors.navyBlue, rakaat: 4, note: 'Obligatory — recited aloud in first 2 rak\'ah'),
                   _PrayerRow(type: 'Sunnah Muakkadah', typeColor: AppColors.midTeal, rakaat: 2, note: 'After Fard — strongly emphasized'),
                   _PrayerRow(type: 'Nafl', typeColor: AppColors.coralOrange, rakaat: 2, note: 'Optional voluntary prayers'),
-                  _PrayerRow(type: 'Witr', typeColor: Color(0xFF9B1C1C), rakaat: 3, note: 'Wajib / Strongly emphasized — prayed as final night prayer before sleep (Bukhari 998)'),
+                  _PrayerRow(type: 'Witr', typeColor: Color(0xFFB89445), rakaat: 3, note: 'Wajib / Strongly emphasized — prayed as final night prayer before sleep (Bukhari 998)'),
                 ],
               ),
             ],
@@ -2997,14 +2997,19 @@ class _PrayerTypeLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Navy is too low-contrast on the dark guide cards. Use the same teal
+    // accent as the rest of the dark Salat experience instead.
+    final accent = isDark && color == AppColors.navyBlue
+        ? AppColors.midTeal
+        : color;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? Colors.black.withValues(alpha: 0.3) : color.withValues(alpha: 0.05),
+        color: isDark ? Colors.black.withValues(alpha: 0.3) : accent.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: color.withValues(alpha: isDark ? 0.3 : 0.15),
+          color: accent.withValues(alpha: isDark ? 0.3 : 0.15),
         ),
       ),
       child: Column(
@@ -3016,7 +3021,7 @@ class _PrayerTypeLegend extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
-                  color: color,
+                  color: accent,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
@@ -3052,7 +3057,7 @@ class _PrayerTypeLegend extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.auto_stories_rounded, size: 12, color: color),
+                Icon(Icons.auto_stories_rounded, size: 12, color: accent),
                 const SizedBox(width: 5),
                 Expanded(
                   child: Text(
@@ -3060,7 +3065,7 @@ class _PrayerTypeLegend extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 10,
                       fontStyle: FontStyle.italic,
-                      color: isDark ? color.withValues(alpha: 0.9) : color,
+                      color: isDark ? accent.withValues(alpha: 0.9) : accent,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3115,6 +3120,8 @@ class _WaqtPrayerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textColor = isDark ? Colors.white : AppColors.navyBlue;
     final subColor = isDark ? Colors.white60 : Colors.grey.shade600;
+    Color rowAccent(Color color) =>
+        isDark && color == AppColors.navyBlue ? AppColors.midTeal : color;
 
     return Container(
       decoration: BoxDecoration(
@@ -3176,6 +3183,7 @@ class _WaqtPrayerCard extends StatelessWidget {
             child: Column(
               children: rows.asMap().entries.map((entry) {
                 final row = entry.value;
+                final accent = rowAccent(row.typeColor);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
@@ -3186,7 +3194,7 @@ class _WaqtPrayerCard extends StatelessWidget {
                         width: 26,
                         height: 26,
                         decoration: BoxDecoration(
-                          color: row.typeColor.withValues(alpha: 0.15),
+                          color: accent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Center(
@@ -3195,7 +3203,7 @@ class _WaqtPrayerCard extends StatelessWidget {
                             style: GoogleFonts.poppins(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w800,
-                                color: row.typeColor),
+                                color: accent),
                           ),
                         ),
                       ),
@@ -3208,16 +3216,16 @@ class _WaqtPrayerCard extends StatelessWidget {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: row.typeColor.withValues(alpha: 0.12),
+                                  color: accent.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: row.typeColor.withValues(alpha: 0.25)),
+                                  border: Border.all(color: accent.withValues(alpha: 0.25)),
                                 ),
                                 child: Text(
                                   row.type,
                                   style: GoogleFonts.poppins(
                                       fontSize: 9.5,
                                       fontWeight: FontWeight.w700,
-                                      color: row.typeColor),
+                                      color: accent),
                                 ),
                               ),
                             ]),
@@ -3333,4 +3341,3 @@ class _CardTitle extends StatelessWidget {
     );
   }
 }
-

@@ -5,8 +5,7 @@ import 'package:http/http.dart' as http;
 import 'halal_analyzer_service.dart';
 
 class GeminiHalalService {
-  // Configurable Gemini API Key
-  // Note: Users can set their own Gemini key or use the built-in fallback engine seamlessly.
+  
   static String apiKey = 'AQ.Ab8RN6JA5Vdi1MD1q5RczYdgs2SDNCq1NQQiGg2pwF8pk49Qiw';
 
   static const String _geminiEndpoint =

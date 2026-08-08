@@ -9,8 +9,10 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import '../services/emergency_api_service.dart';
+import '../services/emergency_group_service.dart';
 import '../services/notification_service.dart';
 
 class EmergencyContact {
@@ -97,7 +99,13 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   // ===== GROUP TRACKING & PROTOCOLS =====
   bool _isGroupJoined = false;
   bool _isGroupLeader = false;
-  final _groupCodeController = TextEditingController(text: "MKK-9981");
+  final _groupCodeController = TextEditingController();
+  StreamSubscription<List<Map<String, dynamic>>>? _groupMembersSubscription;
+  StreamSubscription<Map<String, dynamic>?>? _groupSubscription;
+  List<Map<String, dynamic>> _liveGroupMembers = [];
+  double _groupRangeMeters = 1000;
+  String _groupLeaderName = '';
+  final Set<String> _geofenceAlertedMembers = {};
 
   // Map variables
   final double _mapZoomScale = 1.0;
@@ -137,6 +145,25 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     final double uLat = _currentPosition?.latitude ?? 21.4225;
     final double uLng = _currentPosition?.longitude ?? 39.8262;
 
+    if (_isGroupJoined) {
+      return _liveGroupMembers
+          .where((member) => member['latitude'] is num && member['longitude'] is num)
+          .map((member) {
+        final lat = (member['latitude'] as num).toDouble();
+        final lng = (member['longitude'] as num).toDouble();
+        final distance = Geolocator.distanceBetween(uLat, uLng, lat, lng);
+        final outOfRange = distance > _groupRangeMeters;
+        return {
+          ...member,
+          'lat': lat,
+          'lng': lng,
+          'dist': distance / 1000,
+          'battery': member['battery'] ?? 0,
+          'status': outOfRange ? 'OUT OF RANGE' : 'SAFE',
+        };
+      }).toList();
+    }
+
     final List<Map<String, dynamic>> members = [
       {'name': 'Ahmed (Leader)', 'lat': 21.4180, 'lng': 39.8830, 'battery': 88, 'status': 'SAFE'},
       {'name': 'Fatimah', 'lat': 21.4210, 'lng': 39.8270, 'battery': 92, 'status': 'SAFE'},
@@ -163,6 +190,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     _holdTimer?.cancel();
     _cancelTimer?.cancel();
     _positionStreamSubscription?.cancel();
+    _groupMembersSubscription?.cancel();
+    _groupSubscription?.cancel();
 
     _nameController.dispose();
     _passportController.dispose();
@@ -196,6 +225,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       _hotelController.text = prefs.getString('sos_hotel') ?? "Al Kiswah Towers, Makkah";
       _isGroupJoined = prefs.getBool('sos_is_group_joined') ?? false;
       _isGroupLeader = prefs.getBool('sos_is_group_leader') ?? false;
+      _groupCodeController.text = prefs.getString('sos_group_code') ?? '';
 
       // Load contacts json list
       final String? contactsJson = prefs.getString('sos_contacts_json');
@@ -212,14 +242,14 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         if (oldName != null && oldNum != null) {
           _contacts = [EmergencyContact(name: oldName, number: oldNum)];
         } else {
-          // Initialize with default
-          _contacts = [
-            EmergencyContact(name: "Fatimah Ali (Wife)", number: "+628123456789"),
-            EmergencyContact(name: "Ahmed Hajj Agency", number: "+966509876543"),
-          ];
+          // Never send a real emergency message to demonstration numbers.
+          _contacts = [];
         }
       }
     });
+    if (_isGroupJoined && _groupCodeController.text.trim().isNotEmpty) {
+      _startGroupTracking();
+    }
   }
 
   Future<void> _saveProfileData() async {
@@ -235,6 +265,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     await prefs.setString('sos_hotel', _hotelController.text);
     await prefs.setBool('sos_is_group_joined', _isGroupJoined);
     await prefs.setBool('sos_is_group_leader', _isGroupLeader);
+    await prefs.setString('sos_group_code', _groupCodeController.text.trim().toUpperCase());
 
     // Save serialized contacts list
     final List<Map<String, String>> serializedContacts = _contacts.map((c) => c.toMap()).toList();
@@ -306,6 +337,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       ).listen((Position position) {
         if (mounted) {
           _updateLocationInfo(position);
+          _publishGroupLocation(position);
           if (_isSosTriggered && !_isOfflineSimulated) {
             EmergencyApiService.instance.updateLiveLocation(
               latitude: position.latitude,
@@ -372,15 +404,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     setState(() {
       if (cName.contains("saudi") || cName.contains("arabia")) {
         _emergencyNumber = "997";
-      } else if (cName.contains("united states") || cName.contains("america")) {
+      } else if (cName.contains("united states") || cName.contains("america") || cName.contains('canada')) {
         _emergencyNumber = "911";
-      } else if (cName.contains("united kingdom")) {
+      } else if (cName.contains("united kingdom") || cName.contains('bangladesh') || cName.contains('malaysia') || cName.contains('singapore')) {
         _emergencyNumber = "999";
-      } else if (cName.contains("turkey")) {
-        _emergencyNumber = "112";
-      } else if (cName.contains("malaysia")) {
-        _emergencyNumber = "999";
-      } else if (cName.contains("indonesia")) {
+      } else if (cName.contains("turkey") || cName.contains('türkiye') || cName.contains('indonesia') || cName.contains('india') || cName.contains('pakistan') || cName.contains('united arab emirates') || cName.contains('qatar') || cName.contains('oman') || cName.contains('kuwait') || cName.contains('bahrain') || cName.contains('jordan') || cName.contains('egypt') || cName.contains('morocco') || cName.contains('germany') || cName.contains('france') || cName.contains('italy') || cName.contains('spain') || cName.contains('netherlands') || cName.contains('sweden') || cName.contains('norway') || cName.contains('australia') || cName.contains('new zealand') || cName.contains('japan') || cName.contains('south korea') || cName.contains('china')) {
         _emergencyNumber = "112";
       } else {
         _emergencyNumber = "112";
@@ -530,7 +558,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         medicalProfile: profile,
         emergencyContacts: contacts,
         isSilent: false,
-        groupLeaderId: _isGroupJoined ? "LEADER_9981" : null,
+        groupLeaderId: _isGroupJoined ? _groupCodeController.text.trim().toUpperCase() : null,
       );
 
       if (success) {
@@ -559,12 +587,17 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
   Future<void> _launchSmsFallback(String locationLink) async {
     for (var contact in _contacts) {
-      final phone = contact.numberController.text;
-      final name = contact.nameController.text;
+      final phone = contact.numberController.text.trim();
+      final name = contact.nameController.text.trim();
       final message = "DEENMATE EMERGENCY SOS!\nI need help. My medical profile is attached to this account. My current GPS location: $locationLink";
-      final uri = Uri.parse("sms:$phone?body=${Uri.encodeComponent(message)}");
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
+      final uri = Uri(
+        scheme: 'sms',
+        path: phone,
+        queryParameters: {'body': message},
+      );
+      // Try the intent directly. canLaunchUrl may report false on Android
+      // even when an SMS app exists, due to package visibility rules.
+      if (phone.isNotEmpty && await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         setState(() {
           _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] 📲 SMS draft launched to $name ($phone)");
         });
@@ -610,12 +643,15 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
     // Launch WhatsApp/SMS broadcast directly
     for (var contact in _contacts) {
-      final phone = contact.numberController.text;
+      final phone = contact.numberController.text.trim();
       final safeMsg = "Alhamdulillah, the danger has passed and I am safe now. Thank you for your support.";
-      final uri = Uri.parse("sms:$phone?body=${Uri.encodeComponent(safeMsg)}");
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-      }
+      if (phone.isEmpty) continue;
+      final uri = Uri(
+        scheme: 'sms',
+        path: phone,
+        queryParameters: {'body': safeMsg},
+      );
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -632,7 +668,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         medicalProfile: queued['profile'],
         emergencyContacts: queued['contacts'],
         isSilent: false,
-        groupLeaderId: _isGroupJoined ? "LEADER_9981" : null,
+        groupLeaderId: _isGroupJoined ? _groupCodeController.text.trim().toUpperCase() : null,
       );
     }
     setState(() {
@@ -643,24 +679,153 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
   Future<void> _makeCall(String phone) async {
     final uri = Uri.parse("tel:$phone");
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No phone application is available on this device.')),
+        );
+      }
+    } catch (error) {
+      debugPrint('[Emergency SOS] Could not open phone dialer: $error');
     }
   }
 
   // ===== GROUP CODE GENERATION =====
-  void _generateGroupCode() {
-    final rand = math.Random();
-    final String code = 'MKK-${1000 + rand.nextInt(9000)}';
-    setState(() {
-      _groupCodeController.text = code;
-      _isGroupJoined = true;
-      _isGroupLeader = true;
-    });
-    _saveProfileData();
+  Future<void> _generateGroupCode() async {
+    try {
+      final code = await EmergencyGroupService.instance.createGroup(
+        leaderName: _nameController.text,
+        rangeMeters: _groupRangeMeters,
+      );
+      if (!mounted) return;
+      setState(() {
+        _groupCodeController.text = code;
+        _isGroupJoined = true;
+        _isGroupLeader = true;
+        _groupLeaderName = _nameController.text;
+      });
+      await _saveProfileData();
+      _startGroupTracking();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Group "$code" created. Share this code with members.')),
+      );
+    } catch (error) {
+      _showGroupError(error);
+    }
+  }
+
+  Future<void> _joinGroup() async {
+    final code = _groupCodeController.text.trim().toUpperCase();
+    if (code.isEmpty) return;
+    try {
+      await EmergencyGroupService.instance.joinGroup(
+        code: code,
+        memberName: _nameController.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        _groupCodeController.text = code;
+        _isGroupJoined = true;
+        _isGroupLeader = false;
+      });
+      await _saveProfileData();
+      _startGroupTracking();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Joined group $code. Live tracking is active.')),
+      );
+    } catch (error) {
+      _showGroupError(error);
+    }
+  }
+
+  void _startGroupTracking() {
+    final code = _groupCodeController.text.trim().toUpperCase();
+    if (code.isEmpty) return;
+    _groupMembersSubscription?.cancel();
+    _groupSubscription?.cancel();
+    _groupMembersSubscription = EmergencyGroupService.instance.members(code).listen((members) {
+      if (!mounted) return;
+      setState(() => _liveGroupMembers = members);
+      _checkGroupRange();
+    }, onError: _showGroupError);
+    _groupSubscription = EmergencyGroupService.instance.group(code).listen((group) {
+      if (!mounted || group == null) return;
+      setState(() {
+        _groupRangeMeters = (group['rangeMeters'] as num?)?.toDouble() ?? 1000;
+        _groupLeaderName = group['leaderName'] as String? ?? '';
+      });
+    }, onError: _showGroupError);
+    if (_currentPosition != null) _publishGroupLocation(_currentPosition!);
+  }
+
+  void _publishGroupLocation(Position position) {
+    if (!_isGroupJoined || _isOfflineSimulated) return;
+    EmergencyGroupService.instance.updateMyLocation(
+      code: _groupCodeController.text.trim().toUpperCase(),
+      latitude: position.latitude,
+      longitude: position.longitude,
+    ).catchError(_showGroupError);
+    _checkGroupRange();
+  }
+
+  void _checkGroupRange() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null || _currentPosition == null) return;
+    for (final member in _mockGroupMembers) {
+      final id = member['id'] as String?;
+      if (id == null || id == userId) continue;
+      final isOut = member['status'] == 'OUT OF RANGE';
+      if (isOut && _geofenceAlertedMembers.add(id)) {
+        NotificationService.instance.showCustomNotification(
+          id: id.hashCode & 0x7fffffff,
+          title: 'Group distance alert',
+          body: '${member['name']} is outside the ${(_groupRangeMeters / 1000).toStringAsFixed(1)} km safety range.',
+          scheduledTime: DateTime.now(),
+        );
+      } else if (!isOut) {
+        _geofenceAlertedMembers.remove(id);
+      }
+    }
+  }
+
+  void _showGroupError(Object error) {
+    debugPrint('[Emergency group] $error');
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Group "$code" created! Share this code with your group members.')),
+      SnackBar(content: Text(error.toString().replaceFirst('Bad state: ', ''))),
     );
+  }
+
+  Future<void> _leaveGroup() async {
+    final code = _groupCodeController.text.trim().toUpperCase();
+    Object? cloudError;
+    try {
+      if (code.isNotEmpty) await EmergencyGroupService.instance.leaveGroup(code);
+    } catch (error) {
+      // Local leave must still succeed; a failed cloud delete should not trap
+      // a user in a group after going offline or losing Firebase permission.
+      cloudError = error;
+      debugPrint('[Emergency group] Could not remove cloud membership: $error');
+    } finally {
+      _groupMembersSubscription?.cancel();
+      _groupSubscription?.cancel();
+      if (!mounted) return;
+      setState(() {
+        _isGroupJoined = false;
+        _isGroupLeader = false;
+        _groupCodeController.clear();
+        _groupLeaderName = '';
+        _liveGroupMembers = [];
+        _geofenceAlertedMembers.clear();
+      });
+      await _saveProfileData();
+      if (cloudError != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You left this device. Cloud membership will be removed when Firebase access is restored.')),
+        );
+      }
+    }
   }
 
   // ===== UI BUILDING =====
@@ -1537,6 +1702,12 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 ],
               ),
               const Divider(height: 20),
+              _buildCallContactRow(
+                label: 'National emergency — $_currentCountry',
+                number: _emergencyNumber,
+                icon: Icons.emergency_rounded,
+                isRecommended: true,
+              ),
               _buildCallContactRow(
                 label: "Saudi Red Crescent (Ambulance)",
                 number: "997",
@@ -2458,6 +2629,20 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             "Become the caravan leader and generate a unique code to share with your group.",
             style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: 0.55)),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'Safety range: ${(_groupRangeMeters / 1000).toStringAsFixed(1)} km',
+            style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: textColor),
+          ),
+          Slider(
+            value: _groupRangeMeters,
+            min: 100,
+            max: 5000,
+            divisions: 49,
+            label: '${(_groupRangeMeters / 1000).toStringAsFixed(1)} km',
+            activeColor: AppColors.midTeal,
+            onChanged: (value) => setState(() => _groupRangeMeters = value),
+          ),
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
@@ -2520,18 +2705,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
                 child: Text("JOIN", style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
-                onPressed: () {
-                  if (_groupCodeController.text.trim().isNotEmpty) {
-                    setState(() {
-                      _isGroupJoined = true;
-                      _isGroupLeader = false;
-                    });
-                    _saveProfileData();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Successfully joined group ${_groupCodeController.text.toUpperCase()}!')),
-                    );
-                  }
-                },
+                onPressed: _joinGroup,
               ),
             ],
           ),
@@ -2603,7 +2777,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Makkah Caravan - Group A",
+                      _groupNameController.text.trim().isEmpty ? 'Emergency SOS group' : _groupNameController.text,
                       style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: textColor),
                     ),
                     Text(
@@ -2620,13 +2794,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 child: Text("LEAVE", style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.red)),
-                onPressed: () {
-                  setState(() {
-                    _isGroupJoined = false;
-                    _isGroupLeader = false;
-                  });
-                  _saveProfileData();
-                },
+                onPressed: _leaveGroup,
               ),
             ],
           ),
@@ -2636,8 +2804,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildGroupMeta("GROUP CODE", _groupCodeController.text.toUpperCase()),
-              _buildGroupMeta("CARAVAN LEADER", _isGroupLeader ? "You (Leader)" : "Ahmed Al-Harbi"),
-              _buildGroupMeta("LEADER PHONE", _isGroupLeader ? "—" : "+966 50 123 4567"),
+              _buildGroupMeta("CARAVAN LEADER", _isGroupLeader ? "You (Leader)" : (_groupLeaderName.isEmpty ? 'Loading…' : _groupLeaderName)),
+              _buildGroupMeta("SAFETY RANGE", '${(_groupRangeMeters / 1000).toStringAsFixed(1)} km'),
             ],
           ),
 
@@ -2653,7 +2821,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             final int batt = member['battery'];
             final String status = member['status'];
             final double dist = member['dist'];
-            final bool isOk = !status.contains("BREACH");
+            final bool isOk = status == 'SAFE';
 
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
