@@ -612,7 +612,10 @@ Future<void> _onPositionUpdate(Position position) async {
                         ),
                       );
                     },
-                    child: _buildActiveTabContent(),
+                    child: KeyedSubtree(
+                      key: ValueKey('DashboardTab_$_currentIndex'),
+                      child: _buildActiveTabContent(),
+                    ),
                   ),
                 ),
               ),
@@ -1234,6 +1237,7 @@ _buildAnimatedEntry(
                         child: CustomPaint(
                           painter: _AnalogClockPainter(
                             time: DateTime.now(),
+                            prayerName: _nextPrayerName,
                           ),
                         ),
                       ),
@@ -1991,8 +1995,9 @@ class _NextPrayerCardDecorationPainter extends CustomPainter {
 // no built-in pulsing or scaling; the caller controls if/when it repaints.
 class _AnalogClockPainter extends CustomPainter {
   final DateTime time;
+  final String prayerName;
 
-  _AnalogClockPainter({required this.time});
+  _AnalogClockPainter({required this.time, required this.prayerName});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2041,10 +2046,12 @@ class _AnalogClockPainter extends CustomPainter {
     final double hourAngle = hourFraction * 2 * math.pi - math.pi / 2;
     final double minuteAngle = minuteFraction * 2 * math.pi - math.pi / 2;
 
-    // Hour hand — shorter & thicker — navy blue
+    // Navy is not visible enough on the night card. Only Fajr and Isha use
+    // a bright hour hand; every other prayer retains the navy design.
+    final isNightPrayer = prayerName == 'Fajr' || prayerName == 'Isha';
     final double hourHandLen = radius * 0.5;
     final hourHandPaint = Paint()
-      ..color = AppColors.navyBlue
+      ..color = isNightPrayer ? const Color(0xFFFFE082) : AppColors.navyBlue
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0
       ..strokeCap = StrokeCap.round;
@@ -2083,7 +2090,8 @@ class _AnalogClockPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _AnalogClockPainter oldDelegate) {
     return oldDelegate.time.minute != time.minute ||
-        oldDelegate.time.hour != time.hour;
+        oldDelegate.time.hour != time.hour ||
+        oldDelegate.prayerName != prayerName;
   }
 }
 

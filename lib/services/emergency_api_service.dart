@@ -8,8 +8,16 @@ class EmergencyApiService {
   EmergencyApiService._();
   static final EmergencyApiService instance = EmergencyApiService._();
 
-  // Configurable base URL for DeenMate backend services
-  static const String baseUrl = 'https://api.deenmate.com/v1';
+  /// Deployed emergency-backend address, supplied at build/run time.
+  ///
+  /// `api.deenmate.com` was a placeholder, not a backend that implements
+  /// these routes. Example:
+  /// `--dart-define=EMERGENCY_API_BASE_URL=https://your-api.example/v1`
+  static const String baseUrl = String.fromEnvironment(
+    'EMERGENCY_API_BASE_URL',
+  );
+
+  static bool get isConfigured => baseUrl.isNotEmpty;
 
   /// Triggers a live emergency SOS alert to the backend.
   /// Sends the pilgrim's current GPS location, medical details, emergency contacts,
@@ -22,6 +30,10 @@ class EmergencyApiService {
     required bool isSilent,
     required String? groupLeaderId,
   }) async {
+    if (!isConfigured) {
+      debugPrint('[EmergencyApiService] No EMERGENCY_API_BASE_URL configured; using SMS fallback.');
+      return false;
+    }
     final url = Uri.parse('$baseUrl/emergency/sos/trigger');
     final payload = {
       'timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -66,6 +78,7 @@ class EmergencyApiService {
     required double longitude,
     required String emergencyId,
   }) async {
+    if (!isConfigured) return false;
     final url = Uri.parse('$baseUrl/emergency/sos/update-location');
     final payload = {
       'emergencyId': emergencyId,
@@ -98,6 +111,7 @@ class EmergencyApiService {
     required double latitude,
     required double longitude,
   }) async {
+    if (!isConfigured) return false;
     final url = Uri.parse('$baseUrl/emergency/sos/resolve');
     final payload = {
       'emergencyId': emergencyId,
@@ -131,6 +145,7 @@ class EmergencyApiService {
     required double latitude,
     required double longitude,
   }) async {
+    if (!isConfigured) return false;
     final url = Uri.parse('$baseUrl/groups/check-in/respond');
     final payload = {
       'checkInId': checkInId,
@@ -164,6 +179,7 @@ class EmergencyApiService {
     required double longitude,
     required double distanceOut,
   }) async {
+    if (!isConfigured) return false;
     final url = Uri.parse('$baseUrl/groups/alerts/geofence-breach');
     final payload = {
       'groupLeaderId': groupLeaderId,
