@@ -906,7 +906,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 child: Column(
                   children: [
                     _buildTopHeader(themeText),
-                    _buildBottomNavigationBar(),
+                    const SizedBox(height: 12),
+                    _buildTabBar(),
                     Expanded(child: _buildActiveTabContent(cardBg, themeText)),
                   ],
                 ),
@@ -979,39 +980,35 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     );
   }
 
-  Widget _buildBottomNavigationBar() {
+  static const _tabLabels = ['Home', 'Quran', 'Progress', 'Wazifa', 'More'];
+  static const _tabIcons = [
+    Icons.home_rounded,
+    Icons.menu_book_rounded,
+    Icons.trending_up_rounded,
+    Icons.auto_awesome_rounded,
+    Icons.more_horiz_rounded,
+  ];
+
+  Widget _buildTabBar() {
     final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-    final unselectedColor = _isDarkMode ? Colors.white38 : AppColors.placeholder;
-    final selectedColor = AppColors.midTeal;
 
     return Container(
       decoration: BoxDecoration(
         color: cardBg,
-        border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.15), width: 1)),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.all(4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(5, (index) {
+        children: List.generate(_tabLabels.length, (index) {
           final isSelected = _bottomNavIndex == index;
-          String label = '';
-          switch (index) {
-            case 0:
-              label = 'Home';
-              break;
-            case 1:
-              label = 'Quran';
-              break;
-            case 2:
-              label = 'Progress';
-              break;
-            case 3:
-              label = 'Wazifa';
-              break;
-            case 4:
-              label = 'More';
-              break;
-          }
 
           return Expanded(
             child: GestureDetector(
@@ -1026,28 +1023,37 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                   }
                 });
               },
-              child: Container(
-                color: Colors.transparent,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.navyBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
-                        fontSize: 11.5,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                        color: isSelected ? selectedColor : unselectedColor,
-                      ),
+                    Icon(
+                      _tabIcons[index],
+                      size: 16,
+                      color: isSelected
+                          ? Colors.white
+                          : (_isDarkMode
+                              ? Colors.white54
+                              : AppColors.navyBlue.withValues(alpha: 0.4)),
                     ),
-                    const SizedBox(height: 4),
-                    // Indicator line
-                    Container(
-                      width: 24,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: isSelected ? selectedColor : Colors.transparent,
-                        borderRadius: BorderRadius.circular(1.5),
+                    const SizedBox(height: 2),
+                    Text(
+                      _tabLabels[index],
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? Colors.white
+                            : (_isDarkMode
+                                ? Colors.white54
+                                : AppColors.navyBlue.withValues(alpha: 0.4)),
                       ),
                     ),
                   ],
