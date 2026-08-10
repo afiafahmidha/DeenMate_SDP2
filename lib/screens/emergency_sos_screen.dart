@@ -533,9 +533,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
     NotificationService.instance.showCustomNotification(
       id: 9999,
-      title: "🚨 SOS ACTIVATED 🚨",
+      title: "SOS ACTIVATED",
       body: "All emergency contacts and group leaders have been notified.",
-      scheduledTime: DateTime.now().add(const Duration(seconds: 1)),
+      category: 'sos',
+      targetRoute: '/sos',
     );
 
     _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] Gathering GPS coordinates: $lat, $lng");
@@ -650,9 +651,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
     NotificationService.instance.showCustomNotification(
       id: 9998,
-      title: " Status Safe ",
+      title: "Status Safe",
       body: "An 'I am Safe' broadcast has been sent to your emergency contacts.",
-      scheduledTime: DateTime.now().add(const Duration(seconds: 1)),
+      category: 'sos',
+      targetRoute: '/sos',
     );
 
     if (_incidentLogs.isNotEmpty && !_incidentLogs.first['resolved']) {
@@ -803,7 +805,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           id: id.hashCode & 0x7fffffff,
           title: 'Group distance alert',
           body: '${member['name']} is outside the ${(_groupRangeMeters / 1000).toStringAsFixed(1)} km safety range.',
-          scheduledTime: DateTime.now(),
+          category: 'sos',
+          targetRoute: '/sos',
         );
       } else if (!isOut) {
         _geofenceAlertedMembers.remove(id);

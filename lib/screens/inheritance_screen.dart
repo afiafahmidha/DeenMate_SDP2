@@ -955,6 +955,7 @@ class _InheritanceScreenState extends State<InheritanceScreen>
   Gender _scenarioDeceasedGender = Gender.male;
   List<FaraidShareResult>? _scenarioResults;
   List<Map<String, dynamic>> _savedScenarios = [];
+  String? _activeScenarioName;
 
   // Singleton relations — can only appear once
   static const Set<String> _singletonKeys = {
@@ -1025,7 +1026,7 @@ class _InheritanceScreenState extends State<InheritanceScreen>
     if (jsonStr != null) {
       try {
         final list = jsonDecode(jsonStr) as List;
-        setState(() => _savedScenarios = list.cast<Map<String, dynamic>>());
+        setState(() => _savedScenarios = list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
       } catch (_) {}
     }
 
@@ -3096,41 +3097,111 @@ class _InheritanceScreenState extends State<InheritanceScreen>
                 style: GoogleFonts.poppins(
                     fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor)),
             const SizedBox(height: 8),
-            ..._savedScenarios.map((sc) => Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04), blurRadius: 4)
-                      ]),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.bookmark_rounded,
-                          color: AppColors.midTeal, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(sc['name'] ?? 'Unnamed Scenario',
-                            style: GoogleFonts.poppins(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                color: textColor)),
+            ..._savedScenarios.map((sc) {
+              final isLoaded = _activeScenarioName == sc['name'];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                    color: isLoaded ? AppColors.midTeal.withValues(alpha: 0.08) : cardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isLoaded ? AppColors.midTeal : Colors.transparent,
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04), blurRadius: 4)
+                    ]),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => _loadSavedScenario(sc),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isLoaded ? Icons.bookmark_added_rounded : Icons.bookmark_rounded,
+                            color: AppColors.midTeal,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  sc['name'] ?? 'Unnamed Scenario',
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: textColor),
+                                ),
+                                Text(
+                                  isLoaded ? 'Active calculation displayed above' : 'Tap to load & view calculation results',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 10.5,
+                                      color: isLoaded ? AppColors.midTeal : AppColors.placeholder,
+                                      fontWeight: isLoaded ? FontWeight.bold : FontWeight.normal),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                size: 18, color: Colors.redAccent),
+                            onPressed: () => setState(() {
+                              if (_activeScenarioName == sc['name']) {
+                                _activeScenarioName = null;
+                              }
+                              _savedScenarios.remove(sc);
+                              _saveScenariosToPrefs();
+                            }),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded,
-                            size: 18, color: Colors.redAccent),
-                        onPressed: () => setState(() {
-                          _savedScenarios.remove(sc);
-                          _saveScenariosToPrefs();
-                        }),
-                      ),
-                    ],
+                    ),
                   ),
-                )),
+                ),
+              );
+            }),
           ],
         ],
+      ),
+    );
+  }
+
+  void _loadSavedScenario(Map<String, dynamic> sc) {
+    setState(() {
+      _activeScenarioName = sc['name'];
+
+      if (sc['gender'] != null) {
+        _scenarioDeceasedGender =
+            sc['gender'] == 'male' ? Gender.male : Gender.female;
+      }
+
+      if (sc['heirCounts'] != null) {
+        final Map<String, dynamic> rawCounts =
+            Map<String, dynamic>.from(sc['heirCounts'] as Map);
+        _scenarioHeirCounts.clear();
+        rawCounts.forEach((k, v) {
+          if (v is num) {
+            _scenarioHeirCounts[k] = v.toInt();
+          }
+        });
+      }
+
+      _scenarioResults = FaraidEngine.calculate(
+        meGender: _scenarioDeceasedGender,
+        heirCounts: _scenarioHeirCounts,
+      );
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Loaded & calculated scenario: ${sc['name']}'),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -3159,7 +3230,11 @@ class _InheritanceScreenState extends State<InheritanceScreen>
                   _savedScenarios.add({
                     'name': name.trim(),
                     'date': DateTime.now().toIso8601String(),
+                    'gender':
+                        _scenarioDeceasedGender == Gender.male ? 'male' : 'female',
+                    'heirCounts': Map<String, int>.from(_scenarioHeirCounts),
                   });
+                  _activeScenarioName = name.trim();
                   _saveScenariosToPrefs();
                 });
               }
