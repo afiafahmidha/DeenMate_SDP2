@@ -13,6 +13,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import '../services/emergency_api_service.dart';
 import '../services/emergency_group_service.dart';
+import '../services/weather_service.dart';
 import '../services/notification_service.dart';
 
 class EmergencyContact {
@@ -106,6 +107,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   double _groupRangeMeters = 1000;
   String _groupLeaderName = '';
   final Set<String> _geofenceAlertedMembers = {};
+  EmergencyWeatherData? _weather;
+  DateTime? _lastWeatherFetch;
+  bool _weatherLoading = false;
+  int _weatherPreviewIndex = -1;
 
   // Map variables
   final double _mapZoomScale = 1.0;
@@ -395,6 +400,23 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       setState(() {
         _currentAddress = "Coordinates: ${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}";
       });
+    }
+  }
+
+  Future<void> _refreshWeather(Position position, {bool force = false}) async {
+    if (_weatherLoading || (!force && _lastWeatherFetch != null && DateTime.now().difference(_lastWeatherFetch!) < const Duration(minutes: 20))) return;
+    setState(() => _weatherLoading = true);
+    try {
+      final weather = await WeatherService.instance.current(position.latitude, position.longitude);
+      if (!mounted) return;
+      setState(() {
+        _weather = weather;
+        _lastWeatherFetch = DateTime.now();
+      });
+    } catch (error) {
+      debugPrint('[Weather] $error');
+    } finally {
+      if (mounted) setState(() => _weatherLoading = false);
     }
   }
 
@@ -977,6 +999,91 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         return _buildSosTriggerTab(primaryBg, cardBg, textThemeColor);
     }
   }
+
+  _WeatherVisual _resolvedWeatherVisual() {
+    if (_weatherPreviewIndex >= 0) return _WeatherVisual.values[_weatherPreviewIndex];
+    final weather = _weather;
+    final now = DateTime.now();
+    if (weather == null) return _WeatherVisual.sunny;
+    if (weather.isRainy) return _WeatherVisual.rain;
+    if (weather.isCloudy) return _WeatherVisual.cloudy;
+    if (!weather.isDay) return _WeatherVisual.night;
+    if (weather.sunrise != null && now.difference(weather.sunrise!).abs() < const Duration(minutes: 50)) return _WeatherVisual.sunrise;
+    if (weather.sunset != null && now.difference(weather.sunset!).abs() < const Duration(minutes: 50)) return _WeatherVisual.sunset;
+    if (now.hour >= 12 && now.hour < 17) return _WeatherVisual.afternoon;
+    return _seasonFor(now.month, _currentPosition?.latitude ?? 0);
+  }
+
+  _WeatherVisual _seasonFor(int month, double latitude) {
+    final northern = latitude >= 0;
+    final adjustedMonth = northern ? month : ((month + 5) % 12) + 1;
+    if (adjustedMonth == 12 || adjustedMonth <= 2) return _WeatherVisual.winter;
+    if (adjustedMonth <= 5) return _WeatherVisual.spring;
+    if (adjustedMonth <= 8) return _WeatherVisual.summer;
+    return _WeatherVisual.autumn;
+  }
+
+  Widget _buildWeatherTab(Color cardBg, Color textColor) {
+    final visual = _resolvedWeatherVisual();
+    final weather = _weather;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      children: [
+        Text('Live weather safety', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+        const SizedBox(height: 4),
+        Text('Weather matched to your GPS position. Visual conditions animate in real time.', style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: .6))),
+        const SizedBox(height: 14),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            height: 245,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _AnimatedWeatherBackdrop(visual: visual, darkMode: widget.isDarkMode),
+                Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(color: Colors.black.withValues(alpha: .22), borderRadius: BorderRadius.circular(20)),
+                        child: Text(_weatherPreviewIndex >= 0 ? 'PREVIEW MODE' : 'LIVE • $_currentCountry', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                      ),
+                      const Spacer(),
+                      Text(_weatherVisualName(visual), style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white, shadows: const [Shadow(color: Colors.black54, blurRadius: 8)])),
+                      Text(weather == null ? (_weatherLoading ? 'Getting weather…' : 'Weather unavailable') : '${weather.temperature.toStringAsFixed(0)}°C  •  Feels ${weather.feelsLike.toStringAsFixed(0)}°C  •  Wind ${weather.windSpeed.toStringAsFixed(0)} km/h', style: GoogleFonts.inter(fontSize: 12, color: Colors.white.withValues(alpha: .92))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Try every visual', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+            const SizedBox(height: 4),
+            Text('Use Preview next to check rain, clouds, sun, night, sunrise, sunset, afternoon and all seasons.', style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: .6))),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: OutlinedButton.icon(onPressed: () => setState(() => _weatherPreviewIndex = (_weatherPreviewIndex + 1) % _WeatherVisual.values.length), icon: const Icon(Icons.visibility_rounded), label: const Text('PREVIEW NEXT'))),
+              const SizedBox(width: 8),
+              TextButton.icon(onPressed: () { setState(() => _weatherPreviewIndex = -1); if (_currentPosition != null) _refreshWeather(_currentPosition!, force: true); }, icon: const Icon(Icons.my_location_rounded), label: const Text('LIVE')),
+            ]),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  String _weatherVisualName(_WeatherVisual visual) => switch (visual) {
+    _WeatherVisual.rain => 'Rainy', _WeatherVisual.cloudy => 'Cloudy', _WeatherVisual.sunny => 'Sunny', _WeatherVisual.night => 'Night', _WeatherVisual.sunrise => 'Sunrise', _WeatherVisual.sunset => 'Sunset', _WeatherVisual.afternoon => 'Afternoon', _WeatherVisual.summer => 'Summer', _WeatherVisual.winter => 'Winter', _WeatherVisual.autumn => 'Autumn', _WeatherVisual.spring => 'Spring',
+  };
 
   // ===== TAB 1: SOS TRIGGER PANEL =====
   Widget _buildSosTriggerTab(Color mainBg, Color containerBg, Color textColor) {
@@ -2966,6 +3073,112 @@ class _RadarSweepPainter extends CustomPainter {
 }
 
 // ===== CUSTOM HAJJ RADAR MAP PAINTER =====
+enum _WeatherVisual { rain, cloudy, sunny, night, sunrise, sunset, afternoon, summer, winter, autumn, spring }
+
+class _AnimatedWeatherBackdrop extends StatefulWidget {
+  const _AnimatedWeatherBackdrop({required this.visual, required this.darkMode});
+  final _WeatherVisual visual;
+  final bool darkMode;
+
+  @override
+  State<_AnimatedWeatherBackdrop> createState() => _AnimatedWeatherBackdropState();
+}
+
+class _AnimatedWeatherBackdropState extends State<_AnimatedWeatherBackdrop> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 5))..repeat();
+  }
+
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (_, __) => CustomPaint(
+      painter: _WeatherScenePainter(widget.visual, _controller.value, widget.darkMode),
+    ),
+  );
+}
+
+class _WeatherScenePainter extends CustomPainter {
+  _WeatherScenePainter(this.visual, this.progress, this.darkMode);
+  final _WeatherVisual visual;
+  final double progress;
+  final bool darkMode;
+
+  List<Color> get _colors => switch (visual) {
+    _WeatherVisual.rain => const [Color(0xFF314B69), Color(0xFF162337)],
+    _WeatherVisual.cloudy => const [Color(0xFF71869A), Color(0xFF405262)],
+    _WeatherVisual.night => const [Color(0xFF14213D), Color(0xFF050A16)],
+    _WeatherVisual.sunrise => const [Color(0xFFF59E72), Color(0xFF7868B2)],
+    _WeatherVisual.sunset => const [Color(0xFFE85D75), Color(0xFF38265E)],
+    _WeatherVisual.afternoon => const [Color(0xFF2E99C9), Color(0xFF86D0EE)],
+    _WeatherVisual.summer => const [Color(0xFF37A9CF), Color(0xFFF2C661)],
+    _WeatherVisual.winter => const [Color(0xFF718FC0), Color(0xFFD9EDF5)],
+    _WeatherVisual.autumn => const [Color(0xFFB55B37), Color(0xFFF1B15A)],
+    _WeatherVisual.spring => const [Color(0xFF67B687), Color(0xFFE7A7C4)],
+    _WeatherVisual.sunny => const [Color(0xFF38A9D6), Color(0xFF90D8F2)],
+  };
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(rect, Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: _colors).createShader(rect));
+    final night = visual == _WeatherVisual.night;
+    if (night) _stars(canvas, size);
+    if (visual == _WeatherVisual.cloudy || visual == _WeatherVisual.rain) _clouds(canvas, size);
+    if (visual == _WeatherVisual.rain) _rain(canvas, size);
+    if (visual == _WeatherVisual.winter) _snow(canvas, size);
+    if (visual == _WeatherVisual.autumn || visual == _WeatherVisual.spring) _leaves(canvas, size);
+    if (![ _WeatherVisual.cloudy, _WeatherVisual.rain, _WeatherVisual.winter, _WeatherVisual.night ].contains(visual)) _sun(canvas, size);
+    if (night) _moon(canvas, size);
+    canvas.drawRect(Rect.fromLTWH(0, size.height * .78, size.width, size.height * .22), Paint()..color = (darkMode ? Colors.black : const Color(0xFF123A54)).withValues(alpha: .18));
+  }
+
+  void _sun(Canvas c, Size s) {
+    final x = s.width * (.76 + .02 * math.sin(progress * math.pi * 2));
+    final y = s.height * (visual == _WeatherVisual.sunrise ? .53 : visual == _WeatherVisual.sunset ? .62 : .23);
+    final p = Paint()..color = const Color(0xFFFFE28A);
+    c.drawCircle(Offset(x, y), 27, p);
+    p..style = PaintingStyle.stroke..strokeWidth = 2..color = const Color(0xFFFFF1B8);
+    for (var i = 0; i < 10; i++) { final a = i * math.pi / 5 + progress; c.drawLine(Offset(x + 34 * math.cos(a), y + 34 * math.sin(a)), Offset(x + 43 * math.cos(a), y + 43 * math.sin(a)), p); }
+  }
+
+  void _clouds(Canvas c, Size s) {
+    final offset = (progress * s.width * .18) - 20;
+    final p = Paint()..color = Colors.white.withValues(alpha: visual == _WeatherVisual.rain ? .38 : .7);
+    for (final base in [Offset(s.width * .20 + offset, s.height * .28), Offset(s.width * .64 - offset, s.height * .42)]) {
+      c.drawCircle(base, 25, p); c.drawCircle(base + const Offset(27, -8), 31, p); c.drawCircle(base + const Offset(56, 3), 22, p);
+      c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(base.dx - 20, base.dy, 98, 28), const Radius.circular(18)), p);
+    }
+  }
+
+  void _rain(Canvas c, Size s) {
+    final p = Paint()..color = const Color(0xFFB9E7FF).withValues(alpha: .78)..strokeWidth = 2..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 38; i++) { final x = (i * 37.0) % s.width; final y = ((i * 53.0 + progress * s.height * 1.8) % (s.height + 30)) - 20; c.drawLine(Offset(x, y), Offset(x - 7, y + 18), p); }
+  }
+
+  void _snow(Canvas c, Size s) {
+    final p = Paint()..color = Colors.white.withValues(alpha: .8);
+    for (var i = 0; i < 32; i++) { final x = (i * 43.0 + progress * 20) % s.width; final y = ((i * 31.0 + progress * s.height) % (s.height + 12)) - 6; c.drawCircle(Offset(x, y), 2 + (i % 3), p); }
+  }
+
+  void _leaves(Canvas c, Size s) {
+    final spring = visual == _WeatherVisual.spring;
+    final p = Paint()..color = (spring ? const Color(0xFFFFD1E6) : const Color(0xFFFFC25B)).withValues(alpha: .85);
+    for (var i = 0; i < 18; i++) { final x = ((i * 62.0) + progress * s.width) % (s.width + 20) - 10; final y = (i * 39.0 + progress * s.height * .35) % s.height; c.save(); c.translate(x, y); c.rotate(progress * math.pi * 4 + i); c.drawOval(Rect.fromCenter(center: Offset.zero, width: 10, height: 5), p); c.restore(); }
+  }
+
+  void _stars(Canvas c, Size s) { final p = Paint()..color = Colors.white.withValues(alpha: .8); for (var i = 0; i < 28; i++) { final x = (i * 41.0) % s.width; final y = (i * 29.0) % (s.height * .65); c.drawCircle(Offset(x, y), i % 4 == 0 ? 1.8 : .8, p); } }
+  void _moon(Canvas c, Size s) { final o = Offset(s.width * .76, s.height * .23); c.drawCircle(o, 23, Paint()..color = const Color(0xFFF5F0CA)); c.drawCircle(o + const Offset(9, -5), 23, Paint()..color = const Color(0xFF14213D)); }
+  @override bool shouldRepaint(covariant _WeatherScenePainter old) => old.visual != visual || old.progress != progress || old.darkMode != darkMode;
+}
+
 class HajjMapPainter extends CustomPainter {
   final double userLat;
   final double userLng;
