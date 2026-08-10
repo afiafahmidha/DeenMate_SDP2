@@ -9,6 +9,10 @@ import '../widgets/auth_header.dart'; // AppColors
 import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../l10n/app_localizations.dart';
+import '../services/notification_service.dart';
+import '../widgets/notification_center_modal.dart';
+import 'contact_support_screen.dart';
+import 'about_screen.dart';
 
 /// ===== PROFILE TAB =====
 /// NOTE ON DEPENDENCIES: this file uses `image_picker` to let the user pick
@@ -51,7 +55,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
   // ===== EDITABLE FIELDS ===== (email is intentionally NOT included — it's locked)
   final _fullNameController = TextEditingController(text: "Rahim Uddin");
-  final _phoneController = TextEditingController(text: "+880 1712-345678");
+  final _phoneController = TextEditingController(text: "+8801987654321");
   final _addressController = TextEditingController(text: "Dhaka, Bangladesh");
 
   // Locked — shown as plain text everywhere, never becomes a TextField.
@@ -73,10 +77,10 @@ class _ProfileTabState extends State<ProfileTab> {
     final savedImagePath = prefs.getString('profile_avatar_path');
     setState(() {
 
-      _fullNameController.text = prefs.getString('profile_name') ?? "Muhammad Ali";
-      _phoneController.text = prefs.getString('profile_phone') ?? "+880 1712-345678";
+      _fullNameController.text = prefs.getString('profile_name') ?? "Rahim Uddin";
+      _phoneController.text = prefs.getString('profile_phone') ?? "+8801987654321";
       _addressController.text = prefs.getString('profile_address') ?? "Dhaka, Bangladesh";
-      _email = prefs.getString('profile_email') ?? "muhammad.ali@deenmate.com";
+      _email = prefs.getString('profile_email') ?? "rahimuddin@gmail.com";
 
       _arabicFontSize = prefs.getDouble('quran_font_size') ?? 24;
       _banglaTranslation = prefs.getBool('quran_bangla_translation') ?? true;
@@ -157,12 +161,13 @@ class _ProfileTabState extends State<ProfileTab> {
     return Container(
       color: bgColor,
       child: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             _buildProfileAvatarCard(primaryColor, cardBg, textColor, subtextColor),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
                 children: [
                   // Account Information: name/phone/address editable, email locked.
                   _buildSectionCard(
@@ -184,11 +189,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   _buildSettingsCard(primaryColor, cardBg, textColor, subtextColor),
                   const SizedBox(height: 14),
 
-                  // Quran reading settings — merged in from the separate settings page.
-                  _buildQuranSettingsCard(primaryColor, cardBg, textColor, subtextColor),
-                  const SizedBox(height: 14),
-
-                  // Notifications — single toggle.
+                  // Notifications Section
                   _buildSectionCard(
                     title: _t('notifications'),
                     icon: Icons.notifications_active_rounded,
@@ -196,15 +197,28 @@ class _ProfileTabState extends State<ProfileTab> {
                     cardBg: cardBg,
                     textColor: textColor,
                     children: [
-                      _buildToggleRow(
-                        _t('app_notifications'),
-                        Icons.notifications_rounded,
-                        primaryColor,
-                        textColor,
-                        _notificationsEnabled,
-                        (val) {
-                          setState(() => _notificationsEnabled = val);
-                          _saveSettings();
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        leading: Icon(Icons.settings_suggest_rounded, color: primaryColor, size: 18),
+                        title: Text(
+                          'Notification Center & Controls',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Manage prayer alarms, dhikr, zakat & snooze time (${NotificationService.instance.snoozeDurationMinutes}m)',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: textColor.withValues(alpha: 0.6),
+                          ),
+                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
+                        onTap: () {
+                          NotificationCenterModal.show(context);
                         },
                       ),
                     ],
@@ -226,7 +240,16 @@ class _ProfileTabState extends State<ProfileTab> {
                         title: Text(_t('contact_us'),
                             style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor)),
                         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
-                        onTap: () {},
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ContactSupportScreen(
+                                isDarkMode: widget.isDarkMode,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -235,7 +258,16 @@ class _ProfileTabState extends State<ProfileTab> {
                         title: Text(_t('about'),
                             style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor)),
                         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
-                        onTap: () {},
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AboutScreen(
+                                isDarkMode: widget.isDarkMode,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -514,105 +546,7 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
-  // ===== Quran reading settings (Arabic font size + Bangla/English translation) =====
-  Widget _buildQuranSettingsCard(Color primaryColor, Color cardBg, Color textColor, Color subtextColor) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.menu_book_rounded, color: primaryColor, size: 18),
-              const SizedBox(width: 8),
-              Text(_t('quran_settings'),
-                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
-            ],
-          ),
-          const Divider(height: 18),
 
-          // Arabic font size stepper
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_t('arabic_font_size'),
-                  style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
-              Row(
-                children: [
-                  _stepperButton(Icons.remove_rounded, primaryColor, textColor, () {
-                    if (_arabicFontSize > 14) {
-                      setState(() => _arabicFontSize -= 1);
-                      _saveSettings();
-                    }
-                  }),
-                  SizedBox(
-                    width: 30,
-                    child: Text(
-                      _arabicFontSize.toInt().toString(),
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
-                    ),
-                  ),
-                  _stepperButton(Icons.add_rounded, primaryColor, textColor, () {
-                    if (_arabicFontSize < 40) {
-                      setState(() => _arabicFontSize += 1);
-                      _saveSettings();
-                    }
-                  }),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-
-          _buildToggleRow(
-            _t('bangla_translation'),
-            Icons.translate_rounded,
-            primaryColor,
-            textColor,
-            _banglaTranslation,
-            (val) {
-              setState(() => _banglaTranslation = val);
-              _saveSettings();
-            },
-          ),
-          _buildToggleRow(
-            _t('english_translation'),
-            Icons.translate_rounded,
-            primaryColor,
-            textColor,
-            _englishTranslation,
-            (val) {
-              setState(() => _englishTranslation = val);
-              _saveSettings();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _stepperButton(IconData icon, Color primaryColor, Color textColor, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: primaryColor.withValues(alpha: 0.4)),
-        ),
-        child: Icon(icon, size: 14, color: primaryColor),
-      ),
-    );
-  }
 
   // ===== Generic section wrapper =====
   Widget _buildSectionCard({
@@ -720,26 +654,6 @@ class _ProfileTabState extends State<ProfileTab> {
           ],
         ],
       ),
-    );
-  }
-
-  // ===== Reusable toggle row (used for translations + notifications) =====
-  Widget _buildToggleRow(
-    String label,
-    IconData icon,
-    Color accentColor,
-    Color textColor,
-    bool value,
-    ValueChanged<bool> onChanged,
-  ) {
-    return SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      secondary: Icon(icon, color: accentColor, size: 18),
-      title: Text(label, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor)),
-      value: value,
-      activeThumbColor: accentColor,
-      onChanged: onChanged,
     );
   }
 }

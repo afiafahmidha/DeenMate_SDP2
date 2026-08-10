@@ -11,6 +11,7 @@ import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/auth_header.dart';
+import '../services/notification_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELS
@@ -562,7 +563,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
 
     // Haul start date
     final haulStr = p.getString('zm_haul_start');
-    if (haulStr != null) _haulStartDate = DateTime.tryParse(haulStr);
+    if (haulStr != null) {
+      _haulStartDate = DateTime.tryParse(haulStr);
+    }
 
     // Fitra
     _fitraMembers = p.getInt('zm_fitra_members') ?? 1;
@@ -646,6 +649,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     // Haul start
     if (_haulStartDate != null) {
       await p.setString('zm_haul_start', _haulStartDate!.toIso8601String());
+      _checkAndNotifyZakatHaul();
     } else {
       await p.remove('zm_haul_start');
     }
@@ -672,6 +676,46 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     // Custom assets + liabilities (combined list)
     final allCustom = [..._customAssets, ..._customLiabilities];
     await p.setString('zm_custom_assets', json.encode(allCustom.map((e) => e.toJson()).toList()));
+  }
+
+  Future<void> _checkAndNotifyZakatHaul() async {
+    if (_haulStartDate == null) return;
+    if (!_isHaulCompleted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+
+    final bool haulNotified = prefs.getBool('zm_haul_fulfilled_notified') ?? false;
+    if (!haulNotified) {
+      await NotificationService.instance.showCustomNotification(
+        id: 8888,
+        title: 'Zakat Haul Completed',
+        body: 'Your Zakat Haul (354 lunar days) has been fulfilled. Zakat is now due on your wealth.',
+        category: 'zakat',
+        targetRoute: '/zakat',
+      );
+      await prefs.setBool('zm_haul_fulfilled_notified', true);
+      await prefs.setString('zm_last_unpaid_reminder_date', now.toIso8601String());
+      return;
+    }
+
+    if (_stillOwed > 0) {
+      final lastReminderStr = prefs.getString('zm_last_unpaid_reminder_date');
+      final DateTime lastReminder = lastReminderStr != null
+          ? (DateTime.tryParse(lastReminderStr) ?? now)
+          : now.subtract(const Duration(days: 21));
+
+      if (now.difference(lastReminder).inDays >= 20) {
+        await NotificationService.instance.showCustomNotification(
+          id: 8889,
+          title: 'Zakat Payment Reminder',
+          body: 'Your Zakat Haul is complete and Zakat remains unpaid. Please record your Zakat payment.',
+          category: 'zakat',
+          targetRoute: '/zakat',
+        );
+        await prefs.setString('zm_last_unpaid_reminder_date', now.toIso8601String());
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -2879,6 +2923,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         ),
                       );
                       if (picked != null) {
+                        final p = await SharedPreferences.getInstance();
+                        await p.remove('zm_haul_fulfilled_notified');
                         setState(() => _haulStartDate = picked);
                         _savePrefs();
                       }
@@ -2890,6 +2936,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                           final confirm = await _confirmDeletion(
                               'Are you sure you want to reset and clear the Haul start date?');
                           if (confirm) {
+                            final p = await SharedPreferences.getInstance();
+                            await p.remove('zm_haul_fulfilled_notified');
                             setState(() => _haulStartDate = null);
                             _savePrefs();
                           }
