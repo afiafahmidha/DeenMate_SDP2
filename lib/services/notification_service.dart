@@ -1,32 +1,79 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 /// Action ids used on the actionable prayer-alarm notification buttons.
-/// Kept as plain strings (rather than an enum) because
-/// flutter_local_notifications hands the raw actionId straight back to us
-/// as a String in the NotificationResponse — including from the
-/// background/terminated-app isolate, where only primitives can cross the
-/// isolate boundary.
 class PrayerNotificationAction {
   static const String prayed = 'prayed';
   static const String snooze = 'snooze';
-  static const String missed = 'missed';
 }
 
-/// Which kind of prayer notification fired — lets the app tell an
-/// "on-time" alarm apart from the later "did you pray?" nudge when it
-/// decides how to react to a tapped action (e.g. a nudge's "Missed" should
-/// log a qaza; an on-time alarm's "Missed" is more of an early heads-up).
+/// Which kind of prayer notification fired.
 class PrayerNotificationKind {
   static const String alarm = 'alarm';
   static const String nudge = 'nudge';
 }
 
-/// Singleton service for scheduling and cancelling prayer alarm notifications.
-/// Uses [flutter_local_notifications] with exact TZ-scheduled alarms on Android
-/// and local notifications on iOS.
+/// Represents a recorded notification in the Notification Center history.
+class NotificationItem {
+  final String id;
+  final String title;
+  final String body;
+  final DateTime timestamp;
+  final String category; // 'prayers', 'dhikr', 'zakat', 'quran', 'events', 'sos'
+  final bool isRead;
+  final String? prayerName;
+  final String? targetRoute;
+
+  NotificationItem({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.timestamp,
+    required this.category,
+    this.isRead = false,
+    this.prayerName,
+    this.targetRoute,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'body': body,
+        'timestamp': timestamp.toIso8601String(),
+        'category': category,
+        'isRead': isRead,
+        'prayerName': prayerName,
+        'targetRoute': targetRoute,
+      };
+
+  factory NotificationItem.fromJson(Map<String, dynamic> json) => NotificationItem(
+        id: json['id'] as String,
+        title: json['title'] as String,
+        body: json['body'] as String,
+        timestamp: DateTime.parse(json['timestamp'] as String),
+        category: json['category'] as String? ?? 'prayers',
+        isRead: json['isRead'] as bool? ?? false,
+        prayerName: json['prayerName'] as String?,
+        targetRoute: json['targetRoute'] as String?,
+      );
+
+  NotificationItem copyWith({bool? isRead}) => NotificationItem(
+        id: id,
+        title: title,
+        body: body,
+        timestamp: timestamp,
+        category: category,
+        isRead: isRead ?? this.isRead,
+        prayerName: prayerName,
+        targetRoute: targetRoute,
+      );
+}
+
+/// Singleton service for scheduling, cancelling, and tracking all app notifications.
 class NotificationService {
   NotificationService._();
   static final NotificationService instance = NotificationService._();
@@ -35,8 +82,25 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  int _snoozeDurationMinutes = 15;
+  bool _masterEnabled = true;
 
-  // Unique notification ID per prayer (stable, so cancellation works)
+  final Map<String, bool> _categorySettings = {
+    'prayers': true,
+    'dhikr': true,
+    'zakat': true,
+    'quran': true,
+    'events': true,
+    'sos': true,
+  };
+
+  final List<NotificationItem> _history = [];
+  final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
+
+  List<NotificationItem> get history => List.unmodifiable(_history);
+  int get snoozeDurationMinutes => _snoozeDurationMinutes;
+  bool get masterEnabled => _masterEnabled;
+
   static const Map<String, int> _prayerIds = {
     'Fajr': 1001,
     'Sunrise': 1002,
@@ -46,10 +110,7 @@ class NotificationService {
     'Isha': 1006,
   };
 
-  // End-of-window "did you pray?" nudge gets its own id space so it never
-  // collides with (or accidentally cancels) the on-time alarm above.
   static const int _nudgeIdOffset = 500;
-
   static const _channelId = 'deenmate_prayer_alarms';
   static const _channelName = 'Prayer Alarms';
   static const _channelDesc =
@@ -58,52 +119,17 @@ class NotificationService {
   static const _categoryAlarm = 'prayer_alarm_actions';
   static const _categoryNudge = 'prayer_nudge_actions';
 
-  /// Fired whenever the user taps "Prayed", "Snooze", or "Missed" on a
-  /// prayer notification while the app is running in the foreground or
-  /// background (but still alive). Wire this up from DashboardScreen,
-  /// e.g.:
-  ///
-  /// ```dart
-  /// NotificationService.instance.onPrayerAction =
-  ///     (prayerName, action, kind) {
-  ///   switch (action) {
-  ///     case PrayerNotificationAction.prayed:
-  ///       _onSalatToggle(prayerName, true);
-  ///       break;
-  ///     case PrayerNotificationAction.missed:
-  ///       _onQazaCountChange(prayerName, (_qazaCounts[prayerName] ?? 0) + 1);
-  ///       break;
-  ///     case PrayerNotificationAction.snooze:
-  ///       NotificationService.instance.snoozePrayerAlarm(
-  ///         prayerName: prayerName,
-  ///         delay: const Duration(minutes: 10),
-  ///       );
-  ///       break;
-  ///   }
-  /// };
-  /// ```
-  ///
-  /// Note: if the user taps an action while the app is fully terminated,
-  /// Android delivers the tap to a separate background isolate via
-  /// [_onBackgroundResponse] below, where this callback (and all other
-  /// app state) isn't available. That path currently just logs the
-  /// action — persist it (e.g. via shared_preferences) there if you need
-  /// cold-start handling too, then drain/apply it on the next app launch.
   void Function(String prayerName, String action, String kind)? onPrayerAction;
 
-  // ---- Initialise once ----
+  // ---- Initialize Once ----
   Future<void> init() async {
     if (_initialized) return;
 
-    // Load timezone data bundle
     tz.initializeTimeZones();
 
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    // iOS/macOS notification categories declare which action buttons a
-    // given notification "type" gets. A notification is tied to a
-    // category via its `categoryIdentifier` when it's scheduled below.
     final darwinCategories = <DarwinNotificationCategory>[
       DarwinNotificationCategory(
         _categoryAlarm,
@@ -117,11 +143,6 @@ class NotificationService {
             PrayerNotificationAction.snooze,
             'Snooze',
           ),
-          DarwinNotificationAction.plain(
-            PrayerNotificationAction.missed,
-            'Missed',
-            options: {DarwinNotificationActionOption.destructive},
-          ),
         ],
         options: {
           DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
@@ -134,11 +155,6 @@ class NotificationService {
             PrayerNotificationAction.prayed,
             'Prayed',
             options: {DarwinNotificationActionOption.foreground},
-          ),
-          DarwinNotificationAction.plain(
-            PrayerNotificationAction.missed,
-            'Missed',
-            options: {DarwinNotificationActionOption.destructive},
           ),
         ],
       ),
@@ -163,30 +179,174 @@ class NotificationService {
     );
     _initialized = true;
 
-    // Request permission on Android 13+
-    final androidPlugin = _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    await _loadPreferencesAndHistory();
+    await checkAndRequestPermissions();
+  }
+
+  Future<bool> checkAndRequestPermissions() async {
+    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
-      await androidPlugin.requestNotificationsPermission();
+      final grantedNotif = await androidPlugin.requestNotificationsPermission();
       await androidPlugin.requestExactAlarmsPermission();
+      return grantedNotif ?? false;
+    }
+    return true;
+  }
+
+  Future<void> _loadPreferencesAndHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _snoozeDurationMinutes = prefs.getInt('snooze_duration_minutes') ?? 15;
+      _masterEnabled = prefs.getBool('master_notifications_enabled') ?? true;
+
+      for (final cat in _categorySettings.keys) {
+        _categorySettings[cat] = prefs.getBool('notif_cat_$cat') ?? true;
+      }
+
+      final rawHistory = prefs.getStringList('deenmate_notification_history') ?? [];
+      _history.clear();
+      for (final jsonStr in rawHistory) {
+        try {
+          final Map<String, dynamic> map = jsonDecode(jsonStr);
+          _history.add(NotificationItem.fromJson(map));
+        } catch (_) {}
+      }
+      _updateUnreadCount();
+    } catch (e) {
+      debugPrint('[NotificationService] Load preferences error: $e');
     }
   }
 
-  // ---- Notification tap/action handling (app alive: foreground or background) ----
+  Future<void> setSnoozeDuration(int minutes) async {
+    _snoozeDurationMinutes = minutes;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('snooze_duration_minutes', minutes);
+    } catch (_) {}
+  }
+
+  Future<void> setMasterEnabled(bool enabled) async {
+    _masterEnabled = enabled;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('master_notifications_enabled', enabled);
+    } catch (_) {}
+
+    if (!enabled) {
+      await cancelAll();
+    }
+  }
+
+  bool isCategoryEnabled(String category) {
+    return _masterEnabled && (_categorySettings[category] ?? true);
+  }
+
+  Future<void> setCategoryEnabled(String category, bool enabled) async {
+    _categorySettings[category] = enabled;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notif_cat_$category', enabled);
+    } catch (_) {}
+  }
+
+  void _updateUnreadCount() {
+    final count = _history.where((item) => !item.isRead).length;
+    unreadCountNotifier.value = count;
+  }
+
+  Future<void> addNotificationItem({
+    required String title,
+    required String body,
+    required String category,
+    String? prayerName,
+    String? targetRoute,
+  }) async {
+    final existingIndex = _history.indexWhere(
+      (item) => item.title == title && item.category == category,
+    );
+
+    if (existingIndex != -1) {
+      final existing = _history.removeAt(existingIndex);
+      _history.insert(
+        0,
+        NotificationItem(
+          id: existing.id,
+          title: title,
+          body: body,
+          timestamp: DateTime.now(),
+          category: category,
+          isRead: false,
+          prayerName: prayerName ?? existing.prayerName,
+          targetRoute: targetRoute ?? existing.targetRoute,
+        ),
+      );
+    } else {
+      final item = NotificationItem(
+        id: '${DateTime.now().millisecondsSinceEpoch}',
+        title: title,
+        body: body,
+        timestamp: DateTime.now(),
+        category: category,
+        isRead: false,
+        prayerName: prayerName,
+        targetRoute: targetRoute,
+      );
+      _history.insert(0, item);
+    }
+
+    _updateUnreadCount();
+    await _saveHistoryToPrefs();
+  }
+
+  void deleteNotificationItem(String id) {
+    _history.removeWhere((element) => element.id == id);
+    _updateUnreadCount();
+    _saveHistoryToPrefs();
+  }
+
+  Future<void> markAsRead(String id) async {
+    final index = _history.indexWhere((element) => element.id == id);
+    if (index != -1) {
+      _history[index] = _history[index].copyWith(isRead: true);
+      _updateUnreadCount();
+      await _saveHistoryToPrefs();
+    }
+  }
+
+  Future<void> markAllAsRead() async {
+    for (int i = 0; i < _history.length; i++) {
+      _history[i] = _history[i].copyWith(isRead: true);
+    }
+    _updateUnreadCount();
+    await _saveHistoryToPrefs();
+  }
+
+  Future<void> clearHistory() async {
+    _history.clear();
+    _updateUnreadCount();
+    await _saveHistoryToPrefs();
+  }
+
+  Future<void> _saveHistoryToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = _history.map((e) => jsonEncode(e.toJson())).toList();
+      await prefs.setStringList('deenmate_notification_history', list);
+    } catch (_) {}
+  }
+
   void _onForegroundResponse(NotificationResponse response) {
     final actionId = response.actionId;
     final payload = response.payload;
     if (payload == null) return;
 
-    // payload format: "<kind>|<prayerName>" e.g. "alarm|Dhuhr"
     final parts = payload.split('|');
     if (parts.length != 2) return;
     final kind = parts[0];
     final prayerName = parts[1];
 
     if (actionId == null) {
-      // Plain tap (no action button) — just opening the app, nothing to do.
       return;
     }
 
@@ -195,60 +355,63 @@ class NotificationService {
     );
 
     if (actionId == PrayerNotificationAction.snooze) {
-      // Handle snooze here directly since it doesn't need app/UI state.
       snoozePrayerAlarm(prayerName: prayerName);
     }
 
     onPrayerAction?.call(prayerName, actionId, kind);
   }
 
-  // Runs in a separate background isolate when the app process has been
-  // killed, so it must be a top-level/static function and cannot touch
-  // instance state, Flutter bindings, or UI. Kept minimal — persist the
-  // action here (e.g. shared_preferences) if you want cold-start replay.
   @pragma('vm:entry-point')
-  static void _onBackgroundResponse(NotificationResponse response) {
-    debugPrint(
-      '[NotificationService] Background action "${response.actionId}" '
-      'payload=${response.payload}',
-    );
-    // TODO: persist response.actionId + response.payload (e.g. via
-    // shared_preferences) and apply it in DashboardScreen on next launch.
+  static void _onBackgroundResponse(NotificationResponse response) async {
+    final actionId = response.actionId;
+    final payload = response.payload;
+    if (actionId == null || payload == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final pending = prefs.getStringList('pending_background_notification_actions') ?? [];
+      pending.add('$actionId|$payload');
+      await prefs.setStringList('pending_background_notification_actions', pending);
+    } catch (_) {}
+  }
+
+  Future<void> drainPendingActions(
+      Function(String prayerName, String action, String kind) handler) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final pending = prefs.getStringList('pending_background_notification_actions') ?? [];
+      if (pending.isEmpty) return;
+
+      await prefs.remove('pending_background_notification_actions');
+      for (final item in pending) {
+        final parts = item.split('|');
+        if (parts.length == 3) {
+          final actionId = parts[0];
+          final kind = parts[1];
+          final prayerName = parts[2];
+          handler(prayerName, actionId, kind);
+        }
+      }
+    } catch (e) {
+      debugPrint('[NotificationService] Drain pending actions error: $e');
+    }
   }
 
   NotificationDetails _detailsFor({
     required String kind,
     required bool fullScreenIntent,
   }) {
-    final actions = kind == PrayerNotificationKind.nudge
-        ? const [
-            AndroidNotificationAction(
-              PrayerNotificationAction.prayed,
-              'Prayed',
-              showsUserInterface: true,
-            ),
-            AndroidNotificationAction(
-              PrayerNotificationAction.missed,
-              'Missed',
-              cancelNotification: true,
-            ),
-          ]
-        : const [
-            AndroidNotificationAction(
-              PrayerNotificationAction.prayed,
-              'Prayed',
-              showsUserInterface: true,
-            ),
-            AndroidNotificationAction(
-              PrayerNotificationAction.snooze,
-              'Snooze',
-            ),
-            AndroidNotificationAction(
-              PrayerNotificationAction.missed,
-              'Missed',
-              cancelNotification: true,
-            ),
-          ];
+    final actions = const [
+      AndroidNotificationAction(
+        PrayerNotificationAction.prayed,
+        'Prayed',
+        showsUserInterface: true,
+      ),
+      AndroidNotificationAction(
+        PrayerNotificationAction.snooze,
+        'Snooze',
+      ),
+    ];
 
     final androidDetails = AndroidNotificationDetails(
       _channelId,
@@ -261,7 +424,7 @@ class NotificationService {
         "content://settings/system/alarm_alert",
       ),
       enableVibration: true,
-      fullScreenIntent: fullScreenIntent, // only the on-time alarm wakes the lock screen
+      fullScreenIntent: fullScreenIntent,
       category: AndroidNotificationCategory.alarm,
       visibility: NotificationVisibility.public,
       ongoing: false,
@@ -279,17 +442,13 @@ class NotificationService {
     return NotificationDetails(android: androidDetails, iOS: iosDetails);
   }
 
-  // ---- Schedule a prayer alarm at exact [scheduledTime] ----
-  // Fires an actionable notification right when the prayer window opens,
-  // with "Prayed" / "Snooze" / "Missed" buttons so logging is a one-tap
-  // reflex instead of something to remember later.
   Future<void> schedulePrayerAlarm({
     required String prayerName,
     required DateTime scheduledTime,
   }) async {
     if (!_initialized) await init();
+    if (!isCategoryEnabled('prayers')) return;
 
-    // Don't schedule if time is in the past
     if (scheduledTime.isBefore(DateTime.now())) return;
 
     final id = _prayerIds[prayerName];
@@ -310,41 +469,42 @@ class NotificationService {
       payload: '${PrayerNotificationKind.alarm}|$prayerName',
     );
 
+    await addNotificationItem(
+      title: '$arabicName • Time to Pray',
+      body: '$prayerName prayer scheduled for ${_formatTime(scheduledTime)}',
+      category: 'prayers',
+      prayerName: prayerName,
+    );
+
     debugPrint('[NotificationService] Scheduled $prayerName alarm at $tzTime');
   }
 
-  /// Reschedules a prayer's on-time alarm a bit later, for the "Snooze"
-  /// action. Uses the same notification id as the original alarm, so the
-  /// snoozed one simply replaces it rather than stacking up duplicates.
   Future<void> snoozePrayerAlarm({
     required String prayerName,
-    Duration delay = const Duration(minutes: 10),
+    Duration? delay,
   }) async {
+    final effectiveDelay = delay ?? Duration(minutes: _snoozeDurationMinutes);
+    final nextTime = DateTime.now().add(effectiveDelay);
     await schedulePrayerAlarm(
       prayerName: prayerName,
-      scheduledTime: DateTime.now().add(delay),
+      scheduledTime: nextTime,
+    );
+
+    await addNotificationItem(
+      title: '$prayerName Snoozed',
+      body: 'Alarm snoozed for ${_snoozeDurationMinutes} minutes.',
+      category: 'prayers',
+      prayerName: prayerName,
     );
   }
 
-  // ---- Schedule the end-of-window "did you pray X?" nudge ----
-  //
-  // A gentler, second reminder timed shortly BEFORE a prayer's window
-  // closes (e.g. ~15-20 min before Asr starts, for a Dhuhr nudge) rather
-  // than at its start. This catches people who already prayed but forgot
-  // to tap "Prayed" on the first alarm, and flags people who genuinely
-  // haven't yet — without interrupting them mid-prayer the way a second
-  // alarm right at start time would.
-  //
-  // Callers should pass the same "window closes at" time already used
-  // elsewhere to decide when a prayer counts as missed (e.g. Dhuhr's
-  // window closes when Asr begins, Isha's when tomorrow's Fajr begins),
-  // and this schedules the nudge [leadTime] before that.
   Future<void> scheduleEndOfWindowNudge({
     required String prayerName,
     required DateTime windowEndTime,
     Duration leadTime = const Duration(minutes: 15),
   }) async {
     if (!_initialized) await init();
+    if (!isCategoryEnabled('prayers')) return;
 
     final baseId = _prayerIds[prayerName];
     if (baseId == null) return;
@@ -366,42 +526,28 @@ class NotificationService {
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: '${PrayerNotificationKind.nudge}|$prayerName',
     );
-
-    debugPrint(
-      '[NotificationService] Scheduled $prayerName nudge at $tzTime '
-      '(window closes $windowEndTime)',
-    );
   }
 
-  /// Cancel just the end-of-window nudge for a prayer (e.g. call this the
-  /// moment the user taps "Prayed" on the earlier on-time alarm, so the
-  /// nudge doesn't fire redundantly once it's already logged).
   Future<void> cancelEndOfWindowNudge(String prayerName) async {
     if (!_initialized) await init();
     final baseId = _prayerIds[prayerName];
     if (baseId == null) return;
     await _plugin.cancel(baseId + _nudgeIdOffset);
-    debugPrint('[NotificationService] Cancelled $prayerName nudge');
   }
 
-  // ---- Cancel a scheduled prayer alarm (and its end-of-window nudge) ----
   Future<void> cancelPrayerAlarm(String prayerName) async {
     if (!_initialized) await init();
     final id = _prayerIds[prayerName];
     if (id == null) return;
     await _plugin.cancel(id);
     await cancelEndOfWindowNudge(prayerName);
-    debugPrint('[NotificationService] Cancelled $prayerName alarm');
   }
 
-  // ---- Cancel ALL prayer alarms ----
   Future<void> cancelAll() async {
     if (!_initialized) await init();
     await _plugin.cancelAll();
-    debugPrint('[NotificationService] Cancelled all prayer alarms');
   }
 
-  // ---- Arabic name mapping ----
   String _arabicName(String prayerName) {
     const map = {
       'Fajr': 'Fajr (الفجر)',
@@ -414,98 +560,125 @@ class NotificationService {
     return map[prayerName] ?? prayerName;
   }
 
-  // ---- Schedule a custom/local notification ----
+  String _formatTime(DateTime dt) {
+    final hour = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final period = dt.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $period';
+  }
+
   Future<void> scheduleCustomNotification({
     required int id,
     required String title,
     required String body,
     required DateTime scheduledTime,
+    String category = 'events',
+    String? targetRoute,
   }) async {
     if (!_initialized) await init();
+    if (!isCategoryEnabled(category)) return;
 
-    // Do not schedule past times
+    await addNotificationItem(
+      title: title,
+      body: body,
+      category: category,
+      targetRoute: targetRoute,
+    );
+
     if (scheduledTime.isBefore(DateTime.now())) return;
 
-    final tz.TZDateTime tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
+    try {
+      final tz.TZDateTime tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
 
-    const androidDetails = AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDesc,
-      importance: Importance.max,
-      priority: Priority.max,
-      playSound: true,
-      sound: UriAndroidNotificationSound("content://settings/system/alarm_alert"),
-      enableVibration: true,
-      visibility: NotificationVisibility.public,
-      ongoing: false,
-    );
+      const androidDetails = AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        channelDescription: _channelDesc,
+        importance: Importance.max,
+        priority: Priority.max,
+        playSound: true,
+        enableVibration: true,
+        visibility: NotificationVisibility.public,
+        ongoing: false,
+      );
 
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentSound: true,
-      presentBadge: true,
-    );
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        presentBadge: true,
+      );
 
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
 
-    await _plugin.zonedSchedule(
-      id,
-      title,
-      body,
-      tzTime,
-      details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
-
-    debugPrint('[NotificationService] Scheduled custom notification: $title at $tzTime (id=$id)');
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        tzTime,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: '$category|$id',
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] System zonedSchedule error: $e');
+    }
   }
 
-  // ---- Show a custom/local notification immediately ----
   Future<void> showCustomNotification({
     required int id,
     required String title,
     required String body,
-    required DateTime scheduledTime,
+    String category = 'events',
+    String? targetRoute,
   }) async {
     if (!_initialized) await init();
+    if (!isCategoryEnabled(category)) return;
 
-    const androidDetails = AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDesc,
-      importance: Importance.max,
-      priority: Priority.max,
-      playSound: true,
-      sound: UriAndroidNotificationSound("content://settings/system/alarm_alert"),
-      enableVibration: true,
-      visibility: NotificationVisibility.public,
-      ongoing: false,
+    await addNotificationItem(
+      title: title,
+      body: body,
+      category: category,
+      targetRoute: targetRoute,
     );
 
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentSound: true,
-      presentBadge: true,
-    );
+    try {
+      const androidDetails = AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        channelDescription: _channelDesc,
+        importance: Importance.max,
+        priority: Priority.max,
+        playSound: true,
+        enableVibration: true,
+        visibility: NotificationVisibility.public,
+        ongoing: false,
+      );
 
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        presentBadge: true,
+      );
 
-    await _plugin.show(
-      id,
-      title,
-      body,
-      details,
-    );
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
 
-    debugPrint('[NotificationService] Showed instant custom notification: $title (id=$id)');
+      await _plugin.show(
+        id,
+        title,
+        body,
+        details,
+        payload: '$category|$id',
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] System show error: $e');
+    }
   }
 }
