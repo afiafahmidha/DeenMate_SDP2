@@ -2047,11 +2047,11 @@ class _AnalogClockPainter extends CustomPainter {
     final double minuteAngle = minuteFraction * 2 * math.pi - math.pi / 2;
 
     // Navy is not visible enough on the night card. Only Fajr and Isha use
-    // a bright hour hand; every other prayer retains the navy design.
+    // a lighter navy-blue hour hand; every other prayer retains the navy design.
     final isNightPrayer = prayerName == 'Fajr' || prayerName == 'Isha';
     final double hourHandLen = radius * 0.5;
     final hourHandPaint = Paint()
-      ..color = isNightPrayer ? const Color(0xFFFFE082) : AppColors.navyBlue
+      ..color = isNightPrayer ? const Color(0xFF7AB8E8) : AppColors.navyBlue
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0
       ..strokeCap = StrokeCap.round;
