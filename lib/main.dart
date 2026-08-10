@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -8,12 +8,14 @@ import 'screens/auth_screen.dart';
 import 'firebase_options.dart';
 import 'services/theme_service.dart';
 import 'services/language_service.dart';
+import 'services/notification_service.dart';
 import 'l10n/app_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await LanguageService.loadLanguagePreference();
+  await NotificationService.instance.init();
 
   try {
     await Firebase.initializeApp(

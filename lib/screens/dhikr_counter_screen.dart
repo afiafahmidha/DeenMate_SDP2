@@ -520,11 +520,13 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     final bool isMorning = type == 'Morning Adhkar';
     await NotificationService.instance.scheduleCustomNotification(
       id: id,
-      title: isMorning ? '🌅 Morning Adhkar reminder' : '🌙 Evening Adhkar reminder',
+      title: isMorning ? 'Morning Adhkar Reminder' : 'Evening Adhkar Reminder',
       body: isMorning
           ? 'Time for your morning remembrance — a few minutes of dhikr to start the day.'
           : 'Time for your evening remembrance — close the day with dhikr.',
       scheduledTime: scheduled,
+      category: 'dhikr',
+      targetRoute: '/dhikr',
     );
   }
 
