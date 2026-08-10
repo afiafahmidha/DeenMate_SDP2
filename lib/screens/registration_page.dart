@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../widgets/auth_header.dart';
 import '../l10n/app_localizations.dart';
+import 'about_screen.dart';
 
 class RegistrationPage extends StatefulWidget {
   final VoidCallback onShowLogin;
@@ -35,10 +36,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
   bool agreedToTerms = false;
   bool _isLoading = false;
 
-  String selectedFiqh = 'Hanafi';
   String selectedLanguage = 'English';
-
-  final List<String> fiqhOptions = ['Hanafi', "Shafi'i", 'Maliki', 'Hanbali'];
 
   final List<StarConfig> _headerStars = [
     StarConfig(top: 60, left: 50, size: 8, delayMs: 200),
@@ -347,8 +345,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         },
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    _buildFiqhDropdown(),
                     const SizedBox(height: 24),
                     _buildLanguageSelector(),
                     const SizedBox(height: 20),
@@ -522,88 +518,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== FIQH DROPDOWN =====
-  Widget _buildFiqhDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-                   Text(
-                      AppLocalizations.of(context)!.tr('select_fiqh'),
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.navyBlue,
-              ),
-            ),
-            const Icon(Icons.info_outline, color: AppColors.placeholder, size: 16),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.dustyBlueTeal.withValues(alpha: 0.35), width: 1.0),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: AppColors.navyBlue,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.balance, color: AppColors.white, size: 16),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: selectedFiqh,
-                    isExpanded: true,
-                    borderRadius: BorderRadius.circular(16),
-                    dropdownColor: Colors.white,
-                    elevation: 4,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.placeholder, size: 20),
-                    style: GoogleFonts.poppins(
-                      color: AppColors.navyBlue,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    items: fiqhOptions.map((fiqh) {
-                      return DropdownMenuItem(
-                        value: fiqh,
-                        child: Text(
-                          fiqh,
-                          style: GoogleFonts.poppins(
-                            color: AppColors.navyBlue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: _isLoading ? null : (value) {
-                      setState(() => selectedFiqh = value!);
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 6),
-         Text(
-           AppLocalizations.of(context)!.tr('fiqh_info'),
-          style: GoogleFonts.inter(fontSize: 11, color: AppColors.placeholder),
-        ),
-      ],
-    );
-  }
+
 
   // ===== LANGUAGE SELECTOR =====
   Widget _buildLanguageSelector() {
@@ -707,7 +622,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   ),
                   recognizer: TapGestureRecognizer()
                     ..onTap = () {
-                      // TODO: navigate to Terms page
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AboutScreen(isDarkMode: false),
+                        ),
+                      );
                     },
                 ),
               ],

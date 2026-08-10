@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -95,6 +96,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   int _activeReaderAyahIndex = 1;
   bool _isLoadingSurah = false;
   List<AyahContent> _loadedAyahs = [];
+
+  // Tafsir cache keyed by verse_key e.g. '1:2' -> tafsir text
+  final Map<String, String> _engTafsirCache = {}; // Tafsir Ibn Kathir
+  final Map<String, String> _bnTafsirCache = {};  // Tafsir Ahsanul Bayaan
 
   // Active More view navigation
   String? _activeMoreSubView; // null, 'hifz', 'bookmarks', 'daily_ayah', 'stats', 'settings'
@@ -581,6 +586,128 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     _loadState();
   }
 
+  void _showWheelPagePickerModal(BuildContext context, Color cardBg, Color themeText) {
+    int tempAyah = _activeReaderAyahIndex.clamp(1, _loadedAyahs.isEmpty ? 1 : _loadedAyahs.length);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final modalBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+            return Container(
+              height: 310,
+              decoration: BoxDecoration(
+                color: modalBg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 16)
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.placeholder.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Fixed Header Row with Expanded title to prevent overflow
+                  Row(
+                    children: [
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text('Cancel', style: GoogleFonts.poppins(color: AppColors.placeholder, fontSize: 13)),
+                      ),
+                      Expanded(
+                        child: Text(
+                          'Jump to Ayah',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: themeText),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.midTeal,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            _activeReaderAyahIndex = tempAyah;
+                          });
+                        },
+                        child: Text('Jump', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Ayah Scrollable Wheel
+                  Expanded(
+                    child: CupertinoPicker(
+                      itemExtent: 44,
+                      scrollController: FixedExtentScrollController(
+                        initialItem: (tempAyah - 1).clamp(0, _loadedAyahs.isEmpty ? 0 : _loadedAyahs.length - 1),
+                      ),
+                      onSelectedItemChanged: (index) {
+                        setModalState(() {
+                          tempAyah = index + 1;
+                        });
+                      },
+                      children: List.generate(_loadedAyahs.length, (idx) {
+                        final num = idx + 1;
+                        final isSelected = num == tempAyah;
+                        return Center(
+                          child: Text(
+                            'Ayah $num',
+                            style: GoogleFonts.poppins(
+                              fontSize: isSelected ? 17 : 14,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? AppColors.midTeal : themeText.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Strip HTML tags returned by quran.com tafsir API
+  String _stripHtml(String html) {
+    return html
+        .replaceAll(RegExp(r'<[^>]*>'), ' ')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll(RegExp(r' {2,}'), ' ')
+        .trim();
+  }
+
   String _cleanBismillahPrefix(String text, int surahId) {
     if (surahId == 1 || surahId == 9) return text;
     
@@ -761,6 +888,123 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   // ─────────────────────────────────────────────────────────────────────────────
   // SAFE GENERATOR
   // ─────────────────────────────────────────────────────────────────────────────
+  Future<void> _loadSurahData(int surahId, int totalAyahs) async {
+    setState(() {
+      _isLoadingSurah = true;
+      _loadedAyahs = [];
+    });
+
+    try {
+      final arabicUri    = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId');
+      final banglaUri    = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId/bn.bengali');
+      final englishUri   = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId/en.sahih');
+      // Tafsir Ibn Kathir (id=169, English) & Tafsir Abu Bakr Zakaria / Ibn Kathir (id=166, Bangla)
+      // Pass per_page=300 to fetch ALL verses in the Surah (default per_page=10 truncates after verse 10)
+      final engTafsirUri = Uri.parse('https://api.quran.com/api/v4/tafsirs/169/by_chapter/$surahId?per_page=300');
+      final bnTafsirUri  = Uri.parse('https://api.quran.com/api/v4/tafsirs/166/by_chapter/$surahId?per_page=300');
+
+      final responses = await Future.wait([
+        http.get(arabicUri).timeout(const Duration(seconds: 8)),
+        http.get(banglaUri).timeout(const Duration(seconds: 8)),
+        http.get(englishUri).timeout(const Duration(seconds: 8)),
+        http.get(engTafsirUri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 10)),
+        http.get(bnTafsirUri,  headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 10)),
+      ]);
+
+      if (responses[0].statusCode == 200 &&
+          responses[1].statusCode == 200 &&
+          responses[2].statusCode == 200) {
+        final arabicJson  = jsonDecode(responses[0].body);
+        final banglaJson  = jsonDecode(responses[1].body);
+        final englishJson = jsonDecode(responses[2].body);
+
+        final List<dynamic> arabicAyahs  = arabicJson['data']['ayahs'];
+        final List<dynamic> banglaAyahs  = banglaJson['data']['ayahs'];
+        final List<dynamic> englishAyahs = englishJson['data']['ayahs'];
+
+        // Populate tafsir caches from quran.com
+        if (responses[3].statusCode == 200) {
+          try {
+            final List<dynamic> items = (jsonDecode(responses[3].body))['tafsirs'] ?? [];
+            for (final t in items) {
+              final k = t['verse_key']?.toString() ?? '';
+              final v = t['text']?.toString() ?? '';
+              if (k.isNotEmpty) _engTafsirCache[k] = _stripHtml(v);
+            }
+          } catch (_) {}
+        }
+        if (responses[4].statusCode == 200) {
+          try {
+            final List<dynamic> items = (jsonDecode(responses[4].body))['tafsirs'] ?? [];
+            for (final t in items) {
+              final k = t['verse_key']?.toString() ?? '';
+              final v = t['text']?.toString() ?? '';
+              if (k.isNotEmpty) _bnTafsirCache[k] = _stripHtml(v);
+            }
+          } catch (_) {}
+        }
+
+        final List<AyahContent> fetchedList = [];
+        for (int i = 0; i < arabicAyahs.length; i++) {
+          final rawArabic   = arabicAyahs[i]['text'] ?? '';
+          final cleanArabic = i == 0 ? _cleanBismillahPrefix(rawArabic, surahId) : rawArabic;
+          final ayahNum     = arabicAyahs[i]['numberInSurah'] ?? (i + 1);
+          final verseKey    = '$surahId:$ayahNum';
+
+          // Extract Bangla Tafsir with fallback to previous grouped ayah if empty
+          String bnExplanation = _bnTafsirCache[verseKey] ?? '';
+          if (bnExplanation.isEmpty) {
+            for (int prev = ayahNum - 1; prev >= 1; prev--) {
+              final prevKey = '$surahId:$prev';
+              final prevText = _bnTafsirCache[prevKey] ?? '';
+              if (prevText.isNotEmpty) {
+                bnExplanation = prevText;
+                break;
+              }
+            }
+          }
+
+          // Extract English Tafsir with fallback to previous grouped ayah if empty
+          String engExplanation = _engTafsirCache[verseKey] ?? '';
+          if (engExplanation.isEmpty) {
+            for (int prev = ayahNum - 1; prev >= 1; prev--) {
+              final prevKey = '$surahId:$prev';
+              final prevText = _engTafsirCache[prevKey] ?? '';
+              if (prevText.isNotEmpty) {
+                engExplanation = prevText;
+                break;
+              }
+            }
+          }
+
+          fetchedList.add(AyahContent(
+            number: ayahNum,
+            arabic: cleanArabic,
+            banglaTranslation: banglaAyahs[i]['text'] ?? '',
+            englishTranslation: englishAyahs[i]['text'] ?? '',
+            banglaExplanation: bnExplanation,
+            englishExplanation: engExplanation,
+            page: arabicAyahs[i]['page'],
+          ));
+        }
+
+        setState(() {
+          _loadedAyahs = fetchedList;
+          _isLoadingSurah = false;
+        });
+        return;
+      }
+    } catch (e) {
+      debugPrint('Quran API load error: $e');
+    }
+
+    // Offline / timeout fallback
+    setState(() {
+      _loadedAyahs = _generateSurahContent(surahId, totalAyahs);
+      _isLoadingSurah = false;
+    });
+  }
+
   List<AyahContent> _generateSurahContent(int surahId, int totalAyahs) {
     if (_realQuranText.containsKey(surahId)) {
       final list = _realQuranText[surahId]!;
@@ -814,69 +1058,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     });
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // LIVE API QURAN FETCHING SERVICE
-  // ─────────────────────────────────────────────────────────────────────────────
-  Future<void> _loadSurahData(int surahId, int totalAyahs) async {
-    setState(() {
-      _isLoadingSurah = true;
-      _loadedAyahs = [];
-    });
 
-    try {
-      final arabicUri = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId');
-      final banglaUri = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId/bn.bengali');
-      final englishUri = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId/en.sahih');
-
-      final responses = await Future.wait([
-        http.get(arabicUri).timeout(const Duration(seconds: 8)),
-        http.get(banglaUri).timeout(const Duration(seconds: 8)),
-        http.get(englishUri).timeout(const Duration(seconds: 8)),
-      ]);
-
-      if (responses[0].statusCode == 200 &&
-          responses[1].statusCode == 200 &&
-          responses[2].statusCode == 200) {
-        final arabicJson = jsonDecode(responses[0].body);
-        final banglaJson = jsonDecode(responses[1].body);
-        final englishJson = jsonDecode(responses[2].body);
-
-        final List<dynamic> arabicAyahs = arabicJson['data']['ayahs'];
-        final List<dynamic> banglaAyahs = banglaJson['data']['ayahs'];
-        final List<dynamic> englishAyahs = englishJson['data']['ayahs'];
-
-        final List<AyahContent> fetchedList = [];
-        for (int i = 0; i < arabicAyahs.length; i++) {
-          final rawArabic = arabicAyahs[i]['text'] ?? '';
-          final cleanArabic = i == 0 ? _cleanBismillahPrefix(rawArabic, surahId) : rawArabic;
-
-          fetchedList.add(AyahContent(
-            number: arabicAyahs[i]['numberInSurah'] ?? (i + 1),
-            arabic: cleanArabic,
-            banglaTranslation: banglaAyahs[i]['text'] ?? '',
-            englishTranslation: englishAyahs[i]['text'] ?? '',
-            banglaExplanation: 'এই আয়াতের তাফসির আল্লাহর বাণী অনুযায়ী দ্বীনের সঠিক সরল পথের শিক্ষা দান করে।',
-            englishExplanation: 'This ayah guides the heart towards absolute righteousness and belief.',
-            page: arabicAyahs[i]['page'],
-          ));
-        }
-
-        setState(() {
-          _loadedAyahs = fetchedList;
-          _isLoadingSurah = false;
-        });
-        return;
-      }
-    } catch (e) {
-      // Offline fallback
-    }
-
-    // Offline / timeout fallback generator
-    setState(() {
-      _loadedAyahs = _generateSurahContent(surahId, totalAyahs);
-      _isLoadingSurah = false;
-    });
-  }
 
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1682,20 +1864,90 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                       const Divider(height: 1),
                       const SizedBox(height: 16),
 
-                      Text(
-                        'ব্যাখ্যা ও তাফসির (Explanation)',
-                        style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.coralOrange),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        currentAyah.banglaExplanation,
-                        style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.placeholder, height: 1.45),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        currentAyah.englishExplanation,
-                        style: GoogleFonts.inter(fontSize: 12.5, color: AppColors.placeholder, height: 1.45),
-                      ),
+                      // Tafsir section — follows translation toggle state
+                      if (_showBanglaTranslation && currentAyah.banglaExplanation.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.coralOrange.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.coralOrange.withValues(alpha: 0.20)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.coralOrange,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'তাফসির ইবনে কাসীর (আবু বকর জাকারিয়া)',
+                                  style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                currentAyah.banglaExplanation,
+                                style: GoogleFonts.inter(fontSize: 12.5, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.82), height: 1.55),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+
+                      if (_showEnglishTranslation && currentAyah.englishExplanation.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.midTeal.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.20)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.midTeal,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Tafsir Ibn Kathir',
+                                  style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                currentAyah.englishExplanation,
+                                style: GoogleFonts.inter(fontSize: 12.5, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.82), height: 1.55),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+
+                      if (!_showBanglaTranslation && !_showEnglishTranslation)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Enable Bangla or English translation in Settings to see Tafsir.',
+                            style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.placeholder, fontStyle: FontStyle.italic),
+                          ),
+                        ),
+
+                      if (currentAyah.banglaExplanation.isEmpty && currentAyah.englishExplanation.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Tafsir not available for this verse in offline mode.',
+                            style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.placeholder, fontStyle: FontStyle.italic),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1717,12 +1969,25 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     : null,
                 child: Text('← Previous', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'Ayah $_activeReaderAyahIndex / ${_loadedAyahs.length}',
-                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: themeText),
+              GestureDetector(
+                onTap: () => _showWheelPagePickerModal(context, cardBg, themeText),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.midTeal.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.30)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.unfold_more_rounded, size: 16, color: AppColors.midTeal),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Ayah $_activeReaderAyahIndex / ${_loadedAyahs.length}',
+                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                      ),
+                    ],
                   ),
                 ),
               ),

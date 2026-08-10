@@ -10,6 +10,7 @@ import 'package:adhan/adhan.dart';
 import 'package:intl/intl.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
+import '../widgets/notification_center_modal.dart';
 import 'calendar_tab.dart';
 import 'hajj_umrah_screen.dart';
 import 'inheritance_screen.dart';
@@ -271,6 +272,9 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     // Start location services & prayer time updates
     _initLocationAndTracking();
+
+    // Hook up real notification actions & cold start replay
+    _setupNotificationListener();
   }
 
   @override
@@ -548,6 +552,96 @@ Future<void> _onPositionUpdate(Position position) async {
         await NotificationService.instance.cancelPrayerAlarm(pName);
       }
     }
+  }
+
+  void _setupNotificationListener() {
+    NotificationService.instance.onPrayerAction = (prayerName, action, kind) async {
+      if (action == PrayerNotificationAction.prayed) {
+        setState(() {
+          _salatCompleted[prayerName] = true;
+        });
+        await _saveSalatCompleted(prayerName, true);
+        await NotificationService.instance.cancelEndOfWindowNudge(prayerName);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Logged $prayerName as prayed. Prayer tracker updated.'),
+              backgroundColor: const Color(0xFF1D3557),
+            ),
+          );
+        }
+      } else if (action == PrayerNotificationAction.snooze) {
+        await NotificationService.instance.snoozePrayerAlarm(prayerName: prayerName);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$prayerName alarm snoozed for ${NotificationService.instance.snoozeDurationMinutes} minutes.'),
+              backgroundColor: const Color(0xFF1D3557),
+            ),
+          );
+        }
+      }
+    };
+
+    NotificationService.instance.drainPendingActions((prayerName, action, kind) async {
+      if (action == PrayerNotificationAction.prayed) {
+        setState(() {
+          _salatCompleted[prayerName] = true;
+        });
+        await _saveSalatCompleted(prayerName, true);
+        await NotificationService.instance.cancelEndOfWindowNudge(prayerName);
+      } else if (action == PrayerNotificationAction.snooze) {
+        await NotificationService.instance.snoozePrayerAlarm(prayerName: prayerName);
+      }
+    });
+  }
+
+  void _openNotificationCenter() {
+    NotificationCenterModal.show(
+      context,
+      onPrayed: (prayerName) async {
+        setState(() {
+          _salatCompleted[prayerName] = true;
+        });
+        await _saveSalatCompleted(prayerName, true);
+        await NotificationService.instance.cancelEndOfWindowNudge(prayerName);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Logged $prayerName as prayed. Prayer tracker updated.'),
+              backgroundColor: const Color(0xFF1D3557),
+            ),
+          );
+        }
+      },
+      onSnooze: (prayerName) async {
+        await NotificationService.instance.snoozePrayerAlarm(prayerName: prayerName);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$prayerName alarm snoozed for ${NotificationService.instance.snoozeDurationMinutes} minutes.'),
+              backgroundColor: const Color(0xFF1D3557),
+            ),
+          );
+        }
+      },
+      onNotificationTap: (item) {
+        Navigator.pop(context);
+        if (item.category == 'prayers') {
+          setState(() => _currentIndex = 1);
+        } else if (item.category == 'dhikr') {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const DhikrCounterScreen()));
+        } else if (item.category == 'zakat') {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const ZakatManagerScreen()));
+        } else if (item.category == 'quran') {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const QuranTrackerScreen()));
+        } else if (item.category == 'events') {
+          setState(() => _currentIndex = 2);
+        } else if (item.category == 'sos') {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const EmergencySosScreen()));
+        }
+      },
+    );
   }
 
   @override
@@ -875,9 +969,12 @@ Widget _buildActiveTabContent() {
             cloudsController: _cloudsController,
             onSceneSelected: (scene) => setState(() => _selectedPrayerScene = scene),
             onBack: () => setState(() => _currentIndex = 0),
-            onSalatToggle: (salat, done) {
+            onSalatToggle: (salat, done) async {
               setState(() => _salatCompleted[salat] = done);
-              _saveSalatCompleted(salat, done);
+              await _saveSalatCompleted(salat, done);
+              if (done) {
+                await NotificationService.instance.cancelEndOfWindowNudge(salat);
+              }
             },
             onQazaCountChange: (salat, newCount) {
               setState(() => _qazaCounts[salat] = newCount);
@@ -1059,42 +1156,59 @@ _buildAnimatedEntry(
               ],
             ),
           ),
-          // Notification Bell with dot
-          Stack(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.navyBlue.withValues(alpha: 0.06),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.notifications_outlined,
-                  color: AppColors.navyBlue,
-                  size: 22,
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 10,
-                child: Container(
-                  width: 8,
-                  height: 8,
+          // Interactive Notification Bell with real-time unread badge
+          GestureDetector(
+            onTap: _openNotificationCenter,
+            child: Stack(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppColors.coralOrange,
+                    color: Colors.white.withValues(alpha: 0.7),
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.navyBlue.withValues(alpha: 0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.notifications_outlined,
+                    color: AppColors.navyBlue,
+                    size: 22,
                   ),
                 ),
-              ),
-            ],
+                ValueListenableBuilder<int>(
+                  valueListenable:
+                      NotificationService.instance.unreadCountNotifier,
+                  builder: (context, count, _) {
+                    if (count == 0) return const SizedBox.shrink();
+                    return Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppColors.coralOrange,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
