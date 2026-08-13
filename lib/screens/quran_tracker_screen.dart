@@ -86,6 +86,38 @@ class HadithWazifa {
   });
 }
 
+class CustomWazifa {
+  final String title;
+  final String? arabicText;
+  final String? banglaPronunciation;
+  final String? banglaTranslation;
+  final String? readingRules;
+
+  CustomWazifa({
+    required this.title,
+    this.arabicText,
+    this.banglaPronunciation,
+    this.banglaTranslation,
+    this.readingRules,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'arabicText': arabicText,
+    'banglaPronunciation': banglaPronunciation,
+    'banglaTranslation': banglaTranslation,
+    'readingRules': readingRules,
+  };
+
+  factory CustomWazifa.fromJson(Map<String, dynamic> json) => CustomWazifa(
+    title: json['title'] as String,
+    arabicText: json['arabicText'] as String?,
+    banglaPronunciation: json['banglaPronunciation'] as String?,
+    banglaTranslation: json['banglaTranslation'] as String?,
+    readingRules: json['readingRules'] as String?,
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // QURAN TRACKER & SPIRITUAL ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -691,11 +723,146 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   final bool _ramadanMode = false;
 
   // Wazifa Custom checks state
-  final Map<String, List<String>> _wazifaSupplications = {
-    'Morning': ['আয়াতুল কুরসী (Ayatul Kursi)', 'সূরা ইখলাস, ফালাক, নাস (৩ বার)', 'সূরা হাশরের শেষ ৩ আয়াত', 'সাইয়্যেদুল ইস্তেগফার', 'সকালের দোয়া ও ইস্তিগফার'],
-    'Evening': ['আয়াতুল কুরসী (Ayatul Kursi)', 'সূরা ইখলাস, ফালাক, নাস (৩ বার)', 'সূরা হাশরের শেষ ৩ আয়াত', 'সন্ধ্যার দোয়া ও ইস্তিগফার', 'দরুদে তুনাজ্জিনা (৩ বার)'],
-    'Before Sleep': ['সূরা মূলক (Surah Al-Mulk)', 'সূরা সাজদাহ (Surah As-Sajdah)', 'সূরা বাকারার শেষ ২ আয়াত', 'সূরা কাফিরুন', 'ঘুমানোর দোয়া ও ইস্তিগফার'],
-    'After Salah': ['আয়াতুল কুরসী (Ayatul Kursi)', 'তাসবীহ ফাতেমী (৩৩ বার করে)', 'আস্তাগফিরুল্লাহ ও দোয়া', 'সূরা ইখলাস, ফালাক, নাস'],
+  final Map<String, List<CustomWazifa>> _wazifaSupplications = {
+    'Morning': [
+      CustomWazifa(
+        title: 'আয়াতুল কুরসী (Ayatul Kursi)',
+        arabicText: 'اللَّهُ لَا إِلَهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ لَهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ مَنْ ذَا الَّذِي يَشْفَعُ عِنْدَهُ إِلَّا بِإِذْنِهِ يَعْلَمُ مَا بَيْنَ أَيْدِيهِمْ وَمَا خَلْفَهُمْ وَلَا يُحِيطُونَ بِشَيْءٍ مِنْ عِلْمِهِ إِلَّا بِمَا شَاءَ وَسِعَ كُرْسِيُّهُ السَّمَاوَاتِ وَالْأَرْضَ وَلَا يَئُودُهُ حِفْظُهُمَا وَهُوَ الْعَلِيُّ الْعَظِيمُ',
+        banglaPronunciation: 'আল্লাহু লা ইলাহা ইল্লা হুয়াল হাইয়্যুল কাইয়্যুম। লা তা\'খুযুহু সিনাতুন ওয়ালা নাউম। লাহু মা ফিস সামাওয়াতি ওয়ামা ফিল আরদ। মান যাল্লাযী ইয়াশফাউ ইনদাহু ইল্লা বিইযনিহ। ইয়া\'লামু মা বাইনা আইদীহিম ওয়ামা খালফাহুম। ওয়ালা ইউহীতূনা বিশাইয়্যিম মিন ইলমিহী ইল্লা বিমা শা-আ। ওয়াসিআ কুরসিইয়্যুহুস সামাওয়াতি ওয়াল আরদ, ওয়ালা ইয়াউদুহু হিফযুহুমা ওয়া হুয়াল আলীইয়্যুল আযীম।',
+        banglaTranslation: 'আল্লাহ, তিনি ছাড়া কোনো সত্য উপাস্য নেই, তিনি চিরঞ্জীব, সর্বসত্তার ধারক। তাঁকে তন্দ্রা ও নিদ্রা স্পর্শ করে না। আসমান ও যমীনে যা কিছু আছে সবকিছু তাঁরই। কে সে, যে তাঁর অনুমতি ছাড়া তাঁর নিকট সুপারিশ করবে? তাদের সামনে ও পিছনে যা কিছু আছে তা তিনি জানেন। আর তাঁর ইচ্ছাধীন জ্ঞান ছাড়া অন্য কোনো কিছুর ওপর তারা কর্তৃত্ব করতে পারে না। তাঁর রাজত্ব আসমান ও যমীনব্যাপী পরিব্যাপ্ত। আর এ দুটির রক্ষণাবেক্ষণ তাঁকে ক্লান্ত করে না। তিনি পরম উচ্চ, মহীয়ান।',
+        readingRules: 'সকালে ১ বার পাঠ করলে সারাদিন শয়তানের অনিষ্ট থেকে নিরাপদে থাকা যায়।',
+      ),
+      CustomWazifa(
+        title: 'সূরা ইখলাস, ফালাক, নাস (৩ বার)',
+        arabicText: 'بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ ۝ قُلْ هُوَ اللَّهُ أَحَدٌ... ۝ قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ... ۝ قُلْ أَعُوذُ بِرَبِّ النَّاسِ... ۝',
+        banglaPronunciation: 'কুল হুওয়াল্লাহু আহাদ... কুল আউযু বিরাব্বিল ফালাক... কুল আউযু বিরাব্বিন নাস...',
+        banglaTranslation: 'বলুন, তিনিই আল্লাহ একক... বলুন, আমি আশ্রয় প্রার্থনা করছি উষার প্রতিপালকের... বলুন, আমি আশ্রয় প্রার্থনা করছি মানুষের প্রতিপালকের...',
+        readingRules: 'ফজর সালাতের পর এই ৩টি সূরা ৩ বার করে পাঠ করবেন, যা সারাদিনের সব অনিষ্ট থেকে সুরক্ষায় যথেষ্ট হবে।',
+      ),
+      CustomWazifa(
+        title: 'সূরা হাশরের শেষ ৩ আয়াত',
+        arabicText: 'هُوَ اللَّهُ الَّذِي لَا إِلَهَ إِلَّا هُوَ عَالِمُ الْغَيْبِ وَالشَّهَادَةِ هُوَ الرَّحْمَنُ الرَّحِيمُ ۝ هُوَ اللَّهُ الَّذِي لَا إِلَهَ إِلَّا هُوَ الْمَلِكُ الْقُدُّوسُ السَّلَامُ الْمُؤْمِنُ الْمُهَيْمِنُ الْعَزِيزُ الْجَبَّارُ الْمُتَكَبِّরُ سُبْحَانَ اللَّهِ عَمَّا يُشْرِكُونَ ۝ هُوَ اللَّهُ الْخَالِقُ الْبَارِئُ الْمُصَوِّرُ لَهُ الْأَسْمَاءُ الْحُসْنَى يُসَبِّحُ لَهُ مَا فِي السَّمَاوَاتِ وَالْأَرْضِ وَهُوَ الْعَزِيزُ الْحَكِيمُ ۝',
+        banglaPronunciation: 'হুওয়াল্লাহুল্লাযী লা ইলাহা ইল্লা হুওয়া, আলিমুল গাইби ওয়াশ শাহাদাহ, হুওয়ার রাহমানুর রাহীম...',
+        banglaTranslation: 'তিনিই আল্লাহ, যিনি ছাড়া কোনো ইলাহ নেই; তিনি দৃশ্য ও অদৃশ্যের পরিজ্ঞাত, তিনি পরম دয়াময়, পরম দয়ালু...',
+        readingRules: 'সকালে ৩ বার "আউযুবিল্লাহিস সামীইল আলীমি মিনাশ শায়তানির রাজীম" পাঠ করে এই আয়াতসমূহ ১ বার পড়বেন।',
+      ),
+      CustomWazifa(
+        title: 'সাইয়্যেদুল ইস্তেগফার',
+        arabicText: 'اللَّهُمَّ أَنْتَ رَبِّي لَا إِلَهَ إِلَّا أَنْتَ خَلَقْتَنِي وَأَنَا عَبْدُكَ وَأَنَا عَلَى عَهْدِكَ وَوَعْدِكَ مَا اسْتَطَعْتُ أَعُوذُ بِكَ مِنْ شَرِّ مَا صَنَعْتُ أَبُوءُ لَكَ بِنِعْمَتِكَ عَلَيَّ وَأَبُوءُ لَكِ بِذَنْبِي فَاغْفِرْ لِي فَإِنَّهُ لَا يَغْفِرُ الذُّنُوبَ إِلَّا أَنْتَ',
+        banglaPronunciation: 'আল্লাহুম্মা আনতা রাব্বী লা ইলাহা ইল্লা আনতা খালাকতানি ওয়া আনা আবদুকা ওয়া আনা আলা আহদিকা ওয়া ওয়াদিকা মাসতাতাতু আউযুবিকা মিন শাররি মা সানাতু আবূউ লাকা বিনিমাতিকা আলাইয়্যা ওয়া আবূউ লাকা বিযাম্বী ফাগফিরলী ফাইন্নাহু লা ইয়াগফিরুয যুনূবা ইল্লা আনতা।',
+        banglaTranslation: 'হে আল্লাহ! আপনি আমার প্রতিপালক। আপনি ছাড়া কোনো ইলাহ নেই। আপনি আমাকে সৃষ্টি করেছেন এবং আমি আপনার বান্দা...',
+        readingRules: 'সকালে ১ বার পাঠ করলে এবং ওইদিন মারা গেলে সে জান্নাতী হবে।',
+      ),
+      CustomWazifa(
+        title: 'সকালের দোয়া ও ইস্তিগফার',
+        arabicText: 'اللَّهُمَّ بِكَ أَصْبَحْنَا وَبِكَ أَمْسَيْنَا وَبِكَ نَحْيَا وَبِكَ نَمُوتُ وَإِلَيْكَ النُّشُورُ',
+        banglaPronunciation: 'আল্লাহুম্মা বিকা আসবাহনা ওয়া বিকা আমসাইনা ওয়া বিকা নাহইয়া ওয়া বিকা নামূতু ওয়া ইলাইকান নুশূর।',
+        banglaTranslation: 'হে আল্লাহ! আপনার অনুগ্রহেই আমরা সকালে উপনীত হয়েছি এবং আপনার অনুগ্রহেই আমরা সন্ধ্যায় উপনীত হই, আপনার অনুগ্রহেই আমরা জীবন ধারণ করি এবং আপনার হুকুমেই আমরা মৃত্যুবরণ করি। আর আপনার দিকেই আমাদের পুনরুত্থান।',
+        readingRules: 'ফজর শেষে সকালে ১ বার পাঠ করা সুন্নাত।',
+      ),
+    ],
+    'Evening': [
+      CustomWazifa(
+        title: 'আয়াতুল কুরসী (Ayatul Kursi)',
+        arabicText: 'اللَّهُ لَا إِلَهَ إِلَّا هُوَ الْحَيُّ الْقَيُwُمُ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ لَهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ...',
+        banglaPronunciation: 'আল্লাহু লা ইলাহা ইল্লা হুয়াল হাইয়্যুল কাইয়্যুম...',
+        banglaTranslation: 'আল্লাহ, তিনি ছাড়া কোনো সত্য উপাস্য নেই, তিনি চিরঞ্জীব, সর্বসত্তার ধারক...',
+        readingRules: 'সন্ধ্যায় পাঠ করলে সারা রাত জিন ও শয়তানের অনিষ্ট থেকে নিরাপদ থাকা যায়।',
+      ),
+      CustomWazifa(
+        title: 'সূরা ইখলাস, ফালাক, নাস (৩ বার)',
+        arabicText: 'بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ ۝ قُلْ هُوَ اللَّهُ أَحَدٌ... ۝ قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ... ۝ قُلْ أَعُوذُ بِرَبِّ النَّاسِ... ۝',
+        banglaPronunciation: 'কুল হুওয়াল্লাহু আহাদ... কুল আউযু বিরাব্বিল ফালাক... কুল আউযু বিরাব্বিন নাস...',
+        banglaTranslation: 'বলুন, তিনিই আল্লাহ একক... বলুন, আমি আশ্রয় প্রার্থনা করছি উষার প্রতিপালকের...',
+        readingRules: 'মাগরিবের পর এই ৩টি সূরা ৩ বার করে পাঠ করবেন।',
+      ),
+      CustomWazifa(
+        title: 'সূরা হাশরের শেষ ৩ আয়াত',
+        arabicText: 'هُوَ اللَّهُ الَّذِي لَا إِلَهَ إِلَّا هُوَ عَالِمُ الْغَيْبِ وَالشَّهَادَةِ...',
+        banglaPronunciation: 'হুওয়াল্লাহুল্লাযী লা ইলাহা ইল্লা হুওয়া...',
+        banglaTranslation: 'তিনিই আল্লাহ, যিনি ছাড়া কোনো ইলাহ নেই; তিনি দৃশ্য ও অদৃশ্যের পরিজ্ঞাত...',
+        readingRules: 'সন্ধ্যায় মাগরিবের পর ৩ বার "আউযুবিল্লাহিস সামীইল আলীমি..." পাঠ করে এই আয়াতসমূহ ১ বার পড়বেন।',
+      ),
+      CustomWazifa(
+        title: 'সন্ধ্যার দোয়া ও ইস্তিগফার',
+        arabicText: 'اللَّهُمَّ بِكَ أَمْسَيْنَا وَبِكَ أَصْبَحْنَا وَبِكَ نَحْيَا وَبِكَ نَمُوتُ وَإِلَيْكَ الْمَصِيرُ',
+        banglaPronunciation: 'আল্লাহুম্মা বিকা আমসাইনা ওয়া বিকা আসবাহনা ওয়া বিকা নাহইয়া ওয়া বিকা নামূতু ওয়া ইলাইকাল মাছীর।',
+        banglaTranslation: 'হে আল্লাহ! আপনার অনুগ্রহেই আমরা সন্ধ্যায় উপনীত হয়েছি এবং আপনার অনুগ্রহেই সকালে উপনীত হয়েছি, আপনার অনুগ্রহেই আমরা জীবন ধারণ করি এবং আপনার হুকুমেই আমরা মৃত্যুবরণ করি। আর আপনার দিকেই আমাদের প্রত্যাবর্তন।',
+        readingRules: 'সন্ধ্যায় ১ বার পাঠ করা সুন্নাত।',
+      ),
+      CustomWazifa(
+        title: 'দরুদে তুনাজ্জিনা (৩ বার)',
+        arabicText: 'اللَّهُمَّ صَلِّ عَلَى سَيِّدِنَا مُحَمَّدٍ صَلَاةً تُنْجِينَا بِهَا مِنْ جَمِيعِ الْأَهْوَالِ وَالْآفَاتِ...',
+        banglaPronunciation: 'আল্লাহুম্মা সাল্লি আলা সাইয়্যিদিনা মুহাম্মাদিন সালাতান তুনজিনা...',
+        banglaTranslation: 'হে আল্লাহ! আমাদের সর্দার হযরত মুহাম্মদ (সা.)-এর ওপর এমন রহমত নাযিল করুন, যার বরকতে আপনি আমাদের সকল ভয়ভীতি ও বিপদ-আপদ থেকে মুক্তি দেবেন...',
+        readingRules: 'সন্ধ্যায় ও সালাত শেষে ৩ বার পাঠ অত্যন্ত ফজিলতপূর্ণ।',
+      ),
+    ],
+    'Before Sleep': [
+      CustomWazifa(
+        title: 'সূরা মূলক (Surah Al-Mulk)',
+        benefitBangla: 'সূরা মূলক কবরের আযাব থেকে মুক্তি দান করে।',
+        benefitEnglish: 'Protects from the punishment of the grave.',
+        readingRules: 'কুরআন ট্যাবে গিয়ে সূরা ৬৭ (Al-Mulk) তিলাওয়াত করুন।',
+      ),
+      CustomWazifa(
+        title: 'সূরা সাজদাহ (Surah As-Sajdah)',
+        benefitBangla: 'ঘুমানোর আগে সূরা সাজদাহ পাঠ করা সুন্নাত।',
+        benefitEnglish: 'Reciting Surah As-Sajdah before sleeping is a recommended sunnah.',
+        readingRules: 'কুরআন ট্যাবে গিয়ে সূরা ৩২ (As-Sajdah) তিলাওয়াত করুন।',
+      ),
+      CustomWazifa(
+        title: 'সূরা বাকারার শেষ ২ আয়াত',
+        arabicText: 'آمَنَ الرَّسُولُ بِمَا أُنْزِلَ إِلَيْهِ مِنْ رَبِّهِ وَالْمُؤْمِنُونَ...',
+        banglaPronunciation: 'আমানার রাসূলু বিমা উনযিলা ইলাইহি মির রব্বিহী ওয়াল মু\'মিনূন...',
+        banglaTranslation: 'রাসূল বিশ্বাস রাখেন ওই সমস্ত বিষয়ের ওপর যা তাঁর প্রতিপালকের পক্ষ থেকে অবতীর্ণ হয়েছে এবং মুমিনগণও...',
+        readingRules: 'রাতে এই আয়াত দুটি পাঠ করলে তা সমস্ত অনিষ্ট থেকে বাঁচার জন্য যথেষ্ট হয়।',
+      ),
+      CustomWazifa(
+        title: 'সূরা কাফিরুন',
+        arabicText: 'قُلْ يَا أَيُّهَا الْكَافِرُونَ ۝ لَا أَعْبُدُ مَا تَعْبُدُونَ ۝ وَلَا أَنْتُمْ عَابِدُونَ مَا أَعْبُدُ ۝ وَلَا أَنَا عَابِدٌ مَا عَبَدْتُمْ ۝ وَلَا أَنْتُمْ عَابِدُونَ مَا أَعْبُدُ ۝ لَكُمْ دِينُكُمْ وَلِيَ دِينِ ۝',
+        banglaPronunciation: 'কুল ইয়া আইয়্যুহাল কাফিরূন। লা আ\'বুদু মা তা\'বুদূন। ওয়ালা আনতুম আবিদূনা মা আ\'বুদ। ওয়ালা আনা আবিদুম মা আবাদতখন। ওয়ালা আনতুম আবিদূনা মা আ\'বুদ। লাকুম দীনুকুম ওয়ালি ইয়াদীন।',
+        banglaTranslation: 'বলুন, হে কাফেরকুল! আমি তার এবাদত করি না যার এবাদত তোমরা কর। এবং তোমরাও তাঁর এবাদতকারী নও যাঁর এবাদত আমি করি। এবং আমি এবাদতকারী নই যার এবাদত তোমরা করেছ। এবং তোমরা তাঁর এবাদতকারী নও যার এবাদত আমি করি। তোমাদের দ্বীন তোমাদের জন্য, আমার দ্বীন আমার জন্য।',
+        readingRules: 'ঘুমানোর আগে পাঠ করলে শিরক থেকে মুক্ত থাকা যায়।',
+      ),
+      CustomWazifa(
+        title: 'ঘুমানোর দোয়া ও ইস্তিগফার',
+        arabicText: 'بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا',
+        banglaPronunciation: 'বিইসমিকা আল্লাহুম্মা আমূতু ওয়া আহইয়া।',
+        banglaTranslation: 'হে আল্লাহ! আপনারই নামে আমি মৃত্যুবরণ করি (ঘুমাই) এবং জীবিত হই (জাগি)।',
+        readingRules: 'ডান কাতে শুয়ে ১ বার পাঠ করবেন।',
+      ),
+    ],
+    'After Salah': [
+      CustomWazifa(
+        title: 'আয়াতুল কুরসী (Ayatul Kursi)',
+        arabicText: 'اللَّهُ لَا إِلَهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ...',
+        banglaPronunciation: 'আল্লাহু লা ইলাহা ইল্লা হুয়াল হাইয়্যুল কাইয়্যুম...',
+        banglaTranslation: 'আল্লাহ, তিনি ছাড়া কোনো সত্য উপাস্য নেই, তিনি চিরঞ্জীব, সর্বসত্তার ধারক...',
+        readingRules: 'প্রতি ফরজ সালাত শেষে ১ বার পাঠ করবেন। জান্নাতে যাওয়ার মাধ্যম।',
+      ),
+      CustomWazifa(
+        title: 'তাসবীহ ফাতেমী (৩৩ বার করে)',
+        arabicText: 'سُبْحَانَ اللَّهِ (৩৩ বার), الْحَمْدُ لِلَّهِ (৩৩ বার), اللَّهُ أَكْبَرُ (৩৪ বার)',
+        banglaPronunciation: 'সুবহানাল্লাহ, আলহামদুলিল্লাহ, আল্লাহু আকবার',
+        banglaTranslation: 'আল্লাহ অতি পবিত্র, সকল প্রশংসা আল্লাহর, আল্লাহ সর্বশ্রেষ্ঠ।',
+        readingRules: 'সালাতের পর সুবহানাল্লাহ ৩৩ বার, আলহামদুলিল্লাহ ৩৩ বার ও আল্লাহু আকবার ৩৪ বার পাঠ করবেন।',
+      ),
+      CustomWazifa(
+        title: 'আস্তাগফিরুল্লাহ ও দোয়া',
+        arabicText: 'أَسْتَغْفِرُ اللَّهَ',
+        banglaPronunciation: 'আস্তাগফিরুল্লাহ (৩ বার)',
+        banglaTranslation: 'আমি আল্লাহর নিকট ক্ষমা প্রার্থনা করছি।',
+        readingRules: 'সালাতের সালাম ফেরানোর পর ৩ বার পাঠ করবেন।',
+      ),
+      CustomWazifa(
+        title: 'সূরা ইখলাস, ফালাক, নাস',
+        arabicText: 'قُلْ هُوَ اللَّهُ أَحَدٌ... قُل... قُل...',
+        banglaPronunciation: 'কুল হুওয়াল্লাহু أَحَدٌ... কুল আউযু... কুল আউযু...',
+        banglaTranslation: 'বলুন, তিনিই আল্লাহ একক...',
+        readingRules: 'প্রতি ফরজ সালাত শেষে এই তিনটি সূরা ১ বার করে পাঠ করবেন।',
+      ),
+    ],
   };
   
   // Completed states mapped by "Category_Supplication" -> bool
@@ -939,7 +1106,13 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           final listStr = prefs.getString('quran_wazifa_supps_$cat');
           if (listStr != null) {
             final List<dynamic> decoded = jsonDecode(listStr);
-            _wazifaSupplications[cat] = decoded.map((e) => e.toString()).toList();
+            _wazifaSupplications[cat] = decoded.map((e) {
+              if (e is Map) {
+                return CustomWazifa.fromJson(Map<String, dynamic>.from(e));
+              } else {
+                return CustomWazifa(title: e.toString());
+              }
+            }).toList();
           }
         }
 
@@ -1011,7 +1184,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     await prefs.setString('quran_last_saved_date', DateFormat('yyyy-MM-dd').format(DateTime.now()));
 
     for (final cat in _wazifaSupplications.keys) {
-      await prefs.setString('quran_wazifa_supps_$cat', jsonEncode(_wazifaSupplications[cat]));
+      await prefs.setString(
+        'quran_wazifa_supps_$cat',
+        jsonEncode(_wazifaSupplications[cat]?.map((e) => e.toJson()).toList()),
+      );
     }
 
     await prefs.setString('quran_wazifa_checks', jsonEncode(_completedWazifas));
@@ -1415,7 +1591,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     _wazifaSupplications.forEach((cat, list) {
       for (final w in list) {
         totalTodayWazifas++;
-        if (_completedWazifas['${cat}_$w'] ?? false) {
+        if (_completedWazifas['${cat}_${w.title}'] ?? false) {
           completedTodayWazifas++;
         }
       }
@@ -2448,12 +2624,16 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                   children: [
                     const Divider(),
                     const SizedBox(height: 6),
-                    Text('ফজিলত ও গুরুত্ব (Virtues Bangla):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                    Text(w.benefitBangla, style: GoogleFonts.inter(fontSize: 12, color: themeText, height: 1.35)),
-                    const SizedBox(height: 8),
-                    Text('Virtues (English):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                    Text(w.benefitEnglish, style: GoogleFonts.inter(fontSize: 12, color: themeText, height: 1.35)),
-                    const SizedBox(height: 8),
+                    if (_showBanglaTranslation) ...[
+                      Text('ফজিলত ও গুরুত্ব (Virtues Bangla):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                      Text(w.benefitBangla, style: GoogleFonts.inter(fontSize: 12, color: themeText, height: 1.35)),
+                      const SizedBox(height: 8),
+                    ],
+                    if (_showEnglishTranslation) ...[
+                      Text('Virtues (English):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                      Text(w.benefitEnglish, style: GoogleFonts.inter(fontSize: 12, color: themeText, height: 1.35)),
+                      const SizedBox(height: 8),
+                    ],
                     Text('Hadith Reference:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.placeholder)),
                     Text(w.hadithReference, style: GoogleFonts.inter(fontSize: 11, color: AppColors.placeholder, fontStyle: FontStyle.italic)),
                     
@@ -2511,21 +2691,21 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                       ),
                     ],
 
-                    if (w.banglaPronunciation != null) ...[
+                    if (_showBanglaTranslation && w.banglaPronunciation != null) ...[
                       const SizedBox(height: 12),
                       Text('উচ্চারণ (Bengali Pronunciation):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
                       const SizedBox(height: 4),
                       Text(w.banglaPronunciation!, style: GoogleFonts.inter(fontSize: 12.5, color: themeText, height: 1.45)),
                     ],
 
-                    if (w.banglaTranslation != null) ...[
+                    if (_showBanglaTranslation && w.banglaTranslation != null) ...[
                       const SizedBox(height: 12),
                       Text('অনুবাদ (Bengali Translation):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
                       const SizedBox(height: 4),
                       Text(w.banglaTranslation!, style: GoogleFonts.inter(fontSize: 12.5, color: themeText, height: 1.45)),
                     ],
 
-                    if (w.readingRules != null) ...[
+                    if (_showBanglaTranslation && w.readingRules != null) ...[
                       const SizedBox(height: 12),
                       Text('আমলের নিয়ম (Instructions):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
                       const SizedBox(height: 4),
@@ -2552,36 +2732,133 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         itemCount: list.length,
         itemBuilder: (ctx, idx) {
           final wazifa = list[idx];
-          final val = _completedWazifas['${category}_$wazifa'] ?? false;
+          final val = _completedWazifas['${category}_${wazifa.title}'] ?? false;
+
+          // Check if there is any detailed content to expand
+          final hasDetails = wazifa.arabicText != null ||
+              wazifa.banglaPronunciation != null ||
+              wazifa.banglaTranslation != null ||
+              wazifa.readingRules != null ||
+              wazifa.benefitBangla != null ||
+              wazifa.benefitEnglish != null;
 
           return Card(
             color: cardBg,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             margin: const EdgeInsets.only(bottom: 10),
-            child: ListTile(
-              leading: Checkbox(
-                value: val,
-                activeColor: AppColors.midTeal,
-                onChanged: (v) {
-                  setState(() {
-                    _completedWazifas['${category}_$wazifa'] = v!;
-                    _saveState();
-                  });
-                },
-              ),
-              title: Text(wazifa, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: themeText)),
-              subtitle: Text('Supplication Checklist entry', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: AppColors.coralOrange, size: 18),
-                onPressed: () {
-                  setState(() {
-                    _wazifaSupplications[category]?.removeAt(idx);
-                    _completedWazifas.remove('${category}_$wazifa');
-                    _saveState();
-                  });
-                },
-              ),
-            ),
+            child: hasDetails
+                ? ExpansionTile(
+                    leading: Checkbox(
+                      value: val,
+                      activeColor: AppColors.midTeal,
+                      onChanged: (v) {
+                        setState(() {
+                          _completedWazifas['${category}_${wazifa.title}'] = v!;
+                          _saveState();
+                        });
+                      },
+                    ),
+                    title: Text(wazifa.title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: themeText)),
+                    subtitle: Text('আমলের ফজিলত ও বিবরণ (Tap to expand)', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: AppColors.coralOrange, size: 18),
+                      onPressed: () {
+                        setState(() {
+                          _wazifaSupplications[category]?.removeAt(idx);
+                          _completedWazifas.remove('${category}_${wazifa.title}');
+                          _saveState();
+                        });
+                      },
+                    ),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (wazifa.benefitBangla != null && _showBanglaTranslation) ...[
+                              const Divider(),
+                              const SizedBox(height: 6),
+                              Text('ফজিলত ও গুরুত্ব (Virtues):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                              Text(wazifa.benefitBangla!, style: GoogleFonts.inter(fontSize: 12, color: themeText, height: 1.35)),
+                            ],
+                            if (wazifa.benefitEnglish != null && _showEnglishTranslation) ...[
+                              const Divider(),
+                              const SizedBox(height: 6),
+                              Text('Virtues (English):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                              Text(wazifa.benefitEnglish!, style: GoogleFonts.inter(fontSize: 12, color: themeText, height: 1.35)),
+                            ],
+                            if (wazifa.arabicText != null) ...[
+                              const Divider(),
+                              const SizedBox(height: 6),
+                              Text('আরবি (Arabic):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: _isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: SelectableText(
+                                  wazifa.arabicText!,
+                                  textAlign: TextAlign.right,
+                                  textDirection: TextDirection.rtl,
+                                  style: GoogleFonts.amiri(
+                                    fontSize: 18,
+                                    height: 1.8,
+                                    color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (wazifa.banglaPronunciation != null && _showBanglaTranslation) ...[
+                              const SizedBox(height: 12),
+                              Text('উচ্চারণ (Bengali Pronunciation):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                              const SizedBox(height: 4),
+                              Text(wazifa.banglaPronunciation!, style: GoogleFonts.inter(fontSize: 12.5, color: themeText, height: 1.45)),
+                            ],
+                            if (wazifa.banglaTranslation != null && _showBanglaTranslation) ...[
+                              const SizedBox(height: 12),
+                              Text('অনুবাদ (Bengali Translation):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                              const SizedBox(height: 4),
+                              Text(wazifa.banglaTranslation!, style: GoogleFonts.inter(fontSize: 12.5, color: themeText, height: 1.45)),
+                            ],
+                            if (wazifa.readingRules != null && _showBanglaTranslation) ...[
+                              const SizedBox(height: 12),
+                              Text('আমলের নিয়ম (Instructions):', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
+                              const SizedBox(height: 4),
+                              Text(wazifa.readingRules!, style: GoogleFonts.inter(fontSize: 12, color: AppColors.placeholder, fontStyle: FontStyle.italic)),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                : ListTile(
+                    leading: Checkbox(
+                      value: val,
+                      activeColor: AppColors.midTeal,
+                      onChanged: (v) {
+                        setState(() {
+                          _completedWazifas['${category}_${wazifa.title}'] = v!;
+                          _saveState();
+                        });
+                      },
+                    ),
+                    title: Text(wazifa.title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: themeText)),
+                    subtitle: Text('Supplication Checklist entry', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: AppColors.coralOrange, size: 18),
+                      onPressed: () {
+                        setState(() {
+                          _wazifaSupplications[category]?.removeAt(idx);
+                          _completedWazifas.remove('${category}_${wazifa.title}');
+                          _saveState();
+                        });
+                      },
+                    ),
+                  ),
           );
         },
       ),
@@ -2596,18 +2873,105 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   }
 
   void _showAddWazifaDialog(String category) {
-    final controller = TextEditingController();
+    final titleController = TextEditingController();
+    final arabicController = TextEditingController();
+    final pronunciationController = TextEditingController();
+    final translationController = TextEditingController();
+    final rulesController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (ctx) {
+        final fieldColor = _isDarkMode ? Colors.white : Colors.black;
+        final hintStyle = TextStyle(color: AppColors.placeholder.withValues(alpha: 0.7), fontSize: 13);
+        final labelStyle = GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.midTeal);
+
         return AlertDialog(
           backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Text('Add Wazifa ($category)', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
-          content: TextField(
-            controller: controller,
-            style: TextStyle(color: _isDarkMode ? Colors.white : Colors.black),
-            decoration: const InputDecoration(hintText: 'Enter supplication name...'),
+          title: Text(
+            'নতুন আমল যোগ করুন (${category == 'Morning' ? 'সকাল' : category == 'Evening' ? 'সন্ধ্যা' : category == 'Before Sleep' ? 'ঘুমানোর সময়' : 'সালাত শেষে'})',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
+          ),
+          content: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.85,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('আমলের নাম / শিরোনাম (Title)*', style: labelStyle),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: titleController,
+                    style: TextStyle(color: fieldColor),
+                    decoration: InputDecoration(
+                      hintText: 'উদা: সূরা কাফিরুন, দোয়ার নাম...',
+                      hintStyle: hintStyle,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('আরবি টেক্সট (Arabic Text) [ঐচ্ছিক]', style: labelStyle),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: arabicController,
+                    maxLines: 3,
+                    style: TextStyle(color: fieldColor),
+                    decoration: InputDecoration(
+                      hintText: 'আরবি হরফ লিখুন...',
+                      hintStyle: hintStyle,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('বাংলা উচ্চারণ (Pronunciation) [ঐচ্ছিক]', style: labelStyle),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: pronunciationController,
+                    maxLines: 2,
+                    style: TextStyle(color: fieldColor),
+                    decoration: InputDecoration(
+                      hintText: 'উচ্চারণ বাংলায় লিখুন...',
+                      hintStyle: hintStyle,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('বাংলা অনুবাদ (Translation) [ঐচ্ছিক]', style: labelStyle),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: translationController,
+                    maxLines: 3,
+                    style: TextStyle(color: fieldColor),
+                    decoration: InputDecoration(
+                      hintText: 'অর্থ বাংলায় লিখুন...',
+                      hintStyle: hintStyle,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('আমলের নিয়ম ও ফজিলত (Instructions) [ঐচ্ছিক]', style: labelStyle),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: rulesController,
+                    maxLines: 2,
+                    style: TextStyle(color: fieldColor),
+                    decoration: InputDecoration(
+                      hintText: 'উদা: সকালে ৩ বার, ফজিলত...',
+                      hintStyle: hintStyle,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
           actions: [
             TextButton(
@@ -2615,11 +2979,23 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
               child: Text('Cancel', style: GoogleFonts.poppins(color: AppColors.placeholder)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.navyBlue,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
               onPressed: () {
-                if (controller.text.trim().isNotEmpty) {
+                final title = titleController.text.trim();
+                if (title.isNotEmpty) {
                   setState(() {
-                    _wazifaSupplications[category]?.add(controller.text.trim());
+                    final newWazifa = CustomWazifa(
+                      title: title,
+                      arabicText: arabicController.text.trim().isNotEmpty ? arabicController.text.trim() : null,
+                      banglaPronunciation: pronunciationController.text.trim().isNotEmpty ? pronunciationController.text.trim() : null,
+                      banglaTranslation: translationController.text.trim().isNotEmpty ? translationController.text.trim() : null,
+                      readingRules: rulesController.text.trim().isNotEmpty ? rulesController.text.trim() : null,
+                    );
+                    _wazifaSupplications[category]?.add(newWazifa);
                     _saveState();
                   });
                   Navigator.pop(ctx);
