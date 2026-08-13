@@ -413,21 +413,10 @@ Future<void> _onPositionUpdate(Position position) async {
       if (!alarmEnabled) continue;
       final diffSec = now.difference(pTime).inSeconds.abs();
       final alarmKey = '${pName}_${pTime.day}_${pTime.hour}_${pTime.minute}';
-      // Trigger overlay within a 30-second window of the prayer time
+      // System notifications provide the alarm and its actions. Avoid a
+      // duplicate in-app prayer prompt.
       if (diffSec <= 30 && !_triggeredAlarms.contains(alarmKey)) {
         _triggeredAlarms.add(alarmKey);
-        if (mounted) {
-          setState(() {
-            _alarmPrayerName = pName;
-            _showAlarmOverlay = true;
-          });
-          // Auto-dismiss overlay after 60 seconds
-          Future.delayed(const Duration(seconds: 60), () {
-            if (mounted && _alarmPrayerName == pName) {
-              setState(() => _showAlarmOverlay = false);
-            }
-          });
-        }
       }
     }
 
@@ -539,6 +528,20 @@ Future<void> _onPositionUpdate(Position position) async {
       'Maghrib': _maghribTime,
       'Isha': _ishaTime,
     };
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final tomorrowPrayerTimes = PrayerTimes(
+      Coordinates(_latitude, _longitude),
+      DateComponents.from(tomorrow),
+      CalculationMethod.karachi.getParameters()..madhab = Madhab.hanafi,
+    );
+    final windowEnds = <String, DateTime?>{
+      'Fajr': _sunriseTime,
+      'Sunrise': null,
+      'Dhuhr': _asrTime,
+      'Asr': _maghribTime,
+      'Maghrib': _ishaTime,
+      'Isha': tomorrowPrayerTimes.fajr,
+    };
     for (final entry in allTimes.entries) {
       final pName = entry.key;
       final pTime = entry.value;
@@ -547,6 +550,7 @@ Future<void> _onPositionUpdate(Position position) async {
         await NotificationService.instance.schedulePrayerAlarm(
           prayerName: pName,
           scheduledTime: pTime,
+          windowEndTime: windowEnds[pName],
         );
       } else {
         await NotificationService.instance.cancelPrayerAlarm(pName);
@@ -571,7 +575,6 @@ Future<void> _onPositionUpdate(Position position) async {
           );
         }
       } else if (action == PrayerNotificationAction.snooze) {
-        await NotificationService.instance.snoozePrayerAlarm(prayerName: prayerName);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -591,7 +594,7 @@ Future<void> _onPositionUpdate(Position position) async {
         await _saveSalatCompleted(prayerName, true);
         await NotificationService.instance.cancelEndOfWindowNudge(prayerName);
       } else if (action == PrayerNotificationAction.snooze) {
-        await NotificationService.instance.snoozePrayerAlarm(prayerName: prayerName);
+        // NotificationService schedules the next 20-minute alarm itself.
       }
     });
   }
