@@ -2339,7 +2339,9 @@ class EventDetailPage extends StatelessWidget {
               slivers: [
                 SliverAppBar(
                   expandedHeight: 300,
-                  pinned: true,
+                  // Let the expandable hero scroll away so it cannot cover
+                  // the details or recommended-activities checklist below.
+                  pinned: false,
                   backgroundColor: event.themeColor,
                   foregroundColor: Colors.white,
                   elevation: 0,
@@ -2448,27 +2450,32 @@ class EventDetailPage extends StatelessWidget {
                         Column(
                           children: List.generate(activities.length, (index) {
                             final key = '${DateFormat('yyyyMMdd').format(date)}_event_$index';
-                            final isChecked = activityStatus[key] ?? false;
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 4.0),
-                              child: CheckboxListTile(
-                                value: isChecked,
-                                onChanged: (val) => onToggleActivity(key, val ?? false),
-                                title: Text(
-                                  activities[index],
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    color: isChecked
-                                        ? const Color(0xFF4CAF50).withOpacity(0.85)
-                                        : _edpPrimaryTextColor.withOpacity(0.8),
-                                    decoration: TextDecoration.none,
+                              // The detail page is a separate route, so it must
+                              // rebuild locally after its shared state changes.
+                              child: StatefulBuilder(
+                                builder: (context, setTileState) => CheckboxListTile(
+                                  value: activityStatus[key] ?? false,
+                                  onChanged: (val) => setTileState(
+                                    () => onToggleActivity(key, val ?? false),
                                   ),
+                                  title: Text(
+                                    activities[index],
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: (activityStatus[key] ?? false)
+                                          ? const Color(0xFF4CAF50).withOpacity(0.85)
+                                          : _edpPrimaryTextColor.withOpacity(0.8),
+                                      decoration: TextDecoration.none,
+                                    ),
+                                  ),
+                                  activeColor: AppColors.midTeal,
+                                  checkColor: Colors.white,
+                                  contentPadding: EdgeInsets.zero,
+                                  dense: true,
+                                  controlAffinity: ListTileControlAffinity.leading,
                                 ),
-                                activeColor: AppColors.midTeal,
-                                checkColor: Colors.white,
-                                contentPadding: EdgeInsets.zero,
-                                dense: true,
-                                controlAffinity: ListTileControlAffinity.leading,
                               ),
                             );
                           }),
