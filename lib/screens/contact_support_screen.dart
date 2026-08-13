@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,7 +12,7 @@ import '../widgets/auth_header.dart'; // AppColors
 // ---------------------------------------------------------------------------
 const String _emailjsServiceId  = 'deenmate_support';
 const String _emailjsTemplateId = 'template_os1cwsm';
-const String _emailjsPublicKey  = 'EjkmO7GIo9xoKw-qz';
+const String _emailjsPublicKey  = 'a0mo5oGeNBnFo4dK2';
 
 
 class ContactSupportScreen extends StatefulWidget {
@@ -78,13 +79,15 @@ class _ContactSupportScreenState extends State<ContactSupportScreen>
     final message = _messageController.text.trim();
     final sentAt  = DateTime.now();
 
-    // 1. Try saving to Firestore with a 4-second timeout so it never hangs
+    // Keep a copy for the support dashboard when Firestore is available. Email
+    // delivery is still the source of truth for the success state below.
     try {
       await FirebaseFirestore.instance
           .collection('support_messages')
           .add({
             'name':    name,
-            'email':   email,
+            'email':      email,
+            'from_email': email,
             'subject': subject,
             'message': message,
             'sentAt':  FieldValue.serverTimestamp(),
@@ -95,7 +98,8 @@ class _ContactSupportScreenState extends State<ContactSupportScreen>
       debugPrint('Firestore support_messages write note: $e');
     }
 
-    // 2. Send email via EmailJS REST API with a 6-second timeout
+    // Send the message through EmailJS. Do not report success unless EmailJS
+    // confirms that it accepted the request.
     try {
       final response = await http.post(
         Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
@@ -109,25 +113,52 @@ class _ContactSupportScreenState extends State<ContactSupportScreen>
           'template_params': {
             'name':    name,
             'email':   email,
+            'reply_to': email,
             'subject': subject,
             'message': message,
             'time':    '${sentAt.day}/${sentAt.month}/${sentAt.year}  ${sentAt.hour}:${sentAt.minute.toString().padLeft(2, '0')}',
           },
         }),
-      ).timeout(const Duration(seconds: 6));
+      ).timeout(const Duration(seconds: 20));
 
       debugPrint('EmailJS response code: ${response.statusCode}, body: ${response.body}');
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw _SupportEmailException(response.statusCode, response.body);
+      }
     } catch (e) {
-      debugPrint('EmailJS send note: $e');
+      debugPrint('EmailJS support-message send failed: $e');
+      if (!mounted) return;
+
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_supportErrorMessage(e)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
     }
 
-    // Always show success view once request is processed
+    // EmailJS accepted the message, so it can now be shown as sent.
     if (mounted) {
       setState(() {
         _isSubmitting = false;
         _submitted = true;
       });
     }
+  }
+
+  String _supportErrorMessage(Object error) {
+    if (error is _SupportEmailException) {
+      final details = error.responseBody.trim();
+      return details.isEmpty
+          ? 'Email service rejected the message (error ${error.statusCode}).'
+          : 'Email service error ${error.statusCode}: $details';
+    }
+    if (error is TimeoutException) {
+      return 'The email service did not respond. Please try again.';
+    }
+    return 'Unable to reach the email service. Please try again.';
   }
 
   @override
@@ -538,4 +569,15 @@ class _ContactSupportScreenState extends State<ContactSupportScreen>
       ),
     );
   }
+}
+
+class _SupportEmailException implements Exception {
+  final int statusCode;
+  final String responseBody;
+
+  const _SupportEmailException(this.statusCode, this.responseBody);
+
+  @override
+  String toString() =>
+      'EmailJS returned HTTP $statusCode: $responseBody';
 }
