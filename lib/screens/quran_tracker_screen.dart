@@ -88,6 +88,8 @@ class HadithWazifa {
 
 class CustomWazifa {
   final String title;
+  final String? benefitBangla;
+  final String? benefitEnglish;
   final String? arabicText;
   final String? banglaPronunciation;
   final String? banglaTranslation;
@@ -95,6 +97,8 @@ class CustomWazifa {
 
   CustomWazifa({
     required this.title,
+    this.benefitBangla,
+    this.benefitEnglish,
     this.arabicText,
     this.banglaPronunciation,
     this.banglaTranslation,
@@ -103,6 +107,8 @@ class CustomWazifa {
 
   Map<String, dynamic> toJson() => {
     'title': title,
+    'benefitBangla': benefitBangla,
+    'benefitEnglish': benefitEnglish,
     'arabicText': arabicText,
     'banglaPronunciation': banglaPronunciation,
     'banglaTranslation': banglaTranslation,
@@ -111,6 +117,8 @@ class CustomWazifa {
 
   factory CustomWazifa.fromJson(Map<String, dynamic> json) => CustomWazifa(
     title: json['title'] as String,
+    benefitBangla: json['benefitBangla'] as String?,
+    benefitEnglish: json['benefitEnglish'] as String?,
     arabicText: json['arabicText'] as String?,
     banglaPronunciation: json['banglaPronunciation'] as String?,
     banglaTranslation: json['banglaTranslation'] as String?,
