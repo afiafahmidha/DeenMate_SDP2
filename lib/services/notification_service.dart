@@ -9,6 +9,7 @@ import 'package:timezone/timezone.dart' as tz;
 class PrayerNotificationAction {
   static const String prayed = 'prayed';
   static const String snooze = 'snooze';
+  static const String cancel = 'cancel';
 }
 
 /// Which kind of prayer notification fired.
@@ -82,7 +83,7 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
-  int _snoozeDurationMinutes = 15;
+  int _snoozeDurationMinutes = 20;
   bool _masterEnabled = true;
 
   final Map<String, bool> _categorySettings = {
@@ -117,6 +118,7 @@ class NotificationService {
       'Adhan alarm notifications for each daily prayer time';
 
   static const _categoryAlarm = 'prayer_alarm_actions';
+  static const _categoryInitial = 'prayer_alarm_initial_actions';
   static const _categoryNudge = 'prayer_nudge_actions';
 
   void Function(String prayerName, String action, String kind)? onPrayerAction;
@@ -137,11 +139,14 @@ class NotificationService {
           DarwinNotificationAction.plain(
             PrayerNotificationAction.prayed,
             'Prayed',
-            options: {DarwinNotificationActionOption.foreground},
           ),
           DarwinNotificationAction.plain(
             PrayerNotificationAction.snooze,
             'Snooze',
+          ),
+          DarwinNotificationAction.plain(
+            PrayerNotificationAction.cancel,
+            'Cancel',
           ),
         ],
         options: {
@@ -149,12 +154,18 @@ class NotificationService {
         },
       ),
       DarwinNotificationCategory(
+        _categoryInitial,
+        actions: [
+          DarwinNotificationAction.plain(PrayerNotificationAction.snooze, 'Snooze'),
+          DarwinNotificationAction.plain(PrayerNotificationAction.cancel, 'Cancel'),
+        ],
+      ),
+      DarwinNotificationCategory(
         _categoryNudge,
         actions: [
           DarwinNotificationAction.plain(
             PrayerNotificationAction.prayed,
             'Prayed',
-            options: {DarwinNotificationActionOption.foreground},
           ),
         ],
       ),
@@ -197,7 +208,7 @@ class NotificationService {
   Future<void> _loadPreferencesAndHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _snoozeDurationMinutes = prefs.getInt('snooze_duration_minutes') ?? 15;
+      _snoozeDurationMinutes = prefs.getInt('snooze_duration_minutes') ?? 20;
       _masterEnabled = prefs.getBool('master_notifications_enabled') ?? true;
 
       for (final cat in _categorySettings.keys) {
@@ -342,9 +353,13 @@ class NotificationService {
     if (payload == null) return;
 
     final parts = payload.split('|');
-    if (parts.length != 2) return;
+    if (parts.length < 2) return;
     final kind = parts[0];
     final prayerName = parts[1];
+    final phase = parts.length > 2 ? parts[2] : 'repeat';
+    final windowEnd = parts.length > 3
+        ? DateTime.fromMillisecondsSinceEpoch(int.tryParse(parts[3]) ?? 0)
+        : null;
 
     if (actionId == null) {
       return;
@@ -355,7 +370,12 @@ class NotificationService {
     );
 
     if (actionId == PrayerNotificationAction.snooze) {
-      snoozePrayerAlarm(prayerName: prayerName);
+      snoozePrayerAlarm(prayerName: prayerName, windowEndTime: windowEnd);
+    } else if (actionId == PrayerNotificationAction.prayed) {
+      _markPrayerCompleted(prayerName, windowEnd);
+      cancelPrayerAlarm(prayerName);
+    } else if (actionId == PrayerNotificationAction.cancel) {
+      cancelPrayerAlarm(prayerName);
     }
 
     onPrayerAction?.call(prayerName, actionId, kind);
@@ -369,10 +389,72 @@ class NotificationService {
 
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (actionId == PrayerNotificationAction.prayed) {
+        final parts = payload.split('|');
+        if (parts.length >= 2) {
+          final now = DateTime.now();
+          final ymd =
+              '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+          await prefs.setBool('completed_${ymd}_${parts[1]}', true);
+        }
+      } else if (actionId == PrayerNotificationAction.snooze) {
+        await _scheduleBackgroundSnooze(payload);
+      }
       final pending = prefs.getStringList('pending_background_notification_actions') ?? [];
       pending.add('$actionId|$payload');
       await prefs.setStringList('pending_background_notification_actions', pending);
     } catch (_) {}
+  }
+
+  @pragma('vm:entry-point')
+  static Future<void> _scheduleBackgroundSnooze(String payload) async {
+    final parts = payload.split('|');
+    if (parts.length < 4) return;
+    final prayerName = parts[1];
+    final end = DateTime.fromMillisecondsSinceEpoch(int.tryParse(parts[3]) ?? 0);
+    final next = DateTime.now().add(const Duration(minutes: 20));
+    if (!next.isBefore(end)) return;
+
+    tz.initializeTimeZones();
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.initialize(const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    ));
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        channelDescription: _channelDesc,
+        importance: Importance.max,
+        priority: Priority.max,
+        playSound: true,
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
+        actions: [
+          AndroidNotificationAction(PrayerNotificationAction.prayed, 'Prayed'),
+          AndroidNotificationAction(PrayerNotificationAction.snooze, 'Snooze'),
+        ],
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+        categoryIdentifier: _categoryAlarm,
+      ),
+    );
+    final id = _prayerIds[prayerName];
+    if (id == null) return;
+    await plugin.zonedSchedule(
+      id,
+      '$prayerName prayer time',
+      '$prayerName prayer reminder. Tap Prayed when complete.',
+      tz.TZDateTime.from(next, tz.local),
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: '${PrayerNotificationKind.alarm}|$prayerName|repeat|${end.millisecondsSinceEpoch}',
+    );
   }
 
   Future<void> drainPendingActions(
@@ -389,6 +471,33 @@ class NotificationService {
           final actionId = parts[0];
           final kind = parts[1];
           final prayerName = parts[2];
+          if (actionId == PrayerNotificationAction.snooze) {
+            await snoozePrayerAlarm(prayerName: prayerName);
+          } else if (actionId == PrayerNotificationAction.prayed) {
+            await _markPrayerCompleted(prayerName, null);
+            await cancelPrayerAlarm(prayerName);
+          } else if (actionId == PrayerNotificationAction.cancel) {
+            await cancelPrayerAlarm(prayerName);
+          }
+          handler(prayerName, actionId, kind);
+        } else if (parts.length >= 5) {
+          final actionId = parts[0];
+          final kind = parts[1];
+          final prayerName = parts[2];
+          final windowEnd = DateTime.fromMillisecondsSinceEpoch(
+            int.tryParse(parts[4]) ?? 0,
+          );
+          if (actionId == PrayerNotificationAction.snooze) {
+            await snoozePrayerAlarm(
+              prayerName: prayerName,
+              windowEndTime: windowEnd,
+            );
+          } else if (actionId == PrayerNotificationAction.prayed) {
+            await _markPrayerCompleted(prayerName, windowEnd);
+            await cancelPrayerAlarm(prayerName);
+          } else if (actionId == PrayerNotificationAction.cancel) {
+            await cancelPrayerAlarm(prayerName);
+          }
           handler(prayerName, actionId, kind);
         }
       }
@@ -400,18 +509,17 @@ class NotificationService {
   NotificationDetails _detailsFor({
     required String kind,
     required bool fullScreenIntent,
+    required String phase,
   }) {
-    final actions = const [
-      AndroidNotificationAction(
-        PrayerNotificationAction.prayed,
-        'Prayed',
-        showsUserInterface: true,
-      ),
-      AndroidNotificationAction(
-        PrayerNotificationAction.snooze,
-        'Snooze',
-      ),
-    ];
+    final actions = phase == 'initial'
+        ? const [
+            AndroidNotificationAction(PrayerNotificationAction.snooze, 'Snooze'),
+            AndroidNotificationAction(PrayerNotificationAction.cancel, 'Cancel'),
+          ]
+        : const [
+            AndroidNotificationAction(PrayerNotificationAction.prayed, 'Prayed'),
+            AndroidNotificationAction(PrayerNotificationAction.snooze, 'Snooze'),
+          ];
 
     final androidDetails = AndroidNotificationDetails(
       _channelId,
@@ -436,7 +544,9 @@ class NotificationService {
       presentSound: true,
       presentBadge: true,
       categoryIdentifier:
-          kind == PrayerNotificationKind.nudge ? _categoryNudge : _categoryAlarm,
+          kind == PrayerNotificationKind.nudge
+              ? _categoryNudge
+              : (phase == 'initial' ? _categoryInitial : _categoryAlarm),
     );
 
     return NotificationDetails(android: androidDetails, iOS: iosDetails);
@@ -445,6 +555,8 @@ class NotificationService {
   Future<void> schedulePrayerAlarm({
     required String prayerName,
     required DateTime scheduledTime,
+    DateTime? windowEndTime,
+    bool isSnoozed = false,
   }) async {
     if (!_initialized) await init();
     if (!isCategoryEnabled('prayers')) return;
@@ -457,23 +569,24 @@ class NotificationService {
     final tz.TZDateTime tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
     final arabicName = _arabicName(prayerName);
 
+    final phase = isSnoozed ? 'repeat' : 'initial';
+    final endMillis = (windowEndTime ??
+            scheduledTime.add(const Duration(hours: 2)))
+        .millisecondsSinceEpoch;
     await _plugin.zonedSchedule(
       id,
       '$arabicName • Time to Pray',
       '$prayerName prayer time has arrived. May Allah accept your prayers.',
       tzTime,
-      _detailsFor(kind: PrayerNotificationKind.alarm, fullScreenIntent: true),
+      _detailsFor(
+        kind: PrayerNotificationKind.alarm,
+        fullScreenIntent: true,
+        phase: phase,
+      ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      payload: '${PrayerNotificationKind.alarm}|$prayerName',
-    );
-
-    await addNotificationItem(
-      title: '$arabicName • Time to Pray',
-      body: '$prayerName prayer scheduled for ${_formatTime(scheduledTime)}',
-      category: 'prayers',
-      prayerName: prayerName,
+      payload: '${PrayerNotificationKind.alarm}|$prayerName|$phase|$endMillis',
     );
 
     debugPrint('[NotificationService] Scheduled $prayerName alarm at $tzTime');
@@ -482,20 +595,31 @@ class NotificationService {
   Future<void> snoozePrayerAlarm({
     required String prayerName,
     Duration? delay,
+    DateTime? windowEndTime,
   }) async {
     final effectiveDelay = delay ?? Duration(minutes: _snoozeDurationMinutes);
     final nextTime = DateTime.now().add(effectiveDelay);
+    final end = windowEndTime ?? nextTime.add(const Duration(hours: 2));
+    if (!nextTime.isBefore(end)) {
+      await cancelPrayerAlarm(prayerName);
+      return;
+    }
     await schedulePrayerAlarm(
       prayerName: prayerName,
       scheduledTime: nextTime,
+      windowEndTime: end,
+      isSnoozed: true,
     );
 
-    await addNotificationItem(
-      title: '$prayerName Snoozed',
-      body: 'Alarm snoozed for ${_snoozeDurationMinutes} minutes.',
-      category: 'prayers',
-      prayerName: prayerName,
-    );
+  }
+
+  Future<void> _markPrayerCompleted(
+      String prayerName, DateTime? windowEndTime) async {
+    final now = DateTime.now();
+    final ymd =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('completed_${ymd}_$prayerName', true);
   }
 
   Future<void> scheduleEndOfWindowNudge({
@@ -520,7 +644,11 @@ class NotificationService {
       'Did you pray $prayerName?',
       "$prayerName's window is closing soon — tap to log it.",
       tzTime,
-      _detailsFor(kind: PrayerNotificationKind.nudge, fullScreenIntent: false),
+      _detailsFor(
+        kind: PrayerNotificationKind.nudge,
+        fullScreenIntent: false,
+        phase: 'repeat',
+      ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,

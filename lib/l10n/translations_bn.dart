@@ -1,6 +1,6 @@
 const Map<String, String> bnTranslations = {
   // App
-  'app_name': 'দীনমেট',
+  'app_name': 'DeenMate',
   'app_subtitle': 'আপনার AI-চালিত ইসলামিক জীবনযাপন সঙ্গী',
 
   // Dashboard
@@ -9,7 +9,7 @@ const Map<String, String> bnTranslations = {
   'prayer': 'নামাজ',
   'calendar': ' ক্যালেন্ডার',
   'assistant': 'সহায়ক',
-  'profile': 'প্রোফাইল',
+  'profile': 'প্রোফাইল',  
   'next_prayer': 'পরবর্তী নামাজ',
   'today': 'আজ',
   'islamic_wealth': 'ইসলামিক সম্পদ',
