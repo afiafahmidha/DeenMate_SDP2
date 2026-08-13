@@ -602,6 +602,7 @@ Future<void> _onPositionUpdate(Position position) async {
   void _openNotificationCenter() {
     NotificationCenterModal.show(
       context,
+      isDarkMode: _isDarkMode,
       onPrayed: (prayerName) async {
         setState(() {
           _salatCompleted[prayerName] = true;
