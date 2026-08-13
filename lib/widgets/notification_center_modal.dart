@@ -6,12 +6,14 @@ class NotificationCenterModal extends StatefulWidget {
   final Function(String prayerName)? onPrayed;
   final Function(String prayerName)? onSnooze;
   final Function(NotificationItem item)? onNotificationTap;
+  final bool? isDarkMode;
 
   const NotificationCenterModal({
     super.key,
     this.onPrayed,
     this.onSnooze,
     this.onNotificationTap,
+    this.isDarkMode,
   });
 
   static Future<void> show(
@@ -19,6 +21,7 @@ class NotificationCenterModal extends StatefulWidget {
     Function(String prayerName)? onPrayed,
     Function(String prayerName)? onSnooze,
     Function(NotificationItem item)? onNotificationTap,
+    bool? isDarkMode,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -29,6 +32,7 @@ class NotificationCenterModal extends StatefulWidget {
         onPrayed: onPrayed,
         onSnooze: onSnooze,
         onNotificationTap: onNotificationTap,
+        isDarkMode: isDarkMode,
       ),
     );
   }
@@ -109,9 +113,11 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = widget.isDarkMode ??
+        Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = isDark ? Colors.white : const Color(0xFF1D3557);
+    final dividerColor = isDark ? Colors.white12 : Colors.black12;
 
     final history = NotificationService.instance.history;
     final filteredItems = _selectedCategory == 'all'
@@ -248,7 +254,7 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
             ),
           ),
 
-          const Divider(height: 16),
+          Divider(height: 16, color: dividerColor),
 
           // Permission warning banner if permission is missing
           if (!_hasPermission)
@@ -265,7 +271,7 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
                   Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
+                      child: Text(
                       'Notifications disabled in phone settings.',
                       style: GoogleFonts.inter(
                         fontSize: 12,
@@ -286,7 +292,7 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: Colors.amber.shade900,
+                        color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
                       ),
                     ),
                   ),
@@ -322,14 +328,24 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
                                         : FontWeight.normal,
                                     color: selected
                                         ? Colors.white
-                                        : textColor.withValues(alpha: 0.8),
+                                        : isDark
+                                            ? Colors.white70
+                                            : textColor.withValues(alpha: 0.8),
                                   ),
                                 ),
                                 selected: selected,
-                                selectedColor: const Color(0xFF1D3557),
-                                backgroundColor: isDark
-                                    ? Colors.white.withValues(alpha: 0.08)
-                                    : Colors.black.withValues(alpha: 0.05),
+                                // Set colors per state because the app's
+                                // light Material theme can override the
+                                // default ChoiceChip background color.
+                                color: WidgetStateProperty.resolveWith((states) {
+                                  if (states.contains(WidgetState.selected)) {
+                                    return const Color(0xFF1D3557);
+                                  }
+                                  return isDark
+                                      ? const Color(0xFF303030)
+                                      : Colors.black.withValues(alpha: 0.05);
+                                }),
+                                surfaceTintColor: Colors.transparent,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20),
                                   side: BorderSide(
@@ -649,14 +665,14 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
             ),
           ),
           value: service.masterEnabled,
-          activeColor: const Color(0xFF1D3557),
+          activeColor: isDark ? const Color(0xFF80CBC4) : const Color(0xFF1D3557),
           onChanged: (val) async {
             await service.setMasterEnabled(val);
             setState(() {});
           },
         ),
 
-        const Divider(height: 24),
+        Divider(height: 24, color: isDark ? Colors.white12 : Colors.black12),
 
         // Snooze Duration Selector
         Text(
@@ -683,9 +699,23 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
             return ChoiceChip(
               label: Text('$mins minutes'),
               selected: isSelected,
-              selectedColor: const Color(0xFF1D3557),
+              // Use explicit state colors: the app's global light theme can
+              // otherwise force a pale surface under the dark-mode text.
+              color: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return const Color(0xFF1D3557);
+                }
+                return isDark
+                    ? const Color(0xFF303030)
+                    : Colors.black.withValues(alpha: 0.05);
+              }),
+              surfaceTintColor: Colors.transparent,
               labelStyle: GoogleFonts.inter(
-                color: isSelected ? Colors.white : textColor,
+                color: isSelected
+                    ? Colors.white
+                    : isDark
+                        ? Colors.white70
+                        : textColor,
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
@@ -699,7 +729,7 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
           }).toList(),
         ),
 
-        const Divider(height: 28),
+        Divider(height: 28, color: isDark ? Colors.white12 : Colors.black12),
 
         // Feature Categories
         Text(
@@ -712,12 +742,12 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
         ),
         const SizedBox(height: 8),
 
-        _buildCategorySwitch('prayers', 'Prayer Adhan Alarms', service, textColor),
-        _buildCategorySwitch('dhikr', 'Dhikr & Tasbih Reminders', service, textColor),
-        _buildCategorySwitch('zakat', 'Zakat & Nisab Alerts', service, textColor),
-        _buildCategorySwitch('quran', 'Daily Quran Streaks', service, textColor),
-        _buildCategorySwitch('events', 'Islamic Event Calendar', service, textColor),
-        _buildCategorySwitch('sos', 'Emergency SOS Alerts', service, textColor),
+        _buildCategorySwitch('prayers', 'Prayer Adhan Alarms', service, textColor, isDark),
+        _buildCategorySwitch('dhikr', 'Dhikr & Tasbih Reminders', service, textColor, isDark),
+        _buildCategorySwitch('zakat', 'Zakat & Nisab Alerts', service, textColor, isDark),
+        _buildCategorySwitch('quran', 'Daily Quran Streaks', service, textColor, isDark),
+        _buildCategorySwitch('events', 'Islamic Event Calendar', service, textColor, isDark),
+        _buildCategorySwitch('sos', 'Emergency SOS Alerts', service, textColor, isDark),
       ],
     );
   }
@@ -727,6 +757,7 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
     String label,
     NotificationService service,
     Color textColor,
+    bool isDark,
   ) {
     return SwitchListTile(
       dense: true,
@@ -735,7 +766,7 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
         style: GoogleFonts.inter(fontSize: 13, color: textColor),
       ),
       value: service.isCategoryEnabled(key),
-      activeColor: const Color(0xFF1D3557),
+      activeColor: isDark ? const Color(0xFF80CBC4) : const Color(0xFF1D3557),
       onChanged: (val) async {
         await service.setCategoryEnabled(key, val);
         setState(() {});

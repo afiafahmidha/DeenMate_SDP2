@@ -1641,7 +1641,7 @@ class _CalendarTabState extends State<CalendarTab> {
                       fontSize: 9.5,
                       fontWeight: FontWeight.w600,
                       color: isSelected
-                          ? AppColors.dustyBlueTeal
+                          ? Colors.white
                           : _secondaryTextColor(context),
                     ),
                   ),

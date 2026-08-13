@@ -218,7 +218,10 @@ class _ProfileTabState extends State<ProfileTab> {
                         ),
                         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
                         onTap: () {
-                          NotificationCenterModal.show(context);
+                          NotificationCenterModal.show(
+                            context,
+                            isDarkMode: widget.isDarkMode,
+                          );
                         },
                       ),
                     ],

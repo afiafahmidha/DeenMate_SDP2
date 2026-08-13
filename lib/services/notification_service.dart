@@ -396,9 +396,15 @@ class NotificationService {
           final ymd =
               '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
           await prefs.setBool('completed_${ymd}_${parts[1]}', true);
+          await _cancelBackgroundPrayerAlarm(parts[1]);
         }
       } else if (actionId == PrayerNotificationAction.snooze) {
         await _scheduleBackgroundSnooze(payload);
+      } else if (actionId == PrayerNotificationAction.cancel) {
+        final parts = payload.split('|');
+        if (parts.length >= 2) {
+          await _cancelBackgroundPrayerAlarm(parts[1]);
+        }
       }
       final pending = prefs.getStringList('pending_background_notification_actions') ?? [];
       pending.add('$actionId|$payload');
@@ -412,7 +418,9 @@ class NotificationService {
     if (parts.length < 4) return;
     final prayerName = parts[1];
     final end = DateTime.fromMillisecondsSinceEpoch(int.tryParse(parts[3]) ?? 0);
-    final next = DateTime.now().add(const Duration(minutes: 20));
+    final prefs = await SharedPreferences.getInstance();
+    final snoozeMinutes = prefs.getInt('snooze_duration_minutes') ?? 20;
+    final next = DateTime.now().add(Duration(minutes: snoozeMinutes));
     if (!next.isBefore(end)) return;
 
     tz.initializeTimeZones();
@@ -457,6 +465,20 @@ class NotificationService {
     );
   }
 
+  @pragma('vm:entry-point')
+  static Future<void> _cancelBackgroundPrayerAlarm(String prayerName) async {
+    final id = _prayerIds[prayerName];
+    if (id == null) return;
+
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.initialize(const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    ));
+    await plugin.cancel(id);
+    await plugin.cancel(id + _nudgeIdOffset);
+  }
+
   Future<void> drainPendingActions(
       Function(String prayerName, String action, String kind) handler) async {
     try {
@@ -471,33 +493,15 @@ class NotificationService {
           final actionId = parts[0];
           final kind = parts[1];
           final prayerName = parts[2];
-          if (actionId == PrayerNotificationAction.snooze) {
-            await snoozePrayerAlarm(prayerName: prayerName);
-          } else if (actionId == PrayerNotificationAction.prayed) {
-            await _markPrayerCompleted(prayerName, null);
-            await cancelPrayerAlarm(prayerName);
-          } else if (actionId == PrayerNotificationAction.cancel) {
-            await cancelPrayerAlarm(prayerName);
-          }
+          // The background callback has already completed the action. This
+          // only informs the visible dashboard without resetting a snooze.
           handler(prayerName, actionId, kind);
         } else if (parts.length >= 5) {
           final actionId = parts[0];
           final kind = parts[1];
           final prayerName = parts[2];
-          final windowEnd = DateTime.fromMillisecondsSinceEpoch(
-            int.tryParse(parts[4]) ?? 0,
-          );
-          if (actionId == PrayerNotificationAction.snooze) {
-            await snoozePrayerAlarm(
-              prayerName: prayerName,
-              windowEndTime: windowEnd,
-            );
-          } else if (actionId == PrayerNotificationAction.prayed) {
-            await _markPrayerCompleted(prayerName, windowEnd);
-            await cancelPrayerAlarm(prayerName);
-          } else if (actionId == PrayerNotificationAction.cancel) {
-            await cancelPrayerAlarm(prayerName);
-          }
+          // The background callback has already completed the action. This
+          // only informs the visible dashboard without resetting a snooze.
           handler(prayerName, actionId, kind);
         }
       }
