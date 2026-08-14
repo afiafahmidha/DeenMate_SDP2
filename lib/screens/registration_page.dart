@@ -60,80 +60,65 @@ class _RegistrationPageState extends State<RegistrationPage> {
   // ============================================================
   // 🔥 FIREBASE EMAIL/PASSWORD REGISTRATION
   // ============================================================
- Future<void> _registerWithEmailAndPassword() async {
+Future<void> _registerWithEmailAndPassword() async {
   if (_isLoading) return;
 
   // Validate passwords match
   if (passwordController.text != confirmPasswordController.text) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context)!
-                .tr('passwords_do_not_match'),
-          ),
-          backgroundColor: Colors.red,
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          AppLocalizations.of(context)!.tr('passwords_do_not_match'),
         ),
-      );
-    }
-    return;
-  }
-
-  // Validate form
-  if (!_formKey.currentState!.validate()) {
+        backgroundColor: Colors.red,
+      ),
+    );
     return;
   }
 
   setState(() => _isLoading = true);
 
   try {
-    // ============================================================
-    // 1. CREATE FIREBASE AUTH USER
-    // ============================================================
+    // 1. Create Firebase Authentication account
     final userCredential =
         await FirebaseAuth.instance.createUserWithEmailAndPassword(
       email: emailController.text.trim(),
       password: passwordController.text,
     );
 
-    final User? user = userCredential.user;
+    final user = userCredential.user;
 
     if (user == null) {
       throw Exception('User creation failed.');
     }
 
-    // ============================================================
-    // 2. UPDATE FIREBASE AUTH DISPLAY NAME
-    // ============================================================
-    await user.updateDisplayName(
-      nameController.text.trim(),
-    );
+    // 2. Update Firebase Auth display name
+    final fullName = nameController.text.trim();
 
-    // ============================================================
-    // 3. SAVE USER PROFILE TO FIRESTORE
-    // ============================================================
+    await user.updateDisplayName(fullName);
+
+    // 3. Create user's profile in Cloud Firestore
     await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
+        .collection('profile')
+        .doc('data')
         .set({
-      'uid': user.uid,
-      'name': nameController.text.trim(),
+      'fullName': fullName,
       'email': emailController.text.trim(),
-      'phone': phoneController.text.trim(),
-      'language': selectedLanguage,
+      'phone': null,
+      'address': null,
+      'avatarPath': null,
+      'language': 'en',
+      'darkMode': false,
       'createdAt': FieldValue.serverTimestamp(),
-      'emailVerified': false,
-      'authProvider': 'email',
+      'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    // ============================================================
-    // 4. SEND EMAIL VERIFICATION
-    // ============================================================
+    // 4. Send email verification
     await user.sendEmailVerification();
 
-    // ============================================================
-    // 5. GO TO EMAIL VERIFICATION SCREEN
-    // ============================================================
+    // 5. Go to email verification screen
     if (mounted) {
       widget.onRegisterSuccess();
     }
@@ -157,11 +142,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
             AppLocalizations.of(context)!.tr('password_too_weak');
         break;
 
-      case 'network-request-failed':
-        message =
-            'Network error. Please check your internet connection.';
-        break;
-
       default:
         message = e.message ??
             '${AppLocalizations.of(context)!.tr('registration_failed')}.';
@@ -172,35 +152,16 @@ class _RegistrationPageState extends State<RegistrationPage> {
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    }
-  } on FirebaseException catch (e) {
-    // Firestore error
-    debugPrint('Firestore error: ${e.code}');
-    debugPrint('Firestore message: ${e.message}');
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Account created, but profile could not be saved.',
-          ),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
   } catch (e) {
-    debugPrint('Registration error: $e');
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            AppLocalizations.of(context)!
-                .tr('unexpected_error'),
+            AppLocalizations.of(context)!.tr('unexpected_error'),
           ),
           backgroundColor: Colors.red,
         ),
