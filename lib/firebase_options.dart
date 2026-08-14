@@ -70,6 +70,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '938877453735',
     projectId: 'deenmate-be588',
     storageBucket: 'deenmate-be588.firebasestorage.app',
+    androidClientId: '938877453735-02b9bu30jf6vtnam6otatevc63jb9au8.apps.googleusercontent.com',
     iosClientId: '938877453735-6ebilga7itu3mp9na7n952h5lgrlkbhm.apps.googleusercontent.com',
     iosBundleId: 'com.example.deenmateSdp2',
   );
