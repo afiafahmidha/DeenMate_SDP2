@@ -11,7 +11,7 @@ import 'services/language_service.dart';
 import 'services/notification_service.dart';
 import 'l10n/app_localizations.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await LanguageService.loadLanguagePreference();
