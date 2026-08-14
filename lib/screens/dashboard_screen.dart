@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,6 +28,8 @@ import 'profile_tab.dart';
 import 'halal_scanner/halal_scanner_home.dart';
 import 'prayer_tab.dart'; // Extracted Prayer tab widget
 import 'salat_guide_screen.dart'; // Salat rules, illustrated steps & rakat guide
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -42,6 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   int _currentIndex = 0; // Bottom navigation tab
   bool _isDarkMode = false; // Global Dark Mode state for the app
+  String _userName = 'User';
 
 
   // Animation controllers
@@ -125,7 +128,45 @@ class _DashboardScreenState extends State<DashboardScreen>
   ];
 
 
+Future<void> _loadUserProfile() async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
 
+    if (user == null) {
+      debugPrint('No logged-in user found.');
+      return;
+    }
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    if (!doc.exists) {
+      debugPrint('User document does not exist.');
+      return;
+    }
+
+    final data = doc.data();
+
+    if (data == null) return;
+
+    final profile = data['profile'] as Map<String, dynamic>?;
+
+    if (!mounted) return;
+
+    setState(() {
+      _userName =
+          (profile?['fullName'] as String?)?.trim().isNotEmpty == true
+              ? profile!['fullName'] as String
+              : (user.displayName?.trim().isNotEmpty == true
+                  ? user.displayName!
+                  : 'User');
+    });
+  } catch (e) {
+    debugPrint('Error loading user profile: $e');
+  }
+}
   // Load manual Qaza counts from SharedPreferences
   Future<void> _loadQazaCounts() async {
     try {
@@ -241,6 +282,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   void initState() {
     super.initState();
     _loadAppTheme();
+    _loadUserProfile();
 
     _staggerController = AnimationController(
       vsync: this,
