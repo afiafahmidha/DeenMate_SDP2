@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../widgets/auth_header.dart';
 import '../l10n/app_localizations.dart';
@@ -59,82 +60,158 @@ class _RegistrationPageState extends State<RegistrationPage> {
   // ============================================================
   // 🔥 FIREBASE EMAIL/PASSWORD REGISTRATION
   // ============================================================
-  Future<void> _registerWithEmailAndPassword() async {
-    if (_isLoading) return;
+ Future<void> _registerWithEmailAndPassword() async {
+  if (_isLoading) return;
 
-    // Validate passwords match
-    if (passwordController.text != confirmPasswordController.text) {
+  // Validate passwords match
+  if (passwordController.text != confirmPasswordController.text) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppLocalizations.of(context)!.tr('passwords_do_not_match')),
+          content: Text(
+            AppLocalizations.of(context)!
+                .tr('passwords_do_not_match'),
+          ),
           backgroundColor: Colors.red,
         ),
       );
-      return;
     }
-
-    setState(() => _isLoading = true);
-
-    try {
-      // 1. Create user with email/password
-      final userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-            email: emailController.text.trim(),
-            password: passwordController.text,
-          );
-
-      // 2. Update display name
-      await userCredential.user?.updateDisplayName(nameController.text.trim());
-
-      // 3. Send verification email immediately ✅
-      await userCredential.user?.sendEmailVerification();
-
-      // 4. Go to email verification screen (NOT dashboard)
-      if (mounted) {
-        widget.onRegisterSuccess();
-      }
-    } on FirebaseAuthException catch (e) {
-      String message = AppLocalizations.of(context)!.tr('registration_failed');
-
-      switch (e.code) {
-        case 'email-already-in-use':
-          message = AppLocalizations.of(context)!.tr('email_already_in_use');
-          break;
-        case 'invalid-email':
-          message = AppLocalizations.of(context)!.tr('invalid_email');
-          break;
-        case 'weak-password':
-          message = AppLocalizations.of(context)!.tr('password_too_weak');
-          break;
-        default:
-          message = e.message ?? AppLocalizations.of(context)!.tr('registration_failed') + '.';
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.tr('unexpected_error')),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+    return;
   }
 
+  // Validate form
+  if (!_formKey.currentState!.validate()) {
+    return;
+  }
+
+  setState(() => _isLoading = true);
+
+  try {
+    // ============================================================
+    // 1. CREATE FIREBASE AUTH USER
+    // ============================================================
+    final userCredential =
+        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      email: emailController.text.trim(),
+      password: passwordController.text,
+    );
+
+    final User? user = userCredential.user;
+
+    if (user == null) {
+      throw Exception('User creation failed.');
+    }
+
+    // ============================================================
+    // 2. UPDATE FIREBASE AUTH DISPLAY NAME
+    // ============================================================
+    await user.updateDisplayName(
+      nameController.text.trim(),
+    );
+
+    // ============================================================
+    // 3. SAVE USER PROFILE TO FIRESTORE
+    // ============================================================
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .set({
+      'uid': user.uid,
+      'name': nameController.text.trim(),
+      'email': emailController.text.trim(),
+      'phone': phoneController.text.trim(),
+      'language': selectedLanguage,
+      'createdAt': FieldValue.serverTimestamp(),
+      'emailVerified': false,
+      'authProvider': 'email',
+    });
+
+    // ============================================================
+    // 4. SEND EMAIL VERIFICATION
+    // ============================================================
+    await user.sendEmailVerification();
+
+    // ============================================================
+    // 5. GO TO EMAIL VERIFICATION SCREEN
+    // ============================================================
+    if (mounted) {
+      widget.onRegisterSuccess();
+    }
+  } on FirebaseAuthException catch (e) {
+    String message =
+        AppLocalizations.of(context)!.tr('registration_failed');
+
+    switch (e.code) {
+      case 'email-already-in-use':
+        message =
+            AppLocalizations.of(context)!.tr('email_already_in_use');
+        break;
+
+      case 'invalid-email':
+        message =
+            AppLocalizations.of(context)!.tr('invalid_email');
+        break;
+
+      case 'weak-password':
+        message =
+            AppLocalizations.of(context)!.tr('password_too_weak');
+        break;
+
+      case 'network-request-failed':
+        message =
+            'Network error. Please check your internet connection.';
+        break;
+
+      default:
+        message = e.message ??
+            '${AppLocalizations.of(context)!.tr('registration_failed')}.';
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  } on FirebaseException catch (e) {
+    // Firestore error
+    debugPrint('Firestore error: ${e.code}');
+    debugPrint('Firestore message: ${e.message}');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Account created, but profile could not be saved.',
+          ),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  } catch (e) {
+    debugPrint('Registration error: $e');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)!
+                .tr('unexpected_error'),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+}
   // ============================================================
   // 🔥 FIREBASE GOOGLE SIGN-IN (for Registration)
   // ============================================================
