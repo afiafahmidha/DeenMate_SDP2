@@ -14,8 +14,15 @@ service cloud.firestore {
       match /members/{memberId} {
         allow read: if request.auth != null
           && exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid));
-        allow create, update, delete: if request.auth != null
-          && request.auth.uid == memberId;
+        allow create: if request.auth != null && request.auth.uid == memberId;
+        // A member can update only their own presence fields. The owner can
+        // remove a member but cannot impersonate or edit them.
+        allow update: if request.auth != null
+          && request.auth.uid == memberId
+          && request.resource.data.isLeader == resource.data.isLeader;
+        allow delete: if request.auth != null
+          && (request.auth.uid == memberId
+            || get(/databases/$(database)/documents/emergencyGroups/$(groupCode)).data.leaderId == request.auth.uid);
       }
     }
   }
