@@ -67,6 +67,23 @@ class EmergencyGroupService {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+  /// Owner-only in the UI; enforce the same ownership check in Firestore rules.
+  Future<void> updateRadarRadius({
+    required String code,
+    required double rangeMeters,
+  }) =>
+      _groups.doc(code).update({
+        'rangeMeters': rangeMeters,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+  /// Owner-only in the UI; enforce the same ownership check in Firestore rules.
+  Future<void> removeMember({
+    required String code,
+    required String memberId,
+  }) =>
+      _groups.doc(code).collection('members').doc(memberId).delete();
+
   Stream<List<Map<String, dynamic>>> members(String code) => _groups
       .doc(code)
       .collection('members')
