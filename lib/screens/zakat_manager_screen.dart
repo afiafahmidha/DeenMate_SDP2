@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -4039,7 +4039,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                               ? DateFormat('d MMM yyyy').format(_haulStartDate!)
                               : 'Not set (tap Set Date)',
                           style: GoogleFonts.poppins(
-                              fontSize: 13,
+                              fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: _haulStartDate != null
                                   ? (_isDarkMode ? Colors.white : AppColors.navyBlue)
