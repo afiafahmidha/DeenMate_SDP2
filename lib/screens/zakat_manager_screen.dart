@@ -26,6 +26,7 @@ class ZakatPayment {
   final DateTime date;
   final String note;
   final String? animalDescription;
+  final String obligationType; // 'haul', 'crops', 'minerals', 'rikaz'
 
   ZakatPayment({
     required this.id,
@@ -36,6 +37,7 @@ class ZakatPayment {
     required this.date,
     required this.note,
     this.animalDescription,
+    this.obligationType = 'haul',
   });
 
   Map<String, dynamic> toJson() => {
@@ -47,6 +49,7 @@ class ZakatPayment {
         'date': date.toIso8601String(),
         'note': note,
         'animalDescription': animalDescription,
+        'obligationType': obligationType,
       };
 
   factory ZakatPayment.fromJson(Map<String, dynamic> j) => ZakatPayment(
@@ -58,6 +61,7 @@ class ZakatPayment {
         date: DateTime.parse(j['date'] as String),
         note: j['note'] as String? ?? '',
         animalDescription: j['animalDescription'] as String?,
+        obligationType: j['obligationType'] as String? ?? 'haul',
       );
 }
 
@@ -91,6 +95,42 @@ class ZakatYearSnapshot {
         zakatDue: (j['zakatDue'] as num).toDouble(),
         zakatPaid: (j['zakatPaid'] as num).toDouble(),
         livestockZakat: j['livestockZakat'] as String?,
+      );
+}
+
+class HaulCycle {
+  final int cycleNumber;
+  final DateTime startDate;
+  final DateTime endDate;
+  final double wealthAtCompletion;
+  final double lockedZakat;
+  final String? lockedLivestockSummary;
+
+  HaulCycle({
+    required this.cycleNumber,
+    required this.startDate,
+    required this.endDate,
+    required this.wealthAtCompletion,
+    required this.lockedZakat,
+    this.lockedLivestockSummary,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'cycleNumber': cycleNumber,
+        'startDate': startDate.toIso8601String(),
+        'endDate': endDate.toIso8601String(),
+        'wealthAtCompletion': wealthAtCompletion,
+        'lockedZakat': lockedZakat,
+        'lockedLivestockSummary': lockedLivestockSummary,
+      };
+
+  factory HaulCycle.fromJson(Map<String, dynamic> j) => HaulCycle(
+        cycleNumber: j['cycleNumber'] as int? ?? 1,
+        startDate: DateTime.parse(j['startDate'] as String),
+        endDate: DateTime.parse(j['endDate'] as String),
+        wealthAtCompletion: (j['wealthAtCompletion'] as num).toDouble(),
+        lockedZakat: (j['lockedZakat'] as num).toDouble(),
+        lockedLivestockSummary: j['lockedLivestockSummary'] as String?,
       );
 }
 
@@ -350,6 +390,12 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     return '${_currency.symbol} ${value.toStringAsFixed(0)}';
   }
 
+  static const _monthNames = [
+    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  String _monthName(int month) => _monthNames[month];
+
   // ── Nisab ────────────────────────────────────────────────────
   String _nisabStandard = 'gold'; // 'gold' or 'silver'
   double get _effectiveGoldPrice => _manualOverridePrices
@@ -379,12 +425,47 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   final _receivableCtrl = TextEditingController(text: '0');
   final _liabilitiesCtrl = TextEditingController(text: '0');
 
+  // ── Agricultural Zakat (Ushr) ─────────────────────────────
+  final _cropsHarvestKgCtrl  = TextEditingController(text: '0');
+  final _cropsPricePerKgCtrl = TextEditingController(text: '0');
+  bool _cropsRainFed = true;   // true = 10% (rain-fed), false = 5% (irrigated)
+  double _cropsZakatDue = 0.0;
+
+  // ── Mineral Zakat (Ma'adin) ───────────────────────────────
+  final _mineralsValueCtrl = TextEditingController(text: '0');
+  double _mineralsZakatDue = 0.0;
+
+  // ── Rikaz (Buried Treasure) ───────────────────────────────
+  final _rikazValueCtrl = TextEditingController(text: '0');
+  double _rikazZakatDue = 0.0;
+
+  // ── Rental Income ─────────────────────────────────────────
+  final _rentalGrossCtrl = TextEditingController(text: '0');
+
   double _totalWealth = 0.0;
   double _zakatDue = 0.0;
+  double _zakatEstimate = 0.0;
+  // Locked when haul completes — persists until next cycle is started
+  double? _completedHaulWealthZakat;
+  String? _completedHaulLivestockSummary;
+
+  String get _lockedLivestockSummary {
+    if (_completedHaulLivestockSummary != null && _completedHaulLivestockSummary!.isNotEmpty) {
+      return _completedHaulLivestockSummary!;
+    }
+    if (_haulCycles.isNotEmpty) {
+      return _haulCycles.last.lockedLivestockSummary ?? '';
+    }
+    return '';
+  }
+
+  // Record of all completed haul cycles
+  List<HaulCycle> _haulCycles = [];
+  // Current cycle number (1-based)
+  int _currentHaulCycleNumber = 1;
 
   bool get _isEligible => _totalWealth >= _nisabBDT && _nisabBDT > 0;
   bool get _isHaulCompleted => _haulElapsedDays >= 354;
-  bool get _isZakatObligated => _isEligible && _isHaulCompleted;
   int get _haulElapsedDays =>
       _haulStartDate != null ? DateTime.now().difference(_haulStartDate!).inDays : 0;
 
@@ -413,10 +494,31 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       _fitraMembers * _fitraWeightPerHead * _fitraRatePerKg * _toBDT;
 
   // ── Payments ─────────────────────────────────────────────────
+  double get _activeZakatDue {
+    if (_completedHaulWealthZakat != null) return _completedHaulWealthZakat!;
+    if (_haulCycles.isNotEmpty) {
+      final last = _haulCycles.last;
+      return last.lockedZakat > 0
+          ? last.lockedZakat
+          : (last.wealthAtCompletion > 0 ? last.wealthAtCompletion * 0.025 : 0.0);
+    }
+    return (_totalWealth >= _nisabBDT && _nisabBDT > 0) ? _totalWealth * 0.025 : 0.0;
+  }
+
   List<ZakatPayment> _payments = [];
-  double get _totalPaid =>
-      _payments.fold(0.0, (s, p) => s + (p.amount * _currencyRate(p.currency)));
-  double get _stillOwed => (_zakatDue - _totalPaid).clamp(0.0, double.infinity);
+
+  // Only monetary haul-type payments count against monetary Haul Zakat (NOT animal payments, fitra, crops, minerals, rikaz)
+  double get _totalPaid => _payments
+      .where((p) => p.obligationType == 'haul' && (p.animalDescription == null || p.animalDescription!.isEmpty))
+      .fold(0.0, (s, p) => s + (p.amount * _currencyRate(p.currency)));
+  double get _stillOwed => (_activeZakatDue - _totalPaid).clamp(0.0, double.infinity);
+
+  // Immediate zakat (crops/minerals/rikaz) is tracked completely separately
+  double get _immediatePaid => _payments
+      .where((p) => p.obligationType == 'crops' || p.obligationType == 'minerals' || p.obligationType == 'rikaz')
+      .fold(0.0, (s, p) => s + (p.amount * _currencyRate(p.currency)));
+  double get _immediateStillOwed => (_cropsZakatDue + _mineralsZakatDue + _rikazZakatDue).clamp(0.0, double.infinity);
+  double get _immediateTotalDue => _immediateStillOwed + _immediatePaid;
 
   double get _fitraPaid =>
       _fitraPayments.fold(0.0, (s, p) => s + (p.amount * _currencyRate(p.currency)));
@@ -490,6 +592,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       _camelValueCtrl,
       _cattleValueCtrl,
       _sheepValueCtrl,
+      _cropsHarvestKgCtrl,
+      _cropsPricePerKgCtrl,
+      _mineralsValueCtrl,
+      _rikazValueCtrl,
+      _rentalGrossCtrl,
     ]) {
       c.addListener(_onWealthChanged);
     }
@@ -516,6 +623,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       _camelValueCtrl,
       _cattleValueCtrl,
       _sheepValueCtrl,
+      _cropsHarvestKgCtrl,
+      _cropsPricePerKgCtrl,
+      _mineralsValueCtrl,
+      _rikazValueCtrl,
+      _rentalGrossCtrl,
     ]) {
       c.dispose();
     }
@@ -593,8 +705,21 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     final histJson = p.getString('zm_history');
     if (histJson != null) {
       final list = json.decode(histJson) as List<dynamic>;
-      _history =
-          list.map((e) => ZakatYearSnapshot.fromJson(e as Map<String, dynamic>)).toList();
+      _history = list
+          .map((e) => ZakatYearSnapshot.fromJson(e as Map<String, dynamic>))
+          .map((s) {
+            if (s.zakatDue == 0 && s.wealth > 0) {
+              return ZakatYearSnapshot(
+                year: s.year,
+                wealth: s.wealth,
+                zakatDue: s.wealth * 0.025,
+                zakatPaid: s.zakatPaid,
+                livestockZakat: s.livestockZakat,
+              );
+            }
+            return s;
+          })
+          .toList();
     }
 
     // Livestock
@@ -619,12 +744,44 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           .toList();
     }
 
+    // Agricultural / Minerals / Rikaz / Rental
+    _cropsHarvestKgCtrl.text  = p.getString('zm_crops_kg') ?? '0';
+    _cropsPricePerKgCtrl.text = p.getString('zm_crops_price') ?? '0';
+    _cropsRainFed             = p.getBool('zm_crops_rainfed') ?? true;
+    _mineralsValueCtrl.text   = p.getString('zm_minerals_val') ?? '0';
+    _rikazValueCtrl.text      = p.getString('zm_rikaz_val') ?? '0';
+    _rentalGrossCtrl.text     = p.getString('zm_rental_gross') ?? '0';
+
+    _completedHaulWealthZakat = p.getDouble('zm_completed_haul_wealth_zakat');
+    _completedHaulLivestockSummary = p.getString('zm_completed_haul_livestock_summary');
+
+    // Haul cycle history
+    final haulCyclesStr = p.getString('zm_haul_cycles');
+    if (haulCyclesStr != null) {
+      final decoded = json.decode(haulCyclesStr) as List<dynamic>;
+      _haulCycles = decoded.map((e) => HaulCycle.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    _currentHaulCycleNumber = p.getInt('zm_current_haul_cycle_num') ?? 1;
+
+    _checkAutoRollover();
     setState(() {});
     _recalculate();
   }
 
   Future<void> _savePrefs() async {
     final p = await SharedPreferences.getInstance();
+
+    if (_completedHaulWealthZakat != null) {
+      await p.setDouble('zm_completed_haul_wealth_zakat', _completedHaulWealthZakat!);
+    } else {
+      await p.remove('zm_completed_haul_wealth_zakat');
+    }
+
+    if (_completedHaulLivestockSummary != null) {
+      await p.setString('zm_completed_haul_livestock_summary', _completedHaulLivestockSummary!);
+    } else {
+      await p.remove('zm_completed_haul_livestock_summary');
+    }
 
     // Wealth fields
     await p.setString('zm_cash', _cashCtrl.text);
@@ -676,6 +833,18 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     // Custom assets + liabilities (combined list)
     final allCustom = [..._customAssets, ..._customLiabilities];
     await p.setString('zm_custom_assets', json.encode(allCustom.map((e) => e.toJson()).toList()));
+
+    // Agricultural / Minerals / Rikaz / Rental
+    await p.setString('zm_crops_kg',      _cropsHarvestKgCtrl.text);
+    await p.setString('zm_crops_price',   _cropsPricePerKgCtrl.text);
+    await p.setBool('zm_crops_rainfed',   _cropsRainFed);
+    await p.setString('zm_minerals_val',  _mineralsValueCtrl.text);
+    await p.setString('zm_rikaz_val',     _rikazValueCtrl.text);
+    await p.setString('zm_rental_gross',  _rentalGrossCtrl.text);
+
+    // Haul cycle history
+    await p.setString('zm_haul_cycles', json.encode(_haulCycles.map((c) => c.toJson()).toList()));
+    await p.setInt('zm_current_haul_cycle_num', _currentHaulCycleNumber);
   }
 
   Future<void> _checkAndNotifyZakatHaul() async {
@@ -929,13 +1098,61 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     final receivable = (double.tryParse(_receivableCtrl.text.replaceAll(',', '')) ?? 0) * rate;
     final liabilities = (double.tryParse(_liabilitiesCtrl.text.replaceAll(',', '')) ?? 0) * rate;
 
-    final gross = cash + goldVal + silverVal + stocks + business + receivable
+    // Rental income (net feeds into standard 2.5% wealth pool)
+    final rentalGross = (double.tryParse(_rentalGrossCtrl.text.replaceAll(',', '')) ?? 0) * rate;
+
+    final gross = cash + goldVal + silverVal + stocks + business + receivable + rentalGross
         + _customAssetsTotalBDT;
     final net = (gross - liabilities - _customLiabilitiesTotalBDT).clamp(0.0, double.infinity);
 
+    // Agricultural Zakat (Ushr) — separate, no Haul required, due at each harvest (Nisab = 653 kg)
+    final harvestKg = double.tryParse(_cropsHarvestKgCtrl.text.replaceAll(',', '')) ?? 0;
+    final pricePerKg = (double.tryParse(_cropsPricePerKgCtrl.text.replaceAll(',', '')) ?? 0) * rate;
+    final harvestValue = harvestKg * pricePerKg;
+    final cropsZakat = harvestKg >= 653 ? harvestValue * (_cropsRainFed ? 0.10 : 0.05) : 0.0;
+
+    // Mineral Zakat (Ma'adin) — 2.5%, no Haul, Nisab = currency nisab
+    final mineralsVal = (double.tryParse(_mineralsValueCtrl.text.replaceAll(',', '')) ?? 0) * rate;
+    final mineralsZakat = (_nisabBDT > 0 && mineralsVal >= _nisabBDT) ? mineralsVal * 0.025 : 0.0;
+
+    // Rikaz (Buried Treasure) — 20% flat (Khums), no Nisab, no Haul
+    final rikazVal = (double.tryParse(_rikazValueCtrl.text.replaceAll(',', '')) ?? 0) * rate;
+    final rikazZakat = rikazVal > 0 ? rikazVal * 0.20 : 0.0;
+
+    // Standard wealth Zakat (2.5% after Haul)
+    final wealthZakat = (net >= _nisabBDT && _nisabBDT > 0) ? net * 0.025 : 0.0;
+    final isEligible = net >= _nisabBDT && _nisabBDT > 0;
+
+    // ── AUTOMATIC HAUL START & AUTO-ROLLOVER ─────────────────────
+    if (isEligible && _haulStartDate == null) {
+      _haulStartDate = DateTime.now();
+    }
+    _checkAutoRollover();
+
+    final liveEstimate = wealthZakat + cropsZakat + mineralsZakat + rikazZakat;
+
+    // Only lock when prices are loaded (nisabBDT > 0), so we don't lock 0
+    if (_isHaulCompleted && _nisabBDT > 0) {
+      if (_completedHaulWealthZakat == null) {
+        _completedHaulWealthZakat = wealthZakat;
+        _completedHaulLivestockSummary = _livestockZakatSummary;
+      }
+    } else if (!_isHaulCompleted) {
+      _completedHaulWealthZakat = null;
+      _completedHaulLivestockSummary = null;
+    }
+
+    // _zakatDue: event-based always due + locked haul zakat if haul complete
+    final lockedForDue = _completedHaulWealthZakat ?? 0.0;
+    final dueAmount = (lockedForDue > 0 ? lockedForDue : 0.0) + cropsZakat + mineralsZakat + rikazZakat;
+
     setState(() {
       _totalWealth = net;
-      _zakatDue = (net >= _nisabBDT && _isHaulCompleted) ? net * 0.025 : 0.0;
+      _cropsZakatDue = cropsZakat;
+      _mineralsZakatDue = mineralsZakat;
+      _rikazZakatDue = rikazZakat;
+      _zakatEstimate = liveEstimate;
+      _zakatDue = dueAmount;
     });
 
     _savePrefs();
@@ -1148,7 +1365,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     );
   }
 
-  static const _tabLabels = ['Calculator', 'Haul', 'Rules', 'Al-Fitr', 'Payments', 'History'];
+  static const _tabLabels = ['Calculator', 'Haul', 'Rules', 'Al-Fitr', 'Payments', 'History', 'Guide'];
   static const _tabIcons = [
     Icons.calculate_rounded,
     Icons.hourglass_bottom_rounded,
@@ -1156,6 +1373,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     Icons.people_alt_rounded,
     Icons.receipt_long_rounded,
     Icons.bar_chart_rounded,
+    Icons.help_outline_rounded,
   ];
 
   Widget _buildTabBar() {
@@ -1224,6 +1442,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         return _buildPaymentsTab();
       case 5:
         return _buildHistoryTab();
+      case 6:
+        return _buildGuideTab();
       default:
         return _buildCalculatorTab();
     }
@@ -1240,6 +1460,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildSummaryCard(),
+          if (_cropsZakatDue + _mineralsZakatDue + _rikazZakatDue > 0) ...[
+            const SizedBox(height: 12),
+            _buildImmediateZakatSummaryCard(),
+          ],
           const SizedBox(height: 16),
           _buildPricesCard(),
           const SizedBox(height: 16),
@@ -1263,12 +1487,24 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               'Commercial stock & inventory value', _businessCtrl, _currency.symbol),
           _buildInputCard(Icons.receipt_long_outlined, 'Receivables',
               'Short-term money owed to you', _receivableCtrl, _currency.symbol),
+          _buildInputCard(Icons.home_work_outlined, 'Rental Income (Net)',
+              'Annual gross rent minus maintenance costs', _rentalGrossCtrl, _currency.symbol),
           const SizedBox(height: 16),
           // ── Custom Assets ──────────────────────────────────────
           _buildCustomFieldsSection(isLiability: false),
           const SizedBox(height: 16),
           // ── Livestock ──────────────────────────────────────────
           _buildLivestockSection(),
+          const SizedBox(height: 16),
+          // ── Agricultural Zakat (Ushr) ───────────────────────────
+          _buildSectionHeader('Agricultural Zakat — Ushr', const Color(0xFF2E7D32)),
+          const SizedBox(height: 10),
+          _buildCropsZakatSection(),
+          const SizedBox(height: 16),
+          // ── Minerals & Rikaz ────────────────────────────────────
+          _buildSectionHeader("Minerals (Ma'adin) & Rikaz", AppColors.navyBlue),
+          const SizedBox(height: 10),
+          _buildMineralsRikazSection(),
           const SizedBox(height: 16),
           // ── Liabilities ────────────────────────────────────────
           _buildSectionHeader('Liabilities', AppColors.coralOrange),
@@ -1289,16 +1525,67 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   Widget _buildSummaryCard() {
     String fmt(double v) => _formatCompactMoney(v);
 
-    final isCompleted = _zakatDue > 0 && _stillOwed <= 0;
-    final hasPaidSome = _totalPaid > 0 && _zakatDue > 0;
-    final double displayAmount = _zakatDue > 0 ? _stillOwed : 0.0;
+    final haulComplete = _isHaulCompleted;
+    final hasActiveAssessment = haulComplete || _haulCycles.isNotEmpty;
+    final activeDue = _activeZakatDue;
 
-    String cardTitle = 'Zakat Remaining';
-    if (_zakatDue == 0) {
-      cardTitle = _isEligible ? 'Awaiting Haul Completion' : 'Below Nisab Threshold';
-    } else if (isCompleted) {
-      cardTitle = 'Zakat Obligation';
+    // ── LEFT PANEL: "This Year" ───────────────────────────────────────────────
+    // If haul is complete OR we have a completed cycle in history → show active zakat
+    // Otherwise → show 0 with a Pending badge
+    double thisYearAmount;
+    String thisYearStatus;
+    String thisYearNote;
+    Color thisYearAccent;
+
+    if (hasActiveAssessment && activeDue > 0) {
+      final remaining = _stillOwed;
+      final paid = _totalPaid;
+
+      // Big main number is the amount still to pay
+      thisYearAmount = remaining;
+
+      final isPaidInFull = (paid >= activeDue - 1.0) || remaining <= 1.0;
+
+      if (isPaidInFull) {
+        thisYearStatus = 'Fully Paid';
+        thisYearNote = 'Completed Haul: ${_formatMoney(activeDue)}';
+        thisYearAccent = const Color(0xFF81C784);
+      } else {
+        thisYearStatus = 'Payment Due';
+        thisYearNote = 'Completed Haul: ${_formatMoney(activeDue)}';
+        thisYearAccent = AppColors.coralOrange;
+      }
+    } else {
+      // Haul is in progress — show Pending (no fixed amount yet)
+      thisYearAmount = 0.0;
+      thisYearStatus = 'Pending';
+      thisYearNote = 'Haul in progress ($_haulElapsedDays / 354 days)';
+      thisYearAccent = Colors.amber[200]!;
     }
+
+    // ── RIGHT PANEL: "Next Haul" (live estimate) ─────────────────────────────
+    final nextAmount = _zakatEstimate;
+    final nextDueDate = _haulStartDate != null
+        ? _haulStartDate!.add(const Duration(days: 354))
+        : null;
+    final nextDateStr = nextDueDate != null
+        ? 'Due ${nextDueDate.day} ${_monthName(nextDueDate.month)} ${nextDueDate.year}'
+        : '';
+
+    // ── TOP BADGE ─────────────────────────────────────────────────────────────
+    final topBadgeText = !hasActiveAssessment
+        ? 'Haul In Progress'
+        : (thisYearStatus == 'Fully Paid' ? 'Fully Paid' : 'Payment Due');
+    final topBadgeColor = !hasActiveAssessment
+        ? Colors.amber[200]!
+        : (thisYearStatus == 'Fully Paid'
+            ? const Color(0xFF81C784)
+            : AppColors.coralOrange);
+    final topBadgeBg = !hasActiveAssessment
+        ? Colors.amber.withValues(alpha: 0.2)
+        : (thisYearStatus == 'Fully Paid'
+            ? const Color(0xFF4CAF50).withValues(alpha: 0.22)
+            : AppColors.coralOrange.withValues(alpha: 0.22));
 
     return Container(
       decoration: BoxDecoration(
@@ -1306,7 +1593,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: _isEligible
-              ? (isCompleted
+              ? (thisYearStatus == 'Fully Paid'
                   ? [const Color(0xFF1B4D3E), const Color(0xFF142E24)]
                   : [const Color(0xFF14243B), const Color(0xFF1C3A27)])
               : [const Color(0xFF14243B), const Color(0xFF22364A)],
@@ -1337,7 +1624,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        cardTitle,
+                        'Zakat Timeline',
                         style: GoogleFonts.inter(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 12,
@@ -1346,104 +1633,54 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isCompleted
-                              ? const Color(0xFF4CAF50).withValues(alpha: 0.22)
-                              : (_isZakatObligated
-                                  ? const Color(0xFF4CAF50).withValues(alpha: 0.22)
-                                  : (_isEligible
-                                      ? Colors.amber.withValues(alpha: 0.2)
-                                      : Colors.white.withValues(alpha: 0.1))),
+                          color: topBadgeBg,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          isCompleted
-                              ? 'Completed'
-                              : (_isZakatObligated
-                                  ? '2.5% Rate Applied'
-                                  : (_isEligible ? 'Incomplete Haul' : 'Not Eligible')),
+                          topBadgeText,
                           style: GoogleFonts.inter(
-                              color: isCompleted
-                                  ? const Color(0xFF81C784)
-                                  : (_isZakatObligated
-                                      ? const Color(0xFF81C784)
-                                      : (_isEligible ? Colors.amber[200] : Colors.white60)),
+                              color: topBadgeColor,
                               fontSize: 10,
                               fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  if (isCompleted) ...[
-                    Row(
+                  const SizedBox(height: 12),
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Icon(Icons.check_circle_rounded, color: Color(0xFF81C784), size: 28),
+                        Expanded(
+                          child: _buildZakatPeriodPanel(
+                            title: 'Completed Haul',
+                            icon: Icons.receipt_long_rounded,
+                            amount: hasActiveAssessment && activeDue > 0
+                                ? (thisYearStatus == 'Fully Paid' || thisYearAmount <= 0
+                                    ? 'Fully Paid'
+                                    : _formatMoney(thisYearAmount))
+                                : '—',
+                            status: thisYearStatus,
+                            note: thisYearNote,
+                            accent: thisYearAccent,
+                            livestockSummary: _lockedLivestockSummary,
+                          ),
+                        ),
                         const SizedBox(width: 10),
-                        Text(
-                          'Fully Paid',
-                          style: GoogleFonts.poppins(
-                              color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800),
+                        Expanded(
+                          child: _buildZakatPeriodPanel(
+                            title: 'Next Haul',
+                            icon: Icons.hourglass_top_rounded,
+                            amount: _formatMoney(nextAmount),
+                            status: 'Estimate',
+                            note: nextDateStr,
+                            accent: AppColors.midTeal,
+                            livestockSummary: _livestockZakatSummary,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${_formatMoney(_totalPaid)} logged in payments.',
-                      style: GoogleFonts.inter(
-                          color: Colors.white.withValues(alpha: 0.65), fontSize: 11.5),
-                    ),
-                  ] else ...[
-                    Text(
-                      _formatMoney(displayAmount),
-                      style: GoogleFonts.poppins(
-                          color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800),
-                    ),
-                    if (hasPaidSome) ...[
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: (_totalPaid / _zakatDue).clamp(0.0, 1.0),
-                          minHeight: 5,
-                          backgroundColor: Colors.white.withValues(alpha: 0.15),
-                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF81C784)),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Paid: ${_formatMoney(_totalPaid)} of ${_formatMoney(_zakatDue)} due',
-                        style: GoogleFonts.inter(
-                            color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
-                      ),
-                    ],
-                  ],
-                  if (_isEligible && !_isHaulCompleted) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.amber.withValues(alpha: 0.25)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 14),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Zakat is not yet due because your Haul is incomplete (lunar year elapsed: $_haulElapsedDays / 354 days).',
-                              style: GoogleFonts.inter(
-                                color: Colors.amber[100],
-                                fontSize: 10,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                   const SizedBox(height: 14),
                   const Divider(color: Colors.white12, height: 1),
                   const SizedBox(height: 14),
@@ -1465,6 +1702,301 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildImmediateZakatSummaryCard() {
+    final cropsDue = _cropsZakatDue;
+    final mineralsDue = _mineralsZakatDue;
+    final rikazDue = _rikazZakatDue;
+    final totalImmediate = _immediateTotalDue;
+    final paid = _immediatePaid;
+    final remaining = _immediateStillOwed;
+    final isFullyPaid = remaining <= 1.0 && paid > 0;
+
+    // Show when there is any obligation OR any payment was made
+    if (totalImmediate <= 0 && paid <= 0) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isFullyPaid
+              ? [const Color(0xFF0D2B1A), const Color(0xFF1A3D2B)]
+              : [const Color(0xFF0F3024), const Color(0xFF1B4D3E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1B4D3E).withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isFullyPaid ? Icons.check_circle_rounded : Icons.bolt_rounded,
+                  color: isFullyPaid ? const Color(0xFF81C784) : Colors.amber,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isFullyPaid ? 'Immediate Zakat — Fully Paid' : 'Immediate Zakat Due (No Haul)',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      isFullyPaid
+                          ? 'Crops, Minerals & Rikaz obligations cleared'
+                          : 'Due today upon harvest, extraction, or discovery',
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 9.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!isFullyPaid && remaining > 0)
+                GestureDetector(
+                  onTap: () {
+                    setState(() => _tab = 4);
+                    _showAddPaymentDialog(
+                      isFitra: false,
+                      prefilledObligationType: cropsDue > 0 ? 'crops' : (mineralsDue > 0 ? 'minerals' : 'rikaz'),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.amber,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Pay Now →',
+                      style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.navyBlue,
+                      ),
+                    ),
+                  ),
+                ),
+              if (isFullyPaid)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2E7D32).withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF81C784).withValues(alpha: 0.5)),
+                  ),
+                  child: Text(
+                    'Fully Paid',
+                    style: GoogleFonts.inter(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF81C784),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Stats: Total Due | Paid | Remaining
+          Row(
+            children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Total Due', style: GoogleFonts.inter(color: Colors.white54, fontSize: 9.5)),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatMoney(totalImmediate),
+                    style: GoogleFonts.poppins(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                ]),
+              ),
+              Container(width: 1, height: 34, color: Colors.white12),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Paid', style: GoogleFonts.inter(color: Colors.white54, fontSize: 9.5)),
+                    const SizedBox(height: 2),
+                    Text(
+                      _formatMoney(paid),
+                      style: GoogleFonts.poppins(
+                        color: const Color(0xFF81C784),
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+              Container(width: 1, height: 34, color: Colors.white12),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Remaining', style: GoogleFonts.inter(color: Colors.white54, fontSize: 9.5)),
+                    const SizedBox(height: 2),
+                    Text(
+                      isFullyPaid ? 'None' : _formatMoney(remaining),
+                      style: GoogleFonts.poppins(
+                        color: isFullyPaid ? const Color(0xFF81C784) : Colors.amber,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            ],
+          ),
+          if (!isFullyPaid && totalImmediate > 0) ...[  
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                if (cropsDue > 0)
+                  _buildImmediateItemBadge('Crops (Ushr)', cropsDue, const Color(0xFF81C784)),
+                if (mineralsDue > 0)
+                  _buildImmediateItemBadge('Minerals', mineralsDue, const Color(0xFF81D4FA)),
+                if (rikazDue > 0)
+                  _buildImmediateItemBadge('Rikaz', rikazDue, const Color(0xFFFFB74D)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImmediateItemBadge(String label, double amount, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        '$label: ${_formatMoney(amount)}',
+        style: GoogleFonts.inter(
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildZakatPeriodPanel({
+    required String title,
+    required IconData icon,
+    required String amount,
+    required String status,
+    required String note,
+    required Color accent,
+    String? livestockSummary,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: _isDarkMode ? 0.08 : 0.07),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: Icon + Title
+          Row(
+            children: [
+              Icon(icon, color: accent, size: 14),
+              const SizedBox(width: 5),
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Row 2: Status badge on its own line
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              status,
+              style: GoogleFonts.inter(
+                color: accent,
+                fontSize: 8.5,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Row 3: Amount (large)
+          Text(
+            amount,
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (livestockSummary != null && livestockSummary.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              '+ $livestockSummary',
+              style: GoogleFonts.inter(
+                color: const Color(0xFFA5D6A7),
+                fontSize: 9.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: 3),
+          // Row 4: Note
+          Text(
+            note,
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: 0.6),
+              fontSize: 9.5,
+              height: 1.3,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2693,7 +3225,33 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   // ═══════════════════════════════════════════════════════════════
 
 
+  void _checkAutoRollover() {
+    if (_haulStartDate == null) return;
+    final now = DateTime.now();
+    bool rolled = false;
+    while (_haulStartDate != null && now.difference(_haulStartDate!).inDays >= 354) {
+      final cycleEnd = _haulStartDate!.add(const Duration(days: 354));
+      final lockedZakat = (_totalWealth >= _nisabBDT && _nisabBDT > 0) ? _totalWealth * 0.025 : 0.0;
+      final cycle = HaulCycle(
+        cycleNumber: _currentHaulCycleNumber,
+        startDate: _haulStartDate!,
+        endDate: cycleEnd,
+        wealthAtCompletion: _totalWealth,
+        lockedZakat: lockedZakat,
+        lockedLivestockSummary: _livestockZakatSummary.isNotEmpty ? _livestockZakatSummary : null,
+      );
+      _haulCycles.add(cycle);
+      _haulStartDate = cycleEnd;
+      _currentHaulCycleNumber++;
+      rolled = true;
+    }
+    if (rolled) {
+      _savePrefs();
+    }
+  }
+
   Widget _buildHaulTab() {
+    _checkAutoRollover();
     final now = DateTime.now();
     final int elapsed = _haulStartDate != null ? now.difference(_haulStartDate!).inDays : 0;
     const int haulDays = 354;
@@ -2964,6 +3522,177 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               ],
             ),
           ),
+          if (_haulCycles.isNotEmpty || _haulStartDate != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: _cardDeco(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.history_rounded, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 18),
+                      const SizedBox(width: 8),
+                      Text('Haul Cycle History',
+                          style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13.5,
+                              color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Completed cycles (most recent first)
+                  ...(_haulCycles.reversed.map((cycle) => _buildHaulCycleRow(cycle))),
+                  // Current in-progress cycle
+                  if (_haulStartDate != null && !_isHaulCompleted)
+                    _buildCurrentHaulRow(),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHaulCycleRow(HaulCycle cycle) {
+    final startStr = DateFormat('d MMM yyyy').format(cycle.startDate);
+    final endStr = DateFormat('d MMM yyyy').format(cycle.endDate);
+    // If lockedZakat was archived as 0 (due to prices not loaded at that time),
+    // recover from wealthAtCompletion using 2.5% rule
+    final displayZakat = cycle.lockedZakat > 0
+        ? cycle.lockedZakat
+        : (cycle.wealthAtCompletion > 0 ? cycle.wealthAtCompletion * 0.025 : 0.0);
+    final isRecovered = cycle.lockedZakat == 0 && cycle.wealthAtCompletion > 0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1E2D3D) : const Color(0xFFF0F4F8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(
+              child: Text(
+                '${cycle.cycleNumber}',
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: const Color(0xFF4CAF50)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Haul Cycle ${cycle.cycleNumber}',
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                const SizedBox(height: 2),
+                Text('$startStr → $endStr',
+                    style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.55))),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(_formatMoney(displayZakat),
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: const Color(0xFF4CAF50))),
+              Text(isRecovered ? 'Est. (2.5%)' : 'Zakat locked',
+                  style: GoogleFonts.inter(fontSize: 9.5, color: Colors.grey)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentHaulRow() {
+    final startStr = _haulStartDate != null
+        ? DateFormat('d MMM yyyy').format(_haulStartDate!)
+        : '—';
+    final dueDate = _haulStartDate?.add(const Duration(days: 354));
+    final dueDateStr = dueDate != null ? DateFormat('d MMM yyyy').format(dueDate) : '—';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1E2D3D) : const Color(0xFFF0F4F8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.amber.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(
+              child: Text(
+                '$_currentHaulCycleNumber',
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.amber[700]),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Haul Cycle $_currentHaulCycleNumber (Current)',
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                const SizedBox(height: 2),
+                Text('Started $startStr · Due $dueDateStr',
+                    style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.55))),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(_formatMoney(_zakatEstimate),
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Colors.amber[700])),
+              Text('Estimate',
+                  style: GoogleFonts.inter(fontSize: 9.5, color: Colors.grey)),
+            ],
+          ),
         ],
       ),
     );
@@ -3198,34 +3927,99 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
 
           // 5. Agricultural Produce (Ushr)
           _buildRuleSectionCard(
-            title: '5. Agricultural Produce (Ushr)',
-            subtitle: 'Harvest & Crop Zakat',
+            title: '5. Agricultural Zakat — Ushr (عُشْر)',
+            subtitle: 'Due at every harvest · No Haul required',
             icon: Icons.grass_rounded,
             iconColor: Colors.teal,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildBulletPoint('Nisab for Crops: 5 Awsaq (approx. 653 kg / 1,440 lbs of grain/dates).'),
-                _buildBulletPoint('Rain-watered / Natural Stream crops: 10% (Full Ushr) due at harvest.'),
-                _buildBulletPoint('Artificially Irrigated crops (pumps/wells): 5% (Half Ushr) due at harvest.'),
+                Text(
+                  'Zakat on agricultural produce is a standalone obligation — completely independent of the Haul (lunar year). It is due the moment the crop is gathered and secured. If a farmer has two harvests in one year, Zakat is calculated and paid separately for each.',
+                  style: GoogleFonts.inter(fontSize: 12, height: 1.5, color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue),
+                ),
                 _buildQuranReferenceCard(
-                  arabicText: 'وَآتُوا حَقَّهُ يَوْمَ حَصَادِهِ',
-                  englishText: 'And pay its due [Zakat] on the day of its harvest.',
-                  reference: 'Quran - Surah Al-An\'am (6:141)',
+                  arabicText: 'وَهُوَ الَّذِي أَنشَأَ جَنَّاتٍ مَّعْرُوشَاتٍ وَغَيْرَ مَعْرُوشَاتٍ وَالنَّخْلَ وَالزَّرْعَ مُخْتَلِفًا أُكُلُهُ وَالزَّيْتُونَ وَالرُّمَّانَ مُتَشَابِهًا وَغَيْرَ مُتَشَابِهٍ ۚ كُلُوا مِن ثَمَرِهِ إِذَا أَثْمَرَ وَآتُوا حَقَّهُ يَوْمَ حَصَادِهِ',
+                  englishText: 'It is He who produced gardens, both trellised and untrellised, and palm trees, and crops of diverse flavors, and olives, and pomegranates — similar and dissimilar. Eat of its fruits when it yields, and pay its due on the day of its harvest.',
+                  reference: 'Quran — Surah Al-An\'am (6:141)',
                 ),
                 _buildHadithReferenceCard(
                   arabicText: 'فِيمَا سَقَتِ السَّمَاءُ وَالْعُيُونُ أَوْ كَانَ عَثَرِيًّا الْعُشْرُ، وَمَا سُقِيَ بِالنَّضْحِ نِصْفُ الْعُشْرِ',
-                  englishText: 'On land watered by rain, springs, or natural streams, a tenth (10%) is due. On land watered by irrigation wells or pumps, a half-tenth (5%) is due.',
+                  englishText: 'On land watered by rain, springs, or natural streams — a tenth (10%) is due. On land watered by irrigation wells or pumps — a half-tenth (5%) is due.',
                   reference: 'Sahih al-Bukhari (1483)',
                 ),
+                const SizedBox(height: 8),
+                _buildBulletPoint('Nisab (Threshold): 5 Awsaq ≈ 653 kg of cleaned, threshed grain. If harvest is below 653 kg, no Zakat is due for that harvest.'),
+                _buildBulletPoint('Rain-fed / Natural Water: 10% (Full Ushr) — because no irrigation cost is incurred.'),
+                _buildBulletPoint('Artificial Irrigation (pump/well): 5% (Half Ushr) — reduced rate acknowledges the cost of irrigation.'),
+                _buildBulletPoint('Per-Harvest Rule: Each separate harvest triggers its own calculation. Multiple yearly harvests = multiple Zakat obligations.'),
+                _buildBulletPoint('No Haul Required: The obligation arises at the moment of harvest, not after a lunar year.'),
               ],
             ),
           ),
           const SizedBox(height: 16),
 
-          // 6. 8 Eligible Categories (Asnaf)
+          // 6. Mineral Zakat (Ma'adin)
           _buildRuleSectionCard(
-            title: '6. The 8 Eligible Recipients (Asnaf)',
+            title: "6. Mineral Zakat — Ma'adin (مَعَادِن)",
+            subtitle: 'Due upon extraction · No Haul · Nisab required',
+            icon: Icons.diamond_outlined,
+            iconColor: AppColors.navyBlue,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Minerals extracted from the earth — gold, silver, iron, copper, oil, and similar resources — are subject to Zakat at the standard 2.5% rate. Unlike Rikaz, minerals require the Nisab threshold and significant human labor to extract, which is why scholars apply the lower 2.5% rate instead of 20%.",
+                  style: GoogleFonts.inter(fontSize: 12, height: 1.5, color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue),
+                ),
+                _buildHadithReferenceCard(
+                  arabicText: 'وَفِي الرِّكَازِ الخُمُسُ',
+                  englishText: 'In found buried treasure (Rikaz), one-fifth (20%) is due.',
+                  reference: 'Sahih al-Bukhari (1499), Sahih Muslim (1710) — Scholars derive the Mineral (Ma\'adin) rate by analogy at 2.5%, distinguishing it from Rikaz due to the cost of labor.',
+                ),
+                const SizedBox(height: 8),
+                _buildBulletPoint('Covers: Gold ore, silver ore, iron, copper, oil, natural gas, and other earth-extracted resources.'),
+                _buildBulletPoint('Nisab: Value of extracted batch must reach the monetary Nisab (equivalent of 85g gold or 595g silver).'),
+                _buildBulletPoint('Accumulation Rule: If a mine extracts small daily amounts, aggregate the full extracted batch. Zakat is due once the total batch crosses Nisab.'),
+                _buildBulletPoint('No Haul: Zakat is due immediately upon extraction and refinement — no waiting period.'),
+                _buildBulletPoint('Rate: 2.5% on the total value of the extracted and refined batch.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 7. Buried Treasure (Rikaz)
+          _buildRuleSectionCard(
+            title: '7. Buried Treasure — Rikaz (رِكَاز)',
+            subtitle: 'Due immediately on discovery · No Nisab · 20% flat',
+            icon: Icons.auto_awesome_rounded,
+            iconColor: AppColors.coralOrange,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Rikaz refers to pre-Islamic buried treasure (gold, silver, or wealth) discovered on or under one\'s land. Because it is a sudden windfall requiring zero labor or financial investment, Islamic law prescribes a higher and immediate rate of 20% (one-fifth / Khums). There is unanimous scholarly consensus (Ijma\') on this ruling.',
+                  style: GoogleFonts.inter(fontSize: 12, height: 1.5, color: _isDarkMode ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue),
+                ),
+                _buildHadithReferenceCard(
+                  arabicText: 'الْعَجْمَاءُ جُبَارٌ، وَالْبِئْرُ جُبَارٌ، وَالْمَعْدَنُ جُبَارٌ، وَفِي الرِّكَازِ الخُمُسُ',
+                  englishText: 'Injuries caused by animals are not compensated, nor those caused by wells, nor those in mines. And in found buried treasure (Rikaz), one-fifth (20%) is due.',
+                  reference: 'Sahih al-Bukhari (1499), Sahih Muslim (1710) — Narrated by Abu Hurayrah (رضي الله عنه)',
+                ),
+                const SizedBox(height: 8),
+                _buildBulletPoint('Definition: Pre-Islamic buried wealth (gold, silver, coins, jewels) found in or under land.'),
+                _buildBulletPoint('No Nisab: Even a single ancient coin triggers the obligation — no minimum threshold.'),
+                _buildBulletPoint('Immediate: Due the moment of discovery, after satisfying any local ownership or legal requirements.'),
+                _buildBulletPoint('Rate: 20% (one-fifth / Khums) of the total discovered value — the highest Zakat rate.'),
+                _buildBulletPoint('Unanimous Consensus (Ijma\'): Recognized by all four major schools of Islamic law (Hanafi, Maliki, Shafi\'i, Hanbali).'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 8. 8 Eligible Categories (Asnaf)
+          _buildRuleSectionCard(
+            title: '8. The 8 Eligible Recipients (Asnaf)',
             subtitle: 'Who is entitled to receive Zakat',
             icon: Icons.people_outline_rounded,
             iconColor: Colors.indigo,
@@ -3251,9 +4045,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           ),
           const SizedBox(height: 16),
 
-          // 7. Ineligible Recipients
+          // 9. Ineligible Recipients
           _buildRuleSectionCard(
-            title: '7. Ineligible Recipients',
+            title: '9. Ineligible Recipients',
             subtitle: 'Who cannot receive Zakat',
             icon: Icons.cancel_outlined,
             iconColor: Colors.red.shade700,
@@ -3289,10 +4083,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -3317,18 +4110,16 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  reference,
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: _isDarkMode ? const Color(0xFF80CBC4) : const Color(0xFF1B4D3E),
-                  ),
-                ),
-              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            reference,
+            style: GoogleFonts.poppins(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: _isDarkMode ? const Color(0xFF80CBC4) : const Color(0xFF1B4D3E),
+            ),
           ),
           const SizedBox(height: 10),
           Text(
@@ -3372,10 +4163,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -3400,18 +4190,16 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  reference,
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: _isDarkMode ? const Color(0xFF90CAF9) : AppColors.navyBlue,
-                  ),
-                ),
-              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            reference,
+            style: GoogleFonts.poppins(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: _isDarkMode ? const Color(0xFF90CAF9) : AppColors.navyBlue,
+            ),
           ),
           const SizedBox(height: 10),
           Text(
@@ -4184,20 +4972,20 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Zakat Due',
+                      Text((_isHaulCompleted || _haulCycles.isNotEmpty) ? "Completed Haul Zakat" : 'Zakat (Estimate)',
                           style: GoogleFonts.inter(color: Colors.white54, fontSize: 11)),
                       const SizedBox(height: 2),
                       Text(
-                        _formatMoney(_zakatDue),
+                        _formatMoney(_activeZakatDue),
                         style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.bold),
                       ),
-                      if (_livestockZakatSummary.isNotEmpty) ...[
+                      if (_lockedLivestockSummary.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          '+ $_livestockZakatSummary',
+                          '+ $_lockedLivestockSummary',
                           style: GoogleFonts.inter(
                               color: const Color(0xFFA5D6A7),
                               fontSize: 10,
@@ -4260,6 +5048,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               ],
             ),
           ),
+          _buildImmediateZakatPaymentsCard(),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -4431,6 +5220,174 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     );
   }
 
+  Widget _buildImmediateZakatPaymentsCard() {
+    final totalDue = _immediateTotalDue;
+    final paid = _immediatePaid;
+    final remaining = _immediateStillOwed;
+    final isFullyPaid = remaining <= 1.0 && paid > 0;
+
+    if (totalDue <= 0 && paid <= 0) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isFullyPaid
+              ? const Color(0xFF2E7D32).withValues(alpha: 0.3)
+              : AppColors.coralOrange.withValues(alpha: 0.3),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isFullyPaid
+                      ? const Color(0xFF2E7D32).withValues(alpha: 0.1)
+                      : AppColors.coralOrange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.bolt_rounded,
+                  color: isFullyPaid ? const Color(0xFF2E7D32) : AppColors.coralOrange,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Immediate Zakat Obligations',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                      ),
+                    ),
+                    Text(
+                      'Crops (Ushr), Minerals & Rikaz — Due on event (No Haul)',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isFullyPaid
+                      ? const Color(0xFF2E7D32).withValues(alpha: 0.12)
+                      : AppColors.coralOrange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  isFullyPaid ? 'Fully Paid' : 'Payment Due',
+                  style: GoogleFonts.inter(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.bold,
+                    color: isFullyPaid ? const Color(0xFF2E7D32) : AppColors.coralOrange,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildImmediatePayStat('Total Due', _formatMoney(totalDue)),
+              ),
+              Expanded(
+                child: _buildImmediatePayStat('Total Paid', _formatMoney(paid)),
+              ),
+              Expanded(
+                child: _buildImmediatePayStat(
+                  'Remaining',
+                  isFullyPaid ? 'Fully Paid' : _formatMoney(remaining),
+                  isHighlight: !isFullyPaid && remaining > 0,
+                ),
+              ),
+            ],
+          ),
+          if (!isFullyPaid && remaining > 0) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => _showAddPaymentDialog(
+                isFitra: false,
+                prefilledObligationType: _cropsZakatDue > 0 ? 'crops' : (_mineralsZakatDue > 0 ? 'minerals' : 'rikaz'),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 9),
+                decoration: BoxDecoration(
+                  color: AppColors.navyBlue,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.add_circle_rounded, color: Colors.white, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Log Immediate Payment',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImmediatePayStat(String label, String value, {bool isHighlight = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 10,
+            color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: GoogleFonts.poppins(
+            fontSize: 12.5,
+            fontWeight: FontWeight.bold,
+            color: isHighlight
+                ? AppColors.coralOrange
+                : (_isDarkMode ? Colors.white : AppColors.navyBlue),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPaymentCard(ZakatPayment p, {required bool isFitra}) {
     final color = _categoryColor(p.category);
     return Container(
@@ -4575,16 +5532,38 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     return AppColors.navyBlue;
   }
 
-  void _showAddPaymentDialog({required bool isFitra, String? prefilledRecipient, String? prefilledCategory}) {
+  void _showAddPaymentDialog({
+    required bool isFitra,
+    String? prefilledRecipient,
+    String? prefilledCategory,
+    String? prefilledObligationType,
+  }) {
     final amountCtrl = TextEditingController();
     final recipientCtrl = TextEditingController(text: prefilledRecipient ?? '');
     final noteCtrl = TextEditingController();
     String currency = _selectedCurrency;
     String category = prefilledCategory ?? _zakatCategories.first;
+    String obligationType = prefilledObligationType ?? 'haul';
 
-    final bool hasLivestockObligation = !isFitra && _livestockMeetsNisab && _livestockZakatDueItems.isNotEmpty;
+    final bool hasAnimalPaymentLogged = _payments.any((p) =>
+        p.obligationType == 'haul' &&
+        p.animalDescription != null &&
+        p.animalDescription!.isNotEmpty);
+
+    final bool activeLivestockPresent = (_isHaulCompleted || _haulCycles.isNotEmpty)
+        ? _lockedLivestockSummary.isNotEmpty
+        : (_livestockMeetsNisab && _livestockZakatDueItems.isNotEmpty);
+
+    final bool hasLivestockObligation = !isFitra &&
+        (prefilledObligationType == null || prefilledObligationType == 'haul') &&
+        activeLivestockPresent &&
+        !hasAnimalPaymentLogged;
+
     bool isAnimalPayment = false;
-    String selectedAnimal = hasLivestockObligation ? _livestockZakatDueItems.first : '';
+    final String defaultAnimal = (_isHaulCompleted || _haulCycles.isNotEmpty)
+        ? _lockedLivestockSummary
+        : (_livestockZakatDueItems.isNotEmpty ? _livestockZakatDueItems.first : '');
+    String selectedAnimal = hasLivestockObligation ? defaultAnimal : '';
 
     showModalBottomSheet(
       context: context,
@@ -4719,12 +5698,36 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 _sheetField(recipientCtrl, 'Recipient / Organization'),
                 const SizedBox(height: 10),
                 if (!isFitra) ...[
+                  Text('Obligation Type',
+                      style: GoogleFonts.inter(
+                          fontSize: 11.5, color: _isDarkMode ? Colors.white.withValues(alpha: 0.6) : AppColors.navyBlue.withValues(alpha: 0.6))),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: obligationType,
+                    style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
+                    dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      filled: true,
+                      fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
+                    items: [
+                      DropdownMenuItem(value: 'haul', child: Text('Standard Wealth (Haul)', style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue))),
+                      DropdownMenuItem(value: 'crops', child: Text('Agricultural / Ushr (Immediate)', style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue))),
+                      DropdownMenuItem(value: 'minerals', child: Text('Minerals / Ma\'adin (Immediate)', style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue))),
+                      DropdownMenuItem(value: 'rikaz', child: Text('Buried Treasure / Rikaz (Immediate)', style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue))),
+                    ],
+                    onChanged: (v) { setModalState(() => obligationType = v!); },
+                  ),
+                  const SizedBox(height: 10),
                   Text('Category (from Surah At-Tawbah 9:60)',
                       style: GoogleFonts.inter(
                           fontSize: 11.5, color: _isDarkMode ? Colors.white.withValues(alpha: 0.6) : AppColors.navyBlue.withValues(alpha: 0.6))),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    initialValue: category,
+                    value: category,
                     style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                     dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
                     decoration: InputDecoration(
@@ -4765,14 +5768,35 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       date: DateTime.now(),
                       note: noteCtrl.text.trim(),
                       animalDescription: isAnimalPayment ? selectedAnimal : null,
+                      obligationType: isFitra ? 'fitra' : obligationType,
                     );
                     setState(() {
                       if (isFitra) {
                         _fitraPayments.insert(0, pay);
                       } else {
                         _payments.insert(0, pay);
+                        // After saving, check if immediate zakat is now fully paid
+                        // and clear the relevant fields so the card resets to zero
+                        if (obligationType == 'crops') {
+                          final newRemaining = (_cropsZakatDue - _immediatePaid).clamp(0.0, double.infinity);
+                          if (newRemaining <= 1.0) {
+                            _cropsHarvestKgCtrl.text = '0';
+                            _cropsPricePerKgCtrl.text = '0';
+                          }
+                        } else if (obligationType == 'minerals') {
+                          final newRemaining = (_mineralsZakatDue - _immediatePaid).clamp(0.0, double.infinity);
+                          if (newRemaining <= 1.0) {
+                            _mineralsValueCtrl.text = '0';
+                          }
+                        } else if (obligationType == 'rikaz') {
+                          final newRemaining = (_rikazZakatDue - _immediatePaid).clamp(0.0, double.infinity);
+                          if (newRemaining <= 1.0) {
+                            _rikazValueCtrl.text = '0';
+                          }
+                        }
                       }
                     });
+                    _recalculate();
                     _savePrefs();
                     if (Navigator.canPop(ctx)) {
                       Navigator.pop(ctx);
@@ -5257,7 +6281,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.bold)),
                         Text(
-                            'Wealth: ${_formatMoney(_totalWealth)} | Zakat: ${_formatMoney(_zakatDue)}',
+                            'Wealth: ${_formatMoney(_totalWealth)} | Zakat: ${_formatMoney(_activeZakatDue)}',
                             style: GoogleFonts.inter(color: Colors.white60, fontSize: 11)),
                       ],
                     ),
@@ -5311,7 +6335,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     final snap = ZakatYearSnapshot(
       year: year,
       wealth: _totalWealth,
-      zakatDue: _zakatDue,
+      zakatDue: _activeZakatDue,
       zakatPaid: _totalPaid,
       livestockZakat: _livestockZakatSummary.isNotEmpty ? _livestockZakatSummary : null,
     );
@@ -5338,6 +6362,23 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
 
   Widget _buildHistoryCard(ZakatYearSnapshot s) {
     final paidRatio = s.zakatDue > 0 ? (s.zakatPaid / s.zakatDue).clamp(0.0, 1.0) : 0.0;
+
+    final String statusText;
+    final Color statusColor;
+    if (s.zakatDue <= 0) {
+      statusText = 'No Zakat Due';
+      statusColor = Colors.grey;
+    } else if (s.zakatPaid >= s.zakatDue - 1.0 || (s.zakatDue - s.zakatPaid) <= 1.0) {
+      statusText = 'Fully Paid';
+      statusColor = const Color(0xFF2E7D32);
+    } else if (s.zakatPaid <= 0) {
+      statusText = 'Unpaid';
+      statusColor = AppColors.coralOrange;
+    } else {
+      statusText = 'Partially Paid';
+      statusColor = Colors.amber[800]!;
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
@@ -5354,16 +6395,14 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
-                  color: paidRatio >= 1.0
-                      ? const Color(0xFF2E7D32).withValues(alpha: 0.1)
-                      : AppColors.coralOrange.withValues(alpha: 0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(paidRatio >= 1.0 ? 'Fully Paid' : 'Partially Paid',
+                child: Text(statusText,
                     style: GoogleFonts.inter(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: paidRatio >= 1.0 ? const Color(0xFF2E7D32) : AppColors.coralOrange)),
+                        color: statusColor)),
               ),
             ],
           ),
@@ -5828,6 +6867,562 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // TAB 6 — GUIDE
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildGuideTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF14243B), Color(0xFF1B4D3E)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.28), blurRadius: 14, offset: const Offset(0, 6))],
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle),
+                  child: const Icon(Icons.help_outline_rounded, color: Colors.white, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('How Zakat Manager Works', style: GoogleFonts.poppins(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+                  Text('دَلِيلُ مُدِيرِ الزَّكَاة', style: GoogleFonts.amiri(color: const Color(0xFFA5D6A7), fontSize: 13, fontWeight: FontWeight.bold)),
+                ])),
+              ]),
+              const SizedBox(height: 12),
+              Text('Follow these 5 steps to calculate, track, and pay your Zakat correctly — in sha Allah.', style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.9), fontSize: 11.5, height: 1.45)),
+            ]),
+          ),
+          const SizedBox(height: 20),
+          _buildGuideStep(1, 'Enter Your Wealth', Icons.calculate_rounded, AppColors.navyBlue,
+            'Open the Calculator tab and enter all your zakatable assets:\n\n'
+            '• Cash & bank savings\n'
+            '• Gold (by karat — 24k, 22k, 21k, 18k)\n'
+            '• Silver (in grams)\n'
+            '• Stocks & investments\n'
+            '• Business inventory & trade goods\n'
+            '• Money owed to you (receivables)\n'
+            '• Net rental income\n'
+            '• Agricultural harvest (Ushr)\n'
+            '• Mined minerals or found treasure (Rikaz)\n\n'
+            'Subtract immediate liabilities (debts due now). Net zakatable wealth is calculated automatically.'),
+          _buildGuideStep(2, 'Set Your Haul Start Date', Icons.hourglass_bottom_rounded, const Color(0xFF6A1B9A),
+            'The Haul is the full Islamic lunar year (354 days) your wealth must be held before standard Zakat becomes obligatory.\n\n'
+            '• Go to the Haul tab\n'
+            '• Set the date your wealth first reached Nisab\n'
+            '• The app tracks the Hijri anniversary automatically and notifies you\n\n'
+            'Note: Agricultural Zakat (Ushr), Mineral Zakat, and Rikaz (Buried Treasure) do NOT need a Haul — they are due the moment of harvest, extraction, or discovery.'),
+          _buildGuideStep(3, 'Zakat Becomes Due', Icons.notifications_active_rounded, AppColors.coralOrange,
+            'Two types of obligation — both tracked in the Calculator tab:\n\n'
+            'Haul-Based (Standard Wealth — 2.5%)\n'
+            'Covers gold, silver, cash, stocks, business assets, and rental income. Due after Haul completes.\n\n'
+            'Event-Based (Immediate — No Haul Required)\n'
+            '• Crops: 10% if rain-fed / 5% if irrigated — due on harvest day (Quran 6:141)\n'
+            '• Minerals: 2.5% if value >= Nisab — due on extraction (scholarly consensus)\n'
+            '• Rikaz: 20% flat — due on discovery, no Nisab required (Bukhari 1499)\n\n'
+            'You will receive an app notification when your Haul year completes.'),
+          _buildGuideStep(4, 'Log Your Payments', Icons.receipt_long_rounded, const Color(0xFF2E7D32),
+            'Once Zakat is due, go to the Payments tab:\n\n'
+            '• Tap "Log Payment" to record each payment\n'
+            '• Assign it to one of the 8 Asnaf categories (Surah 9:60)\n'
+            '• Supports BDT, USD, EUR and all major currencies — auto-converted at live rates\n'
+            '• Use the Verified Charity Directory to find Zakat-eligible organizations\n\n'
+            'Smart Overpayment:\nIf you pay more than your remaining Zakat, the app automatically splits the entry into a Zakat portion and a Sadaqah (voluntary) portion — both are recorded.'),
+          _buildGuideStep(5, 'Track Your History', Icons.bar_chart_rounded, Colors.teal,
+            'The History tab shows your complete year-by-year Zakat record:\n\n'
+            '• Bar chart: Zakat Due vs. Paid for each year\n'
+            '• Each year\'s wealth snapshot is locked permanently when the Haul completes\n'
+            '• Export a full PDF financial statement from the Payments tab\n\n'
+            'All data is stored securely on your device and persists across app restarts.'),
+          const SizedBox(height: 8),
+          _buildRuleSectionCard(
+            title: 'Quick Reference — All Zakat Types',
+            subtitle: 'Rates, Nisab, and timing at a glance',
+            icon: Icons.table_chart_rounded,
+            iconColor: AppColors.navyBlue,
+            child: Column(children: [
+              _buildGuideRefRow('Cash, Gold, Silver, Stocks', '2.5%', 'After Haul', const Color(0xFF1565C0)),
+              _buildGuideRefRow('Business Inventory', '2.5%', 'After Haul', const Color(0xFF1565C0)),
+              _buildGuideRefRow('Net Rental Income', '2.5%', 'After Haul', const Color(0xFF1565C0)),
+              _buildGuideRefRow('Camels (>= 5)', 'Animal', 'After Haul', const Color(0xFF2E7D32)),
+              _buildGuideRefRow('Cattle (>= 30)', 'Animal', 'After Haul', const Color(0xFF2E7D32)),
+              _buildGuideRefRow('Sheep/Goats (>= 40)', 'Animal', 'After Haul', const Color(0xFF2E7D32)),
+              _buildGuideRefRow('Crops (>= 653 kg)', '10% / 5%', 'On harvest day', Colors.teal),
+              _buildGuideRefRow('Minerals (>= Nisab)', '2.5%', 'On extraction', Colors.teal),
+              _buildGuideRefRow('Rikaz (any amount)', '20%', 'On discovery', AppColors.coralOrange),
+              _buildGuideRefRow('Zakat al-Fitr', 'Fixed/person', 'Before Eid prayer', const Color(0xFF6A1B9A)),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          _buildRuleSectionCard(
+            title: 'Live Nisab Values',
+            subtitle: 'Minimum wealth threshold for Zakat',
+            icon: Icons.price_check_rounded,
+            iconColor: Colors.amber.shade800,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _buildGuideNisabRow('Gold Nisab (85g × 24k)', _formatMoney(85 * _effectiveGoldPrice)),
+              _buildGuideNisabRow('Silver Nisab (595g)', _formatMoney(595 * _effectiveSilverPrice)),
+              _buildGuideNisabRow('Crops Nisab (5 Wasaq)', '653 kg minimum'),
+              _buildGuideNisabRow('Minerals Nisab', 'Same as currency Nisab'),
+              _buildGuideNisabRow('Rikaz Nisab', 'None — any amount triggers 20%'),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                child: Text('Your app uses ${_nisabStandard == "gold" ? "Gold" : "Silver"} Nisab standard. Change it in Calculator → Settings.', style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.amber[200] : Colors.amber[900], height: 1.4)),
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuideStep(int number, String title, IconData icon, Color color, String content) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: _isDarkMode ? 0.15 : 0.07),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          child: Row(children: [
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: Center(child: Text('$number', style: GoogleFonts.poppins(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold))),
+            ),
+            const SizedBox(width: 10),
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13.5, color: _isDarkMode ? Colors.white : AppColors.navyBlue))),
+            GestureDetector(
+              onTap: () => setState(() => _tab = (number - 1).clamp(0, 5)),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+                child: Text('Go →', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
+            ),
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(content, style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white.withValues(alpha: 0.82) : AppColors.navyBlue.withValues(alpha: 0.8), height: 1.65)),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildGuideRefRow(String type, String rate, String timing, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
+      child: Row(children: [
+        Expanded(child: Text(type, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white : AppColors.navyBlue))),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+          child: Text(rate, style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
+        ),
+        const SizedBox(width: 8),
+        Text(timing, style: GoogleFonts.inter(fontSize: 9.5, color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.45))),
+      ]),
+    );
+  }
+
+  Widget _buildGuideNisabRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Expanded(child: Text(label, style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.7)))),
+        Text(value, style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+      ]),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CROPS / MINERALS / RIKAZ SECTION BUILDERS
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildSectionInputRow({
+    required IconData icon,
+    required String label,
+    required String sub,
+    required TextEditingController ctrl,
+    required String suffix,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.6)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                  ),
+                ),
+                if (sub.isNotEmpty)
+                  Text(
+                    sub,
+                    style: GoogleFonts.inter(
+                      fontSize: 9.5,
+                      color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.45),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 95,
+            child: TextField(
+              controller: ctrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+              ),
+              decoration: InputDecoration(
+                suffixText: ' $suffix',
+                suffixStyle: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4),
+                ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                filled: true,
+                fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onChanged: (_) => _recalculate(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImmediateBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.bolt_rounded, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 9.5,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCropsZakatSection() {
+    final harvestKg = double.tryParse(_cropsHarvestKgCtrl.text.replaceAll(',', '')) ?? 0;
+    final meetsNisab = harvestKg >= 653;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.3)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.grass_rounded, color: Color(0xFF2E7D32), size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Agricultural Zakat — Ushr', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+            Text('Due at harvest · No Haul required · Quran 6:141', style: GoogleFonts.inter(fontSize: 10.5, color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5))),
+          ])),
+          _buildImmediateBadge('Harvest Day', const Color(0xFF2E7D32)),
+        ]),
+        const SizedBox(height: 12),
+        _buildSectionInputRow(
+          icon: Icons.scale_outlined,
+          label: 'Harvest Weight',
+          sub: 'After threshing (kg)',
+          ctrl: _cropsHarvestKgCtrl,
+          suffix: 'kg',
+        ),
+        const Divider(height: 16, color: Color(0xFFEEEEEE)),
+        _buildSectionInputRow(
+          icon: Icons.sell_outlined,
+          label: 'Market Price / kg',
+          sub: 'Price per kg in ${_currency.code}',
+          ctrl: _cropsPricePerKgCtrl,
+          suffix: _currency.symbol,
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: meetsNisab ? const Color(0xFF2E7D32).withValues(alpha: 0.09) : (_isDarkMode ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF5F7FA)),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: meetsNisab ? const Color(0xFF2E7D32).withValues(alpha: 0.25) : Colors.transparent),
+          ),
+          child: Row(children: [
+            Icon(meetsNisab ? Icons.check_circle_rounded : Icons.info_outline_rounded, size: 15, color: meetsNisab ? const Color(0xFF2E7D32) : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
+            const SizedBox(width: 8),
+            Expanded(child: Text(
+              meetsNisab
+                ? 'Nisab met (≥ 653 kg) — Zakat is due on this harvest'
+                : 'Nisab: 653 kg (5 Wasaq). Your harvest: ${harvestKg.toStringAsFixed(0)} kg — below threshold',
+              style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.w600, color: meetsNisab ? const Color(0xFF2E7D32) : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5))),
+            )),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _isDarkMode ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF5F7FA),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Irrigation Method', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue)),
+            const SizedBox(height: 8),
+            Row(children: [
+              _buildCropChip('Rain-fed / Stream', true),
+              const SizedBox(width: 8),
+              _buildCropChip('Irrigated (pump)', false),
+            ]),
+            const SizedBox(height: 6),
+            Text(
+              _cropsRainFed
+                ? 'Rate: 10% (Full Ushr) — Sahih al-Bukhari (1483)'
+                : 'Rate: 5% (Half Ushr) — Sahih al-Bukhari (1483)',
+              style: GoogleFonts.inter(fontSize: 10, color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5)),
+            ),
+          ]),
+        ),
+        if (meetsNisab && _cropsZakatDue > 0) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF1B4D3E), Color(0xFF2E7D32)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(children: [
+              const Icon(Icons.agriculture_rounded, color: Colors.white70, size: 18),
+              const SizedBox(width: 10),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Crops Zakat Due (This Harvest — No Haul)', style: GoogleFonts.inter(color: Colors.white70, fontSize: 10.5)),
+                Text(_formatMoney(_cropsZakatDue), style: GoogleFonts.poppins(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              ])),
+            ]),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  Widget _buildCropChip(String label, bool isRainFed) {
+    final selected = _cropsRainFed == isRainFed;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () { setState(() => _cropsRainFed = isRainFed); _recalculate(); },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected
+              ? (isRainFed ? const Color(0xFF2E7D32) : AppColors.navyBlue)
+              : (_isDarkMode ? Colors.white.withValues(alpha: 0.05) : Colors.white),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? Colors.transparent : (_isDarkMode ? Colors.white24 : const Color(0xFFDDDDDD)),
+            ),
+          ),
+          child: Center(child: Text(label, style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w600, color: selected ? Colors.white : (_isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.7))), textAlign: TextAlign.center)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMineralsRikazSection() {
+    final mineralsVal = (double.tryParse(_mineralsValueCtrl.text.replaceAll(',', '')) ?? 0) * _toBDT;
+    final rikazVal = (double.tryParse(_rikazValueCtrl.text.replaceAll(',', '')) ?? 0) * _toBDT;
+    final mineralsMeetsNisab = mineralsVal >= _nisabBDT && _nisabBDT > 0;
+    return Column(children: [
+      // Minerals card
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.22)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.diamond_outlined, color: AppColors.navyBlue, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text("Mineral Zakat — Ma'adin", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+              Text('2.5% upon extraction · No Haul · Nisab required', style: GoogleFonts.inter(fontSize: 10.5, color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5))),
+            ])),
+            _buildImmediateBadge('On Extraction', AppColors.navyBlue),
+          ]),
+          const SizedBox(height: 12),
+          _buildSectionInputRow(
+            icon: Icons.hardware_outlined,
+            label: 'Extracted Mineral Value',
+            sub: 'Market value of total extracted batch',
+            ctrl: _mineralsValueCtrl,
+            suffix: _currency.symbol,
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: mineralsMeetsNisab ? AppColors.navyBlue.withValues(alpha: 0.08) : (_isDarkMode ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF5F7FA)),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: mineralsMeetsNisab ? AppColors.navyBlue.withValues(alpha: 0.2) : Colors.transparent),
+            ),
+            child: Row(children: [
+              Icon(mineralsMeetsNisab ? Icons.check_circle_rounded : Icons.info_outline_rounded, size: 15, color: mineralsMeetsNisab ? AppColors.navyBlue : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
+              const SizedBox(width: 8),
+              Expanded(child: Text(
+                mineralsMeetsNisab
+                  ? 'Nisab met — 2.5% due: ${_formatMoney(_mineralsZakatDue)}'
+                  : 'Nisab: ${_formatMoney(_nisabBDT)} (85g gold). Extracted: ${_formatMoney(mineralsVal)} — below threshold',
+                style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.w600, color: mineralsMeetsNisab ? AppColors.navyBlue : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5))),
+              )),
+            ]),
+          ),
+          if (mineralsMeetsNisab && _mineralsZakatDue > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.navyBlue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(children: [
+                const Icon(Icons.bolt_rounded, color: AppColors.navyBlue, size: 16),
+                const SizedBox(width: 8),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Mineral Zakat Due (Immediate — No Haul)', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.navyBlue)),
+                  Text(_formatMoney(_mineralsZakatDue), style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                ])),
+              ]),
+            ),
+          ],
+        ]),
+      ),
+      const SizedBox(height: 12),
+      // Rikaz card
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.coralOrange.withValues(alpha: 0.3)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: AppColors.coralOrange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.auto_awesome_rounded, color: AppColors.coralOrange, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Buried Treasure — Rikaz (رِكَاز)', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+              Text('20% Khums · No Nisab · Due immediately on discovery', style: GoogleFonts.inter(fontSize: 10.5, color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.5))),
+            ])),
+            _buildImmediateBadge('On Discovery', AppColors.coralOrange),
+          ]),
+          const SizedBox(height: 12),
+          _buildSectionInputRow(
+            icon: Icons.savings_outlined,
+            label: 'Found Treasure Value',
+            sub: 'Total market value of discovered buried wealth',
+            ctrl: _rikazValueCtrl,
+            suffix: _currency.symbol,
+          ),
+          if (rikazVal > 0) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF7B3F00), Color(0xFFBF6716)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(children: [
+                const Icon(Icons.account_balance_wallet_rounded, color: Colors.white70, size: 16),
+                const SizedBox(width: 8),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Rikaz Due (Khums — 20% Immediate)', style: GoogleFonts.inter(color: Colors.white70, fontSize: 10.5)),
+                  Text(_formatMoney(_rikazZakatDue), style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                ])),
+              ]),
+            ),
+          ],
+        ]),
+      ),
+    ]);
+  }
+
   Widget _iconBtn(IconData icon, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
@@ -5893,31 +7488,52 @@ class _BarChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (snapshots.isEmpty) return;
-    final maxZakat = snapshots.map((s) => s.zakatDue).reduce(math.max);
-    if (maxZakat == 0) return;
+    final maxZakatDue = snapshots.map((s) => s.zakatDue).reduce(math.max);
+    final maxPaid = snapshots.map((s) => s.zakatPaid).reduce(math.max);
+    final maxVal = math.max(maxZakatDue, maxPaid);
+
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+
+    if (maxVal == 0) {
+      textPainter
+        ..text = TextSpan(
+            text: 'No Zakat amounts recorded yet for chart',
+            style: GoogleFonts.inter(
+                fontSize: 11,
+                color: isDarkMode ? Colors.white38 : const Color(0xFF1A2E40).withValues(alpha: 0.38)))
+        ..layout();
+      textPainter.paint(
+          canvas, Offset(size.width / 2 - textPainter.width / 2, size.height / 2 - textPainter.height / 2));
+      return;
+    }
+
     final barWidth = (size.width / snapshots.length) * 0.55;
     final gap = size.width / snapshots.length;
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     for (int i = 0; i < snapshots.length; i++) {
       final s = snapshots[i];
-      final barH = (s.zakatDue / maxZakat) * (size.height - 30);
+      final barH = (s.zakatDue / maxVal) * (size.height - 30);
       final x = gap * i + (gap - barWidth) / 2;
       final y = size.height - 22 - barH;
 
-      // Bar background
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(x, y, barWidth, barH), const Radius.circular(5)),
-        Paint()..color = isDarkMode ? const Color(0xFF2C3E50) : const Color(0xFF1A2E40),
-      );
+      if (barH > 0) {
+        // Bar background (Zakat Due)
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(x, y, barWidth, barH), const Radius.circular(5)),
+          Paint()..color = isDarkMode ? const Color(0xFF2C3E50) : const Color(0xFF1A2E40),
+        );
+      }
 
       // Paid overlay
-      final paidH = math.min(s.zakatPaid / maxZakat, 1.0) * (size.height - 30);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(x, y + barH - paidH, barWidth, paidH), const Radius.circular(5)),
-        Paint()..color = const Color(0xFF459490),
-      );
+      if (s.zakatPaid > 0) {
+        final paidH = (s.zakatPaid / maxVal).clamp(0.0, 1.0) * (size.height - 30);
+        final paidY = barH > 0 ? (y + barH - paidH) : (size.height - 22 - paidH);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromLTWH(x, paidY, barWidth, paidH), const Radius.circular(5)),
+          Paint()..color = const Color(0xFF459490),
+        );
+      }
 
       // Year label
       textPainter
