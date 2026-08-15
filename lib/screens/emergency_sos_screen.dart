@@ -101,12 +101,16 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   bool _isGroupJoined = false;
   bool _isGroupLeader = false;
   final _groupCodeController = TextEditingController();
+  final _groupChatController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _groupMembersSubscription;
   StreamSubscription<Map<String, dynamic>?>? _groupSubscription;
   List<Map<String, dynamic>> _liveGroupMembers = [];
   double _groupRangeMeters = 1000;
   String _groupLeaderName = '';
   final Set<String> _geofenceAlertedMembers = {};
+  final List<Map<String, String>> _groupChatMessages = [
+    {'sender': 'Safety system', 'text': 'Group channel is ready.', 'time': 'Now'},
+  ];
   EmergencyWeatherData? _weather;
   DateTime? _lastWeatherFetch;
   bool _weatherLoading = false;
@@ -208,6 +212,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     _groupNameController.dispose();
     _hotelController.dispose();
     _groupCodeController.dispose();
+    _groupChatController.dispose();
 
     for (var contact in _contacts) {
       contact.dispose();
@@ -2865,8 +2870,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     );
   }
 
-  // Active Group status when joined
-  Widget _buildActiveGroupHub(Color cardBg, Color textColor) {
+  // Kept as a reference for the original compact group card.
+  Widget _buildLegacyActiveGroupHub(Color cardBg, Color textColor) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2986,6 +2991,214 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       ),
     );
   }
+
+  /// The group experience is deliberately split by role. A member never
+  /// receives the owner command controls in its widget tree.
+  Widget _buildActiveGroupHub(Color cardBg, Color textColor) => _isGroupLeader
+      ? _buildOwnerGroupHub(cardBg, textColor)
+      : _buildMemberGroupHub(cardBg, textColor);
+
+  Widget _buildOwnerGroupHub(Color cardBg, Color textColor) {
+    // Use the complete Firestore member list here. Unlike the radar map, the
+    // manifest must also show members who have not shared a location yet.
+    final members = _liveGroupMembers;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildGroupRoleHeader(cardBg, textColor, 'Owner Command Center', Icons.admin_panel_settings_rounded),
+        const SizedBox(height: 12),
+        _buildSectionCard(cardBg, [
+          Text('Dynamic radar radius', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+          Text('${(_groupRangeMeters / 1000).toStringAsFixed(1)} km safety zone', style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: .6))),
+          Slider(
+            value: _groupRangeMeters,
+            min: 100,
+            max: 5000,
+            divisions: 49,
+            activeColor: AppColors.midTeal,
+            label: '${(_groupRangeMeters / 1000).toStringAsFixed(1)} km',
+            onChanged: (value) => setState(() => _groupRangeMeters = value),
+            onChangeEnd: (value) => EmergencyGroupService.instance.updateRadarRadius(
+              code: _groupCodeController.text.trim().toUpperCase(), rangeMeters: value,
+            ).catchError(_showGroupError),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        _buildSectionCard(cardBg, [
+          Row(children: [
+            const Icon(Icons.key_rounded, color: AppColors.midTeal),
+            const SizedBox(width: 8),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Invite token', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+              Text(_groupCodeController.text.toUpperCase(), style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+            ])),
+            IconButton(tooltip: 'Generate a new code', onPressed: _requestInviteRefresh, icon: const Icon(Icons.refresh_rounded)),
+          ]),
+          Text('Share this with members. Expiring invite tokens are enforced when the Firebase invite service is connected.', style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: .6))),
+        ]),
+        const SizedBox(height: 16),
+        Text('Member manifest (${members.length})', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor)),
+        const SizedBox(height: 8),
+        ...members.map((member) => _buildOwnerMemberRow(cardBg, textColor, member)),
+        const SizedBox(height: 12),
+        _buildOwnerIncidentCard(cardBg, textColor),
+        const SizedBox(height: 12),
+        _buildGroupChat(cardBg, textColor),
+      ],
+    );
+  }
+
+  Widget _buildMemberGroupHub(Color cardBg, Color textColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildGroupRoleHeader(cardBg, textColor, 'Member Safety Hub', Icons.shield_rounded),
+        const SizedBox(height: 12),
+        _buildSectionCard(cardBg, [
+          Text('Need urgent help?', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: textColor)),
+          const SizedBox(height: 3),
+          Text('Hold the SOS button for 3 seconds to alert ${_groupLeaderName.isEmpty ? 'your group owner' : _groupLeaderName} and the entire group.', style: GoogleFonts.inter(fontSize: 11, height: 1.35, color: textColor.withValues(alpha: .65))),
+          const SizedBox(height: 12),
+          SizedBox(width: double.infinity, child: ElevatedButton.icon(
+            onPressed: () => setState(() => _tab = 0),
+            icon: const Icon(Icons.emergency_rounded),
+            label: const Text('OPEN PANIC BUTTON'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+          )),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _sendSafeCheckIn,
+            icon: const Icon(Icons.verified_user_rounded),
+            label: const Text("I'M SAFE — CHECK IN"),
+            style: OutlinedButton.styleFrom(foregroundColor: AppColors.midTeal, minimumSize: const Size(double.infinity, 42)),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        _buildSectionCard(cardBg, [
+          Text('Group safety status', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+          const SizedBox(height: 8),
+          _buildMemberMeta('OWNER', _groupLeaderName.isEmpty ? 'Loading…' : _groupLeaderName, textColor),
+          const SizedBox(height: 6),
+          _buildMemberMeta('RADAR RADIUS', '${(_groupRangeMeters / 1000).toStringAsFixed(1)} km', textColor),
+        ]),
+        const SizedBox(height: 12),
+        _buildGroupChat(cardBg, textColor),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _leaveGroup,
+          icon: const Icon(Icons.exit_to_app_rounded),
+          label: const Text('LEAVE GROUP'),
+          style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red), minimumSize: const Size(double.infinity, 44)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupRoleHeader(Color cardBg, Color textColor, String title, IconData icon) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16)),
+    child: Row(children: [
+      CircleAvatar(backgroundColor: AppColors.midTeal.withValues(alpha: .16), child: Icon(icon, color: AppColors.midTeal)),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: textColor)),
+        Text(_groupNameController.text.trim().isEmpty ? 'Emergency SOS group' : _groupNameController.text, style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: .6))),
+      ])),
+      const Icon(Icons.circle, size: 10, color: Colors.green),
+    ]),
+  );
+
+  Widget _buildSectionCard(Color cardBg, List<Widget> children) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+  );
+
+  Widget _buildOwnerMemberRow(Color cardBg, Color textColor, Map<String, dynamic> member) {
+    final isOwner = member['isLeader'] == true;
+    final id = member['id'] as String?;
+    final status = member['status'] as String? ?? 'SAFE';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12)),
+      child: Row(children: [
+        Icon(status == 'SAFE' ? Icons.person_pin_circle_rounded : Icons.warning_amber_rounded, color: status == 'SAFE' ? AppColors.midTeal : Colors.orange),
+        const SizedBox(width: 9),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(member['name'] as String? ?? 'Member', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
+          Text(isOwner ? 'Owner' : '${status.replaceAll('_', ' ')} • ${(member['dist'] as num? ?? 0).toStringAsFixed(1)} km away', style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: .6))),
+        ])),
+        if (!isOwner && id != null) IconButton(
+          tooltip: 'Remove member', icon: const Icon(Icons.person_remove_outlined, color: Colors.red),
+          onPressed: () => EmergencyGroupService.instance.removeMember(code: _groupCodeController.text.trim().toUpperCase(), memberId: id).catchError(_showGroupError),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildOwnerIncidentCard(Color cardBg, Color textColor) {
+    final active = _incidentLogs.where((log) => log['resolved'] != true).cast<Map<String, dynamic>>().toList();
+    return _buildSectionCard(cardBg, [
+      Text('Incident command', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+      const SizedBox(height: 5),
+      Text(active.isEmpty ? 'No active SOS incidents. All members are safe.' : '${active.length} active incident${active.length == 1 ? '' : 's'} need attention.', style: GoogleFonts.inter(fontSize: 11, color: active.isEmpty ? Colors.green : Colors.redAccent)),
+      if (active.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        ElevatedButton.icon(onPressed: _resolveLatestIncident, icon: const Icon(Icons.check_circle_outline_rounded), label: const Text('MARK ALL CLEAR'), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white)),
+      ],
+    ]);
+  }
+
+  Widget _buildGroupChat(Color cardBg, Color textColor) => _buildSectionCard(cardBg, [
+    Text('Priority group chat', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+    const SizedBox(height: 8),
+    ..._groupChatMessages.take(3).map((message) => Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Text('${message['sender']}: ${message['text']}', style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: .8))),
+    )),
+    Row(children: [
+      Expanded(child: TextField(controller: _groupChatController, style: TextStyle(color: textColor), decoration: const InputDecoration(hintText: 'Send a group message', isDense: true))),
+      IconButton(onPressed: _sendGroupMessage, icon: const Icon(Icons.send_rounded, color: AppColors.midTeal)),
+    ]),
+  ]);
+
+  void _sendGroupMessage() {
+    final message = _groupChatController.text.trim();
+    if (message.isEmpty) return;
+    setState(() {
+      _groupChatMessages.insert(0, {'sender': _nameController.text.trim().isEmpty ? 'You' : _nameController.text.trim(), 'text': message, 'time': 'Now'});
+      _groupChatController.clear();
+    });
+  }
+
+  void _sendSafeCheckIn() => setState(() => _groupChatMessages.insert(0, {
+    'sender': _nameController.text.trim().isEmpty ? 'Member' : _nameController.text.trim(), 'text': '✅ I am safe.', 'time': 'Now',
+  }));
+
+  void _requestInviteRefresh() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Invite refresh UI is ready. Connect this action to the secure Firebase invite-token function.')),
+    );
+  }
+
+  void _resolveLatestIncident() {
+    final activeIndex = _incidentLogs.indexWhere((log) => log['resolved'] != true);
+    if (activeIndex == -1) return;
+    setState(() {
+      _incidentLogs[activeIndex]['resolved'] = true;
+      _incidentLogs[activeIndex]['resolvedTime'] = DateTime.now().toIso8601String();
+    });
+    _saveIncidentLogs();
+  }
+
+  Widget _buildMemberMeta(String label, String value, Color textColor) => Row(
+    children: [
+      SizedBox(width: 110, child: Text(label, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: .55)))),
+      Expanded(child: Text(value, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: textColor))),
+    ],
+  );
 
   Widget _buildGroupMeta(String label, String val) {
     return Expanded(

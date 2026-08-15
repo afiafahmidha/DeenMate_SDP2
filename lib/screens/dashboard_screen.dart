@@ -421,16 +421,30 @@ Future<void> _onPositionUpdate(Position position) async {
     }
 
     // === Auto Qaza Calculation ===
-    // If a fard prayer time has passed today, is unchecked, and hasn't been auto-logged yet for today,
-    // automatically increment its persistent Qaza count.
+    // A prayer is Qaza only after its own time window has ended while it is
+    // still unchecked. Starting a prayer time must never mark that prayer as
+    // missed. Isha remains valid until tomorrow's Fajr.
+    final tomorrowForIsha = now.add(const Duration(days: 1));
+    final tomorrowPrayerTimes = PrayerTimes(
+      coordinates,
+      DateComponents.from(tomorrowForIsha),
+      params,
+    );
+    final Map<String, DateTime?> prayerWindowEnds = {
+      'Fajr': _sunriseTime,
+      'Dhuhr': _asrTime,
+      'Asr': _maghribTime,
+      'Maghrib': _ishaTime,
+      'Isha': tomorrowPrayerTimes.fajr,
+    };
     final ymd = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final List<String> fardPrayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
     for (final sName in fardPrayers) {
-      final sTime = allTimes[sName];
-      if (sTime == null) continue;
-      final bool isPast = now.isAfter(sTime);
+      final windowEnd = prayerWindowEnds[sName];
+      if (windowEnd == null) continue;
+      final bool hasWindowEnded = now.isAfter(windowEnd);
       final bool isDone = _salatCompleted[sName] ?? false;
-      if (isPast && !isDone) {
+      if (hasWindowEnded && !isDone) {
         final logKey = 'auto_qaza_logged_${ymd}_$sName';
         if (!_triggeredAlarms.contains(logKey)) {
           _triggeredAlarms.add(logKey);
