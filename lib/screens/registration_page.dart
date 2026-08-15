@@ -97,23 +97,23 @@ Future<void> _registerWithEmailAndPassword() async {
 
     await user.updateDisplayName(fullName);
 
-    // 3. Create user's profile in Cloud Firestore
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('profile')
-        .doc('data')
-        .set({
-      'fullName': fullName,
-      'email': emailController.text.trim(),
-      'phone': null,
-      'address': null,
-      'avatarPath': null,
-      'language': 'en',
-      'darkMode': false,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+   // 3. Create user's profile in Cloud Firestore
+await FirebaseFirestore.instance
+    .collection('users')
+    .doc(user.uid)
+    .set({
+  'profile': {
+    'fullName': fullName,
+    'email': emailController.text.trim(),
+    'phone': null,
+    'address': null,
+    'avatarPath': null,
+    'language': 'en',
+    'darkMode': false,
+    'createdAt': FieldValue.serverTimestamp(),
+    'updatedAt': FieldValue.serverTimestamp(),
+  },
+});
 
     // 4. Send email verification
     await user.sendEmailVerification();
@@ -199,7 +199,38 @@ Future<void> _registerWithEmailAndPassword() async {
         idToken: googleAuth.idToken,
       );
 
-      await FirebaseAuth.instance.signInWithCredential(credential);
+      final userCredential =
+    await FirebaseAuth.instance.signInWithCredential(credential);
+
+final user = userCredential.user;
+
+if (user == null) {
+  throw Exception('Google user creation failed.');
+}
+
+final userDoc = await FirebaseFirestore.instance
+    .collection('users')
+    .doc(user.uid)
+    .get();
+
+if (!userDoc.exists) {
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(user.uid)
+      .set({
+    'profile': {
+      'fullName': user.displayName ?? 'User',
+      'email': user.email ?? '',
+      'phone': null,
+      'address': null,
+      'avatarPath': user.photoURL,
+      'language': 'en',
+      'darkMode': false,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    },
+  });
+}
 
       if (mounted) {
         widget.onRegisterSuccess();

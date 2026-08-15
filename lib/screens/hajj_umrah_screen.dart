@@ -1,6 +1,8 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import 'hajj_ritual_detail_screen.dart';
 
@@ -1333,6 +1335,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
 
   Future<void> _loadState() async {
     final prefs = await SharedPreferences.getInstance();
+    
+    // 1. Load cached states from SharedPreferences
     setState(() {
       _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
       _hajjType = prefs.getString('hajj_type') ?? 'Tamattu';
@@ -1356,9 +1360,123 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       for (final item in _documentItems) {
         _documentsDone[item] = prefs.getBool('doc_${item.hashCode}') ?? false;
       }
-
-      _initSegmentControllersForCurrentMode();
     });
+
+    // 2. Fetch from Firestore users/{uid} directly
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (doc.exists) {
+          final data = doc.data();
+          if (data != null && data['hajjUmrah'] != null) {
+            final hajjUmrah = data['hajjUmrah'] as Map<String, dynamic>;
+            final remoteHajjType = hajjUmrah['hajjType'] as String?;
+            final remoteHajjRitual = hajjUmrah['hajjRitualDone'] as Map<String, dynamic>?;
+            final remoteUmrahRitual = hajjUmrah['umrahRitualDone'] as Map<String, dynamic>?;
+            final remotePacking = hajjUmrah['packingDone'] as Map<String, dynamic>?;
+            final remoteDocuments = hajjUmrah['documentsDone'] as Map<String, dynamic>?;
+
+            setState(() {
+              if (remoteHajjType != null) {
+                _hajjType = remoteHajjType;
+                prefs.setString('hajj_type', remoteHajjType);
+              }
+
+              if (remoteHajjRitual != null) {
+                remoteHajjRitual.forEach((key, val) {
+                  if (val is bool) {
+                    _hajjRitualDone[key] = val;
+                    prefs.setBool('hajj_$key', val);
+                  }
+                });
+              }
+
+              if (remoteUmrahRitual != null) {
+                remoteUmrahRitual.forEach((key, val) {
+                  if (val is bool) {
+                    _umrahRitualDone[key] = val;
+                    prefs.setBool('umrah_$key', val);
+                  }
+                });
+              }
+
+              if (remotePacking != null) {
+                remotePacking.forEach((key, val) {
+                  if (val is bool) {
+                    _packingDone[key] = val;
+                    final item = _packingItems.firstWhere((i) => i == key, orElse: () => "");
+                    if (item.isNotEmpty) {
+                      prefs.setBool('pack_${item.hashCode}', val);
+                    } else {
+                      final hash = int.tryParse(key);
+                      if (hash != null) {
+                        final matchedItem = _packingItems.firstWhere((i) => i.hashCode == hash, orElse: () => "");
+                        if (matchedItem.isNotEmpty) {
+                          _packingDone[matchedItem] = val;
+                          prefs.setBool('pack_${matchedItem.hashCode}', val);
+                        }
+                      }
+                    }
+                  }
+                });
+              }
+
+              if (remoteDocuments != null) {
+                remoteDocuments.forEach((key, val) {
+                  if (val is bool) {
+                    _documentsDone[key] = val;
+                    final item = _documentItems.firstWhere((i) => i == key, orElse: () => "");
+                    if (item.isNotEmpty) {
+                      prefs.setBool('doc_${item.hashCode}', val);
+                    } else {
+                      final hash = int.tryParse(key);
+                      if (hash != null) {
+                        final matchedItem = _documentItems.firstWhere((i) => i.hashCode == hash, orElse: () => "");
+                        if (matchedItem.isNotEmpty) {
+                          _documentsDone[matchedItem] = val;
+                          prefs.setBool('doc_${matchedItem.hashCode}', val);
+                        }
+                      }
+                    }
+                  }
+                });
+              }
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint("Error loading Hajj/Umrah state from Firestore: $e");
+      }
+    }
+
+    _initSegmentControllersForCurrentMode();
+  }
+
+  Future<void> _updateFirestoreHajjUmrah() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({
+        'hajjUmrah': {
+          'hajjType': _hajjType,
+          'hajjRitualDone': _hajjRitualDone,
+          'umrahRitualDone': _umrahRitualDone,
+          'packingDone': _packingDone,
+          'documentsDone': _documentsDone,
+        }
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Error updating Hajj/Umrah state in Firestore: $e");
+    }
   }
 
   Future<void> _saveBool(String key, bool value) async {
@@ -1666,6 +1784,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                         final newVal = !alreadyDone;
                         setState(() => doneMap[id] = newVal);
                         _saveBool('$prefix$id', newVal);
+                        _updateFirestoreHajjUmrah();
 
                         if (i < steps.length - 1) {
                           final controller = _segmentControllers['${segKeyPrefix}_$i'];
@@ -1762,6 +1881,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             SharedPreferences.getInstance().then((prefs) {
               prefs.setString('hajj_type', type);
             });
+            _updateFirestoreHajjUmrah();
           }
         },
         child: AnimatedContainer(
@@ -2104,6 +2224,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                 final newVal = !(_packingDone[item] ?? false);
                 setState(() => _packingDone[item] = newVal);
                 _saveBool('pack_${item.hashCode}', newVal);
+                _updateFirestoreHajjUmrah();
               },
               icon: Icons.checkroom_rounded,
             )),
@@ -2126,6 +2247,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                 final newVal = !(_documentsDone[item] ?? false);
                 setState(() => _documentsDone[item] = newVal);
                 _saveBool('doc_${item.hashCode}', newVal);
+                _updateFirestoreHajjUmrah();
               },
               icon: Icons.description_rounded,
             )),
