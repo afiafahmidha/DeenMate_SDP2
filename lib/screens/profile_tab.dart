@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import '../services/theme_service.dart';
@@ -75,12 +77,82 @@ class _ProfileTabState extends State<ProfileTab> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final savedImagePath = prefs.getString('profile_avatar_path');
-    setState(() {
 
-      _fullNameController.text = prefs.getString('profile_name') ?? "Rahim Uddin";
-      _phoneController.text = prefs.getString('profile_phone') ?? "+8801987654321";
-      _addressController.text = prefs.getString('profile_address') ?? "Dhaka, Bangladesh";
-      _email = prefs.getString('profile_email') ?? "rahimuddin@gmail.com";
+    // Default values from SharedPreferences/constants
+    String name = prefs.getString('profile_name') ?? "";
+    String phone = prefs.getString('profile_phone') ?? "";
+    String address = prefs.getString('profile_address') ?? "";
+    String email = prefs.getString('profile_email') ?? "";
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      if (email.isEmpty) {
+        email = user.email ?? "";
+      }
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        if (doc.exists) {
+          final data = doc.data();
+          if (data != null && data['profile'] != null) {
+            final profile = data['profile'] as Map<String, dynamic>;
+            if (name.isEmpty || (profile['fullName'] as String?)?.isNotEmpty == true) {
+              name = profile['fullName'] ?? name;
+            }
+            if (phone.isEmpty || (profile['phone'] as String?)?.isNotEmpty == true) {
+              phone = profile['phone'] ?? phone;
+            }
+            if (address.isEmpty || (profile['address'] as String?)?.isNotEmpty == true) {
+              address = profile['address'] ?? address;
+            }
+            if (profile['email'] != null) {
+              email = profile['email'];
+            }
+            
+            // Save to SharedPreferences so they stay cached
+            await prefs.setString('profile_name', name);
+            await prefs.setString('profile_phone', phone);
+            await prefs.setString('profile_address', address);
+            await prefs.setString('profile_email', email);
+          }
+        } else {
+          // If no document exists yet, create one for this user
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+            'profile': {
+              'fullName': user.displayName ?? name,
+              'email': user.email ?? email,
+              'phone': phone.isNotEmpty ? phone : null,
+              'address': address.isNotEmpty ? address : null,
+              'avatarPath': user.photoURL,
+              'language': 'en',
+              'darkMode': false,
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            }
+          });
+          name = user.displayName ?? name;
+          email = user.email ?? email;
+        }
+      } catch (e) {
+        debugPrint("Error loading profile from Firestore: $e");
+      }
+    }
+
+    if (name.isEmpty) name = "User";
+    if (phone.isEmpty) phone = "+8801987654321";
+    if (address.isEmpty) address = "Dhaka, Bangladesh";
+    if (email.isEmpty) email = "user@deenmate.com";
+
+    setState(() {
+      _fullNameController.text = name;
+      _phoneController.text = phone;
+      _addressController.text = address;
+      _email = email;
 
       _arabicFontSize = prefs.getDouble('quran_font_size') ?? 24;
       _banglaTranslation = prefs.getBool('quran_bangla_translation') ?? true;
@@ -97,9 +169,13 @@ class _ProfileTabState extends State<ProfileTab> {
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString('profile_name', _fullNameController.text);
-    await prefs.setString('profile_phone', _phoneController.text);
-    await prefs.setString('profile_address', _addressController.text);
+    final fullName = _fullNameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final address = _addressController.text.trim();
+
+    await prefs.setString('profile_name', fullName);
+    await prefs.setString('profile_phone', phone);
+    await prefs.setString('profile_address', address);
     // Email is deliberately never written from a user-editable field.
 
     await prefs.setDouble('quran_font_size', _arabicFontSize);
@@ -110,6 +186,46 @@ class _ProfileTabState extends State<ProfileTab> {
 
     if (_avatarImage != null) {
       await prefs.setString('profile_avatar_path', _avatarImage!.path);
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'profile.fullName': fullName,
+          'profile.phone': phone,
+          'profile.address': address,
+          'profile.updatedAt': FieldValue.serverTimestamp(),
+        });
+        
+        // Also update FirebaseAuth display name
+        await user.updateDisplayName(fullName);
+      } catch (e) {
+        // If document doesn't support update (e.g. doesn't exist yet), set it
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+            'profile': {
+              'fullName': fullName,
+              'email': user.email ?? _email,
+              'phone': phone,
+              'address': address,
+              'avatarPath': user.photoURL,
+              'language': 'en',
+              'darkMode': false,
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            }
+          }, SetOptions(merge: true));
+        } catch (err) {
+          debugPrint("Error updating profile in Firestore: $err");
+        }
+      }
     }
   }
 
