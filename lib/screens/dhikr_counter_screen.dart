@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import '../services/notification_service.dart';
 
@@ -264,6 +267,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
 
   late AnimationController _tapPulseController;
   late AnimationController _breathController;
+  Timer? _dbWriteTimer;
 
   // ===== THEME HELPERS =====
   bool get _dark => widget.isDarkMode || Theme.of(context).brightness == Brightness.dark;
@@ -302,6 +306,8 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
 
   @override
   void dispose() {
+    _dbWriteTimer?.cancel();
+    _syncDhikrToFirestore();
     _tapPulseController.dispose();
     _breathController.dispose();
     super.dispose();
@@ -309,12 +315,7 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
 
   String get _todayKey => 'dhikr_daily_${DateFormat('yyyyMMdd').format(DateTime.now())}';
 
-  Future<void> _loadStats() async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = prefs.getInt(_todayKey) ?? 0;
-    final lifetime = prefs.getInt('dhikr_lifetime_total') ?? 0;
-    final hintDismissed = prefs.getBool('dhikr_hint_dismissed') ?? false;
-
+  int _calculateStreak(SharedPreferences prefs) {
     int streak = 0;
     DateTime day = DateTime.now();
     while (true) {
@@ -327,14 +328,168 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
         break;
       }
     }
+    return streak;
+  }
 
-    if (!mounted) return;
-    setState(() {
-      _todayTotal = today;
-      _lifetimeTotal = lifetime;
-      _currentStreak = streak;
-      _showHint = !hintDismissed;
-    });
+  Future<void> _loadStats() async {
+    final prefs = await SharedPreferences.getInstance();
+    int today = prefs.getInt(_todayKey) ?? 0;
+    int lifetime = prefs.getInt('dhikr_lifetime_total') ?? 0;
+    final hintDismissed = prefs.getBool('dhikr_hint_dismissed') ?? false;
+
+    int streak = _calculateStreak(prefs);
+
+    if (mounted) {
+      setState(() {
+        _todayTotal = today;
+        _lifetimeTotal = lifetime;
+        _currentStreak = streak;
+        _showHint = !hintDismissed;
+      });
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (doc.exists) {
+          final data = doc.data();
+          if (data != null && data['dhikr'] != null) {
+            final dhikrMap = data['dhikr'] as Map<String, dynamic>;
+            final remoteLifetime = dhikrMap['lifetimeTotal'] as int? ?? 0;
+            final remoteDailyHistory = dhikrMap['dailyHistory'] as Map<String, dynamic>?;
+            final remotePresetsDaily = dhikrMap['presetsDaily'] as Map<String, dynamic>?;
+            final remotePresetsLifetime = dhikrMap['presetsLifetime'] as Map<String, dynamic>?;
+
+            if (remoteLifetime > lifetime) {
+              lifetime = remoteLifetime;
+              await prefs.setInt('dhikr_lifetime_total', remoteLifetime);
+            }
+
+            if (remoteDailyHistory != null) {
+              for (final entry in remoteDailyHistory.entries) {
+                final dateKey = entry.key;
+                final count = entry.value as int? ?? 0;
+                final key = 'dhikr_daily_$dateKey';
+                final localCount = prefs.getInt(key) ?? 0;
+                if (count > localCount) {
+                  await prefs.setInt(key, count);
+                  if (dateKey == DateFormat('yyyyMMdd').format(DateTime.now())) {
+                    today = count;
+                  }
+                }
+              }
+            }
+
+            if (remotePresetsDaily != null) {
+              for (final dateEntry in remotePresetsDaily.entries) {
+                final dateKey = dateEntry.key;
+                final breakdown = dateEntry.value as Map<String, dynamic>;
+                for (final presetEntry in breakdown.entries) {
+                  final presetKey = presetEntry.key;
+                  final count = presetEntry.value as int? ?? 0;
+                  final key = 'dhikr_daily_${dateKey}_$presetKey';
+                  final localCount = prefs.getInt(key) ?? 0;
+                  if (count > localCount) {
+                    await prefs.setInt(key, count);
+                  }
+                }
+              }
+            }
+
+            if (remotePresetsLifetime != null) {
+              for (final entry in remotePresetsLifetime.entries) {
+                final presetKey = entry.key;
+                final count = entry.value as int? ?? 0;
+                final key = 'dhikr_lifetime_$presetKey';
+                final localCount = prefs.getInt(key) ?? 0;
+                if (count > localCount) {
+                  await prefs.setInt(key, count);
+                }
+              }
+            }
+
+            streak = _calculateStreak(prefs);
+
+            if (mounted) {
+              setState(() {
+                _todayTotal = today;
+                _lifetimeTotal = lifetime;
+                _currentStreak = streak;
+              });
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint("Error fetching Dhikr counts from Firestore: $e");
+      }
+    }
+  }
+
+  Future<void> _syncDhikrToFirestore() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final lifetimeTotal = prefs.getInt('dhikr_lifetime_total') ?? 0;
+
+    final Map<String, int> dailyHistory = {};
+    final Map<String, Map<String, int>> presetsDaily = {};
+
+    final now = DateTime.now();
+    for (int i = 0; i < 30; i++) {
+      final day = now.subtract(Duration(days: i));
+      final dateKey = DateFormat('yyyyMMdd').format(day);
+      final key = 'dhikr_daily_$dateKey';
+      final val = prefs.getInt(key) ?? 0;
+      if (val > 0) {
+        dailyHistory[dateKey] = val;
+
+        final Map<String, int> breakdown = {};
+        for (final preset in [..._presets, const _DhikrPreset(name: 'Custom', arabic: '', translit: '', meaning: '', virtue: '', target: 0, icon: Icons.tune_rounded)]) {
+          final presetKey = preset.name.replaceAll(' ', '_');
+          final todayPresetKey = '${key}_$presetKey';
+          final count = prefs.getInt(todayPresetKey) ?? 0;
+          if (count > 0) {
+            breakdown[presetKey] = count;
+          }
+        }
+        if (breakdown.isNotEmpty) {
+          presetsDaily[dateKey] = breakdown;
+        }
+      }
+    }
+
+    final Map<String, int> presetsLifetime = {};
+    for (final preset in [..._presets, const _DhikrPreset(name: 'Custom', arabic: '', translit: '', meaning: '', virtue: '', target: 0, icon: Icons.tune_rounded)]) {
+      final presetKey = preset.name.replaceAll(' ', '_');
+      final key = 'dhikr_lifetime_$presetKey';
+      final count = prefs.getInt(key) ?? 0;
+      if (count > 0) {
+        presetsLifetime[presetKey] = count;
+      }
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({
+        'dhikr': {
+          'lifetimeTotal': lifetimeTotal,
+          'dailyHistory': dailyHistory,
+          'presetsDaily': presetsDaily,
+          'presetsLifetime': presetsLifetime,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        }
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Error syncing Dhikr counts to Firestore: $e");
+    }
   }
 
   Future<void> _loadReminderSettings() async {
@@ -376,6 +531,11 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
       _todayTotal = today;
       _lifetimeTotal = lifetime;
       if (_currentStreak == 0) _currentStreak = 1;
+    });
+
+    _dbWriteTimer?.cancel();
+    _dbWriteTimer = Timer(const Duration(milliseconds: 1500), () {
+      _syncDhikrToFirestore();
     });
   }
 
