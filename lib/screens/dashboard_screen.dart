@@ -129,40 +129,59 @@ class _DashboardScreenState extends State<DashboardScreen>
 
 
 Future<void> _loadUserProfile() async {
+  debugPrint('🔥🔥🔥 LOAD USER PROFILE CALLED 🔥🔥🔥');
+
   try {
     final user = FirebaseAuth.instance.currentUser;
-
     if (user == null) {
       debugPrint('No logged-in user found.');
       return;
     }
 
+    // 1. Immediately load cached name from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final cachedName = prefs.getString('profile_name');
+    if (cachedName != null && cachedName.trim().isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _userName = cachedName.trim();
+        });
+      }
+    } else {
+      // Fallback to auth display name if available
+      if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _userName = user.displayName!.trim();
+          });
+        }
+      }
+    }
+
+    // 2. Fetch from Firestore users/{uid} directly
     final doc = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .get();
 
-    if (!doc.exists) {
-      debugPrint('User document does not exist.');
-      return;
+    if (doc.exists) {
+      final data = doc.data();
+      if (data != null && data['profile'] != null) {
+        final profile = data['profile'] as Map<String, dynamic>;
+        final fullName = profile['fullName'] as String?;
+        
+        if (fullName != null && fullName.trim().isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _userName = fullName.trim();
+            });
+          }
+          await prefs.setString('profile_name', _userName);
+        }
+      }
+    } else {
+      debugPrint('User profile document does not exist.');
     }
-
-    final data = doc.data();
-
-    if (data == null) return;
-
-    final profile = data['profile'] as Map<String, dynamic>?;
-
-    if (!mounted) return;
-
-    setState(() {
-      _userName =
-          (profile?['fullName'] as String?)?.trim().isNotEmpty == true
-              ? profile!['fullName'] as String
-              : (user.displayName?.trim().isNotEmpty == true
-                  ? user.displayName!
-                  : 'User');
-    });
   } catch (e) {
     debugPrint('Error loading user profile: $e');
   }
@@ -1204,15 +1223,15 @@ _buildAnimatedEntry(
                   ],
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  'Rahim',
-                  style: GoogleFonts.poppins(
-                    fontSize: 30,
-                    fontWeight: FontWeight.bold,
-                    color: _isDarkMode ? Colors.white : AppColors.navyBlue,
-                    letterSpacing: 0.5,
-                  ),
-                ),
+               Text(
+  _userName,
+  style: GoogleFonts.poppins(
+    fontSize: 30,
+    fontWeight: FontWeight.bold,
+    color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+    letterSpacing: 0.5,
+  ),
+),
               ],
             ),
           ),
