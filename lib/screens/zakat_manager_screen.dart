@@ -71,6 +71,15 @@ class ZakatYearSnapshot {
   final double zakatDue;
   final double zakatPaid;
   final String? livestockZakat;
+  final double fitraDue;
+  final double fitraPaid;
+  final double cropsDue;
+  final double cropsPaid;
+  final double mineralsDue;
+  final double mineralsPaid;
+  final double rikazDue;
+  final double rikazPaid;
+  final List<ZakatPayment> payments;
 
   ZakatYearSnapshot({
     required this.year,
@@ -78,6 +87,15 @@ class ZakatYearSnapshot {
     required this.zakatDue,
     required this.zakatPaid,
     this.livestockZakat,
+    this.fitraDue = 0,
+    this.fitraPaid = 0,
+    this.cropsDue = 0,
+    this.cropsPaid = 0,
+    this.mineralsDue = 0,
+    this.mineralsPaid = 0,
+    this.rikazDue = 0,
+    this.rikazPaid = 0,
+    this.payments = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -86,6 +104,15 @@ class ZakatYearSnapshot {
         'zakatDue': zakatDue,
         'zakatPaid': zakatPaid,
         'livestockZakat': livestockZakat,
+        'fitraDue': fitraDue,
+        'fitraPaid': fitraPaid,
+        'cropsDue': cropsDue,
+        'cropsPaid': cropsPaid,
+        'mineralsDue': mineralsDue,
+        'mineralsPaid': mineralsPaid,
+        'rikazDue': rikazDue,
+        'rikazPaid': rikazPaid,
+        'payments': payments.map((p) => p.toJson()).toList(),
       };
 
   factory ZakatYearSnapshot.fromJson(Map<String, dynamic> j) =>
@@ -95,6 +122,17 @@ class ZakatYearSnapshot {
         zakatDue: (j['zakatDue'] as num).toDouble(),
         zakatPaid: (j['zakatPaid'] as num).toDouble(),
         livestockZakat: j['livestockZakat'] as String?,
+        fitraDue: (j['fitraDue'] as num?)?.toDouble() ?? 0,
+        fitraPaid: (j['fitraPaid'] as num?)?.toDouble() ?? 0,
+        cropsDue: (j['cropsDue'] as num?)?.toDouble() ?? 0,
+        cropsPaid: (j['cropsPaid'] as num?)?.toDouble() ?? 0,
+        mineralsDue: (j['mineralsDue'] as num?)?.toDouble() ?? 0,
+        mineralsPaid: (j['mineralsPaid'] as num?)?.toDouble() ?? 0,
+        rikazDue: (j['rikazDue'] as num?)?.toDouble() ?? 0,
+        rikazPaid: (j['rikazPaid'] as num?)?.toDouble() ?? 0,
+        payments: (j['payments'] as List<dynamic>? ?? [])
+            .map((p) => ZakatPayment.fromJson(p as Map<String, dynamic>))
+            .toList(),
       );
 }
 
@@ -450,14 +488,25 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   String? _completedHaulLivestockSummary;
 
   String get _lockedLivestockSummary {
-    if (_completedHaulLivestockSummary != null && _completedHaulLivestockSummary!.isNotEmpty) {
-      return _completedHaulLivestockSummary!;
+    // A completed assessment can deliberately have no livestock obligation.
+    // Do not fall back to an older haul in that case.
+    if (_completedHaulWealthZakat != null) {
+      return _completedHaulLivestockSummary ?? '';
     }
     if (_haulCycles.isNotEmpty) {
       return _haulCycles.last.lockedLivestockSummary ?? '';
     }
     return '';
   }
+
+  bool get _hasCompletedHaulAssessment =>
+      _isHaulCompleted || _haulCycles.isNotEmpty;
+
+  /// Live livestock inputs belong to the next haul and must not alter a
+  /// completed haul's snapshot, payment options, or financial statement.
+  String get _assessmentLivestockSummary => _hasCompletedHaulAssessment
+      ? _lockedLivestockSummary
+      : _livestockZakatSummary;
 
   // Record of all completed haul cycles
   List<HaulCycle> _haulCycles = [];
@@ -492,6 +541,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   double get _fitraWeightPerHead => double.tryParse(_fitraWeightCtrl.text) ?? 3.0;
   double get _fitraTotal =>
       _fitraMembers * _fitraWeightPerHead * _fitraRatePerKg * _toBDT;
+  bool get _isRamadan => _Hijri.fromGregorian(DateTime.now()).month == 9;
 
   // ── Payments ─────────────────────────────────────────────────
   double get _activeZakatDue {
@@ -514,15 +564,71 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   double get _stillOwed => (_activeZakatDue - _totalPaid).clamp(0.0, double.infinity);
 
   // Immediate zakat (crops/minerals/rikaz) is tracked completely separately
+  double _immediatePaidFor(String obligationType) => _payments
+      .where((p) => p.obligationType == obligationType)
+      .fold(0.0, (s, p) => s + (p.amount * _currencyRate(p.currency)));
   double get _immediatePaid => _payments
       .where((p) => p.obligationType == 'crops' || p.obligationType == 'minerals' || p.obligationType == 'rikaz')
       .fold(0.0, (s, p) => s + (p.amount * _currencyRate(p.currency)));
-  double get _immediateStillOwed => (_cropsZakatDue + _mineralsZakatDue + _rikazZakatDue).clamp(0.0, double.infinity);
-  double get _immediateTotalDue => _immediateStillOwed + _immediatePaid;
+  double get _immediateStillOwed =>
+      ((_cropsZakatDue - _immediatePaidFor('crops')).clamp(0.0, double.infinity) +
+              (_mineralsZakatDue - _immediatePaidFor('minerals')).clamp(0.0, double.infinity) +
+              (_rikazZakatDue - _immediatePaidFor('rikaz')).clamp(0.0, double.infinity))
+          .toDouble();
+  double get _immediateTotalDue =>
+      _cropsZakatDue + _mineralsZakatDue + _rikazZakatDue;
 
-  double get _fitraPaid =>
-      _fitraPayments.fold(0.0, (s, p) => s + (p.amount * _currencyRate(p.currency)));
+  double get _fitraPaid {
+    final currentHijriYear = _Hijri.fromGregorian(DateTime.now()).year;
+    return _fitraPayments
+        .where((p) => _Hijri.fromGregorian(p.date).year == currentHijriYear)
+        .fold(0.0, (s, p) => s + (p.amount * _currencyRate(p.currency)));
+  }
   double get _fitraStillOwed => (_fitraTotal - _fitraPaid).clamp(0.0, double.infinity);
+
+  /// Remaining payable amount (in BDT) for a given obligation type.
+  double _remainingForObligation(String obligationType) {
+    switch (obligationType) {
+      case 'crops':
+        return (_cropsZakatDue - _immediatePaidFor('crops'))
+            .clamp(0.0, double.infinity);
+      case 'minerals':
+        return (_mineralsZakatDue - _immediatePaidFor('minerals'))
+            .clamp(0.0, double.infinity);
+      case 'rikaz':
+        return (_rikazZakatDue - _immediatePaidFor('rikaz'))
+            .clamp(0.0, double.infinity);
+      case 'fitra':
+        return _fitraStillOwed;
+      default:
+        return _stillOwed;
+    }
+  }
+
+  String _obligationLabel(String obligationType) {
+    switch (obligationType) {
+      case 'crops':
+        return 'Ushr';
+      case 'minerals':
+        return 'Minerals';
+      case 'rikaz':
+        return 'Rikaz';
+      case 'fitra':
+        return 'Fitra';
+      default:
+        return 'Haul';
+    }
+  }
+
+  /// Formats the remaining payable amount (in BDT) into the given currency.
+  String _paymentRemainingText(String currencyCode, String obligationType) {
+    final remainingBDT = _remainingForObligation(obligationType);
+    final symbol = _currencies
+        .firstWhere((c) => c.code == currencyCode, orElse: () => _currencies.first)
+        .symbol;
+    final rate = _currencyRate(currencyCode);
+    return '$symbol ${NumberFormat('#,##0').format(remainingBDT / rate)}';
+  }
 
   double _currencyRate(String code) {
     final c = _currencies.firstWhere((x) => x.code == code,
@@ -764,8 +870,31 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     _currentHaulCycleNumber = p.getInt('zm_current_haul_cycle_num') ?? 1;
 
     _checkAutoRollover();
+    _repairCurrentYearSnapshotLivestock();
     setState(() {});
     _recalculate();
+  }
+
+  /// Repair the current saved record from older app versions that captured
+  /// next-haul livestock instead of the completed haul's locked value.
+  void _repairCurrentYearSnapshotLivestock() {
+    if (!_hasCompletedHaulAssessment) return;
+
+    final index = _history.indexWhere((s) => s.year == DateTime.now().year);
+    if (index < 0) return;
+
+    final snapshot = _history[index];
+    final livestockSummary = _assessmentLivestockSummary;
+    if ((snapshot.livestockZakat ?? '') == livestockSummary) return;
+
+    _history[index] = ZakatYearSnapshot(
+      year: snapshot.year,
+      wealth: snapshot.wealth,
+      zakatDue: snapshot.zakatDue,
+      zakatPaid: snapshot.zakatPaid,
+      livestockZakat:
+          livestockSummary.isEmpty ? null : livestockSummary,
+    );
   }
 
   Future<void> _savePrefs() async {
@@ -1509,8 +1638,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           // ── Liabilities ────────────────────────────────────────
           _buildSectionHeader('Liabilities', AppColors.coralOrange),
           const SizedBox(height: 10),
-          _buildInputCard(Icons.money_off_outlined, 'Immediate Liabilities',
-              'Immediate debts & outstanding dues', _liabilitiesCtrl, _currency.symbol),
+          _buildInputCard(Icons.money_off_outlined, 'Liabilities',
+              'Debts & outstanding dues to deduct', _liabilitiesCtrl, _currency.symbol),
           const SizedBox(height: 8),
           _buildCustomFieldsSection(isLiability: true),
           const SizedBox(height: 16),
@@ -4466,17 +4595,14 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     final now = DateTime.now();
     final todayHijri = _Hijri.fromGregorian(now);
 
-    // Ramadan is Month 9. Seasonal gate: Last 10 days of Ramadan (Day 20 to 29/30)
+    // Fitra belongs to Ramadan. It must not create a payable amount outside it.
     final bool isRamadan = todayHijri.month == 9;
-    final bool isFitraWindowOpen = isRamadan && todayHijri.day >= 20;
+    final bool isFitraWindowOpen = isRamadan;
 
     int daysUntilWindow = 0;
     String statusMessage = '';
 
-    if (isRamadan && todayHijri.day < 20) {
-      daysUntilWindow = 20 - todayHijri.day;
-      statusMessage = 'Starts in the last 10 days of Ramadan';
-    } else if (!isRamadan) {
+    if (!isRamadan) {
       int monthsRemaining = 0;
       if (todayHijri.month < 9) {
         monthsRemaining = 9 - todayHijri.month - 1;
@@ -4573,7 +4699,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   const SizedBox(height: 16),
                   Text(
                     isRamadan
-                        ? 'Zakat al-Fitr is only payable during Ramadan, ideally in the last 10 days before the Eid prayer.'
+                        ? 'Zakat al-Fitr is payable during Ramadan and should be given before the Eid prayer.'
                         : 'Zakat al-Fitr is paid during the month of Ramadan. The calculation and payment logging will unlock automatically once the season begins.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
@@ -4972,8 +5098,12 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text((_isHaulCompleted || _haulCycles.isNotEmpty) ? "Completed Haul Zakat" : 'Zakat (Estimate)',
-                          style: GoogleFonts.inter(color: Colors.white54, fontSize: 11)),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text((_isHaulCompleted || _haulCycles.isNotEmpty) ? 'Haul Zakat' : 'Zakat (Estimate)',
+                            style: GoogleFonts.inter(color: Colors.white54, fontSize: 11)),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         _formatMoney(_activeZakatDue),
@@ -5410,9 +5540,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         fontSize: 9.5, fontWeight: FontWeight.bold, color: color)),
               ),
               const Spacer(),
-              Text(DateFormat('d MMM yyyy').format(p.date),
+              Text("Paid on ${DateFormat('dd MMMM yyyy').format(p.date)}",
                   style: GoogleFonts.inter(
-                      fontSize: 10.5, color: _isDarkMode ? Colors.white.withValues(alpha: 0.45) : AppColors.navyBlue.withValues(alpha: 0.45))),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
             ],
           ),
           const SizedBox(height: 8),
@@ -5550,9 +5682,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         p.animalDescription != null &&
         p.animalDescription!.isNotEmpty);
 
-    final bool activeLivestockPresent = (_isHaulCompleted || _haulCycles.isNotEmpty)
-        ? _lockedLivestockSummary.isNotEmpty
-        : (_livestockMeetsNisab && _livestockZakatDueItems.isNotEmpty);
+    final livestockPaymentOptions = _hasCompletedHaulAssessment
+        ? (_lockedLivestockSummary.isEmpty ? <String>[] : [_lockedLivestockSummary])
+        : _livestockZakatDueItems;
+
+    final bool activeLivestockPresent = livestockPaymentOptions.isNotEmpty;
 
     final bool hasLivestockObligation = !isFitra &&
         (prefilledObligationType == null || prefilledObligationType == 'haul') &&
@@ -5560,10 +5694,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         !hasAnimalPaymentLogged;
 
     bool isAnimalPayment = false;
-    final String defaultAnimal = (_isHaulCompleted || _haulCycles.isNotEmpty)
-        ? _lockedLivestockSummary
-        : (_livestockZakatDueItems.isNotEmpty ? _livestockZakatDueItems.first : '');
+    final String defaultAnimal = livestockPaymentOptions.isNotEmpty
+        ? livestockPaymentOptions.first
+        : '';
     String selectedAnimal = hasLivestockObligation ? defaultAnimal : '';
+    String? paymentError;
 
     showModalBottomSheet(
       context: context,
@@ -5640,7 +5775,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                           ),
                           const SizedBox(height: 6),
                           DropdownButtonFormField<String>(
-                            initialValue: _livestockZakatDueItems.contains(selectedAnimal) ? selectedAnimal : _livestockZakatDueItems.first,
+                            initialValue: livestockPaymentOptions.contains(selectedAnimal) ? selectedAnimal : livestockPaymentOptions.first,
                             style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                             dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
                             decoration: InputDecoration(
@@ -5650,7 +5785,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                               fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                             ),
-                            items: _livestockZakatDueItems
+                            items: livestockPaymentOptions
                                 .map((item) => DropdownMenuItem(
                                       value: item,
                                       child: Text(item,
@@ -5672,7 +5807,12 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   children: [
                     Expanded(
                       child: _sheetField(amountCtrl, isAnimalPayment ? 'Equivalent Value (optional)' : 'Amount',
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          onChanged: (_) {
+                            if (paymentError != null) {
+                              setModalState(() => paymentError = null);
+                            }
+                          }),
                     ),
                     const SizedBox(width: 10),
                     DropdownButtonHideUnderline(
@@ -5683,7 +5823,12 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                             color: _isDarkMode ? Colors.white : AppColors.navyBlue),
-                        onChanged: (v) => setModalState(() => currency = v!),
+                        onChanged: (v) {
+                          setModalState(() => currency = v!);
+                          if (paymentError != null) {
+                            setModalState(() => paymentError = null);
+                          }
+                        },
                         items: _currencies
                             .map((c) => DropdownMenuItem(
                                   value: c.code,
@@ -5694,6 +5839,49 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     ),
                   ],
                 ),
+                if (!isAnimalPayment) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Remaining ${_obligationLabel(isFitra ? 'fitra' : obligationType)} to pay: '
+                    '${_paymentRemainingText(currency, isFitra ? 'fitra' : obligationType)}',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF2E7D32),
+                    ),
+                  ),
+                ],
+                if (paymentError != null) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.coralOrange.withValues(alpha: _isDarkMode ? 0.2 : 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: AppColors.coralOrange.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.error_outline_rounded,
+                            size: 14, color: AppColors.coralOrange),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            paymentError!,
+                            style: GoogleFonts.inter(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.coralOrange,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 _sheetField(recipientCtrl, 'Recipient / Organization'),
                 const SizedBox(height: 10),
@@ -5757,7 +5945,22 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                 InkWell(
                   onTap: () {
                     final amount = double.tryParse(amountCtrl.text) ?? 0;
-                    if (!isAnimalPayment && amount <= 0) return;
+                    final payObligationType = isFitra ? 'fitra' : obligationType;
+                    if (!isAnimalPayment) {
+                      if (amount <= 0) {
+                        setModalState(() => paymentError =
+                            'Enter an amount greater than 0.');
+                        return;
+                      }
+                      final remainingBDT = _remainingForObligation(payObligationType);
+                      final amountBDT = amount * _currencyRate(currency);
+                      if (amountBDT > remainingBDT + 0.01) {
+                        setModalState(() => paymentError =
+                            'Amount exceeds remaining ${_obligationLabel(payObligationType)} to pay '
+                            '(max ${_paymentRemainingText(currency, payObligationType)}).');
+                        return;
+                      }
+                    }
                     if (recipientCtrl.text.trim().isEmpty) return;
                     final pay = ZakatPayment(
                       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -5775,25 +5978,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                         _fitraPayments.insert(0, pay);
                       } else {
                         _payments.insert(0, pay);
-                        // After saving, check if immediate zakat is now fully paid
-                        // and clear the relevant fields so the card resets to zero
-                        if (obligationType == 'crops') {
-                          final newRemaining = (_cropsZakatDue - _immediatePaid).clamp(0.0, double.infinity);
-                          if (newRemaining <= 1.0) {
-                            _cropsHarvestKgCtrl.text = '0';
-                            _cropsPricePerKgCtrl.text = '0';
-                          }
-                        } else if (obligationType == 'minerals') {
-                          final newRemaining = (_mineralsZakatDue - _immediatePaid).clamp(0.0, double.infinity);
-                          if (newRemaining <= 1.0) {
-                            _mineralsValueCtrl.text = '0';
-                          }
-                        } else if (obligationType == 'rikaz') {
-                          final newRemaining = (_rikazZakatDue - _immediatePaid).clamp(0.0, double.infinity);
-                          if (newRemaining <= 1.0) {
-                            _rikazValueCtrl.text = '0';
-                          }
-                        }
                       }
                     });
                     _recalculate();
@@ -5827,10 +6011,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   }
 
   Widget _sheetField(TextEditingController ctrl, String label,
-      {TextInputType keyboardType = TextInputType.text}) {
+      {TextInputType keyboardType = TextInputType.text, ValueChanged<String>? onChanged}) {
     return TextField(
       controller: ctrl,
       keyboardType: keyboardType,
+      onChanged: onChanged,
       style: GoogleFonts.poppins(fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
       decoration: InputDecoration(
         labelText: label,
@@ -5985,6 +6170,27 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     final receivable = (double.tryParse(_receivableCtrl.text.replaceAll(',', '')) ?? 0) * rate;
     final liabilities = (double.tryParse(_liabilitiesCtrl.text.replaceAll(',', '')) ?? 0) * rate;
     final livestockVal = _livestockMeetsNisab ? _livestockTotalBDT : 0.0;
+    final statementLivestockSummary = _assessmentLivestockSummary;
+    final haulPayments = _payments
+        .where((p) => p.obligationType == 'haul')
+        .toList();
+    final immediatePayments = _payments
+        .where((p) =>
+            p.obligationType == 'crops' ||
+            p.obligationType == 'minerals' ||
+            p.obligationType == 'rikaz')
+        .toList();
+    double paidFor(String obligationType) => _payments
+        .where((p) => p.obligationType == obligationType)
+        .fold(0.0, (sum, p) => sum + p.amount * _currencyRate(p.currency));
+    final cropsPaid = paidFor('crops');
+    final mineralsPaid = paidFor('minerals');
+    final rikazPaid = paidFor('rikaz');
+    // Older records cleared the source value after payment. Preserve a
+    // meaningful statement by using that recorded payment as the due amount.
+    final cropsDueForStatement = math.max(_cropsZakatDue, cropsPaid).toDouble();
+    final mineralsDueForStatement = math.max(_mineralsZakatDue, mineralsPaid).toDouble();
+    final rikazDueForStatement = math.max(_rikazZakatDue, rikazPaid).toDouble();
 
     pdf.addPage(
       pw.MultiPage(
@@ -6038,7 +6244,13 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Text('Zakat Obligation:'),
-                      pw.Text(_formattedZakatDueText(), style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text(
+                        _formattedZakatDueText(
+                          dueAmount: _activeZakatDue,
+                          livestockSummary: statementLivestockSummary,
+                        ),
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      ),
                     ],
                   ),
                   pw.Row(
@@ -6060,6 +6272,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             ),
             pw.SizedBox(height: 20),
 
+            if (_isRamadan) ...[
             pw.Container(
               padding: const pw.EdgeInsets.all(12),
               decoration: pw.BoxDecoration(
@@ -6069,7 +6282,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('ZAKAT AL-FITR SUMMARY', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.teal)),
+                  pw.Text('ZAKAT AL-FITR SUMMARY (RAMADAN)', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.teal)),
                   pw.SizedBox(height: 8),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -6110,6 +6323,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               ),
             ),
             pw.SizedBox(height: 20),
+            ],
 
             pw.Text('ASSETS BREAKDOWN', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 8),
@@ -6127,7 +6341,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   _pdfTableRow('Livestock Market Value', _formatMoney(livestockVal)),
                 for (var ca in _customAssets)
                   _pdfTableRow(ca.name, _formatMoney(ca.value * _currencyRate(ca.currency))),
-                _pdfTableRow('Immediate Liabilities (Deduction)', '- ${_formatMoney(liabilities)}'),
+                _pdfTableRow('Liabilities (Deduction)', '- ${_formatMoney(liabilities)}'),
                 for (var cl in _customLiabilities)
                   _pdfTableRow('${cl.name} (Deduction)',
                       '- ${_formatMoney(cl.value * _currencyRate(cl.currency))}'),
@@ -6135,7 +6349,20 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             ),
             pw.SizedBox(height: 20),
 
-            if (_livestockMeetsNisab && _livestockZakatSummary.isNotEmpty) ...[
+            pw.Text('IMMEDIATE ZAKAT (NO HAUL REQUIRED)', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.deepOrange)),
+            pw.SizedBox(height: 8),
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300),
+              children: [
+                _pdfTableRow3('Type', 'Due', 'Paid', 'Remaining', isHeader: true),
+                _pdfTableRow3('Agricultural / Ushr', _formatMoney(cropsDueForStatement), _formatMoney(cropsPaid), _formatMoney((cropsDueForStatement - cropsPaid).clamp(0.0, double.infinity))),
+                _pdfTableRow3('Minerals / Ma\'adin', _formatMoney(mineralsDueForStatement), _formatMoney(mineralsPaid), _formatMoney((mineralsDueForStatement - mineralsPaid).clamp(0.0, double.infinity))),
+                _pdfTableRow3('Buried Treasure / Rikaz', _formatMoney(rikazDueForStatement), _formatMoney(rikazPaid), _formatMoney((rikazDueForStatement - rikazPaid).clamp(0.0, double.infinity))),
+              ],
+            ),
+            pw.SizedBox(height: 20),
+
+            if (statementLivestockSummary.isNotEmpty) ...[
               pw.Text('LIVESTOCK ZAKAT OBLIGATION', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 8),
               pw.Container(
@@ -6145,21 +6372,21 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
                 ),
                 child: pw.Text(
-                  '$_livestockZakatSummary (or equivalent monetary value)',
+                  '$statementLivestockSummary (or equivalent monetary value)',
                   style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.green800),
                 ),
               ),
               pw.SizedBox(height: 20),
             ],
 
-            if (_payments.isNotEmpty) ...[
-              pw.Text('ZAKAT PAYMENT HISTORY', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+            if (haulPayments.isNotEmpty) ...[
+              pw.Text('HAUL ZAKAT PAYMENT HISTORY', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 8),
               pw.Table(
                 border: pw.TableBorder.all(color: PdfColors.grey300),
                 children: [
-                  _pdfTableRow3('Date', 'Recipient', 'Category', 'Amount', isHeader: true),
-                  for (var p in _payments)
+                  _pdfTableRow3('Payment Date', 'Recipient', 'Category', 'Amount', isHeader: true),
+                  for (var p in haulPayments)
                     _pdfTableRow3(
                       DateFormat('dd MMM yyyy').format(p.date),
                       p.recipient,
@@ -6175,6 +6402,29 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               pw.SizedBox(height: 20),
             ],
 
+            if (immediatePayments.isNotEmpty) ...[
+              pw.Text('IMMEDIATE ZAKAT PAYMENT HISTORY', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 8),
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey300),
+                children: [
+                  _pdfTableRow3('Payment Date', 'Type', 'Recipient', 'Amount', isHeader: true),
+                  for (var p in immediatePayments)
+                    _pdfTableRow3(
+                      DateFormat('dd MMMM yyyy').format(p.date),
+                      p.obligationType == 'crops'
+                          ? 'Ushr'
+                          : p.obligationType == 'minerals'
+                              ? 'Minerals'
+                              : 'Rikaz',
+                      p.recipient,
+                      _formatMoney(p.amount * _currencyRate(p.currency)),
+                    ),
+                ],
+              ),
+              pw.SizedBox(height: 20),
+            ],
+
             if (_fitraPayments.isNotEmpty) ...[
               pw.Text('FITRA PAYMENT HISTORY', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 8),
@@ -6184,7 +6434,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   _pdfTableRow3('Date', 'Recipient', 'Category', 'Amount', isHeader: true),
                   for (var p in _fitraPayments)
                     _pdfTableRow3(
-                      DateFormat('dd MMM yyyy').format(p.date),
+                      DateFormat('dd MMMM yyyy').format(p.date),
                       p.recipient,
                       'Zakat al-Fitr',
                       _formatMoney(p.amount * _currencyRate(p.currency)),
@@ -6200,6 +6450,76 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     await Printing.layoutPdf(
       name: 'DeenMate_Zakat_Statement',
       onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
+  }
+
+  Future<void> _exportYearRecordPdf(ZakatYearSnapshot snapshot) async {
+    final pdf = pw.Document();
+    // Backfill legacy snapshots that lost a due value after a full payment.
+    final cropsDue = math.max(snapshot.cropsDue, snapshot.cropsPaid).toDouble();
+    final mineralsDue = math.max(snapshot.mineralsDue, snapshot.mineralsPaid).toDouble();
+    final rikazDue = math.max(snapshot.rikazDue, snapshot.rikazPaid).toDouble();
+    final immediateDue = cropsDue + mineralsDue + rikazDue;
+    final immediatePaid = snapshot.cropsPaid + snapshot.mineralsPaid + snapshot.rikazPaid;
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (context) => [
+          pw.Text('DeenMate', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.teal)),
+          pw.Text('Yearly Zakat Record - ${snapshot.year}', style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700)),
+          pw.SizedBox(height: 16),
+          pw.Text('HAUL ZAKAT (MONETARY & LIVESTOCK)', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.teal)),
+          pw.SizedBox(height: 6),
+          pw.Table(border: pw.TableBorder.all(color: PdfColors.grey300), children: [
+            _pdfTableRow('Net Zakatable Wealth', _formatMoney(snapshot.wealth)),
+            _pdfTableRow('Monetary Zakat Due', _formatMoney(snapshot.zakatDue)),
+            _pdfTableRow('Monetary Zakat Paid', _formatMoney(snapshot.zakatPaid)),
+            if (snapshot.livestockZakat != null && snapshot.livestockZakat!.isNotEmpty)
+              _pdfTableRow('Livestock Obligation', snapshot.livestockZakat!),
+          ]),
+          if (snapshot.fitraDue > 0 || snapshot.fitraPaid > 0) ...[
+            pw.SizedBox(height: 16),
+            pw.Text('ZAKAT AL-FITR (RAMADAN)', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.teal)),
+            pw.SizedBox(height: 6),
+            pw.Table(border: pw.TableBorder.all(color: PdfColors.grey300), children: [
+              _pdfTableRow('Fitra Due', _formatMoney(snapshot.fitraDue)),
+              _pdfTableRow('Fitra Paid', _formatMoney(snapshot.fitraPaid)),
+            ]),
+          ],
+          pw.SizedBox(height: 16),
+          pw.Text('IMMEDIATE ZAKAT (NO HAUL REQUIRED)', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.deepOrange)),
+          pw.SizedBox(height: 6),
+          pw.Table(border: pw.TableBorder.all(color: PdfColors.grey300), children: [
+            _pdfTableRow3('Type', 'Due', 'Paid', 'Remaining', isHeader: true),
+            _pdfTableRow3('Agricultural / Ushr', _formatMoney(cropsDue), _formatMoney(snapshot.cropsPaid), _formatMoney((cropsDue - snapshot.cropsPaid).clamp(0.0, double.infinity))),
+            _pdfTableRow3('Minerals / Ma\'adin', _formatMoney(mineralsDue), _formatMoney(snapshot.mineralsPaid), _formatMoney((mineralsDue - snapshot.mineralsPaid).clamp(0.0, double.infinity))),
+            _pdfTableRow3('Buried Treasure / Rikaz', _formatMoney(rikazDue), _formatMoney(snapshot.rikazPaid), _formatMoney((rikazDue - snapshot.rikazPaid).clamp(0.0, double.infinity))),
+            _pdfTableRow3('Total', _formatMoney(immediateDue), _formatMoney(immediatePaid), _formatMoney((immediateDue - immediatePaid).clamp(0.0, double.infinity))),
+          ]),
+          if (snapshot.payments.isNotEmpty) ...[
+            pw.SizedBox(height: 16),
+            pw.Text('PAYMENTS RECORDED IN ${snapshot.year}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 6),
+            pw.Table(border: pw.TableBorder.all(color: PdfColors.grey300), children: [
+              _pdfTableRow3('Date', 'Type', 'Recipient', 'Amount', isHeader: true),
+              for (final payment in snapshot.payments)
+                _pdfTableRow3(
+                  DateFormat('dd MMM yyyy').format(payment.date),
+                  payment.obligationType == 'fitra' ? 'Fitra' : payment.obligationType == 'crops' ? 'Ushr' : payment.obligationType == 'minerals' ? 'Minerals' : payment.obligationType == 'rikaz' ? 'Rikaz' : 'Haul',
+                  payment.recipient,
+                  _formatMoney(payment.amount * _currencyRate(payment.currency)),
+                ),
+            ]),
+          ],
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(
+      name: 'DeenMate_Zakat_Record_${snapshot.year}',
+      onLayout: (format) async => pdf.save(),
     );
   }
 
@@ -6332,12 +6652,32 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
 
   void _saveYearSnapshot(int year) {
     final existing = _history.indexWhere((s) => s.year == year);
+    final yearPayments = [..._payments, ..._fitraPayments]
+        .where((p) => p.date.year == year)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    double paidFor(String obligationType) => yearPayments
+        .where((p) => p.obligationType == obligationType)
+        .fold(0.0, (sum, p) => sum + p.amount * _currencyRate(p.currency));
     final snap = ZakatYearSnapshot(
       year: year,
       wealth: _totalWealth,
       zakatDue: _activeZakatDue,
-      zakatPaid: _totalPaid,
-      livestockZakat: _livestockZakatSummary.isNotEmpty ? _livestockZakatSummary : null,
+      zakatPaid: paidFor('haul'),
+      livestockZakat: _assessmentLivestockSummary.isNotEmpty
+          ? _assessmentLivestockSummary
+          : null,
+      // Fitra becomes due in Ramadan; outside Ramadan, the next Fitra must
+      // not be recorded as an unpaid obligation.
+      fitraDue: _isRamadan ? _fitraTotal : 0,
+      fitraPaid: paidFor('fitra'),
+      cropsDue: _cropsZakatDue,
+      cropsPaid: paidFor('crops'),
+      mineralsDue: _mineralsZakatDue,
+      mineralsPaid: paidFor('minerals'),
+      rikazDue: _rikazZakatDue,
+      rikazPaid: paidFor('rikaz'),
+      payments: yearPayments,
     );
     setState(() {
       if (existing >= 0) {
@@ -6411,33 +6751,40 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             children: [
               _historyChip('Net Wealth', _formatCompactMoney(s.wealth)),
               const SizedBox(width: 10),
-              _historyChip('Zakat Due', _formatMoney(s.zakatDue)),
+              _historyChip('Total Due', _formatMoney(_yearTotalDue(s))),
               const SizedBox(width: 10),
-              _historyChip('Paid', _formatMoney(s.zakatPaid)),
+              _historyChip('Total Paid', _formatMoney(_yearTotalPaid(s))),
             ],
           ),
-          if (s.livestockZakat != null && s.livestockZakat!.isNotEmpty) ...[
+          // Per-type breakdown: Haul, Ushr, Minerals, Rikaz, Fitra
+          Container(
+            margin: const EdgeInsets.only(top: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF5F7FA),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                _historyBreakdownRow('Type', dueLabel: 'Due', paidLabel: 'Paid', isHeader: true),
+                _historyBreakdownRow('Haul',
+                    due: s.zakatDue, paid: s.zakatPaid,
+                    livestockSummary: (s.livestockZakat != null && s.livestockZakat!.isNotEmpty) ? s.livestockZakat : null),
+                _historyBreakdownRow('Ushr', due: s.cropsDue, paid: s.cropsPaid),
+                _historyBreakdownRow('Minerals', due: s.mineralsDue, paid: s.mineralsPaid),
+                _historyBreakdownRow('Rikaz', due: s.rikazDue, paid: s.rikazPaid),
+                if (s.fitraDue > 0 || s.fitraPaid > 0)
+                  _historyBreakdownRow('Fitra', due: s.fitraDue, paid: s.fitraPaid),
+              ],
+            ),
+          ),
+          if (s.payments.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2E7D32).withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.pets_rounded, size: 14, color: Color(0xFF2E7D32)),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Livestock Obligation: ${s.livestockZakat}',
-                      style: GoogleFonts.inter(
-                          fontSize: 10.5,
-                          color: const Color(0xFF2E7D32),
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
+            Text(
+              '${s.payments.length} payment record${s.payments.length == 1 ? '' : 's'} in ${s.year}',
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                color: _isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.65),
               ),
             ),
           ],
@@ -6456,6 +6803,15 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              GestureDetector(
+                onTap: () => _exportYearRecordPdf(s),
+                child: Text('Export PDF',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: AppColors.midTeal,
+                        fontWeight: FontWeight.w600)),
+              ),
+              const SizedBox(width: 18),
               GestureDetector(
                 onTap: () async {
                   final confirm = await _confirmDeletion(
@@ -6498,6 +6854,109 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                     fontSize: 12, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
           ],
         ),
+      ),
+    );
+  }
+
+  double _yearTotalDue(ZakatYearSnapshot s) =>
+      s.zakatDue +
+      s.fitraDue +
+      s.cropsDue +
+      s.mineralsDue +
+      s.rikazDue;
+
+  double _yearTotalPaid(ZakatYearSnapshot s) =>
+      s.zakatPaid +
+      s.fitraPaid +
+      s.cropsPaid +
+      s.mineralsPaid +
+      s.rikazPaid;
+
+  Widget _historyBreakdownRow(
+    String label, {
+    double due = 0,
+    double paid = 0,
+    String? livestockSummary,
+    String? dueLabel,
+    String? paidLabel,
+    bool isHeader = false,
+  }) {
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final mutedColor = _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.55);
+    if (isHeader) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Text(dueLabel ?? 'Type',
+                  style: GoogleFonts.inter(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                      color: mutedColor)),
+            ),
+            Expanded(
+              child: Text(dueLabel ?? 'Due',
+                  textAlign: TextAlign.end,
+                  style: GoogleFonts.inter(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                      color: mutedColor)),
+            ),
+            Expanded(
+              child: Text(paidLabel ?? 'Paid',
+                  textAlign: TextAlign.end,
+                  style: GoogleFonts.inter(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                      color: mutedColor)),
+            ),
+          ],
+        ),
+      );
+    }
+    final hasLivestock = livestockSummary != null && livestockSummary.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: Text(label,
+                    style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: textColor)),
+              ),
+              Expanded(
+                child: Text(_formatMoney(due),
+                    textAlign: TextAlign.end,
+                    style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: textColor)),
+              ),
+              Expanded(
+                child: Text(_formatMoney(paid),
+                    textAlign: TextAlign.end,
+                    style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2E7D32))),
+              ),
+            ],
+          ),
+          if (hasLivestock)
+            Text('  + $livestockSummary',
+                style: GoogleFonts.inter(
+                    fontSize: 9.5,
+                    fontStyle: FontStyle.italic,
+                    color: mutedColor)),
+        ],
       ),
     );
   }
@@ -6772,22 +7231,44 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   ),
                   onPressed: () {
                     final amount = double.tryParse(amountCtrl.text) ?? 0.0;
-                    if (amount > 0) {
-                      // Log payment directly
-                      final payment = ZakatPayment(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        amount: amount,
-                        currency: _currency.code,
-                        recipient: org.name,
-                        category: org.category,
-                        date: DateTime.now(),
-                        note: 'Paid via official charity donation page.',
+                    if (amount <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: AppColors.coralOrange,
+                          behavior: SnackBarBehavior.floating,
+                          content: Text('Enter an amount greater than 0.',
+                              style: GoogleFonts.inter(fontSize: 12.5)),
+                        ),
                       );
-                      setState(() {
-                        _payments.add(payment);
-                      });
-                      _savePrefs();
+                      return;
                     }
+                    final amountBDT = amount * _toBDT;
+                    if (amountBDT > _stillOwed + 0.01) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: AppColors.coralOrange,
+                          behavior: SnackBarBehavior.floating,
+                          content: Text(
+                              'Amount exceeds remaining Haul Zakat to pay (max ${_formatMoney(_stillOwed)}).',
+                              style: GoogleFonts.inter(fontSize: 12.5)),
+                        ),
+                      );
+                      return;
+                    }
+                    // Log payment directly
+                    final payment = ZakatPayment(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      amount: amount,
+                      currency: _currency.code,
+                      recipient: org.name,
+                      category: org.category,
+                      date: DateTime.now(),
+                      note: 'Paid via official charity donation page.',
+                    );
+                    setState(() {
+                      _payments.add(payment);
+                    });
+                    _savePrefs();
                     Navigator.pop(ctx);
                     _visitCharityWebsite(org);
                   },
