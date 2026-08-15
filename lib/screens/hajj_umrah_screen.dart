@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -1668,6 +1668,12 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     final segKeyPrefix = _mode == 'Hajj' ? 'hajj_$_hajjType' : 'umrah';
     final images = _mode == 'Hajj' ? _hajjStepImages : _umrahStepImages;
     
+    // Ensure animation controllers exist for the current mode/type
+    if (_segmentAnimations.length != (steps.length > 0 ? steps.length - 1 : 0) ||
+        (steps.length > 1 && !_segmentAnimations.containsKey('${segKeyPrefix}_0'))) {
+      _initSegmentControllersForCurrentMode();
+    }
+
     // Compute progress specifically for the active steps of this mode/type
     int completedCount = 0;
     for (final s in steps) {
@@ -1708,9 +1714,9 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               return Offset(cx, cy);
             });
 
-            final segmentAnimations = List.generate(
-              steps.length - 1,
-              (i) => _segmentAnimations['${segKeyPrefix}_$i']!,
+            final segmentAnimations = List<Animation<double>>.generate(
+              steps.length > 1 ? steps.length - 1 : 0,
+              (i) => _segmentAnimations['${segKeyPrefix}_$i'] ?? const AlwaysStoppedAnimation<double>(0.0),
             );
 
             return SizedBox(
@@ -1746,16 +1752,18 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                       stepNumber: i + 1,
                       cardBg: cardBg,
                       onTap: () {
-                        final id = steps[i]['id']!;
+                        final id = steps[i]['id'] ?? '';
+                        if (id.isEmpty) return;
                         final alreadyDone = doneMap[id] ?? false;
 
                         if (!alreadyDone) {
                           if (i > 0) {
-                            final prevDone = doneMap[steps[i - 1]['id']!] ?? false;
+                            final prevId = steps[i - 1]['id'] ?? '';
+                            final prevDone = doneMap[prevId] ?? false;
                             if (!prevDone) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Complete "${steps[i - 1]['title']}" first'),
+                                  content: Text('Complete "${steps[i - 1]['title'] ?? 'previous step'}" first'),
                                   duration: const Duration(seconds: 2),
                                   backgroundColor: AppColors.coralOrange,
                                   behavior: SnackBarBehavior.floating,
@@ -1766,11 +1774,12 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                           }
                         } else {
                           if (i < steps.length - 1) {
-                            final nextDone = doneMap[steps[i + 1]['id']!] ?? false;
+                            final nextId = steps[i + 1]['id'] ?? '';
+                            final nextDone = doneMap[nextId] ?? false;
                             if (nextDone) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Uncheck "${steps[i + 1]['title']}" first'),
+                                  content: Text('Uncheck "${steps[i + 1]['title'] ?? 'next step'}" first'),
                                   duration: const Duration(seconds: 2),
                                   backgroundColor: AppColors.coralOrange,
                                   behavior: SnackBarBehavior.floating,
@@ -1804,9 +1813,9 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                       width: width,
                       nodeSize: nodeSize,
                       sidePad: sidePad,
-                      stepId: steps[i]['id']!,
-                      title: steps[i]['title']!,
-                      guideline: steps[i]['desc']!,
+                      stepId: steps[i]['id'] ?? '',
+                      title: steps[i]['title'] ?? '',
+                      guideline: steps[i]['desc'] ?? '',
                       isDone: doneMap[steps[i]['id']] ?? false,
                       cardBg: cardBg,
                       textColor: textColor,
