@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -10,8 +10,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/auth_header.dart';
 import '../services/notification_service.dart';
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELS
@@ -531,8 +534,11 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   int _tab = 0;
   bool _isDarkMode = false;
   bool _isChangingCurrency = false;
+  bool _isLoading = false;
+  Timer? _dbWriteTimer;
   bool? _userPaymentsExpanded;
   bool get _isPaymentsExpanded => _userPaymentsExpanded ?? (_stillOwed > 0);
+
 
   // ── Live prices & overrides ──────────────────────────────────
   double _goldSpotUSD = 3280.0;
@@ -1073,6 +1079,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   @override
   void dispose() {
     _priceRefreshTimer?.cancel();
+    _dbWriteTimer?.cancel();
+    _syncZakatToFirestore();
     for (final c in [
       _cashCtrl,
       _gold24kCtrl,
@@ -1112,7 +1120,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   }
 
   void _onWealthChanged() {
-    if (_isChangingCurrency) return;
+    if (_isLoading || _isChangingCurrency) return;
     _recalculate();
     _checkNisabCrossing();
   }
@@ -1122,6 +1130,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   // ─────────────────────────────────────────────────────────────
 
   Future<void> _loadPrefs() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     final p = await SharedPreferences.getInstance();
     _isDarkMode = p.getBool('is_dark_mode') ?? false;
 
@@ -1303,9 +1315,150 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     }
     _currentHaulCycleNumber = p.getInt('zm_current_haul_cycle_num') ?? 1;
 
+    // Load from Firestore
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (doc.exists) {
+          final data = doc.data();
+          if (data != null && data['zakat'] != null) {
+            final zakat = data['zakat'] as Map<String, dynamic>;
+
+            _completedHaulWealthZakat = zakat['completedHaulWealthZakat'] != null
+                ? (zakat['completedHaulWealthZakat'] as num).toDouble()
+                : null;
+            _completedHaulLivestockSummary = zakat['completedHaulLivestockSummary'] as String?;
+
+            _cashCtrl.text = zakat['cash'] as String? ?? _cashCtrl.text;
+            _gold24kCtrl.text = zakat['gold24k'] as String? ?? _gold24kCtrl.text;
+            _gold22kCtrl.text = zakat['gold22k'] as String? ?? _gold22kCtrl.text;
+            _gold21kCtrl.text = zakat['gold21k'] as String? ?? _gold21kCtrl.text;
+            _gold18kCtrl.text = zakat['gold18k'] as String? ?? _gold18kCtrl.text;
+            _silverGramsCtrl.text = zakat['silver'] as String? ?? _silverGramsCtrl.text;
+            _stocksCtrl.text = zakat['stocks'] as String? ?? _stocksCtrl.text;
+            _businessCtrl.text = zakat['business'] as String? ?? _businessCtrl.text;
+            _receivableCtrl.text = zakat['receivable'] as String? ?? _receivableCtrl.text;
+            _liabilitiesCtrl.text = zakat['liabilities'] as String? ?? _liabilitiesCtrl.text;
+
+            _nisabStandard = zakat['nisabStandard'] as String? ?? _nisabStandard;
+            _selectedCurrency = zakat['selectedCurrency'] as String? ?? _selectedCurrency;
+            _nisabAlertEnabled = zakat['nisabAlertEnabled'] as bool? ?? _nisabAlertEnabled;
+            _manualOverridePrices = zakat['manualOverridePrices'] as bool? ?? _manualOverridePrices;
+            _manualGoldPriceCtrl.text = zakat['manualGoldPrice'] as String? ?? _manualGoldPriceCtrl.text;
+            _manualSilverPriceCtrl.text = zakat['manualSilverPrice'] as String? ?? _manualSilverPriceCtrl.text;
+
+            final haulStr = zakat['haulStartDate'] as String?;
+            if (haulStr != null) {
+              _haulStartDate = DateTime.tryParse(haulStr);
+            } else {
+              _haulStartDate = null;
+            }
+
+            _fitraMembers = zakat['fitraMembers'] as int? ?? _fitraMembers;
+            _fitraStaple = zakat['fitraStaple'] as String? ?? _fitraStaple;
+            _fitraPriceCtrl.text = zakat['fitraPrice'] as String? ?? _fitraPriceCtrl.text;
+            _fitraWeightCtrl.text = zakat['fitraWeight'] as String? ?? _fitraWeightCtrl.text;
+
+            final payList = zakat['payments'] as List<dynamic>?;
+            if (payList != null) {
+              _payments = payList.map((e) => ZakatPayment.fromJson(e as Map<String, dynamic>)).toList();
+            }
+
+            final fitraPayList = zakat['fitraPayments'] as List<dynamic>?;
+            if (fitraPayList != null) {
+              _fitraPayments = fitraPayList.map((e) => ZakatPayment.fromJson(e as Map<String, dynamic>)).toList();
+            }
+
+            final histList = zakat['history'] as List<dynamic>?;
+            if (histList != null) {
+              _history = histList.map((e) => ZakatYearSnapshot.fromJson(e as Map<String, dynamic>)).toList();
+            }
+
+            _livestockCamels = zakat['camels'] as int? ?? _livestockCamels;
+            _livestockCattle = zakat['cattle'] as int? ?? _livestockCattle;
+            _livestockSheep = zakat['sheep'] as int? ?? _livestockSheep;
+            _camelValueCtrl.text = zakat['camelVal'] as String? ?? _camelValueCtrl.text;
+            _cattleValueCtrl.text = zakat['cattleVal'] as String? ?? _cattleValueCtrl.text;
+            _sheepValueCtrl.text = zakat['sheepVal'] as String? ?? _sheepValueCtrl.text;
+
+            final customList = zakat['customAssets'] as List<dynamic>?;
+            if (customList != null) {
+              final list = customList.map((e) => _CustomAsset.fromJson(e as Map<String, dynamic>)).toList();
+              _customAssets = list.where((a) => !a.isLiability).toList();
+              _customLiabilities = list.where((a) => a.isLiability).toList();
+            }
+
+            final cropList = zakat['cropItems'] as List<dynamic>?;
+            if (cropList != null) {
+              for (final c in _cropItems) {
+                c.nameCtrl.dispose();
+                c.harvestKgCtrl.dispose();
+                c.pricePerKgCtrl.dispose();
+              }
+              _cropItems = cropList.map((e) => CropInputItem.fromJson(e as Map<String, dynamic>)).toList();
+            }
+            for (final c in _cropItems) {
+              _attachCropListeners(c);
+            }
+
+            final mineralList = zakat['mineralItems'] as List<dynamic>?;
+            if (mineralList != null) {
+              for (final m in _mineralItems) {
+                m.nameCtrl.dispose();
+                m.valueCtrl.dispose();
+              }
+              _mineralItems = mineralList.map((e) => MineralInputItem.fromJson(e as Map<String, dynamic>)).toList();
+            }
+            for (final m in _mineralItems) {
+              _attachMineralListeners(m);
+            }
+
+            final rikazList = zakat['rikazItems'] as List<dynamic>?;
+            if (rikazList != null) {
+              for (final r in _rikazItems) {
+                r.nameCtrl.dispose();
+                r.valueCtrl.dispose();
+              }
+              _rikazItems = rikazList.map((e) => RikazInputItem.fromJson(e as Map<String, dynamic>)).toList();
+            }
+            for (final r in _rikazItems) {
+              _attachRikazListeners(r);
+            }
+
+            final immRecList = zakat['immediateRecords'] as List<dynamic>?;
+            if (immRecList != null) {
+              _immediateRecords = immRecList.map((e) => ImmediateHarvestRecord.fromJson(e as Map<String, dynamic>)).toList();
+            }
+
+            _rentalGrossCtrl.text = zakat['rentalGross'] as String? ?? _rentalGrossCtrl.text;
+            _cropsClosedPaidBDT = zakat['cropsClosedPaidBDT'] != null ? (zakat['cropsClosedPaidBDT'] as num).toDouble() : _cropsClosedPaidBDT;
+            _mineralsClosedPaidBDT = zakat['mineralsClosedPaidBDT'] != null ? (zakat['mineralsClosedPaidBDT'] as num).toDouble() : _mineralsClosedPaidBDT;
+            _rikazClosedPaidBDT = zakat['rikazClosedPaidBDT'] != null ? (zakat['rikazClosedPaidBDT'] as num).toDouble() : _rikazClosedPaidBDT;
+
+            final haulCyclesList = zakat['haulCycles'] as List<dynamic>?;
+            if (haulCyclesList != null) {
+              _haulCycles = haulCyclesList.map((e) => HaulCycle.fromJson(e as Map<String, dynamic>)).toList();
+            }
+            _currentHaulCycleNumber = zakat['currentHaulCycleNumber'] as int? ?? _currentHaulCycleNumber;
+
+            await _savePrefsToLocalOnly();
+          }
+        }
+      } catch (e) {
+        debugPrint("Error loading Zakat state from Firestore: $e");
+      }
+    }
+
     _checkAutoRollover();
     _repairCurrentYearSnapshotLivestock();
-    setState(() {});
+    setState(() {
+      _isLoading = false;
+    });
     _recalculate();
   }
 
@@ -1331,7 +1484,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     );
   }
 
-  Future<void> _savePrefs() async {
+  Future<void> _savePrefsToLocalOnly() async {
     final p = await SharedPreferences.getInstance();
 
     if (_completedHaulWealthZakat != null) {
@@ -1410,6 +1563,131 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     // Haul cycle history
     await p.setString('zm_haul_cycles', json.encode(_haulCycles.map((c) => c.toJson()).toList()));
     await p.setInt('zm_current_haul_cycle_num', _currentHaulCycleNumber);
+  }
+
+  Future<void> _savePrefs() async {
+    await _savePrefsToLocalOnly();
+
+    if (!_isLoading) {
+      _dbWriteTimer?.cancel();
+      _dbWriteTimer = Timer(const Duration(milliseconds: 1500), () {
+        _syncZakatToFirestore();
+      });
+    }
+  }
+
+  Future<void> _syncZakatToFirestore() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Read all values synchronously upfront to avoid accessing disposed controllers or state
+    final cashText = _cashCtrl.text;
+    final gold24kText = _gold24kCtrl.text;
+    final gold22kText = _gold22kCtrl.text;
+    final gold21kText = _gold21kCtrl.text;
+    final gold18kText = _gold18kCtrl.text;
+    final silverGramsText = _silverGramsCtrl.text;
+    final stocksText = _stocksCtrl.text;
+    final businessText = _businessCtrl.text;
+    final receivableText = _receivableCtrl.text;
+    final liabilitiesText = _liabilitiesCtrl.text;
+    final manualGoldPriceText = _manualGoldPriceCtrl.text;
+    final manualSilverPriceText = _manualSilverPriceCtrl.text;
+    final fitraPriceText = _fitraPriceCtrl.text;
+    final fitraWeightText = _fitraWeightCtrl.text;
+    final camelValText = _camelValueCtrl.text;
+    final cattleValText = _cattleValueCtrl.text;
+    final sheepValText = _sheepValueCtrl.text;
+    final rentalGrossText = _rentalGrossCtrl.text;
+
+    final completedHaulWealthZakat = _completedHaulWealthZakat;
+    final completedHaulLivestockSummary = _completedHaulLivestockSummary;
+    final nisabStandard = _nisabStandard;
+    final selectedCurrency = _selectedCurrency;
+    final nisabAlertEnabled = _nisabAlertEnabled;
+    final manualOverridePrices = _manualOverridePrices;
+    final haulStartDateIso = _haulStartDate?.toIso8601String();
+    final fitraMembers = _fitraMembers;
+    final fitraStaple = _fitraStaple;
+
+    final paymentsJson = _payments.map((e) => e.toJson()).toList();
+    final fitraPaymentsJson = _fitraPayments.map((e) => e.toJson()).toList();
+    final historyJson = _history.map((e) => e.toJson()).toList();
+
+    final camels = _livestockCamels;
+    final cattle = _livestockCattle;
+    final sheep = _livestockSheep;
+
+    final customAssetsJson = [..._customAssets, ..._customLiabilities].map((e) => e.toJson()).toList();
+    final cropItemsJson = _cropItems.map((e) => e.toJson()).toList();
+    final mineralItemsJson = _mineralItems.map((e) => e.toJson()).toList();
+    final rikazItemsJson = _rikazItems.map((e) => e.toJson()).toList();
+    final immediateRecordsJson = _immediateRecords.map((e) => e.toJson()).toList();
+
+    final cropsClosedPaidBDT = _cropsClosedPaidBDT;
+    final mineralsClosedPaidBDT = _mineralsClosedPaidBDT;
+    final rikazClosedPaidBDT = _rikazClosedPaidBDT;
+
+    final haulCyclesJson = _haulCycles.map((c) => c.toJson()).toList();
+    final currentHaulCycleNumber = _currentHaulCycleNumber;
+
+    try {
+      final Map<String, dynamic> zakatData = {
+        'completedHaulWealthZakat': completedHaulWealthZakat,
+        'completedHaulLivestockSummary': completedHaulLivestockSummary,
+        'cash': cashText,
+        'gold24k': gold24kText,
+        'gold22k': gold22kText,
+        'gold21k': gold21kText,
+        'gold18k': gold18kText,
+        'silver': silverGramsText,
+        'stocks': stocksText,
+        'business': businessText,
+        'receivable': receivableText,
+        'liabilities': liabilitiesText,
+        'nisabStandard': nisabStandard,
+        'selectedCurrency': selectedCurrency,
+        'nisabAlertEnabled': nisabAlertEnabled,
+        'manualOverridePrices': manualOverridePrices,
+        'manualGoldPrice': manualGoldPriceText,
+        'manualSilverPrice': manualSilverPriceText,
+        'haulStartDate': haulStartDateIso,
+        'fitraMembers': fitraMembers,
+        'fitraStaple': fitraStaple,
+        'fitraPrice': fitraPriceText,
+        'fitraWeight': fitraWeightText,
+        'payments': paymentsJson,
+        'fitraPayments': fitraPaymentsJson,
+        'history': historyJson,
+        'camels': camels,
+        'cattle': cattle,
+        'sheep': sheep,
+        'camelVal': camelValText,
+        'cattleVal': cattleValText,
+        'sheepVal': sheepValText,
+        'customAssets': customAssetsJson,
+        'cropItems': cropItemsJson,
+        'mineralItems': mineralItemsJson,
+        'rikazItems': rikazItemsJson,
+        'immediateRecords': immediateRecordsJson,
+        'rentalGross': rentalGrossText,
+        'cropsClosedPaidBDT': cropsClosedPaidBDT,
+        'mineralsClosedPaidBDT': mineralsClosedPaidBDT,
+        'rikazClosedPaidBDT': rikazClosedPaidBDT,
+        'haulCycles': haulCyclesJson,
+        'currentHaulCycleNumber': currentHaulCycleNumber,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({
+        'zakat': zakatData,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Error syncing Zakat to Firestore: $e");
+    }
   }
 
   Future<void> _checkAndNotifyZakatHaul() async {
