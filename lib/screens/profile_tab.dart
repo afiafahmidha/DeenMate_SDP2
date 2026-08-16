@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -46,6 +47,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
   // Profile photo — a real picked file now, instead of a preset gradient avatar.
   File? _avatarImage;
+  String? _avatarBase64;
 
   // Quran reading preferences (merged in from the old "Quran Journey" settings page).
   double _arabicFontSize = 24;
@@ -77,6 +79,7 @@ class _ProfileTabState extends State<ProfileTab> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final savedImagePath = prefs.getString('profile_avatar_path');
+    String savedImageBase64 = prefs.getString('profile_avatar_base64') ?? "";
 
     // Default values from SharedPreferences/constants
     String name = prefs.getString('profile_name') ?? "";
@@ -110,12 +113,16 @@ class _ProfileTabState extends State<ProfileTab> {
             if (profile['email'] != null) {
               email = profile['email'];
             }
+            if (profile['avatarBase64'] != null) {
+              savedImageBase64 = profile['avatarBase64'];
+            }
             
             // Save to SharedPreferences so they stay cached
             await prefs.setString('profile_name', name);
             await prefs.setString('profile_phone', phone);
             await prefs.setString('profile_address', address);
             await prefs.setString('profile_email', email);
+            await prefs.setString('profile_avatar_base64', savedImageBase64);
           }
         } else {
           // If no document exists yet, create one for this user
@@ -129,6 +136,7 @@ class _ProfileTabState extends State<ProfileTab> {
               'phone': phone.isNotEmpty ? phone : null,
               'address': address.isNotEmpty ? address : null,
               'avatarPath': user.photoURL,
+              'avatarBase64': savedImageBase64.isNotEmpty ? savedImageBase64 : null,
               'language': 'en',
               'darkMode': false,
               'createdAt': FieldValue.serverTimestamp(),
@@ -160,6 +168,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
       _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
 
+      _avatarBase64 = savedImageBase64;
       if (savedImagePath != null && savedImagePath.isNotEmpty) {
         _avatarImage = File(savedImagePath);
       }
@@ -187,6 +196,8 @@ class _ProfileTabState extends State<ProfileTab> {
     if (_avatarImage != null) {
       await prefs.setString('profile_avatar_path', _avatarImage!.path);
     }
+    
+    final avatarBase64 = prefs.getString('profile_avatar_base64');
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -198,6 +209,7 @@ class _ProfileTabState extends State<ProfileTab> {
           'profile.fullName': fullName,
           'profile.phone': phone,
           'profile.address': address,
+          'profile.avatarBase64': avatarBase64,
           'profile.updatedAt': FieldValue.serverTimestamp(),
         });
         
@@ -216,6 +228,7 @@ class _ProfileTabState extends State<ProfileTab> {
               'phone': phone,
               'address': address,
               'avatarPath': user.photoURL,
+              'avatarBase64': avatarBase64,
               'language': 'en',
               'darkMode': false,
               'createdAt': FieldValue.serverTimestamp(),
@@ -234,12 +247,21 @@ class _ProfileTabState extends State<ProfileTab> {
     try {
       final XFile? picked = await _picker.pickImage(
         source: source,
-        maxWidth: 800,
-        imageQuality: 85,
+        maxWidth: 200,
+        maxHeight: 200,
+        imageQuality: 75,
       );
       if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        final base64Str = base64Encode(bytes);
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile_avatar_base64', base64Str);
+        await prefs.setString('profile_avatar_path', picked.path);
+
         setState(() {
           _avatarImage = File(picked.path);
+          _avatarBase64 = base64Str;
         });
         await _saveSettings();
       }
@@ -443,12 +465,14 @@ class _ProfileTabState extends State<ProfileTab> {
                     color: primaryColor.withValues(alpha: 0.15),
                     image: _avatarImage != null
                         ? DecorationImage(image: FileImage(_avatarImage!), fit: BoxFit.cover)
-                        : null,
+                        : (_avatarBase64 != null && _avatarBase64!.isNotEmpty)
+                            ? DecorationImage(image: MemoryImage(base64Decode(_avatarBase64!)), fit: BoxFit.cover)
+                            : null,
                     boxShadow: [
                       BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 8, offset: const Offset(0, 3)),
                     ],
                   ),
-                  child: _avatarImage == null
+                  child: (_avatarImage == null && (_avatarBase64 == null || _avatarBase64!.isEmpty))
                       ? Center(
                           child: Text(
                             _fullNameController.text.isNotEmpty

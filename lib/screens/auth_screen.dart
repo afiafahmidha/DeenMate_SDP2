@@ -206,12 +206,26 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  // ── Session helper ───────────────────────────────────────────────
   Future<void> _updateLoginSession(bool isLoggedIn) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_logged_in', isLoggedIn);
       if (!isLoggedIn) {
+        // Clear all user-specific cached preferences
+        final keys = prefs.getKeys();
+        final List<String> keysToRemove = [];
+        for (final key in keys) {
+          if (key.startsWith('profile_') ||
+              key.startsWith('qaza_') ||
+              key.startsWith('completed_') ||
+              key.startsWith('alarm_')) {
+            keysToRemove.add(key);
+          }
+        }
+        for (final key in keysToRemove) {
+          await prefs.remove(key);
+        }
+
         await FirebaseAuth.instance.signOut();
         await GoogleSignIn().signOut();
       }

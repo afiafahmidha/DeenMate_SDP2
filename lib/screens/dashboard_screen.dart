@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -166,24 +166,80 @@ Future<void> _loadUserProfile() async {
 
     if (doc.exists) {
       final data = doc.data();
-      if (data != null && data['profile'] != null) {
-        final profile = data['profile'] as Map<String, dynamic>;
-        final fullName = profile['fullName'] as String?;
-        
-        if (fullName != null && fullName.trim().isNotEmpty) {
-          if (mounted) {
-            setState(() {
-              _userName = fullName.trim();
-            });
+      if (data != null) {
+        // Sync profile details
+        if (data['profile'] != null) {
+          final profile = data['profile'] as Map<String, dynamic>;
+          final fullName = profile['fullName'] as String?;
+          
+          if (fullName != null && fullName.trim().isNotEmpty) {
+            if (mounted) {
+              setState(() {
+                _userName = fullName.trim();
+              });
+            }
+            await prefs.setString('profile_name', _userName);
           }
-          await prefs.setString('profile_name', _userName);
+        }
+
+        // Sync Qaza Counts
+        if (data['qazaCounts'] != null) {
+          final firestoreQaza = data['qazaCounts'] as Map<String, dynamic>;
+          for (final prayer in _qazaCounts.keys) {
+            if (firestoreQaza.containsKey(prayer)) {
+              final count = firestoreQaza[prayer] as int;
+              if (mounted) {
+                setState(() {
+                  _qazaCounts[prayer] = count;
+                });
+              }
+              await prefs.setInt('qaza_$prayer', count);
+            }
+          }
+        }
+
+        // Sync Prayer Alarms
+        if (data['prayerAlarms'] != null) {
+          final firestoreAlarms = data['prayerAlarms'] as Map<String, dynamic>;
+          for (final prayer in _prayerAlarms.keys) {
+            if (firestoreAlarms.containsKey(prayer)) {
+              final enabled = firestoreAlarms[prayer] as bool;
+              if (mounted) {
+                setState(() {
+                  _prayerAlarms[prayer] = enabled;
+                });
+              }
+              await prefs.setBool('alarm_$prayer', enabled);
+            }
+          }
+          _syncAlarms();
+        }
+
+        // Sync Salat Completed for today
+        if (data['salatCompleted'] != null) {
+          final firestoreSalat = data['salatCompleted'] as Map<String, dynamic>;
+          final now = DateTime.now();
+          final ymd = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+          
+          for (final salat in _salatCompleted.keys) {
+            final key = '${ymd}_$salat';
+            if (firestoreSalat.containsKey(key)) {
+              final val = firestoreSalat[key] as bool;
+              if (mounted) {
+                setState(() {
+                  _salatCompleted[salat] = val;
+                });
+              }
+              await prefs.setBool('completed_${ymd}_$salat', val);
+            }
+          }
         }
       }
     } else {
       debugPrint('User profile document does not exist.');
     }
   } catch (e) {
-    debugPrint('Error loading user profile: $e');
+    debugPrint('Error loading user profile/syncing: $e');
   }
 }
   // Load manual Qaza counts from SharedPreferences
@@ -206,6 +262,18 @@ Future<void> _loadUserProfile() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('qaza_$prayer', val);
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'qazaCounts': {
+            prayer: val,
+          }
+        }, SetOptions(merge: true));
+      }
     } catch (e) {
       debugPrint('Error saving qaza count: $e');
     }
@@ -253,6 +321,18 @@ Future<void> _loadUserProfile() async {
       final ymd = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('completed_${ymd}_$salat', val);
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'salatCompleted': {
+            '${ymd}_$salat': val,
+          }
+        }, SetOptions(merge: true));
+      }
     } catch (e) {
       debugPrint('Error saving salat completion: $e');
     }
@@ -281,6 +361,18 @@ Future<void> _loadUserProfile() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('alarm_$prayer', val);
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'prayerAlarms': {
+            prayer: val,
+          }
+        }, SetOptions(merge: true));
+      }
     } catch (e) {
       debugPrint('Error saving alarm state: $e');
     }
