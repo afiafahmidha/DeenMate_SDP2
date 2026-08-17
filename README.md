@@ -31,3 +31,19 @@ Every member must sign in, grant precise location permission, create or join
 the same SOS group code, and keep the app open while testing live tracking.
 The phone's normal SMS and dialler apps are used for contacts and emergency
 calls; add real contact names and numbers in the Medical tab.
+
+## SOS incident database
+
+The SOS button now writes an owner-private document to `sosIncidents`, keeps
+its latest GPS point updated while the alert is active, and marks it resolved
+when the user selects **I'm Safe Now**. If the app's offline simulation is
+enabled, the alert is stored on-device and is synchronized once the simulation
+is disabled. Deploy the updated rules before testing:
+
+```powershell
+firebase deploy --only firestore:rules
+```
+
+The database deliberately contains no medical profile or emergency contact
+numbers. Those details remain on the device and are used only to compose the
+system SMS fallback.
