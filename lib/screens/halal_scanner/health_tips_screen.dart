@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'halal_drawer.dart';
-import 'guides_and_walkthrough.dart';
+import 'guides_and_walkthrough.dart' hide MobileFrame;
+import 'additives_list_screen.dart';
 
 class HealthTipArticle {
   final String title;

@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../widgets/auth_header.dart'; // AppColors
 
 const Color kLinkGreen = Color(0xFF6FE6A8);
 
-// ============================================================
+
 // ENTRY POINT
 // ============================================================
 class InheritanceGuideScreen extends StatelessWidget {
@@ -18,7 +21,7 @@ class InheritanceGuideScreen extends StatelessWidget {
   Widget build(BuildContext context) => const InheritanceScreen();
 }
 
-// ============================================================
+
 // MODELS
 // ============================================================
 enum Gender { male, female }
@@ -85,7 +88,7 @@ class FaraidShareResult {
   });
 }
 
-// ============================================================
+
 // FARAID ENGINE (Hanafi-style, with exclusion notes)
 // ============================================================
 class FaraidEngine {
@@ -1042,6 +1045,93 @@ class _InheritanceScreenState extends State<InheritanceScreen>
         });
       } catch (_) {}
     }
+
+    // Sync / Load with Cloud Firestore
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (doc.exists) {
+          final data = doc.data();
+          if (data != null && data['inheritance'] != null) {
+            final inheritanceMap = data['inheritance'] as Map<String, dynamic>;
+            final remoteFamilyTree = inheritanceMap['familyTree'] as List<dynamic>?;
+            final remoteMyGender = inheritanceMap['myGender'] as String?;
+            final remoteNodeOffsets = inheritanceMap['nodeOffsets'] as Map<String, dynamic>?;
+            final remoteSavedScenarios = inheritanceMap['savedScenarios'] as List<dynamic>?;
+            final remoteBoardLocked = inheritanceMap['boardLocked'] as bool?;
+            final remoteLockedMatrix = inheritanceMap['lockedMatrix'] as List<dynamic>?;
+
+            setState(() {
+              if (remoteMyGender != null) {
+                _myGender = remoteMyGender == 'female' ? Gender.female : Gender.male;
+              }
+              if (remoteFamilyTree != null) {
+                try {
+                  _familyRelatives = remoteFamilyTree
+                      .map((e) => RelativeNode.fromJson(Map<String, dynamic>.from(e as Map)))
+                      .toList();
+                  _recalculateFamilyShares();
+                } catch (_) {}
+              }
+              if (remoteNodeOffsets != null) {
+                _nodeOffsets.clear();
+                remoteNodeOffsets.forEach((k, v) {
+                  final entry = v as Map;
+                  _nodeOffsets[k] = Offset((entry['x'] as num).toDouble(), (entry['y'] as num).toDouble());
+                });
+              }
+              if (remoteSavedScenarios != null) {
+                _savedScenarios = remoteSavedScenarios
+                    .map((e) => Map<String, dynamic>.from(e as Map))
+                    .toList();
+              }
+              if (remoteBoardLocked != null) {
+                _boardLocked = remoteBoardLocked;
+              }
+              if (remoteLockedMatrix != null) {
+                try {
+                  final storage = List<double>.from(remoteLockedMatrix.cast<double>());
+                  _treeTransformController.value = Matrix4.fromList(storage);
+                } catch (_) {}
+              }
+            });
+
+            // Save to local SharedPreferences to ensure synchronization
+            if (remoteFamilyTree != null) {
+              await prefs.setString('inheritance_family_tree', jsonEncode(remoteFamilyTree));
+            }
+            if (remoteMyGender != null) {
+              await prefs.setString('inheritance_my_gender', remoteMyGender);
+            }
+            if (remoteNodeOffsets != null) {
+              await prefs.setString('inheritance_node_offsets', jsonEncode(remoteNodeOffsets));
+            }
+            if (remoteSavedScenarios != null) {
+              await prefs.setString('inheritance_saved_scenarios', jsonEncode(remoteSavedScenarios));
+            }
+            if (remoteBoardLocked != null) {
+              await prefs.setBool('inheritance_board_locked', remoteBoardLocked);
+            }
+            if (remoteLockedMatrix != null) {
+              await prefs.setString('inheritance_locked_matrix', jsonEncode(remoteLockedMatrix));
+            }
+          } else {
+            // Document exists but no inheritance data, upload local data
+            await _syncToFirestore();
+          }
+        } else {
+          // Document does not exist, upload local data
+          await _syncToFirestore();
+        }
+      } catch (e) {
+        debugPrint("Error loading inheritance from Firestore: $e");
+      }
+    }
   }
 
   void _initEmptyTree() {
@@ -1051,6 +1141,67 @@ class _InheritanceScreenState extends State<InheritanceScreen>
       ];
       _recalculateFamilyShares();
     });
+  }
+
+  String _formatScenarioDate(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final dt = DateTime.parse(dateStr);
+      return DateFormat('dd MMM, yyyy').format(dt);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<void> _syncToFirestore() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final familyTreeStr = prefs.getString('inheritance_family_tree');
+      final myGenderStr = prefs.getString('inheritance_my_gender') ?? 'male';
+      final offsetsStr = prefs.getString('inheritance_node_offsets');
+      final boardLocked = prefs.getBool('inheritance_board_locked') ?? false;
+      final matrixStr = prefs.getString('inheritance_locked_matrix');
+
+      List<dynamic> familyTree = [];
+      if (familyTreeStr != null) {
+        try {
+          familyTree = jsonDecode(familyTreeStr);
+        } catch (_) {}
+      }
+
+      Map<String, dynamic> offsets = {};
+      if (offsetsStr != null) {
+        try {
+          offsets = jsonDecode(offsetsStr);
+        } catch (_) {}
+      }
+
+      List<dynamic> matrix = [];
+      if (matrixStr != null) {
+        try {
+          matrix = jsonDecode(matrixStr);
+        } catch (_) {}
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({
+        'inheritance': {
+          'familyTree': familyTree,
+          'myGender': myGenderStr,
+          'nodeOffsets': offsets,
+          'savedScenarios': _savedScenarios,
+          'boardLocked': boardLocked,
+          'lockedMatrix': matrix,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        }
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Error syncing inheritance to Firestore: $e");
+    }
   }
 
   Future<void> _saveFamilyTree() async {
@@ -1064,11 +1215,13 @@ class _InheritanceScreenState extends State<InheritanceScreen>
     final offsetMap = _nodeOffsets.map(
         (k, v) => MapEntry(k, <String, double>{'x': v.dx, 'y': v.dy}));
     await prefs.setString('inheritance_node_offsets', jsonEncode(offsetMap));
+    await _syncToFirestore();
   }
 
   Future<void> _saveScenariosToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('inheritance_saved_scenarios', jsonEncode(_savedScenarios));
+    await _syncToFirestore();
   }
 
   void _recalculateFamilyShares() {
@@ -1563,6 +1716,7 @@ class _InheritanceScreenState extends State<InheritanceScreen>
                           final storage = _treeTransformController.value.storage.toList();
                           await prefs.setString('inheritance_locked_matrix', jsonEncode(storage));
                         }
+                        await _syncToFirestore();
                       },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
@@ -3131,12 +3285,30 @@ class _InheritanceScreenState extends State<InheritanceScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  sc['name'] ?? 'Unnamed Scenario',
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: textColor),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        sc['name'] ?? 'Unnamed Scenario',
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: textColor),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (sc['date'] != null) ...[
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _formatScenarioDate(sc['date'] as String?),
+                                        style: GoogleFonts.inter(
+                                            fontSize: 10.5,
+                                            color: AppColors.placeholder,
+                                            fontWeight: FontWeight.normal),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                                 Text(
                                   isLoaded ? 'Active calculation displayed above' : 'Tap to load & view calculation results',

@@ -4,9 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:adhan/adhan.dart';
-import '../widgets/auth_header.dart'; // Import AppColors
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../widgets/auth_header.dart'; 
 
-// File-level theme helpers so widgets in this file can share logic.
 bool _isDarkModeCtx(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
 
 Color _surfaceColor(BuildContext context) {
@@ -90,7 +91,7 @@ class HijriDate {
   }
 }
 
-// ===== STAR CONFIG =====
+
 class _CalendarStarConfig {
   final double topFraction;
   final double leftFraction;
@@ -100,7 +101,6 @@ class _CalendarStarConfig {
   _CalendarStarConfig({required this.topFraction, required this.leftFraction, required this.size, required this.delayMs});
 }
 
-// ===== TWINKLING STAR WIDGET =====
 class _CalendarTwinklingStar extends StatefulWidget {
   final double topFraction;
   final double leftFraction;
@@ -180,7 +180,7 @@ class _CalendarStarPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ===== VERY SMALL TEXTURE PAINTER =====
+
 class _CalendarTexturePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -267,7 +267,7 @@ class HijriConverter {
   }
 }
 
-// ===== ISLAMIC EVENT MODEL =====
+
 class IslamicEvent {
   final String title;
   final String titleBengali;
@@ -300,8 +300,7 @@ class IslamicEvent {
     this.heroImages = const [],
   });
 
-  // Resolves the actual list of images to show in the hero carousel,
-  // falling back gracefully so nothing crashes before real assets exist.
+
   List<String> get carouselImages {
     if (heroImages.isNotEmpty) return heroImages;
     if (backgroundImagePath != null) return [backgroundImagePath!];
@@ -814,6 +813,55 @@ class _CalendarTabState extends State<CalendarTab> {
       _selectedDate = DateTime(2026, today.month, today.day);
       _currentMonth = DateTime(2026, today.month, 1);
     }
+    _loadCalendarActivities();
+  }
+
+  Future<void> _loadCalendarActivities() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data['calendarActivities'] != null) {
+          final firestoreActs = data['calendarActivities'] as Map<String, dynamic>;
+          if (mounted) {
+            setState(() {
+              firestoreActs.forEach((key, value) {
+                if (value is bool) {
+                  _activityStatus[key] = value;
+                }
+              });
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading calendar activities from Firestore: $e');
+    }
+  }
+
+  Future<void> _saveCalendarActivity(String key, bool val) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'calendarActivities': {
+            key: val,
+          }
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('Error saving calendar activity to Firestore: $e');
+    }
   }
 
   // Sparkling star config for background
@@ -887,7 +935,10 @@ class _CalendarTabState extends State<CalendarTab> {
               isBengali: _isBengali,
               isDarkMode: widget.isDarkMode,
               activityStatus: _activityStatus,
-              onToggleActivity: (key, val) => setState(() => _activityStatus[key] = val),
+              onToggleActivity: (key, val) {
+                setState(() => _activityStatus[key] = val);
+                _saveCalendarActivity(key, val);
+              },
             ),
           ),
     );
@@ -2061,7 +2112,11 @@ class _CalendarTabState extends State<CalendarTab> {
                 color: Colors.transparent,
                 child: CheckboxListTile(
                   value: isChecked,
-                  onChanged: (val) => setState(() => _activityStatus[key] = val ?? false),
+                  onChanged: (val) {
+                    final bool newWal = val ?? false;
+                    setState(() => _activityStatus[key] = newWal);
+                    _saveCalendarActivity(key, newWal);
+                  },
                   title: Text(
                     activities[index],
                     style: GoogleFonts.inter(
@@ -2133,7 +2188,11 @@ class _CalendarTabState extends State<CalendarTab> {
                 color: Colors.transparent,
                 child: CheckboxListTile(
                   value: isChecked,
-                  onChanged: (val) => setState(() => _activityStatus[key] = val ?? false),
+                  onChanged: (val) {
+                    final bool newWal = val ?? false;
+                    setState(() => _activityStatus[key] = newWal);
+                    _saveCalendarActivity(key, newWal);
+                  },
                   title: Text(
                     activities[index],
                     style: GoogleFonts.inter(
