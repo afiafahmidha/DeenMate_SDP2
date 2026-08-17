@@ -10,9 +10,10 @@ import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth_header.dart'; // AppColors
-import '../services/emergency_api_service.dart';
 import '../services/emergency_group_service.dart';
+import '../services/emergency_sos_service.dart';
 import '../services/weather_service.dart';
 import '../services/notification_service.dart';
 
@@ -21,8 +22,8 @@ class EmergencyContact {
   final TextEditingController numberController;
 
   EmergencyContact({required String name, required String number})
-      : nameController = TextEditingController(text: name),
-        numberController = TextEditingController(text: number);
+    : nameController = TextEditingController(text: name),
+      numberController = TextEditingController(text: number);
 
   Map<String, String> toMap() {
     return {'name': nameController.text, 'number': numberController.text};
@@ -75,13 +76,18 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   List<String> _activeSosLogs = [];
   final List<Map<String, dynamic>> _offlineQueue = [];
   List<Map<String, dynamic>> _incidentLogs = [];
+  String? _activeIncidentId;
 
   // ===== DYNAMIC EMERGENCY CONTACTS LIST =====
   List<EmergencyContact> _contacts = [];
 
   // ===== IN-APP ROUTE PLANNER CONTROLLERS =====
-  final _routeOriginController = TextEditingController(text: "Al Mashair, Makkah");
-  final _routeDestController = TextEditingController(text: "Kaaba, Al Haram, Makkah");
+  final _routeOriginController = TextEditingController(
+    text: "Al Mashair, Makkah",
+  );
+  final _routeDestController = TextEditingController(
+    text: "Kaaba, Al Haram, Makkah",
+  );
   final bool _isRouteActive = true;
 
   // ===== MEDICAL PROFILE DATA (CONTROLLERS) =====
@@ -101,6 +107,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   bool _isGroupJoined = false;
   bool _isGroupLeader = false;
   final _groupCodeController = TextEditingController();
+  final _newGroupNameController = TextEditingController();
   final _groupChatController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _groupMembersSubscription;
   StreamSubscription<Map<String, dynamic>?>? _groupSubscription;
@@ -109,7 +116,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   String _groupLeaderName = '';
   final Set<String> _geofenceAlertedMembers = {};
   final List<Map<String, String>> _groupChatMessages = [
-    {'sender': 'Safety system', 'text': 'Group channel is ready.', 'time': 'Now'},
+    {
+      'sender': 'Safety system',
+      'text': 'Group channel is ready.',
+      'time': 'Now',
+    },
   ];
   EmergencyWeatherData? _weather;
   DateTime? _lastWeatherFetch;
@@ -156,31 +167,53 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
     if (_isGroupJoined) {
       return _liveGroupMembers
-          .where((member) => member['latitude'] is num && member['longitude'] is num)
+          .where(
+            (member) => member['latitude'] is num && member['longitude'] is num,
+          )
           .map((member) {
-        final lat = (member['latitude'] as num).toDouble();
-        final lng = (member['longitude'] as num).toDouble();
-        final distance = Geolocator.distanceBetween(uLat, uLng, lat, lng);
-        final outOfRange = distance > _groupRangeMeters;
-        return {
-          ...member,
-          'lat': lat,
-          'lng': lng,
-          'dist': distance / 1000,
-          'battery': member['battery'] ?? 0,
-          'status': outOfRange ? 'OUT OF RANGE' : 'SAFE',
-        };
-      }).toList();
+            final lat = (member['latitude'] as num).toDouble();
+            final lng = (member['longitude'] as num).toDouble();
+            final distance = Geolocator.distanceBetween(uLat, uLng, lat, lng);
+            final outOfRange = distance > _groupRangeMeters;
+            return {
+              ...member,
+              'lat': lat,
+              'lng': lng,
+              'dist': distance / 1000,
+              'battery': member['battery'] ?? 0,
+              'status': outOfRange ? 'OUT OF RANGE' : 'SAFE',
+            };
+          })
+          .toList();
     }
 
     final List<Map<String, dynamic>> members = [
-      {'name': 'Ahmed (Leader)', 'lat': 21.4180, 'lng': 39.8830, 'battery': 88, 'status': 'SAFE'},
-      {'name': 'Fatimah', 'lat': 21.4210, 'lng': 39.8270, 'battery': 92, 'status': 'SAFE'},
-      {'name': 'Yusuf', 'lat': 21.3550, 'lng': 39.9850, 'battery': 12, 'status': '⚠️ OUT OF BOUNDS / GEOFENCE BREACH'},
+      {
+        'name': 'Ahmed (Leader)',
+        'lat': 21.4180,
+        'lng': 39.8830,
+        'battery': 88,
+        'status': 'SAFE',
+      },
+      {
+        'name': 'Fatimah',
+        'lat': 21.4210,
+        'lng': 39.8270,
+        'battery': 92,
+        'status': 'SAFE',
+      },
+      {
+        'name': 'Yusuf',
+        'lat': 21.3550,
+        'lng': 39.9850,
+        'battery': 12,
+        'status': '⚠️ OUT OF BOUNDS / GEOFENCE BREACH',
+      },
     ];
 
     for (var m in members) {
-      final double dist = Geolocator.distanceBetween(uLat, uLng, m['lat'], m['lng']) / 1000.0;
+      final double dist =
+          Geolocator.distanceBetween(uLat, uLng, m['lat'], m['lng']) / 1000.0;
       m['dist'] = dist;
     }
     return members;
@@ -191,6 +224,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     super.initState();
     _loadProfileData();
     _loadIncidentLogs();
+    _loadOfflineQueue();
     _initLocationTracking();
   }
 
@@ -212,6 +246,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     _groupNameController.dispose();
     _hotelController.dispose();
     _groupCodeController.dispose();
+    _newGroupNameController.dispose();
     _groupChatController.dispose();
 
     for (var contact in _contacts) {
@@ -224,39 +259,23 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   Future<void> _loadProfileData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _nameController.text = prefs.getString('sos_name') ?? "Muhammad Ali";
-      _passportController.text = prefs.getString('sos_passport') ?? "K98765432";
-      _nationalityController.text = prefs.getString('sos_nationality') ?? "Indonesian";
-      _bloodController.text = prefs.getString('sos_blood') ?? "O+";
-      _allergiesController.text = prefs.getString('sos_allergies') ?? "Penicillin, Pollen";
-      _conditionsController.text = prefs.getString('sos_conditions') ?? "Hypertension";
-      _medsController.text = prefs.getString('sos_meds') ?? "Lisinopril 10mg daily";
-      _groupNameController.text = prefs.getString('sos_group_name') ?? "Garuda Hajj Cluster 4";
-      _hotelController.text = prefs.getString('sos_hotel') ?? "Al Kiswah Towers, Makkah";
+      _nameController.clear();
+      _passportController.clear();
+      _nationalityController.clear();
+      _bloodController.clear();
+      _allergiesController.clear();
+      _conditionsController.clear();
+      _medsController.clear();
+      _groupNameController.clear();
+      _hotelController.clear();
       _isGroupJoined = prefs.getBool('sos_is_group_joined') ?? false;
       _isGroupLeader = prefs.getBool('sos_is_group_leader') ?? false;
       _groupCodeController.text = prefs.getString('sos_group_code') ?? '';
+      _activeIncidentId = prefs.getString('sos_active_incident_id');
 
-      // Load contacts json list
-      final String? contactsJson = prefs.getString('sos_contacts_json');
-      if (contactsJson != null) {
-        final List<dynamic> decoded = jsonDecode(contactsJson);
-        _contacts = decoded.map((item) => EmergencyContact(
-          name: item['name'] ?? '',
-          number: item['number'] ?? '',
-        )).toList();
-      } else {
-        // Graceful migration from old single contact keys
-        final String? oldName = prefs.getString('sos_contact_name');
-        final String? oldNum = prefs.getString('sos_contact_number');
-        if (oldName != null && oldNum != null) {
-          _contacts = [EmergencyContact(name: oldName, number: oldNum)];
-        } else {
-          // Never send a real emergency message to demonstration numbers.
-          _contacts = [];
-        }
-      }
+      _contacts = [];
     });
+    await _loadProfileFromFirestore();
     if (_isGroupJoined && _groupCodeController.text.trim().isNotEmpty) {
       _startGroupTracking();
     }
@@ -275,15 +294,51 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     await prefs.setString('sos_hotel', _hotelController.text);
     await prefs.setBool('sos_is_group_joined', _isGroupJoined);
     await prefs.setBool('sos_is_group_leader', _isGroupLeader);
-    await prefs.setString('sos_group_code', _groupCodeController.text.trim().toUpperCase());
+    await prefs.setString(
+      'sos_group_code',
+      _groupCodeController.text.trim().toUpperCase(),
+    );
 
     // Save serialized contacts list
-    final List<Map<String, String>> serializedContacts = _contacts.map((c) => c.toMap()).toList();
+    final List<Map<String, String>> serializedContacts = _contacts
+        .map((c) => c.toMap())
+        .toList();
     await prefs.setString('sos_contacts_json', jsonEncode(serializedContacts));
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'sosProfile': {
+          'passport': _passportController.text.trim(),
+          'nationality': _nationalityController.text.trim(),
+          'bloodType': _bloodController.text.trim(),
+          'allergies': _allergiesController.text.trim(),
+          'conditions': _conditionsController.text.trim(),
+          'medications': _medsController.text.trim(),
+          'hotel': _hotelController.text.trim(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        'sosEmergencyContacts': serializedContacts,
+        // Browser preferences can be cleared when Flutter web/Chrome restarts.
+        // Keep group membership with the signed-in user's profile as well.
+        'sosGroupMembership': {
+          'code': _groupCodeController.text.trim().toUpperCase(),
+          'isJoined': _isGroupJoined,
+          'isLeader': _isGroupLeader,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        'profile': {
+          'fullName': _nameController.text.trim(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      }, SetOptions(merge: true));
+    }
 
     setState(() => _isProfileEditing = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile card and emergency contacts saved.')),
+      const SnackBar(
+        content: Text('Profile card and emergency contacts saved.'),
+      ),
     );
   }
 
@@ -300,6 +355,84 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   Future<void> _saveIncidentLogs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('sos_incident_logs', jsonEncode(_incidentLogs));
+  }
+
+  Future<void> _loadProfileFromFirestore() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final data = snapshot.data() ?? <String, dynamic>{};
+      final profile = Map<String, dynamic>.from(
+        data['profile'] as Map? ?? const {},
+      );
+      final sos = Map<String, dynamic>.from(
+        data['sosProfile'] as Map? ?? const {},
+      );
+      final groupMembership = Map<String, dynamic>.from(
+        data['sosGroupMembership'] as Map? ?? const {},
+      );
+      final contacts = (data['sosEmergencyContacts'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (contact) => EmergencyContact(
+              name: (contact['name'] ?? '').toString(),
+              number: (contact['number'] ?? '').toString(),
+            ),
+          )
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _nameController.text = (profile['fullName'] ?? user.displayName ?? '')
+            .toString();
+        _passportController.text = (sos['passport'] ?? '').toString();
+        _nationalityController.text = (sos['nationality'] ?? '').toString();
+        _bloodController.text = (sos['bloodType'] ?? '').toString();
+        _allergiesController.text = (sos['allergies'] ?? '').toString();
+        _conditionsController.text = (sos['conditions'] ?? '').toString();
+        _medsController.text = (sos['medications'] ?? '').toString();
+        _hotelController.text = (sos['hotel'] ?? '').toString();
+        _contacts = contacts;
+        final savedGroupCode = (groupMembership['code'] ?? '')
+            .toString()
+            .trim()
+            .toUpperCase();
+        if (groupMembership['isJoined'] == true && savedGroupCode.isNotEmpty) {
+          _groupCodeController.text = savedGroupCode;
+          _isGroupJoined = true;
+          _isGroupLeader = groupMembership['isLeader'] == true;
+        }
+      });
+
+      if (_isGroupJoined && _groupCodeController.text.trim().isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('sos_is_group_joined', _isGroupJoined);
+        await prefs.setBool('sos_is_group_leader', _isGroupLeader);
+        await prefs.setString('sos_group_code', _groupCodeController.text);
+      }
+    } catch (error) {
+      debugPrint('[SOS] Profile load failed: $error');
+    }
+  }
+
+  Future<void> _loadOfflineQueue() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('sos_offline_queue');
+    if (raw == null) return;
+    try {
+      final queue = List<Map<String, dynamic>>.from(jsonDecode(raw));
+      if (mounted) setState(() => _offlineQueue.addAll(queue));
+    } catch (error) {
+      debugPrint('[SOS] Ignoring invalid offline queue: $error');
+    }
+  }
+
+  Future<void> _saveOfflineQueue() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('sos_offline_queue', jsonEncode(_offlineQueue));
   }
 
   // ===== GEOLOCATION =====
@@ -324,14 +457,18 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       }
 
       if (permission == LocationPermission.deniedForever) {
-        setState(() => _currentAddress = "Location permissions permanently denied");
+        setState(
+          () => _currentAddress = "Location permissions permanently denied",
+        );
         return;
       }
 
       // Get current position
       try {
         final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+          ),
         );
         _updateLocationInfo(pos);
       } catch (e) {
@@ -339,29 +476,41 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       }
 
       // Continuous location stream — keeps GPS card live in real time
-      _positionStreamSubscription = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 5,
-        ),
-      ).listen((Position position) {
-        if (mounted) {
-          _updateLocationInfo(position);
-          _publishGroupLocation(position);
-          if (_isSosTriggered && !_isOfflineSimulated) {
-            EmergencyApiService.instance.updateLiveLocation(
-              latitude: position.latitude,
-              longitude: position.longitude,
-              emergencyId: "SOS_${position.timestamp.millisecondsSinceEpoch}",
-            );
-            setState(() {
-              _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] Live GPS update: ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}");
-            });
-          }
-        }
-      });
+      _positionStreamSubscription =
+          Geolocator.getPositionStream(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 5,
+            ),
+          ).listen((Position position) {
+            if (mounted) {
+              _updateLocationInfo(position);
+              _publishGroupLocation(position);
+              if (_isSosTriggered && !_isOfflineSimulated) {
+                final incidentId = _activeIncidentId;
+                if (incidentId != null)
+                  EmergencySosService.instance
+                      .updateLocation(
+                        latitude: position.latitude,
+                        longitude: position.longitude,
+                        incidentId: incidentId,
+                      )
+                      .catchError(
+                        (Object error) =>
+                            debugPrint('[SOS] Location sync failed: $error'),
+                      );
+                setState(() {
+                  _activeSosLogs.add(
+                    "[${DateTime.now().toLocal().toString().substring(11, 19)}] Live GPS update: ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}",
+                  );
+                });
+              }
+            }
+          });
     } catch (e) {
-      debugPrint("Geolocator platform channel error (test simulation fallback): $e");
+      debugPrint(
+        "Geolocator platform channel error (test simulation fallback): $e",
+      );
       setState(() {
         _currentPosition = Position(
           longitude: 39.8262,
@@ -392,27 +541,40 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
     try {
       final geocoding = Geocoding();
-      final placemarks = await geocoding.placemarkFromCoordinates(pos.latitude, pos.longitude);
+      final placemarks = await geocoding.placemarkFromCoordinates(
+        pos.latitude,
+        pos.longitude,
+      );
       if (placemarks.isNotEmpty) {
         final pm = placemarks.first;
         setState(() {
-          _currentAddress = "${pm.street ?? ''}, ${pm.locality ?? ''}, ${pm.country ?? ''}";
+          _currentAddress =
+              "${pm.street ?? ''}, ${pm.locality ?? ''}, ${pm.country ?? ''}";
           _currentCountry = pm.country ?? "Saudi Arabia";
           _updateEmergencyNumber(pm.country);
         });
       }
     } catch (e) {
       setState(() {
-        _currentAddress = "Coordinates: ${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}";
+        _currentAddress =
+            "Coordinates: ${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}";
       });
     }
   }
 
   Future<void> _refreshWeather(Position position, {bool force = false}) async {
-    if (_weatherLoading || (!force && _lastWeatherFetch != null && DateTime.now().difference(_lastWeatherFetch!) < const Duration(minutes: 20))) return;
+    if (_weatherLoading ||
+        (!force &&
+            _lastWeatherFetch != null &&
+            DateTime.now().difference(_lastWeatherFetch!) <
+                const Duration(minutes: 20)))
+      return;
     setState(() => _weatherLoading = true);
     try {
-      final weather = await WeatherService.instance.current(position.latitude, position.longitude);
+      final weather = await WeatherService.instance.current(
+        position.latitude,
+        position.longitude,
+      );
       if (!mounted) return;
       setState(() {
         _weather = weather;
@@ -431,11 +593,40 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     setState(() {
       if (cName.contains("saudi") || cName.contains("arabia")) {
         _emergencyNumber = "997";
-      } else if (cName.contains("united states") || cName.contains("america") || cName.contains('canada')) {
+      } else if (cName.contains("united states") ||
+          cName.contains("america") ||
+          cName.contains('canada')) {
         _emergencyNumber = "911";
-      } else if (cName.contains("united kingdom") || cName.contains('bangladesh') || cName.contains('malaysia') || cName.contains('singapore')) {
+      } else if (cName.contains("united kingdom") ||
+          cName.contains('bangladesh') ||
+          cName.contains('malaysia') ||
+          cName.contains('singapore')) {
         _emergencyNumber = "999";
-      } else if (cName.contains("turkey") || cName.contains('türkiye') || cName.contains('indonesia') || cName.contains('india') || cName.contains('pakistan') || cName.contains('united arab emirates') || cName.contains('qatar') || cName.contains('oman') || cName.contains('kuwait') || cName.contains('bahrain') || cName.contains('jordan') || cName.contains('egypt') || cName.contains('morocco') || cName.contains('germany') || cName.contains('france') || cName.contains('italy') || cName.contains('spain') || cName.contains('netherlands') || cName.contains('sweden') || cName.contains('norway') || cName.contains('australia') || cName.contains('new zealand') || cName.contains('japan') || cName.contains('south korea') || cName.contains('china')) {
+      } else if (cName.contains("turkey") ||
+          cName.contains('türkiye') ||
+          cName.contains('indonesia') ||
+          cName.contains('india') ||
+          cName.contains('pakistan') ||
+          cName.contains('united arab emirates') ||
+          cName.contains('qatar') ||
+          cName.contains('oman') ||
+          cName.contains('kuwait') ||
+          cName.contains('bahrain') ||
+          cName.contains('jordan') ||
+          cName.contains('egypt') ||
+          cName.contains('morocco') ||
+          cName.contains('germany') ||
+          cName.contains('france') ||
+          cName.contains('italy') ||
+          cName.contains('spain') ||
+          cName.contains('netherlands') ||
+          cName.contains('sweden') ||
+          cName.contains('norway') ||
+          cName.contains('australia') ||
+          cName.contains('new zealand') ||
+          cName.contains('japan') ||
+          cName.contains('south korea') ||
+          cName.contains('china')) {
         _emergencyNumber = "112";
       } else {
         _emergencyNumber = "112";
@@ -452,12 +643,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         point['lat'],
         point['lng'],
       );
-      pointsWithDistance.add({
-        ...point,
-        'distance': distanceInMeters / 1000.0,
-      });
+      pointsWithDistance.add({...point, 'distance': distanceInMeters / 1000.0});
     }
-    pointsWithDistance.sort((a, b) => (a['distance'] as double).compareTo(b['distance'] as double));
+    pointsWithDistance.sort(
+      (a, b) => (a['distance'] as double).compareTo(b['distance'] as double),
+    );
     setState(() {
       _sortedMedicalPoints = pointsWithDistance;
     });
@@ -497,7 +687,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       _isCountingDown = true;
       _cancelCountdown = 5;
       _activeSosLogs = [
-        "[${DateTime.now().toLocal().toString().substring(11, 19)}] SOS Triggered. Waiting 5s auto-cancel..."
+        "[${DateTime.now().toLocal().toString().substring(11, 19)}] SOS Triggered. Waiting 5s auto-cancel...",
       ];
     });
 
@@ -544,8 +734,12 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       targetRoute: '/sos',
     );
 
-    _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] Gathering GPS coordinates: $lat, $lng");
-    _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] Loading medical profile and ${_contacts.length} emergency contacts...");
+    _activeSosLogs.add(
+      "[${DateTime.now().toLocal().toString().substring(11, 19)}] Gathering GPS coordinates: $lat, $lng",
+    );
+    _activeSosLogs.add(
+      "[${DateTime.now().toLocal().toString().substring(11, 19)}] Loading medical profile and ${_contacts.length} emergency contacts...",
+    );
 
     final profile = {
       'name': _nameController.text,
@@ -562,11 +756,15 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     final contacts = _contacts.map((c) => c.toMap()).toList();
 
     if (_isLowBatterySimulated) {
-      _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] ⚠️ BATTERY CRITICALLY LOW! Auto-sending final location link before device shutdown.");
+      _activeSosLogs.add(
+        "[${DateTime.now().toLocal().toString().substring(11, 19)}] ⚠️ BATTERY CRITICALLY LOW! Auto-sending final location link before device shutdown.",
+      );
     }
 
     if (_isOfflineSimulated) {
-      _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] ❌ Offline Mode. Queueing SOS payload locally.");
+      _activeSosLogs.add(
+        "[${DateTime.now().toLocal().toString().substring(11, 19)}] ❌ Offline Mode. Queueing SOS payload locally.",
+      );
       _offlineQueue.add({
         'timestamp': DateTime.now().toIso8601String(),
         'lat': lat,
@@ -574,31 +772,49 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         'profile': profile,
         'contacts': contacts,
         'link': locationLink,
+        'resolved': false,
       });
-      _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] 💬 Launching SMS fallback protocols...");
+      _saveOfflineQueue();
+      _activeSosLogs.add(
+        "[${DateTime.now().toLocal().toString().substring(11, 19)}] 💬 Launching SMS fallback protocols...",
+      );
       _launchSmsFallback(locationLink);
     } else {
-      _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] 🌐 Connection OK. Contacting DeenMate Emergency API...");
-
-      final success = await EmergencyApiService.instance.triggerEmergencySos(
-        latitude: lat,
-        longitude: lng,
-        medicalProfile: profile,
-        emergencyContacts: contacts,
-        isSilent: false,
-        groupLeaderId: _isGroupJoined ? _groupCodeController.text.trim().toUpperCase() : null,
+      _activeSosLogs.add(
+        "[${DateTime.now().toLocal().toString().substring(11, 19)}] 🌐 Connection OK. Contacting DeenMate Emergency API...",
       );
 
+      bool success;
+      try {
+        _activeIncidentId = await EmergencySosService.instance.createIncident(
+          latitude: lat,
+          longitude: lng,
+          address: _currentAddress,
+          isSilent: false,
+        );
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('sos_active_incident_id', _activeIncidentId!);
+        success = true;
+      } catch (error) {
+        debugPrint('[SOS] Incident creation failed: $error');
+        success = false;
+      }
+
       if (success) {
-        _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] ✅ Broadcast successful. Group leader notified via server push.");
+        _activeSosLogs.add(
+          "[${DateTime.now().toLocal().toString().substring(11, 19)}] ✅ Broadcast successful. Group leader notified via server push.",
+        );
       } else {
-        _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] ⚠️ API request failed. Falling back to cellular SMS...");
+        _activeSosLogs.add(
+          "[${DateTime.now().toLocal().toString().substring(11, 19)}] ⚠️ API request failed. Falling back to cellular SMS...",
+        );
         _launchSmsFallback(locationLink);
       }
     }
 
     final newIncident = {
       'id': 'INC_${DateTime.now().millisecondsSinceEpoch}',
+      'databaseId': _activeIncidentId,
       'timestamp': DateTime.now().toIso8601String(),
       'type': 'Standard SOS',
       'lat': lat,
@@ -617,7 +833,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     for (var contact in _contacts) {
       final phone = contact.numberController.text.trim();
       final name = contact.nameController.text.trim();
-      final message = "DEENMATE EMERGENCY SOS!\nI need help. My medical profile is attached to this account. My current GPS location: $locationLink";
+      final message =
+          "DEENMATE EMERGENCY SOS!\nI need help. My medical profile is attached to this account. My current GPS location: $locationLink";
       final uri = Uri(
         scheme: 'sms',
         path: phone,
@@ -625,13 +842,18 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       );
       // Try the intent directly. canLaunchUrl may report false on Android
       // even when an SMS app exists, due to package visibility rules.
-      if (phone.isNotEmpty && await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (phone.isNotEmpty &&
+          await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         setState(() {
-          _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] 📲 SMS draft launched to $name ($phone)");
+          _activeSosLogs.add(
+            "[${DateTime.now().toLocal().toString().substring(11, 19)}] 📲 SMS draft launched to $name ($phone)",
+          );
         });
       } else {
         setState(() {
-          _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] ❌ SMS Launcher failed for $name.");
+          _activeSosLogs.add(
+            "[${DateTime.now().toLocal().toString().substring(11, 19)}] ❌ SMS Launcher failed for $name.",
+          );
         });
       }
     }
@@ -643,21 +865,31 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
     setState(() {
       _isSosTriggered = false;
-      _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] SOS Deactivated. Broadcasting safe status...");
+      _activeSosLogs.add(
+        "[${DateTime.now().toLocal().toString().substring(11, 19)}] SOS Deactivated. Broadcasting safe status...",
+      );
     });
 
-    if (!_isOfflineSimulated) {
-      await EmergencyApiService.instance.deactivateEmergencySos(
-        emergencyId: "SOS_ACTIVE",
-        latitude: lat,
-        longitude: lng,
-      );
+    final incidentId = _activeIncidentId;
+    var incidentResolved = incidentId == null;
+    if (!_isOfflineSimulated && incidentId != null) {
+      try {
+        await EmergencySosService.instance.resolveIncident(
+          incidentId: incidentId,
+          latitude: lat,
+          longitude: lng,
+        );
+        incidentResolved = true;
+      } catch (error) {
+        debugPrint('[SOS] Incident resolution sync failed: $error');
+      }
     }
 
     NotificationService.instance.showCustomNotification(
       id: 9998,
       title: "Status Safe",
-      body: "An 'I am Safe' broadcast has been sent to your emergency contacts.",
+      body:
+          "An 'I am Safe' broadcast has been sent to your emergency contacts.",
       category: 'sos',
       targetRoute: '/sos',
     );
@@ -669,11 +901,21 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       });
       _saveIncidentLogs();
     }
+    if (_isOfflineSimulated && _offlineQueue.isNotEmpty) {
+      _offlineQueue.last['resolved'] = true;
+      await _saveOfflineQueue();
+    }
+    if (incidentResolved) {
+      _activeIncidentId = null;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('sos_active_incident_id');
+    }
 
     // Launch WhatsApp/SMS broadcast directly
     for (var contact in _contacts) {
       final phone = contact.numberController.text.trim();
-      final safeMsg = "Alhamdulillah, the danger has passed and I am safe now. Thank you for your support.";
+      final safeMsg =
+          "Alhamdulillah, the danger has passed and I am safe now. Thank you for your support.";
       if (phone.isEmpty) continue;
       final uri = Uri(
         scheme: 'sms',
@@ -684,35 +926,60 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     }
   }
 
-  void _syncOfflineQueue() {
+  Future<void> _syncOfflineQueue() async {
     if (_offlineQueue.isEmpty) return;
     setState(() {
-      _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] 🔄 Syncing ${_offlineQueue.length} buffered offline SOS alerts...");
+      _activeSosLogs.add(
+        "[${DateTime.now().toLocal().toString().substring(11, 19)}] 🔄 Syncing ${_offlineQueue.length} buffered offline SOS alerts...",
+      );
     });
 
-    for (var queued in _offlineQueue) {
-      EmergencyApiService.instance.triggerEmergencySos(
-        latitude: queued['lat'],
-        longitude: queued['lng'],
-        medicalProfile: queued['profile'],
-        emergencyContacts: queued['contacts'],
-        isSilent: false,
-        groupLeaderId: _isGroupJoined ? _groupCodeController.text.trim().toUpperCase() : null,
-      );
+    final delivered = <Map<String, dynamic>>[];
+    for (final queued in _offlineQueue) {
+      try {
+        final incidentId = await EmergencySosService.instance.createIncident(
+          latitude: (queued['lat'] as num).toDouble(),
+          longitude: (queued['lng'] as num).toDouble(),
+          address: _currentAddress,
+          isSilent: false,
+        );
+        if (queued['resolved'] == true) {
+          await EmergencySosService.instance.resolveIncident(
+            incidentId: incidentId,
+            latitude: (queued['lat'] as num).toDouble(),
+            longitude: (queued['lng'] as num).toDouble(),
+          );
+        } else {
+          _activeIncidentId ??= incidentId;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('sos_active_incident_id', _activeIncidentId!);
+        }
+        delivered.add(queued);
+      } catch (error) {
+        debugPrint('[SOS] Queued incident sync failed: $error');
+      }
     }
     setState(() {
-      _offlineQueue.clear();
-      _activeSosLogs.add("[${DateTime.now().toLocal().toString().substring(11, 19)}] ✅ Offline queue synced.");
+      _offlineQueue.removeWhere(delivered.contains);
+      _activeSosLogs.add(
+        "[${DateTime.now().toLocal().toString().substring(11, 19)}] ${delivered.isEmpty ? 'Offline queue is still waiting for a connection.' : 'Offline queue synced.'}",
+      );
     });
+    await _saveOfflineQueue();
   }
 
   Future<void> _makeCall(String phone) async {
     final uri = Uri.parse("tel:$phone");
     try {
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No phone application is available on this device.')),
+          const SnackBar(
+            content: Text('No phone application is available on this device.'),
+          ),
         );
       }
     } catch (error) {
@@ -722,9 +989,19 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
   // ===== GROUP CODE GENERATION =====
   Future<void> _generateGroupCode() async {
+    final groupName = _newGroupNameController.text.trim();
+    if (groupName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a group name before creating the group.'),
+        ),
+      );
+      return;
+    }
     try {
       final code = await EmergencyGroupService.instance.createGroup(
         leaderName: _nameController.text,
+        groupName: groupName,
         rangeMeters: _groupRangeMeters,
       );
       if (!mounted) return;
@@ -733,11 +1010,14 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         _isGroupJoined = true;
         _isGroupLeader = true;
         _groupLeaderName = _nameController.text;
+        _groupNameController.text = groupName;
       });
       await _saveProfileData();
       _startGroupTracking();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Group "$code" created. Share this code with members.')),
+        SnackBar(
+          content: Text('Group "$code" created. Share this code with members.'),
+        ),
       );
     } catch (error) {
       _showGroupError(error);
@@ -773,16 +1053,21 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     if (code.isEmpty) return;
     _groupMembersSubscription?.cancel();
     _groupSubscription?.cancel();
-    _groupMembersSubscription = EmergencyGroupService.instance.members(code).listen((members) {
-      if (!mounted) return;
-      setState(() => _liveGroupMembers = members);
-      _checkGroupRange();
-    }, onError: _showGroupError);
-    _groupSubscription = EmergencyGroupService.instance.group(code).listen((group) {
+    _groupMembersSubscription = EmergencyGroupService.instance
+        .members(code)
+        .listen((members) {
+          if (!mounted) return;
+          setState(() => _liveGroupMembers = members);
+          _checkGroupRange();
+        }, onError: _showGroupError);
+    _groupSubscription = EmergencyGroupService.instance.group(code).listen((
+      group,
+    ) {
       if (!mounted || group == null) return;
       setState(() {
         _groupRangeMeters = (group['rangeMeters'] as num?)?.toDouble() ?? 1000;
         _groupLeaderName = group['leaderName'] as String? ?? '';
+        _groupNameController.text = group['name'] as String? ?? '';
       });
     }, onError: _showGroupError);
     if (_currentPosition != null) _publishGroupLocation(_currentPosition!);
@@ -790,11 +1075,13 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
   void _publishGroupLocation(Position position) {
     if (!_isGroupJoined || _isOfflineSimulated) return;
-    EmergencyGroupService.instance.updateMyLocation(
-      code: _groupCodeController.text.trim().toUpperCase(),
-      latitude: position.latitude,
-      longitude: position.longitude,
-    ).catchError(_showGroupError);
+    EmergencyGroupService.instance
+        .updateMyLocation(
+          code: _groupCodeController.text.trim().toUpperCase(),
+          latitude: position.latitude,
+          longitude: position.longitude,
+        )
+        .catchError(_showGroupError);
     _checkGroupRange();
   }
 
@@ -809,7 +1096,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         NotificationService.instance.showCustomNotification(
           id: id.hashCode & 0x7fffffff,
           title: 'Group distance alert',
-          body: '${member['name']} is outside the ${(_groupRangeMeters / 1000).toStringAsFixed(1)} km safety range.',
+          body:
+              '${member['name']} is outside the ${(_groupRangeMeters / 1000).toStringAsFixed(1)} km safety range.',
           category: 'sos',
           targetRoute: '/sos',
         );
@@ -831,7 +1119,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     final code = _groupCodeController.text.trim().toUpperCase();
     Object? cloudError;
     try {
-      if (code.isNotEmpty) await EmergencyGroupService.instance.leaveGroup(code);
+      if (code.isNotEmpty)
+        await EmergencyGroupService.instance.leaveGroup(code);
     } catch (error) {
       // Local leave must still succeed; a failed cloud delete should not trap
       // a user in a group after going offline or losing Firebase permission.
@@ -852,7 +1141,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       await _saveProfileData();
       if (cloudError != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You left this device. Cloud membership will be removed when Firebase access is restored.')),
+          const SnackBar(
+            content: Text(
+              'You left this device. Cloud membership will be removed when Firebase access is restored.',
+            ),
+          ),
         );
       }
     }
@@ -862,7 +1155,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   @override
   Widget build(BuildContext context) {
     final bool isDark = widget.isDarkMode;
-    final primaryBg = isDark ? const Color(0xFF121212) : const Color(0xFFF7F7F5);
+    final primaryBg = isDark
+        ? const Color(0xFF121212)
+        : const Color(0xFFF7F7F5);
     final textThemeColor = isDark ? Colors.white70 : AppColors.navyBlue;
     final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
@@ -898,7 +1193,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       child: Row(
         children: [
           IconButton(
-            icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 20),
+            icon: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: textColor,
+              size: 20,
+            ),
             onPressed: () => Navigator.pop(context),
           ),
           Container(
@@ -907,7 +1206,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               color: const Color(0xFFD32F2F),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.health_and_safety_rounded, color: Colors.white, size: 20),
+            child: const Icon(
+              Icons.health_and_safety_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -950,9 +1253,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 10,
-              offset: const Offset(0, 3)),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
       child: Row(
@@ -970,19 +1274,28 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 ),
                 child: Column(
                   children: [
-                    Icon(_tabIcons[i],
-                        size: 16,
+                    Icon(
+                      _tabIcons[i],
+                      size: 16,
+                      color: active
+                          ? Colors.white
+                          : (isDark
+                                ? Colors.white54
+                                : AppColors.navyBlue.withValues(alpha: 0.4)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _tabLabels[i],
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
                         color: active
                             ? Colors.white
-                            : (isDark ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
-                    const SizedBox(height: 2),
-                    Text(_tabLabels[i],
-                        style: GoogleFonts.inter(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: active
-                                ? Colors.white
-                                : (isDark ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)))),
+                            : (isDark
+                                  ? Colors.white54
+                                  : AppColors.navyBlue.withValues(alpha: 0.4)),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1009,15 +1322,20 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   }
 
   _WeatherVisual _resolvedWeatherVisual() {
-    if (_weatherPreviewIndex >= 0) return _WeatherVisual.values[_weatherPreviewIndex];
+    if (_weatherPreviewIndex >= 0)
+      return _WeatherVisual.values[_weatherPreviewIndex];
     final weather = _weather;
     final now = DateTime.now();
     if (weather == null) return _WeatherVisual.sunny;
     if (weather.isRainy) return _WeatherVisual.rain;
     if (weather.isCloudy) return _WeatherVisual.cloudy;
     if (!weather.isDay) return _WeatherVisual.night;
-    if (weather.sunrise != null && now.difference(weather.sunrise!).abs() < const Duration(minutes: 50)) return _WeatherVisual.sunrise;
-    if (weather.sunset != null && now.difference(weather.sunset!).abs() < const Duration(minutes: 50)) return _WeatherVisual.sunset;
+    if (weather.sunrise != null &&
+        now.difference(weather.sunrise!).abs() < const Duration(minutes: 50))
+      return _WeatherVisual.sunrise;
+    if (weather.sunset != null &&
+        now.difference(weather.sunset!).abs() < const Duration(minutes: 50))
+      return _WeatherVisual.sunset;
     if (now.hour >= 12 && now.hour < 17) return _WeatherVisual.afternoon;
     return _seasonFor(now.month, _currentPosition?.latitude ?? 0);
   }
@@ -1037,9 +1355,22 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
-        Text('Live weather safety', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+        Text(
+          'Live weather safety',
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
+        ),
         const SizedBox(height: 4),
-        Text('Weather matched to your GPS position. Visual conditions animate in real time.', style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: .6))),
+        Text(
+          'Weather matched to your GPS position. Visual conditions animate in real time.',
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: textColor.withValues(alpha: .6),
+          ),
+        ),
         const SizedBox(height: 14),
         ClipRRect(
           borderRadius: BorderRadius.circular(20),
@@ -1048,20 +1379,58 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                _AnimatedWeatherBackdrop(visual: visual, darkMode: widget.isDarkMode),
+                _AnimatedWeatherBackdrop(
+                  visual: visual,
+                  darkMode: widget.isDarkMode,
+                ),
                 Padding(
                   padding: const EdgeInsets.all(18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(color: Colors.black.withValues(alpha: .22), borderRadius: BorderRadius.circular(20)),
-                        child: Text(_weatherPreviewIndex >= 0 ? 'PREVIEW MODE' : 'LIVE • $_currentCountry', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: .22),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          _weatherPreviewIndex >= 0
+                              ? 'PREVIEW MODE'
+                              : 'LIVE • $_currentCountry',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                       const Spacer(),
-                      Text(_weatherVisualName(visual), style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white, shadows: const [Shadow(color: Colors.black54, blurRadius: 8)])),
-                      Text(weather == null ? (_weatherLoading ? 'Getting weather…' : 'Weather unavailable') : '${weather.temperature.toStringAsFixed(0)}°C  •  Feels ${weather.feelsLike.toStringAsFixed(0)}°C  •  Wind ${weather.windSpeed.toStringAsFixed(0)} km/h', style: GoogleFonts.inter(fontSize: 12, color: Colors.white.withValues(alpha: .92))),
+                      Text(
+                        _weatherVisualName(visual),
+                        style: GoogleFonts.poppins(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          shadows: const [
+                            Shadow(color: Colors.black54, blurRadius: 8),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        weather == null
+                            ? (_weatherLoading
+                                  ? 'Getting weather…'
+                                  : 'Weather unavailable')
+                            : '${weather.temperature.toStringAsFixed(0)}°C  •  Feels ${weather.feelsLike.toStringAsFixed(0)}°C  •  Wind ${weather.windSpeed.toStringAsFixed(0)} km/h',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: .92),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1072,25 +1441,74 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         const SizedBox(height: 14),
         Container(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16)),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Try every visual', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
-            const SizedBox(height: 4),
-            Text('Use Preview next to check rain, clouds, sun, night, sunrise, sunset, afternoon and all seasons.', style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: .6))),
-            const SizedBox(height: 10),
-            Row(children: [
-              Expanded(child: OutlinedButton.icon(onPressed: () => setState(() => _weatherPreviewIndex = (_weatherPreviewIndex + 1) % _WeatherVisual.values.length), icon: const Icon(Icons.visibility_rounded), label: const Text('PREVIEW NEXT'))),
-              const SizedBox(width: 8),
-              TextButton.icon(onPressed: () { setState(() => _weatherPreviewIndex = -1); if (_currentPosition != null) _refreshWeather(_currentPosition!, force: true); }, icon: const Icon(Icons.my_location_rounded), label: const Text('LIVE')),
-            ]),
-          ]),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Try every visual',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Use Preview next to check rain, clouds, sun, night, sunrise, sunset, afternoon and all seasons.',
+                style: GoogleFonts.inter(
+                  fontSize: 10.5,
+                  color: textColor.withValues(alpha: .6),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => setState(
+                        () => _weatherPreviewIndex =
+                            (_weatherPreviewIndex + 1) %
+                            _WeatherVisual.values.length,
+                      ),
+                      icon: const Icon(Icons.visibility_rounded),
+                      label: const Text('PREVIEW NEXT'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() => _weatherPreviewIndex = -1);
+                      if (_currentPosition != null)
+                        _refreshWeather(_currentPosition!, force: true);
+                    },
+                    icon: const Icon(Icons.my_location_rounded),
+                    label: const Text('LIVE'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
   String _weatherVisualName(_WeatherVisual visual) => switch (visual) {
-    _WeatherVisual.rain => 'Rainy', _WeatherVisual.cloudy => 'Cloudy', _WeatherVisual.sunny => 'Sunny', _WeatherVisual.night => 'Night', _WeatherVisual.sunrise => 'Sunrise', _WeatherVisual.sunset => 'Sunset', _WeatherVisual.afternoon => 'Afternoon', _WeatherVisual.summer => 'Summer', _WeatherVisual.winter => 'Winter', _WeatherVisual.autumn => 'Autumn', _WeatherVisual.spring => 'Spring',
+    _WeatherVisual.rain => 'Rainy',
+    _WeatherVisual.cloudy => 'Cloudy',
+    _WeatherVisual.sunny => 'Sunny',
+    _WeatherVisual.night => 'Night',
+    _WeatherVisual.sunrise => 'Sunrise',
+    _WeatherVisual.sunset => 'Sunset',
+    _WeatherVisual.afternoon => 'Afternoon',
+    _WeatherVisual.summer => 'Summer',
+    _WeatherVisual.winter => 'Winter',
+    _WeatherVisual.autumn => 'Autumn',
+    _WeatherVisual.spring => 'Spring',
   };
 
   // ===== TAB 1: SOS TRIGGER PANEL =====
@@ -1106,7 +1524,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           _buildLiveLocationCard(containerBg, textColor),
           const SizedBox(height: 14),
           if (_isSosTriggered) _buildSosLogsCard(containerBg, textColor),
-        ]
+        ],
       ],
     );
   }
@@ -1118,7 +1536,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       child: Column(
         children: [
           Text(
-            _isSosTriggered ? "EMERGENCY BROADCAST ACTIVE" : "PRESS & HOLD TO TRIGGER SOS",
+            _isSosTriggered
+                ? "EMERGENCY BROADCAST ACTIVE"
+                : "PRESS & HOLD TO TRIGGER SOS",
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 13,
@@ -1146,7 +1566,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Please hold the button down for 2 seconds to confirm SOS trigger.'),
+                    content: Text(
+                      'Please hold the button down for 2 seconds to confirm SOS trigger.',
+                    ),
                     duration: Duration(seconds: 2),
                   ),
                 );
@@ -1164,8 +1586,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                     color: _isSosTriggered
                         ? const Color(0xFFD32F2F).withValues(alpha: 0.15)
                         : (_isHolding
-                            ? AppColors.midTeal.withValues(alpha: 0.15)
-                            : Colors.grey.withValues(alpha: 0.05)),
+                              ? AppColors.midTeal.withValues(alpha: 0.15)
+                              : Colors.grey.withValues(alpha: 0.05)),
                   ),
                 ),
                 AnimatedContainer(
@@ -1178,8 +1600,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                       colors: _isSosTriggered
                           ? [const Color(0xFFD32F2F), const Color(0xFFB71C1C)]
                           : (_isHolding
-                              ? [AppColors.midTeal, const Color(0xFF387A76)]
-                              : [const Color(0xFFE57373), const Color(0xFFD32F2F)]),
+                                ? [AppColors.midTeal, const Color(0xFF387A76)]
+                                : [
+                                    const Color(0xFFE57373),
+                                    const Color(0xFFD32F2F),
+                                  ]),
                     ),
                     boxShadow: [
                       BoxShadow(
@@ -1196,7 +1621,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        _isSosTriggered ? Icons.gpp_maybe_rounded : Icons.warning_amber_rounded,
+                        _isSosTriggered
+                            ? Icons.gpp_maybe_rounded
+                            : Icons.warning_amber_rounded,
                         color: Colors.white,
                         size: 40,
                       ),
@@ -1221,7 +1648,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                     child: CircularProgressIndicator(
                       value: _holdProgress,
                       strokeWidth: 6,
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Colors.white,
+                      ),
                       backgroundColor: Colors.transparent,
                     ),
                   ),
@@ -1239,12 +1668,20 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 16),
+                  const Icon(
+                    Icons.check_circle_outline_rounded,
+                    color: Colors.green,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
                       "Click once when safe to broadcast recovery",
-                      style: GoogleFonts.inter(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: Colors.green,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -1270,20 +1707,35 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       decoration: BoxDecoration(
         color: containerBg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.red.withValues(alpha: 0.3), width: 1.5),
+        border: Border.all(
+          color: Colors.red.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
       ),
       child: Column(
         children: [
-          const Icon(Icons.notifications_active_rounded, color: Colors.red, size: 48),
+          const Icon(
+            Icons.notifications_active_rounded,
+            color: Colors.red,
+            size: 48,
+          ),
           const SizedBox(height: 16),
           Text(
             "Sending Emergency SOS Alert in",
-            style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: textColor),
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
           ),
           const SizedBox(height: 10),
           Text(
             "$_cancelCountdown",
-            style: GoogleFonts.poppins(fontSize: 72, fontWeight: FontWeight.w900, color: Colors.red),
+            style: GoogleFonts.poppins(
+              fontSize: 72,
+              fontWeight: FontWeight.w900,
+              color: Colors.red,
+            ),
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -1293,10 +1745,15 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.grey[800],
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               icon: const Icon(Icons.cancel_outlined),
-              label: Text("CANCEL NOW", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+              label: Text(
+                "CANCEL NOW",
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              ),
               onPressed: _cancelSosCountdown,
             ),
           ),
@@ -1304,7 +1761,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           Text(
             "Pre-filled contacts & authorities will receive GPS coordinates",
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: 0.5)),
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: textColor.withValues(alpha: 0.5),
+            ),
           ),
         ],
       ),
@@ -1339,7 +1799,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   shape: BoxShape.circle,
                 ),
               ),
-              const Icon(Icons.my_location_rounded, color: AppColors.midTeal, size: 20),
+              const Icon(
+                Icons.my_location_rounded,
+                color: AppColors.midTeal,
+                size: 20,
+              ),
             ],
           ),
           const SizedBox(width: 12),
@@ -1351,31 +1815,50 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   children: [
                     Text(
                       "Real-time GPS Status",
-                      style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Container(
                       width: 6,
                       height: 6,
-                      decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                     const SizedBox(width: 4),
                     Text(
                       "LIVE",
-                      style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.green),
+                      style: GoogleFonts.poppins(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 3),
                 Text(
                   _currentAddress,
-                  style: GoogleFonts.inter(fontSize: 11.5, color: textColor.withValues(alpha: 0.7), height: 1.3),
+                  style: GoogleFonts.inter(
+                    fontSize: 11.5,
+                    color: textColor.withValues(alpha: 0.7),
+                    height: 1.3,
+                  ),
                 ),
                 if (_currentPosition != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     "Coordinates: ${_currentPosition!.latitude.toStringAsFixed(6)}, ${_currentPosition!.longitude.toStringAsFixed(6)} (Acc: ${_currentPosition!.accuracy.toStringAsFixed(1)}m)",
-                    style: GoogleFonts.robotoMono(fontSize: 10, color: AppColors.midTeal, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.robotoMono(
+                      fontSize: 10,
+                      color: AppColors.midTeal,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ],
@@ -1402,12 +1885,19 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             children: [
               Text(
                 "Live Dispatch Log (Real-time)",
-                style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: Colors.red[800]),
+                style: GoogleFonts.poppins(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red[800],
+                ),
               ),
               const SizedBox(
                 width: 12,
                 height: 12,
-                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.red)),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(Colors.red),
+                ),
               ),
             ],
           ),
@@ -1421,7 +1911,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
                   _activeSosLogs[idx],
-                  style: GoogleFonts.robotoMono(fontSize: 10.5, color: textColor.withValues(alpha: 0.8), height: 1.3),
+                  style: GoogleFonts.robotoMono(
+                    fontSize: 10.5,
+                    color: textColor.withValues(alpha: 0.8),
+                    height: 1.3,
+                  ),
                 ),
               );
             },
@@ -1467,7 +1961,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.emergency_rounded, color: Colors.white, size: 20),
+                      const Icon(
+                        Icons.emergency_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         "MEDICAL EMERGENCY CARD",
@@ -1480,19 +1978,32 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                       ),
                     ],
                   ),
-                  const Icon(Icons.nfc_rounded, color: Colors.white60, size: 20),
+                  const Icon(
+                    Icons.nfc_rounded,
+                    color: Colors.white60,
+                    size: 20,
+                  ),
                 ],
               ),
               const Divider(color: Colors.white24, height: 20),
               Text(
-                _nameController.text.toUpperCase(),
-                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                _nameController.text.trim().isEmpty
+                    ? 'NO PROFILE INFO YET'
+                    : _nameController.text.toUpperCase(),
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildProfileCardItem("PASSPORT/ID", _passportController.text),
+                  _buildProfileCardItem(
+                    "PASSPORT/ID",
+                    _passportController.text,
+                  ),
                   _buildProfileCardItem("BLOOD TYPE", _bloodController.text),
                 ],
               ),
@@ -1501,14 +2012,21 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               const SizedBox(height: 8),
               _buildProfileCardItem("ALLERGIES", _allergiesController.text),
               const SizedBox(height: 8),
-              _buildProfileCardItem("MEDICAL CONDITIONS", _conditionsController.text),
+              _buildProfileCardItem(
+                "MEDICAL CONDITIONS",
+                _conditionsController.text,
+              ),
               const SizedBox(height: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     "EMERGENCY CONTACTS",
-                    style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white60),
+                    style: GoogleFonts.inter(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white60,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   ..._contacts.map((c) {
@@ -1516,9 +2034,22 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                     final num = c.numberController.text;
                     return Text(
                       "$name ($num)",
-                      style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     );
                   }),
+                  if (_contacts.isEmpty)
+                    Text(
+                      'No contacts added yet',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
                 ],
               ),
             ],
@@ -1547,7 +2078,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   Expanded(
                     child: Text(
                       "Profile Information Details",
-                      style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor),
+                      style: GoogleFonts.poppins(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
                     ),
                   ),
                   TextButton.icon(
@@ -1558,10 +2093,18 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         setState(() => _isProfileEditing = true);
                       }
                     },
-                    icon: Icon(_isProfileEditing ? Icons.save_rounded : Icons.edit_rounded, size: 16),
+                    icon: Icon(
+                      _isProfileEditing
+                          ? Icons.save_rounded
+                          : Icons.edit_rounded,
+                      size: 16,
+                    ),
                     label: Text(
                       _isProfileEditing ? "Save" : "Edit",
-                      style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -1574,8 +2117,14 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               _buildEditableField("Known Allergies", _allergiesController),
               _buildEditableField("Medical Conditions", _conditionsController),
               _buildEditableField("Current Medications", _medsController),
-              _buildEditableField("Hajj/Umrah Group & Agency", _groupNameController),
-              _buildEditableField("Makkah/Madinah Hotel Address", _hotelController),
+              _buildEditableField(
+                "Hajj/Umrah Group & Agency",
+                _groupNameController,
+              ),
+              _buildEditableField(
+                "Makkah/Madinah Hotel Address",
+                _hotelController,
+              ),
 
               // Emergency Contacts dynamic editor list
               const Divider(height: 1, thickness: 1),
@@ -1585,12 +2134,25 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 children: [
                   Text(
                     "Emergency Contacts List",
-                    style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
                   ),
                   if (_isProfileEditing)
                     TextButton.icon(
-                      icon: const Icon(Icons.add_circle_outline_rounded, size: 14),
-                      label: Text("Add Contact", style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold)),
+                      icon: const Icon(
+                        Icons.add_circle_outline_rounded,
+                        size: 14,
+                      ),
+                      label: Text(
+                        "Add Contact",
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       onPressed: () {
                         setState(() {
                           _contacts.add(EmergencyContact(name: '', number: ''));
@@ -1606,9 +2168,13 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                    color: widget.isDarkMode
+                        ? const Color(0xFF2C2C2C)
+                        : Colors.grey[50],
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+                    border: Border.all(
+                      color: Colors.grey.withValues(alpha: 0.15),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -1616,15 +2182,25 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildContactField("Contact Name", contact.nameController),
+                            _buildContactField(
+                              "Contact Name",
+                              contact.nameController,
+                            ),
                             const SizedBox(height: 6),
-                            _buildContactField("Phone Number", contact.numberController, keyboardType: TextInputType.phone),
+                            _buildContactField(
+                              "Phone Number",
+                              contact.numberController,
+                              keyboardType: TextInputType.phone,
+                            ),
                           ],
                         ),
                       ),
                       if (_isProfileEditing && _contacts.length > 1)
                         IconButton(
-                          icon: const Icon(Icons.remove_circle_outline_rounded, color: Colors.red),
+                          icon: const Icon(
+                            Icons.remove_circle_outline_rounded,
+                            color: Colors.red,
+                          ),
                           onPressed: () {
                             setState(() {
                               _contacts.removeAt(index).dispose();
@@ -1648,17 +2224,29 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white60),
+          style: GoogleFonts.inter(
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            color: Colors.white60,
+          ),
         ),
         Text(
-          value.isEmpty ? "None Declared" : value,
-          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+          value.trim().isEmpty ? "No info yet" : value,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildEditableField(String label, TextEditingController controller, {TextInputType keyboardType = TextInputType.text}) {
+  Widget _buildEditableField(
+    String label,
+    TextEditingController controller, {
+    TextInputType keyboardType = TextInputType.text,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -1679,11 +2267,21 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   child: TextField(
                     controller: controller,
                     keyboardType: keyboardType,
-                    style: GoogleFonts.poppins(fontSize: 13, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue),
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: widget.isDarkMode
+                          ? Colors.white
+                          : AppColors.navyBlue,
+                    ),
                     decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
+                        borderSide: BorderSide(
+                          color: Colors.grey.withValues(alpha: 0.3),
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       focusedBorder: OutlineInputBorder(
@@ -1691,16 +2289,22 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       filled: true,
-                      fillColor: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                      fillColor: widget.isDarkMode
+                          ? const Color(0xFF2C2C2C)
+                          : Colors.grey[50],
                     ),
                   ),
                 )
               : Text(
-                  controller.text.isEmpty ? "Not Filled" : controller.text,
+                  controller.text.trim().isEmpty
+                      ? "No info yet"
+                      : controller.text,
                   style: GoogleFonts.poppins(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue,
+                    color: widget.isDarkMode
+                        ? Colors.white70
+                        : AppColors.navyBlue,
                   ),
                 ),
         ],
@@ -1708,7 +2312,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     );
   }
 
-  Widget _buildContactField(String label, TextEditingController controller, {TextInputType keyboardType = TextInputType.text}) {
+  Widget _buildContactField(
+    String label,
+    TextEditingController controller, {
+    TextInputType keyboardType = TextInputType.text,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1727,11 +2335,21 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 child: TextField(
                   controller: controller,
                   keyboardType: keyboardType,
-                  style: GoogleFonts.poppins(fontSize: 12.5, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue),
+                  style: GoogleFonts.poppins(
+                    fontSize: 12.5,
+                    color: widget.isDarkMode
+                        ? Colors.white
+                        : AppColors.navyBlue,
+                  ),
                   decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+                      borderSide: BorderSide(
+                        color: Colors.grey.withValues(alpha: 0.2),
+                      ),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     focusedBorder: OutlineInputBorder(
@@ -1739,7 +2357,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     filled: true,
-                    fillColor: widget.isDarkMode ? const Color(0xFF333333) : Colors.white,
+                    fillColor: widget.isDarkMode
+                        ? const Color(0xFF333333)
+                        : Colors.white,
                   ),
                 ),
               )
@@ -1748,7 +2368,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 style: GoogleFonts.poppins(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
-                  color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue,
+                  color: widget.isDarkMode
+                      ? Colors.white70
+                      : AppColors.navyBlue,
                 ),
               ),
       ],
@@ -1767,7 +2389,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         // Country-specific numbers section
         Text(
           "Location-Aware Emergency Contacts",
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor),
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
         ),
         const SizedBox(height: 8),
         Container(
@@ -1794,24 +2420,40 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                       children: [
                         Text(
                           "Current Detected Country",
-                          style: GoogleFonts.inter(fontSize: 11, color: widget.isDarkMode ? Colors.white38 : AppColors.placeholder),
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: widget.isDarkMode
+                                ? Colors.white38
+                                : AppColors.placeholder,
+                          ),
                         ),
                         Text(
                           _currentCountry,
-                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: textColor),
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.midTeal.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       "GPS Match",
-                      style: GoogleFonts.poppins(fontSize: 10.5, color: AppColors.midTeal, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        color: AppColors.midTeal,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -1862,16 +2504,26 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         // Nearest Medical Points (Sorted by GPS)
         Text(
           "Nearest Hajj Medical Points",
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor),
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
         ),
         const SizedBox(height: 8),
         _sortedMedicalPoints.isEmpty
             ? Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Text(
                   "Waiting for GPS to resolve nearest emergency centers...",
-                  style: GoogleFonts.inter(fontSize: 12, color: textColor.withValues(alpha: 0.5)),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: textColor.withValues(alpha: 0.5),
+                  ),
                 ),
               )
             : Column(
@@ -1899,7 +2551,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                             color: AppColors.midTeal.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.local_hospital_rounded, color: AppColors.midTeal, size: 20),
+                          child: const Icon(
+                            Icons.local_hospital_rounded,
+                            color: AppColors.midTeal,
+                            size: 20,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1908,12 +2564,19 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                             children: [
                               Text(
                                 point['name']!,
-                                style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 point['desc']!,
-                                style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: 0.6)),
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: textColor.withValues(alpha: 0.6),
+                                ),
                               ),
                             ],
                           ),
@@ -1924,11 +2587,18 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                           children: [
                             Text(
                               "${dist.toStringAsFixed(1)} km",
-                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.midTeal,
+                              ),
                             ),
                             Text(
                               "Away",
-                              style: GoogleFonts.inter(fontSize: 9, color: textColor.withValues(alpha: 0.5)),
+                              style: GoogleFonts.inter(
+                                fontSize: 9,
+                                color: textColor.withValues(alpha: 0.5),
+                              ),
                             ),
                           ],
                         ),
@@ -1943,7 +2613,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         // Interactive Health/Dehydration and Safety Guides
         Text(
           "Emergency Pilgrim Safety Guides (Offline)",
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor),
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
         ),
         const SizedBox(height: 8),
         _buildSafetyGuideCard(
@@ -1951,7 +2625,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           subtitle: "Recognize heat exhaustion & act instantly",
           icon: Icons.light_mode_rounded,
           iconColor: Colors.orange,
-          content: "• Symptoms: Extremely high body temp (>40°C), red/dry skin, heavy sweating or lack of sweating, rapid pulse, dizziness/confusion.\n"
+          content:
+              "• Symptoms: Extremely high body temp (>40°C), red/dry skin, heavy sweating or lack of sweating, rapid pulse, dizziness/confusion.\n"
               "• Actions: Move to a shaded cool place immediately, spray skin with cold water or cover with damp sheets, fan actively. Offer small sips of cool water if conscious.",
         ),
         _buildSafetyGuideCard(
@@ -1959,7 +2634,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           subtitle: "What to do in a high-density crowd surge",
           icon: Icons.groups_rounded,
           iconColor: AppColors.navyBlue,
-          content: "• Protect Chest: Keep your arms up in front of your chest like a boxer to create breathing space.\n"
+          content:
+              "• Protect Chest: Keep your arms up in front of your chest like a boxer to create breathing space.\n"
               "• Stay Standing: Do not drop bags or try to pick up dropped items. If you fall, get up immediately or roll into a ball.\n"
               "• Move Diagonally: Never fight the crowd force. Move diagonally with the flow toward edges.",
         ),
@@ -1968,7 +2644,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           subtitle: "Offline quick-action cardiovascular resuscitation",
           icon: Icons.favorite_rounded,
           iconColor: Colors.red[800]!,
-          content: "1. Verify consciousness & breathing. Call 997 immediately.\n"
+          content:
+              "1. Verify consciousness & breathing. Call 997 immediately.\n"
               "2. Place hands in the center of the chest.\n"
               "3. Compress hard and fast: 100-120 compressions per minute at 2-inch depth.\n"
               "4. If trained, deliver 2 rescue breaths after every 30 compressions.",
@@ -1978,7 +2655,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           subtitle: "Action steps if separated from group",
           icon: Icons.person_search_rounded,
           iconColor: AppColors.midTeal,
-          content: "• STAY PUT: Wandering blindly makes finding you harder. Find a visible landmark and wait.\n"
+          content:
+              "• STAY PUT: Wandering blindly makes finding you harder. Find a visible landmark and wait.\n"
               "• USE ID BRACELET: Point to your Hajj agency name, bracelet number, or hotel name to guides/police.\n"
               "• FIND HELP POSTS: Walk to the nearest Scout post or green umbrella police post to request announcement services.",
         ),
@@ -1996,7 +2674,13 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: isRecommended ? const Color(0xFFD32F2F) : AppColors.placeholder),
+          Icon(
+            icon,
+            size: 18,
+            color: isRecommended
+                ? const Color(0xFFD32F2F)
+                : AppColors.placeholder,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -2004,25 +2688,47 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               children: [
                 Text(
                   label,
-                  style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue),
+                  style: GoogleFonts.inter(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: widget.isDarkMode
+                        ? Colors.white70
+                        : AppColors.navyBlue,
+                  ),
                 ),
                 Text(
                   number,
-                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.midTeal,
+                  ),
                 ),
               ],
             ),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: isRecommended ? const Color(0xFFD32F2F) : Colors.grey[200],
-              foregroundColor: isRecommended ? Colors.white : AppColors.navyBlue,
+              backgroundColor: isRecommended
+                  ? const Color(0xFFD32F2F)
+                  : Colors.grey[200],
+              foregroundColor: isRecommended
+                  ? Colors.white
+                  : AppColors.navyBlue,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             icon: const Icon(Icons.phone_in_talk_rounded, size: 14),
-            label: Text("CALL", style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold)),
+            label: Text(
+              "CALL",
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             onPressed: () => _makeCall(number),
           ),
         ],
@@ -2043,13 +2749,19 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: ExpansionTile(
-          collapsedTextColor: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue,
+          collapsedTextColor: widget.isDarkMode
+              ? Colors.white70
+              : AppColors.navyBlue,
           textColor: AppColors.midTeal,
           iconColor: AppColors.midTeal,
           title: Row(
@@ -2060,8 +2772,20 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
-                    Text(subtitle, style: GoogleFonts.inter(fontSize: 10.5, color: Colors.grey[500])),
+                    Text(
+                      title,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        color: Colors.grey[500],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -2072,7 +2796,13 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
               child: Text(
                 content,
-                style: GoogleFonts.inter(fontSize: 11.5, color: widget.isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.75), height: 1.4),
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  color: widget.isDarkMode
+                      ? Colors.white60
+                      : AppColors.navyBlue.withValues(alpha: 0.75),
+                  height: 1.4,
+                ),
               ),
             ),
           ],
@@ -2093,7 +2823,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       Marker(
         markerId: const MarkerId('user_location'),
         position: LatLng(userLat, userLng),
-        infoWindow: const InfoWindow(title: 'You (Live Pilgrim Location)', snippet: 'Current position'),
+        infoWindow: const InfoWindow(
+          title: 'You (Live Pilgrim Location)',
+          snippet: 'Current position',
+        ),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
       ),
     );
@@ -2102,7 +2835,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       Marker(
         markerId: const MarkerId('kaaba_haram'),
         position: const LatLng(21.4225, 39.8262),
-        infoWindow: const InfoWindow(title: 'Masjid Al-Haram', snippet: 'Makkah Kaaba'),
+        infoWindow: const InfoWindow(
+          title: 'Masjid Al-Haram',
+          snippet: 'Makkah Kaaba',
+        ),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
       ),
     );
@@ -2111,7 +2847,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       Marker(
         markerId: const MarkerId('mina_camp'),
         position: const LatLng(21.4172, 39.8821),
-        infoWindow: const InfoWindow(title: 'Mina Pilgrim Encampment', snippet: 'Tents & Jamarat Bridge'),
+        infoWindow: const InfoWindow(
+          title: 'Mina Pilgrim Encampment',
+          snippet: 'Tents & Jamarat Bridge',
+        ),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
       ),
     );
@@ -2120,7 +2859,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       Marker(
         markerId: const MarkerId('mount_arafat'),
         position: const LatLng(21.3533, 39.9839),
-        infoWindow: const InfoWindow(title: 'Jabal al-Rahmah', snippet: 'Mount Arafat Plain'),
+        infoWindow: const InfoWindow(
+          title: 'Jabal al-Rahmah',
+          snippet: 'Mount Arafat Plain',
+        ),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
       ),
     );
@@ -2138,7 +2880,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             position: LatLng(mLat, mLng),
             infoWindow: InfoWindow(title: mName, snippet: 'Status: $mStatus'),
             icon: BitmapDescriptor.defaultMarkerWithHue(
-              mStatus.contains("BREACH") ? BitmapDescriptor.hueYellow : BitmapDescriptor.hueRed,
+              mStatus.contains("BREACH")
+                  ? BitmapDescriptor.hueYellow
+                  : BitmapDescriptor.hueRed,
             ),
           ),
         );
@@ -2178,38 +2922,38 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   children: [
                     Text(
                       "Holy Sites Live Map",
-                      style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor),
+                      style: GoogleFonts.poppins(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
                     ),
                     Text(
-                      _useGoogleMapWidget ? "Real-time Google Maps Satellite & Radar" : "GPS-linked route planner & group radar",
-                      style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: 0.5)),
+                      _useGoogleMapWidget
+                          ? "Real-time Google Maps Satellite & Radar"
+                          : "GPS-linked route planner & group radar",
+                      style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        color: textColor.withValues(alpha: 0.5),
+                      ),
                     ),
                   ],
                 ),
               ),
-              InkWell(
-                onTap: () {
-                  setState(() {
-                    _useGoogleMapWidget = !_useGoogleMapWidget;
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.midTeal.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(_useGoogleMapWidget ? Icons.map_outlined : Icons.radar_outlined, size: 14, color: AppColors.midTeal),
-                      const SizedBox(width: 4),
-                      Text(
-                        _useGoogleMapWidget ? "Google Map" : "Radar",
-                        style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal),
-                      ),
-                    ],
-                  ),
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: widget.isDarkMode
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : AppColors.navyBlue.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildMapModeToggleOption('Map', true),
+                    _buildMapModeToggleOption('Radar', false),
+                  ],
                 ),
               ),
             ],
@@ -2220,29 +2964,57 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: widget.isDarkMode ? const Color(0xFF2B2B2B) : Colors.blue.withValues(alpha: 0.04),
+              color: widget.isDarkMode
+                  ? const Color(0xFF2B2B2B)
+                  : Colors.blue.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.2)),
+              border: Border.all(
+                color: AppColors.midTeal.withValues(alpha: 0.2),
+              ),
             ),
             child: Column(
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.my_location_rounded, color: Colors.blue, size: 16),
+                    const Icon(
+                      Icons.my_location_rounded,
+                      color: Colors.blue,
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: SizedBox(
                         height: 32,
                         child: TextField(
                           controller: _routeOriginController,
-                          style: GoogleFonts.poppins(fontSize: 11.5, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue),
+                          style: GoogleFonts.poppins(
+                            fontSize: 11.5,
+                            color: widget.isDarkMode
+                                ? Colors.white
+                                : AppColors.navyBlue,
+                          ),
                           decoration: InputDecoration(
                             hintText: "Start (Origin)",
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
                             filled: true,
-                            fillColor: widget.isDarkMode ? const Color(0xFF3B3B3B) : Colors.white,
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.midTeal)),
+                            fillColor: widget.isDarkMode
+                                ? const Color(0xFF3B3B3B)
+                                : Colors.white,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: BorderSide(
+                                color: Colors.grey.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: const BorderSide(
+                                color: AppColors.midTeal,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -2252,21 +3024,45 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.location_on_rounded, color: Colors.red, size: 16),
+                    const Icon(
+                      Icons.location_on_rounded,
+                      color: Colors.red,
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: SizedBox(
                         height: 32,
                         child: TextField(
                           controller: _routeDestController,
-                          style: GoogleFonts.poppins(fontSize: 11.5, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue),
+                          style: GoogleFonts.poppins(
+                            fontSize: 11.5,
+                            color: widget.isDarkMode
+                                ? Colors.white
+                                : AppColors.navyBlue,
+                          ),
                           decoration: InputDecoration(
                             hintText: "Destination (To)",
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
                             filled: true,
-                            fillColor: widget.isDarkMode ? const Color(0xFF3B3B3B) : Colors.white,
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.midTeal)),
+                            fillColor: widget.isDarkMode
+                                ? const Color(0xFF3B3B3B)
+                                : Colors.white,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: BorderSide(
+                                color: Colors.grey.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: const BorderSide(
+                                color: AppColors.midTeal,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -2282,11 +3078,23 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            _buildPresetRouteChip("Mina ➔ Kaaba", "Al Mashair, Makkah", "Kaaba, Al Haram, Makkah"),
+                            _buildPresetRouteChip(
+                              "Mina ➔ Kaaba",
+                              "Al Mashair, Makkah",
+                              "Kaaba, Al Haram, Makkah",
+                            ),
                             const SizedBox(width: 6),
-                            _buildPresetRouteChip("Arafat ➔ Mina", "Mount Arafat, Makkah", "Mina Pilgrim Encampment"),
+                            _buildPresetRouteChip(
+                              "Arafat ➔ Mina",
+                              "Mount Arafat, Makkah",
+                              "Mina Pilgrim Encampment",
+                            ),
                             const SizedBox(width: 6),
-                            _buildPresetRouteChip("GPS ➔ Hospital", "Current GPS", "Ajyad Emergency Hospital"),
+                            _buildPresetRouteChip(
+                              "GPS ➔ Hospital",
+                              "Current GPS",
+                              "Ajyad Emergency Hospital",
+                            ),
                           ],
                         ),
                       ),
@@ -2297,13 +3105,27 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         backgroundColor: AppColors.midTeal,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      child: Text("SEARCH", style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        "SEARCH",
+                        style: GoogleFonts.poppins(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       onPressed: () {
                         setState(() {});
-                        _launchGoogleRouteSearch(_routeOriginController.text, _routeDestController.text);
+                        _launchGoogleRouteSearch(
+                          _routeOriginController.text,
+                          _routeDestController.text,
+                        );
                       },
                     ),
                   ],
@@ -2329,9 +3151,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Container(
-              height: 220,
+              height: 245,
               width: double.infinity,
-              color: widget.isDarkMode ? const Color(0xFF151515) : const Color(0xFFE3F2FD),
+              color: widget.isDarkMode
+                  ? const Color(0xFF151515)
+                  : const Color(0xFFE3F2FD),
               child: _useGoogleMapWidget
                   ? GoogleMap(
                       initialCameraPosition: CameraPosition(
@@ -2347,20 +3171,20 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   : Stack(
                       children: [
                         CustomPaint(
-                          size: const Size(double.infinity, 220),
+                          size: const Size(double.infinity, 245),
                           painter: HajjMapPainter(
                             userLat: userLat,
                             userLng: userLng,
                             zoomScale: _mapZoomScale,
                             isDarkMode: widget.isDarkMode,
-                            groupMembers: _isGroupJoined ? _mockGroupMembers : [],
+                            groupMembers: _isGroupJoined
+                                ? _mockGroupMembers
+                                : [],
                           ),
                         ),
                         if (!widget.isDarkMode)
                           const Positioned.fill(
-                            child: IgnorePointer(
-                              child: RadarSweepWidget(),
-                            ),
+                            child: IgnorePointer(child: RadarSweepWidget()),
                           ),
                       ],
                     ),
@@ -2377,12 +3201,17 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 backgroundColor: AppColors.midTeal,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               icon: const Icon(Icons.navigation_rounded, size: 16),
               label: Text(
                 "Open Turn-by-Turn Navigation in Google Maps",
-                style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold),
+                style: GoogleFonts.poppins(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               onPressed: () => _showNavigationOptionsDialog(userLat, userLng),
             ),
@@ -2397,8 +3226,12 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       context: context,
       builder: (BuildContext ctx) {
         return AlertDialog(
-          backgroundColor: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: widget.isDarkMode
+              ? const Color(0xFF1E1E1E)
+              : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Row(
             children: [
               const Icon(Icons.navigation_rounded, color: AppColors.midTeal),
@@ -2409,7 +3242,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   style: GoogleFonts.poppins(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
-                    color: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
+                    color: widget.isDarkMode
+                        ? Colors.white
+                        : AppColors.navyBlue,
                   ),
                 ),
               ),
@@ -2424,19 +3259,55 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   height: 1.3,
-                  color: widget.isDarkMode ? Colors.white70 : Colors.grey.shade700,
+                  color: widget.isDarkMode
+                      ? Colors.white70
+                      : Colors.grey.shade700,
                 ),
               ),
               const SizedBox(height: 12),
-              _buildNavDestinationTile("🕋 Masjid Al-Haram (Kaaba)", 21.4225, 39.8262, userLat, userLng, ctx),
-              _buildNavDestinationTile("⛺ Mina Pilgrim Encampment", 21.4172, 39.8821, userLat, userLng, ctx),
-              _buildNavDestinationTile("⛰️ Mount Arafat (Jabal al-Rahmah)", 21.3533, 39.9839, userLat, userLng, ctx),
-              _buildNavDestinationTile("🏥 Ajyad Emergency Hospital", 21.4192, 39.8286, userLat, userLng, ctx),
+              _buildNavDestinationTile(
+                "🕋 Masjid Al-Haram (Kaaba)",
+                21.4225,
+                39.8262,
+                userLat,
+                userLng,
+                ctx,
+              ),
+              _buildNavDestinationTile(
+                "⛺ Mina Pilgrim Encampment",
+                21.4172,
+                39.8821,
+                userLat,
+                userLng,
+                ctx,
+              ),
+              _buildNavDestinationTile(
+                "⛰️ Mount Arafat (Jabal al-Rahmah)",
+                21.3533,
+                39.9839,
+                userLat,
+                userLng,
+                ctx,
+              ),
+              _buildNavDestinationTile(
+                "🏥 Ajyad Emergency Hospital",
+                21.4192,
+                39.8286,
+                userLat,
+                userLng,
+                ctx,
+              ),
             ],
           ),
           actions: [
             TextButton(
-              child: Text("CANCEL", style: GoogleFonts.poppins(color: AppColors.midTeal, fontWeight: FontWeight.bold)),
+              child: Text(
+                "CANCEL",
+                style: GoogleFonts.poppins(
+                  color: AppColors.midTeal,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               onPressed: () => Navigator.of(ctx).pop(),
             ),
           ],
@@ -2445,7 +3316,14 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     );
   }
 
-  Widget _buildNavDestinationTile(String name, double destLat, double destLng, double userLat, double userLng, BuildContext ctx) {
+  Widget _buildNavDestinationTile(
+    String name,
+    double destLat,
+    double destLng,
+    double userLat,
+    double userLng,
+    BuildContext ctx,
+  ) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
@@ -2457,10 +3335,16 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           color: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
         ),
       ),
-      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.midTeal),
+      trailing: const Icon(
+        Icons.arrow_forward_ios_rounded,
+        size: 14,
+        color: AppColors.midTeal,
+      ),
       onTap: () async {
         Navigator.of(ctx).pop();
-        final uri = Uri.parse("https://www.google.com/maps/dir/?api=1&origin=$userLat,$userLng&destination=$destLat,$destLng");
+        final uri = Uri.parse(
+          "https://www.google.com/maps/dir/?api=1&origin=$userLat,$userLng&destination=$destLat,$destLng",
+        );
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
@@ -2486,7 +3370,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         ),
         child: Text(
           label,
-          style: GoogleFonts.poppins(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+          style: GoogleFonts.poppins(
+            fontSize: 9.5,
+            fontWeight: FontWeight.bold,
+            color: AppColors.midTeal,
+          ),
         ),
       ),
     );
@@ -2501,11 +3389,47 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       originParam = "$userLat,$userLng";
     }
 
-    final String url = "https://www.google.com/maps/dir/?api=1&origin=${Uri.encodeComponent(originParam)}&destination=${Uri.encodeComponent(dest)}";
+    final String url =
+        "https://www.google.com/maps/dir/?api=1&origin=${Uri.encodeComponent(originParam)}&destination=${Uri.encodeComponent(dest)}";
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+  }
+
+  Widget _buildMapModeToggleOption(String label, bool useGoogleMap) {
+    final isSelected = _useGoogleMapWidget == useGoogleMap;
+
+    return GestureDetector(
+      onTap: () {
+        if (!isSelected) {
+          setState(() => _useGoogleMapWidget = useGoogleMap);
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: isSelected
+                ? Colors.white
+                : (widget.isDarkMode
+                    ? Colors.white70
+                    : AppColors.navyBlue.withValues(alpha: 0.6)),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildMapTypePill(String label, MapType mapType) {
@@ -2541,7 +3465,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         const SizedBox(width: 4),
         Text(
           label,
-          style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white54 : AppColors.navyBlue),
+          style: GoogleFonts.inter(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: widget.isDarkMode ? Colors.white54 : AppColors.navyBlue,
+          ),
         ),
       ],
     );
@@ -2561,7 +3489,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         // Emergency Simulation Controls
         Text(
           "Emergency Simulation Controls",
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor),
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
         ),
         const SizedBox(height: 8),
         Container(
@@ -2586,11 +3518,18 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text(
                     "Simulate Offline (No Internet)",
-                    style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
                   ),
                   subtitle: Text(
                     "Enabling blocks API and buffers SOS reports to internal database, forcing SMS backup.",
-                    style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: 0.6)),
+                    style: GoogleFonts.inter(
+                      fontSize: 10.5,
+                      color: textColor.withValues(alpha: 0.6),
+                    ),
                   ),
                   value: _isOfflineSimulated,
                   onChanged: (val) {
@@ -2607,11 +3546,18 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text(
                     "Simulate Critically Low Battery (<15%)",
-                    style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
                   ),
                   subtitle: Text(
                     "Triggers proactive battery-aware SOS location beaconing before phone simulation runs flat.",
-                    style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: 0.6)),
+                    style: GoogleFonts.inter(
+                      fontSize: 10.5,
+                      color: textColor.withValues(alpha: 0.6),
+                    ),
                   ),
                   value: _isLowBatterySimulated,
                   onChanged: (val) {
@@ -2629,16 +3575,26 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         // Incident Logs History
         Text(
           "Incident History Logs",
-          style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor),
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
         ),
         const SizedBox(height: 8),
         _incidentLogs.isEmpty
             ? Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Text(
                   "No past incident logs recorded. Safe and sound!",
-                  style: GoogleFonts.inter(fontSize: 12, color: textColor.withValues(alpha: 0.5)),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: textColor.withValues(alpha: 0.5),
+                  ),
                 ),
               )
             : ListView.builder(
@@ -2647,7 +3603,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 itemCount: _incidentLogs.length,
                 itemBuilder: (context, idx) {
                   final log = _incidentLogs[idx];
-                  final timeStr = DateTime.parse(log['timestamp']).toLocal().toString().substring(5, 16);
+                  final timeStr = DateTime.parse(
+                    log['timestamp'],
+                  ).toLocal().toString().substring(5, 16);
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
@@ -2655,7 +3613,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                       color: cardBg,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: log['resolved'] ? Colors.green.withValues(alpha: 0.2) : Colors.red.withValues(alpha: 0.2),
+                        color: log['resolved']
+                            ? Colors.green.withValues(alpha: 0.2)
+                            : Colors.red.withValues(alpha: 0.2),
                         width: 1,
                       ),
                     ),
@@ -2668,26 +3628,40 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                             children: [
                               Text(
                                 "${log['type']} - $timeStr",
-                                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                ),
                               ),
                               Text(
                                 "Location: ${log['address']}",
-                                style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: 0.6)),
+                                style: GoogleFonts.inter(
+                                  fontSize: 10.5,
+                                  color: textColor.withValues(alpha: 0.6),
+                                ),
                               ),
                             ],
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: log['resolved'] ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
+                            color: log['resolved']
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : Colors.red.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             log['resolved'] ? "RESOLVED" : "ACTIVE",
                             style: GoogleFonts.poppins(
                               fontSize: 9.5,
-                              color: log['resolved'] ? Colors.green : Colors.red,
+                              color: log['resolved']
+                                  ? Colors.green
+                                  : Colors.red,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -2710,7 +3684,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
@@ -2718,36 +3696,90 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         children: [
           Text(
             "Hajj Group Formation Protocol",
-            style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: textColor),
+            style: GoogleFonts.poppins(
+              fontSize: 14.5,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             "How Hajj/Umrah groups connect for safety tracking",
-            style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: 0.55)),
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: textColor.withValues(alpha: 0.55),
+            ),
           ),
           const Divider(height: 24),
 
-          _buildProtocolStep("1", "Leader Creates Group", "Hajj agency leader logs in, sets up caravan coordinates, and generates a unique code (e.g. MKK-9981)."),
-          _buildProtocolStep("2", "Leader Shares Code", "Leader prints the code on wristbands, ID cards, or sends it via text/WhatsApp to members."),
-          _buildProtocolStep("3", "Pilgrims Join in App", "Pilgrims enter the code below to sync live coordinates and profiles with the caravan."),
-          _buildProtocolStep("4", "Live Safety Layer Active", "Caravan leader can trigger safety pings after big crowd movements (e.g. Jamarat, Arafat)."),
+          _buildProtocolStep(
+            "1",
+            "Leader Creates Group",
+            "Hajj agency leader logs in, sets up caravan coordinates, and generates a unique code (e.g. MKK-9981).",
+          ),
+          _buildProtocolStep(
+            "2",
+            "Leader Shares Code",
+            "Leader prints the code on wristbands, ID cards, or sends it via text/WhatsApp to members.",
+          ),
+          _buildProtocolStep(
+            "3",
+            "Pilgrims Join in App",
+            "Pilgrims enter the code below to sync live coordinates and profiles with the caravan.",
+          ),
+          _buildProtocolStep(
+            "4",
+            "Live Safety Layer Active",
+            "Caravan leader can trigger safety pings after big crowd movements (e.g. Jamarat, Arafat).",
+          ),
 
           const Divider(height: 24),
 
           // ===== CREATE GROUP (LEADER) =====
           Text(
             "Create a New Group",
-            style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+            style: GoogleFonts.poppins(
+              fontSize: 12.5,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             "Become the caravan leader and generate a unique code to share with your group.",
-            style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: 0.55)),
+            style: GoogleFonts.inter(
+              fontSize: 10.5,
+              color: textColor.withValues(alpha: 0.55),
+            ),
           ),
           const SizedBox(height: 8),
+          TextField(
+            controller: _newGroupNameController,
+            textCapitalization: TextCapitalization.words,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
+            ),
+            decoration: InputDecoration(
+              labelText: 'Group name',
+              hintText: 'e.g. Garuda Hajj Cluster 4',
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           Text(
             'Safety range: ${(_groupRangeMeters / 1000).toStringAsFixed(1)} km',
-            style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: textColor),
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: textColor,
+            ),
           ),
           Slider(
             value: _groupRangeMeters,
@@ -2767,12 +3799,17 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 backgroundColor: AppColors.navyBlue,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
               label: Text(
                 "CREATE GROUP & GENERATE CODE",
-                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold),
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               onPressed: _generateGroupCode,
             ),
@@ -2783,7 +3820,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           // ===== JOIN EXISTING GROUP =====
           Text(
             "Join Hajj Caravan Group",
-            style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+            style: GoogleFonts.poppins(
+              fontSize: 12.5,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
           ),
           const SizedBox(height: 8),
           Row(
@@ -2793,12 +3834,22 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   height: 44,
                   child: TextField(
                     controller: _groupCodeController,
-                    style: GoogleFonts.poppins(fontSize: 13, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue),
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: widget.isDarkMode
+                          ? Colors.white
+                          : AppColors.navyBlue,
+                    ),
                     decoration: InputDecoration(
-                      hintText: "Enter Code (e.g. MKK-9981)",
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      hintText: "Enter Code (e.g. SOS-9981)",
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
+                        borderSide: BorderSide(
+                          color: Colors.grey.withValues(alpha: 0.3),
+                        ),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       focusedBorder: OutlineInputBorder(
@@ -2806,7 +3857,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       filled: true,
-                      fillColor: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                      fillColor: widget.isDarkMode
+                          ? const Color(0xFF2C2C2C)
+                          : Colors.grey[50],
                     ),
                   ),
                 ),
@@ -2816,10 +3869,21 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.midTeal,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
-                child: Text("JOIN", style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                child: Text(
+                  "JOIN",
+                  style: GoogleFonts.poppins(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 onPressed: _joinGroup,
               ),
             ],
@@ -2845,7 +3909,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             alignment: Alignment.center,
             child: Text(
               number,
-              style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -2855,12 +3923,22 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               children: [
                 Text(
                   title,
-                  style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue),
+                  style: GoogleFonts.poppins(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                    color: widget.isDarkMode
+                        ? Colors.white70
+                        : AppColors.navyBlue,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   body,
-                  style: GoogleFonts.inter(fontSize: 10.5, color: Colors.grey[500], height: 1.3),
+                  style: GoogleFonts.inter(
+                    fontSize: 10.5,
+                    color: Colors.grey[500],
+                    height: 1.3,
+                  ),
                 ),
               ],
             ),
@@ -2878,7 +3956,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
@@ -2892,12 +3974,22 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _groupNameController.text.trim().isEmpty ? 'Emergency SOS group' : _groupNameController.text,
-                      style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: textColor),
+                      _groupNameController.text.trim().isEmpty
+                          ? 'Emergency SOS group'
+                          : _groupNameController.text,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
                     ),
                     Text(
                       "Active Safety Synchronization",
-                      style: GoogleFonts.inter(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -2905,10 +3997,22 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Colors.red),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: Text("LEAVE", style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.red)),
+                child: Text(
+                  "LEAVE",
+                  style: GoogleFonts.poppins(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
                 onPressed: _leaveGroup,
               ),
             ],
@@ -2918,16 +4022,33 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildGroupMeta("GROUP CODE", _groupCodeController.text.toUpperCase()),
-              _buildGroupMeta("CARAVAN LEADER", _isGroupLeader ? "You (Leader)" : (_groupLeaderName.isEmpty ? 'Loading…' : _groupLeaderName)),
-              _buildGroupMeta("SAFETY RANGE", '${(_groupRangeMeters / 1000).toStringAsFixed(1)} km'),
+              _buildGroupMeta(
+                "GROUP CODE",
+                _groupCodeController.text.toUpperCase(),
+              ),
+              _buildGroupMeta(
+                "CARAVAN LEADER",
+                _isGroupLeader
+                    ? "You (Leader)"
+                    : (_groupLeaderName.isEmpty
+                          ? 'Loading…'
+                          : _groupLeaderName),
+              ),
+              _buildGroupMeta(
+                "SAFETY RANGE",
+                '${(_groupRangeMeters / 1000).toStringAsFixed(1)} km',
+              ),
             ],
           ),
 
           const Divider(height: 24),
           Text(
             "Group Members Live Tracker",
-            style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor),
+            style: GoogleFonts.poppins(
+              fontSize: 12.5,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
           ),
           const SizedBox(height: 8),
 
@@ -2942,14 +4063,22 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
+                color: widget.isDarkMode
+                    ? const Color(0xFF2C2C2C)
+                    : Colors.grey[50],
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isOk ? Colors.grey.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: isOk
+                      ? Colors.grey.withValues(alpha: 0.1)
+                      : Colors.orange.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
                   Icon(
-                    isOk ? Icons.account_circle_rounded : Icons.warning_amber_rounded,
+                    isOk
+                        ? Icons.account_circle_rounded
+                        : Icons.warning_amber_rounded,
                     color: isOk ? AppColors.midTeal : Colors.orange[800],
                   ),
                   const SizedBox(width: 10),
@@ -2959,19 +4088,31 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                       children: [
                         Text(
                           name,
-                          style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: textColor),
+                          style: GoogleFonts.poppins(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
                         ),
                         Text(
                           "Distance: ${dist.toStringAsFixed(1)} km • Battery: $batt%",
-                          style: GoogleFonts.inter(fontSize: 10, color: Colors.grey[500]),
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: Colors.grey[500],
+                          ),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: isOk ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                      color: isOk
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.orange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -3005,11 +4146,29 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildGroupRoleHeader(cardBg, textColor, 'Owner Command Center', Icons.admin_panel_settings_rounded),
+        _buildGroupRoleHeader(
+          cardBg,
+          textColor,
+          'Owner Command Center',
+          Icons.admin_panel_settings_rounded,
+        ),
         const SizedBox(height: 12),
         _buildSectionCard(cardBg, [
-          Text('Dynamic radar radius', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
-          Text('${(_groupRangeMeters / 1000).toStringAsFixed(1)} km safety zone', style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: .6))),
+          Text(
+            'Dynamic radar radius',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          Text(
+            '${(_groupRangeMeters / 1000).toStringAsFixed(1)} km safety zone',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: textColor.withValues(alpha: .6),
+            ),
+          ),
           Slider(
             value: _groupRangeMeters,
             min: 100,
@@ -3018,28 +4177,66 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             activeColor: AppColors.midTeal,
             label: '${(_groupRangeMeters / 1000).toStringAsFixed(1)} km',
             onChanged: (value) => setState(() => _groupRangeMeters = value),
-            onChangeEnd: (value) => EmergencyGroupService.instance.updateRadarRadius(
-              code: _groupCodeController.text.trim().toUpperCase(), rangeMeters: value,
-            ).catchError(_showGroupError),
+            onChangeEnd: (value) => EmergencyGroupService.instance
+                .updateRadarRadius(
+                  code: _groupCodeController.text.trim().toUpperCase(),
+                  rangeMeters: value,
+                )
+                .catchError(_showGroupError),
           ),
         ]),
         const SizedBox(height: 12),
         _buildSectionCard(cardBg, [
-          Row(children: [
-            const Icon(Icons.key_rounded, color: AppColors.midTeal),
-            const SizedBox(width: 8),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Invite token', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
-              Text(_groupCodeController.text.toUpperCase(), style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-            ])),
-            IconButton(tooltip: 'Generate a new code', onPressed: _requestInviteRefresh, icon: const Icon(Icons.refresh_rounded)),
-          ]),
-          Text('Share this with members. Expiring invite tokens are enforced when the Firebase invite service is connected.', style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: .6))),
+          Row(
+            children: [
+              const Icon(Icons.key_rounded, color: AppColors.midTeal),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Invite token',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                    Text(
+                      _groupCodeController.text.toUpperCase(),
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.midTeal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Text(
+            'Share this with members. Expiring invite tokens are enforced when the Firebase invite service is connected.',
+            style: GoogleFonts.inter(
+              fontSize: 10.5,
+              color: textColor.withValues(alpha: .6),
+            ),
+          ),
         ]),
         const SizedBox(height: 16),
-        Text('Member manifest (${members.length})', style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor)),
+        Text(
+          'Member manifest (${members.length})',
+          style: GoogleFonts.poppins(
+            fontSize: 13.5,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
+        ),
         const SizedBox(height: 8),
-        ...members.map((member) => _buildOwnerMemberRow(cardBg, textColor, member)),
+        ...members.map(
+          (member) => _buildOwnerMemberRow(cardBg, textColor, member),
+        ),
         const SizedBox(height: 12),
         _buildOwnerIncidentCard(cardBg, textColor),
         const SizedBox(height: 12),
@@ -3052,34 +4249,77 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildGroupRoleHeader(cardBg, textColor, 'Member Safety Hub', Icons.shield_rounded),
+        _buildGroupRoleHeader(
+          cardBg,
+          textColor,
+          'Member Safety Hub',
+          Icons.shield_rounded,
+        ),
         const SizedBox(height: 12),
         _buildSectionCard(cardBg, [
-          Text('Need urgent help?', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: textColor)),
+          Text(
+            'Need urgent help?',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
           const SizedBox(height: 3),
-          Text('Hold the SOS button for 3 seconds to alert ${_groupLeaderName.isEmpty ? 'your group owner' : _groupLeaderName} and the entire group.', style: GoogleFonts.inter(fontSize: 11, height: 1.35, color: textColor.withValues(alpha: .65))),
+          Text(
+            'Hold the SOS button for 3 seconds to alert ${_groupLeaderName.isEmpty ? 'your group owner' : _groupLeaderName} and the entire group.',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              height: 1.35,
+              color: textColor.withValues(alpha: .65),
+            ),
+          ),
           const SizedBox(height: 12),
-          SizedBox(width: double.infinity, child: ElevatedButton.icon(
-            onPressed: () => setState(() => _tab = 0),
-            icon: const Icon(Icons.emergency_rounded),
-            label: const Text('OPEN PANIC BUTTON'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-          )),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => setState(() => _tab = 0),
+              icon: const Icon(Icons.emergency_rounded),
+              label: const Text('OPEN PANIC BUTTON'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: _sendSafeCheckIn,
             icon: const Icon(Icons.verified_user_rounded),
             label: const Text("I'M SAFE — CHECK IN"),
-            style: OutlinedButton.styleFrom(foregroundColor: AppColors.midTeal, minimumSize: const Size(double.infinity, 42)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.midTeal,
+              minimumSize: const Size(double.infinity, 42),
+            ),
           ),
         ]),
         const SizedBox(height: 12),
         _buildSectionCard(cardBg, [
-          Text('Group safety status', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+          Text(
+            'Group safety status',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
           const SizedBox(height: 8),
-          _buildMemberMeta('OWNER', _groupLeaderName.isEmpty ? 'Loading…' : _groupLeaderName, textColor),
+          _buildMemberMeta(
+            'OWNER',
+            _groupLeaderName.isEmpty ? 'Loading…' : _groupLeaderName,
+            textColor,
+          ),
           const SizedBox(height: 6),
-          _buildMemberMeta('RADAR RADIUS', '${(_groupRangeMeters / 1000).toStringAsFixed(1)} km', textColor),
+          _buildMemberMeta(
+            'RADAR RADIUS',
+            '${(_groupRangeMeters / 1000).toStringAsFixed(1)} km',
+            textColor,
+          ),
         ]),
         const SizedBox(height: 12),
         _buildGroupChat(cardBg, textColor),
@@ -3088,115 +4328,285 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           onPressed: _leaveGroup,
           icon: const Icon(Icons.exit_to_app_rounded),
           label: const Text('LEAVE GROUP'),
-          style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red), minimumSize: const Size(double.infinity, 44)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.red,
+            side: const BorderSide(color: Colors.red),
+            minimumSize: const Size(double.infinity, 44),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildGroupRoleHeader(Color cardBg, Color textColor, String title, IconData icon) => Container(
+  Widget _buildGroupRoleHeader(
+    Color cardBg,
+    Color textColor,
+    String title,
+    IconData icon,
+  ) => Container(
     padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16)),
-    child: Row(children: [
-      CircleAvatar(backgroundColor: AppColors.midTeal.withValues(alpha: .16), child: Icon(icon, color: AppColors.midTeal)),
-      const SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: textColor)),
-        Text(_groupNameController.text.trim().isEmpty ? 'Emergency SOS group' : _groupNameController.text, style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: .6))),
-      ])),
-      const Icon(Icons.circle, size: 10, color: Colors.green),
-    ]),
+    decoration: BoxDecoration(
+      color: cardBg,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Row(
+      children: [
+        CircleAvatar(
+          backgroundColor: AppColors.midTeal.withValues(alpha: .16),
+          child: Icon(icon, color: AppColors.midTeal),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              Text(
+                _groupNameController.text.trim().isEmpty
+                    ? 'Emergency SOS group'
+                    : _groupNameController.text,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: textColor.withValues(alpha: .6),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Icon(Icons.circle, size: 10, color: Colors.green),
+      ],
+    ),
   );
 
   Widget _buildSectionCard(Color cardBg, List<Widget> children) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(14)),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+    decoration: BoxDecoration(
+      color: cardBg,
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    ),
   );
 
-  Widget _buildOwnerMemberRow(Color cardBg, Color textColor, Map<String, dynamic> member) {
+  Widget _buildOwnerMemberRow(
+    Color cardBg,
+    Color textColor,
+    Map<String, dynamic> member,
+  ) {
     final isOwner = member['isLeader'] == true;
     final id = member['id'] as String?;
     final status = member['status'] as String? ?? 'SAFE';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12)),
-      child: Row(children: [
-        Icon(status == 'SAFE' ? Icons.person_pin_circle_rounded : Icons.warning_amber_rounded, color: status == 'SAFE' ? AppColors.midTeal : Colors.orange),
-        const SizedBox(width: 9),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(member['name'] as String? ?? 'Member', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
-          Text(isOwner ? 'Owner' : '${status.replaceAll('_', ' ')} • ${(member['dist'] as num? ?? 0).toStringAsFixed(1)} km away', style: GoogleFonts.inter(fontSize: 10.5, color: textColor.withValues(alpha: .6))),
-        ])),
-        if (!isOwner && id != null) IconButton(
-          tooltip: 'Remove member', icon: const Icon(Icons.person_remove_outlined, color: Colors.red),
-          onPressed: () => EmergencyGroupService.instance.removeMember(code: _groupCodeController.text.trim().toUpperCase(), memberId: id).catchError(_showGroupError),
-        ),
-      ]),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            status == 'SAFE'
+                ? Icons.person_pin_circle_rounded
+                : Icons.warning_amber_rounded,
+            color: status == 'SAFE' ? AppColors.midTeal : Colors.orange,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  member['name'] as String? ?? 'Member',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+                Text(
+                  isOwner
+                      ? 'Owner'
+                      : '${status.replaceAll('_', ' ')} • ${(member['dist'] as num? ?? 0).toStringAsFixed(1)} km away',
+                  style: GoogleFonts.inter(
+                    fontSize: 10.5,
+                    color: textColor.withValues(alpha: .6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (!isOwner && id != null)
+            IconButton(
+              tooltip: 'Remove member',
+              icon: const Icon(Icons.person_remove_outlined, color: Colors.red),
+              onPressed: () => EmergencyGroupService.instance
+                  .removeMember(
+                    code: _groupCodeController.text.trim().toUpperCase(),
+                    memberId: id,
+                  )
+                  .catchError(_showGroupError),
+            ),
+        ],
+      ),
     );
   }
 
   Widget _buildOwnerIncidentCard(Color cardBg, Color textColor) {
-    final active = _incidentLogs.where((log) => log['resolved'] != true).cast<Map<String, dynamic>>().toList();
+    final active = _incidentLogs
+        .where((log) => log['resolved'] != true)
+        .cast<Map<String, dynamic>>()
+        .toList();
     return _buildSectionCard(cardBg, [
-      Text('Incident command', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+      Text(
+        'Incident command',
+        style: GoogleFonts.poppins(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: textColor,
+        ),
+      ),
       const SizedBox(height: 5),
-      Text(active.isEmpty ? 'No active SOS incidents. All members are safe.' : '${active.length} active incident${active.length == 1 ? '' : 's'} need attention.', style: GoogleFonts.inter(fontSize: 11, color: active.isEmpty ? Colors.green : Colors.redAccent)),
+      Text(
+        active.isEmpty
+            ? 'No active SOS incidents. All members are safe.'
+            : '${active.length} active incident${active.length == 1 ? '' : 's'} need attention.',
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          color: active.isEmpty ? Colors.green : Colors.redAccent,
+        ),
+      ),
       if (active.isNotEmpty) ...[
         const SizedBox(height: 10),
-        ElevatedButton.icon(onPressed: _resolveLatestIncident, icon: const Icon(Icons.check_circle_outline_rounded), label: const Text('MARK ALL CLEAR'), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white)),
+        ElevatedButton.icon(
+          onPressed: _resolveLatestIncident,
+          icon: const Icon(Icons.check_circle_outline_rounded),
+          label: const Text('MARK ALL CLEAR'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+          ),
+        ),
       ],
     ]);
   }
 
-  Widget _buildGroupChat(Color cardBg, Color textColor) => _buildSectionCard(cardBg, [
-    Text('Priority group chat', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
-    const SizedBox(height: 8),
-    ..._groupChatMessages.take(3).map((message) => Padding(
-      padding: const EdgeInsets.only(bottom: 5),
-      child: Text('${message['sender']}: ${message['text']}', style: GoogleFonts.inter(fontSize: 11, color: textColor.withValues(alpha: .8))),
-    )),
-    Row(children: [
-      Expanded(child: TextField(controller: _groupChatController, style: TextStyle(color: textColor), decoration: const InputDecoration(hintText: 'Send a group message', isDense: true))),
-      IconButton(onPressed: _sendGroupMessage, icon: const Icon(Icons.send_rounded, color: AppColors.midTeal)),
-    ]),
-  ]);
+  Widget _buildGroupChat(Color cardBg, Color textColor) =>
+      _buildSectionCard(cardBg, [
+        Text(
+          'Priority group chat',
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ..._groupChatMessages
+            .take(3)
+            .map(
+              (message) => Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Text(
+                  '${message['sender']}: ${message['text']}',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: textColor.withValues(alpha: .8),
+                  ),
+                ),
+              ),
+            ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _groupChatController,
+                style: TextStyle(color: textColor),
+                decoration: const InputDecoration(
+                  hintText: 'Send a group message',
+                  isDense: true,
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: _sendGroupMessage,
+              icon: const Icon(Icons.send_rounded, color: AppColors.midTeal),
+            ),
+          ],
+        ),
+      ]);
 
   void _sendGroupMessage() {
     final message = _groupChatController.text.trim();
     if (message.isEmpty) return;
     setState(() {
-      _groupChatMessages.insert(0, {'sender': _nameController.text.trim().isEmpty ? 'You' : _nameController.text.trim(), 'text': message, 'time': 'Now'});
+      _groupChatMessages.insert(0, {
+        'sender': _nameController.text.trim().isEmpty
+            ? 'You'
+            : _nameController.text.trim(),
+        'text': message,
+        'time': 'Now',
+      });
       _groupChatController.clear();
     });
   }
 
-  void _sendSafeCheckIn() => setState(() => _groupChatMessages.insert(0, {
-    'sender': _nameController.text.trim().isEmpty ? 'Member' : _nameController.text.trim(), 'text': '✅ I am safe.', 'time': 'Now',
-  }));
-
-  void _requestInviteRefresh() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Invite refresh UI is ready. Connect this action to the secure Firebase invite-token function.')),
-    );
-  }
+  void _sendSafeCheckIn() => setState(
+    () => _groupChatMessages.insert(0, {
+      'sender': _nameController.text.trim().isEmpty
+          ? 'Member'
+          : _nameController.text.trim(),
+      'text': '✅ I am safe.',
+      'time': 'Now',
+    }),
+  );
 
   void _resolveLatestIncident() {
-    final activeIndex = _incidentLogs.indexWhere((log) => log['resolved'] != true);
+    final activeIndex = _incidentLogs.indexWhere(
+      (log) => log['resolved'] != true,
+    );
     if (activeIndex == -1) return;
     setState(() {
       _incidentLogs[activeIndex]['resolved'] = true;
-      _incidentLogs[activeIndex]['resolvedTime'] = DateTime.now().toIso8601String();
+      _incidentLogs[activeIndex]['resolvedTime'] = DateTime.now()
+          .toIso8601String();
     });
     _saveIncidentLogs();
   }
 
   Widget _buildMemberMeta(String label, String value, Color textColor) => Row(
     children: [
-      SizedBox(width: 110, child: Text(label, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: .55)))),
-      Expanded(child: Text(value, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: textColor))),
+      SizedBox(
+        width: 110,
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: textColor.withValues(alpha: .55),
+          ),
+        ),
+      ),
+      Expanded(
+        child: Text(
+          value,
+          style: GoogleFonts.poppins(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+      ),
     ],
   );
 
@@ -3207,12 +4617,20 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         children: [
           Text(
             label,
-            style: GoogleFonts.inter(fontSize: 8.5, fontWeight: FontWeight.bold, color: Colors.grey[500]),
+            style: GoogleFonts.inter(
+              fontSize: 8.5,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[500],
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             val,
-            style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue),
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: widget.isDarkMode ? Colors.white70 : AppColors.navyBlue,
+            ),
           ),
         ],
       ),
@@ -3228,7 +4646,8 @@ class RadarSweepWidget extends StatefulWidget {
   State<RadarSweepWidget> createState() => _RadarSweepWidgetState();
 }
 
-class _RadarSweepWidgetState extends State<RadarSweepWidget> with SingleTickerProviderStateMixin {
+class _RadarSweepWidgetState extends State<RadarSweepWidget>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -3251,9 +4670,7 @@ class _RadarSweepWidgetState extends State<RadarSweepWidget> with SingleTickerPr
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        return CustomPaint(
-          painter: _RadarSweepPainter(_controller.value),
-        );
+        return CustomPaint(painter: _RadarSweepPainter(_controller.value));
       },
     );
   }
@@ -3289,34 +4706,61 @@ class _RadarSweepPainter extends CustomPainter {
 }
 
 // ===== CUSTOM HAJJ RADAR MAP PAINTER =====
-enum _WeatherVisual { rain, cloudy, sunny, night, sunrise, sunset, afternoon, summer, winter, autumn, spring }
+enum _WeatherVisual {
+  rain,
+  cloudy,
+  sunny,
+  night,
+  sunrise,
+  sunset,
+  afternoon,
+  summer,
+  winter,
+  autumn,
+  spring,
+}
 
 class _AnimatedWeatherBackdrop extends StatefulWidget {
-  const _AnimatedWeatherBackdrop({required this.visual, required this.darkMode});
+  const _AnimatedWeatherBackdrop({
+    required this.visual,
+    required this.darkMode,
+  });
   final _WeatherVisual visual;
   final bool darkMode;
 
   @override
-  State<_AnimatedWeatherBackdrop> createState() => _AnimatedWeatherBackdropState();
+  State<_AnimatedWeatherBackdrop> createState() =>
+      _AnimatedWeatherBackdropState();
 }
 
-class _AnimatedWeatherBackdropState extends State<_AnimatedWeatherBackdrop> with SingleTickerProviderStateMixin {
+class _AnimatedWeatherBackdropState extends State<_AnimatedWeatherBackdrop>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 5))..repeat();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..repeat();
   }
 
   @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: _controller,
     builder: (_, __) => CustomPaint(
-      painter: _WeatherScenePainter(widget.visual, _controller.value, widget.darkMode),
+      painter: _WeatherScenePainter(
+        widget.visual,
+        _controller.value,
+        widget.darkMode,
+      ),
     ),
   );
 }
@@ -3344,55 +4788,148 @@ class _WeatherScenePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    canvas.drawRect(rect, Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: _colors).createShader(rect));
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: _colors,
+        ).createShader(rect),
+    );
     final night = visual == _WeatherVisual.night;
     if (night) _stars(canvas, size);
-    if (visual == _WeatherVisual.cloudy || visual == _WeatherVisual.rain) _clouds(canvas, size);
+    if (visual == _WeatherVisual.cloudy || visual == _WeatherVisual.rain)
+      _clouds(canvas, size);
     if (visual == _WeatherVisual.rain) _rain(canvas, size);
     if (visual == _WeatherVisual.winter) _snow(canvas, size);
-    if (visual == _WeatherVisual.autumn || visual == _WeatherVisual.spring) _leaves(canvas, size);
-    if (![ _WeatherVisual.cloudy, _WeatherVisual.rain, _WeatherVisual.winter, _WeatherVisual.night ].contains(visual)) _sun(canvas, size);
+    if (visual == _WeatherVisual.autumn || visual == _WeatherVisual.spring)
+      _leaves(canvas, size);
+    if (![
+      _WeatherVisual.cloudy,
+      _WeatherVisual.rain,
+      _WeatherVisual.winter,
+      _WeatherVisual.night,
+    ].contains(visual))
+      _sun(canvas, size);
     if (night) _moon(canvas, size);
-    canvas.drawRect(Rect.fromLTWH(0, size.height * .78, size.width, size.height * .22), Paint()..color = (darkMode ? Colors.black : const Color(0xFF123A54)).withValues(alpha: .18));
+    canvas.drawRect(
+      Rect.fromLTWH(0, size.height * .78, size.width, size.height * .22),
+      Paint()
+        ..color = (darkMode ? Colors.black : const Color(0xFF123A54))
+            .withValues(alpha: .18),
+    );
   }
 
   void _sun(Canvas c, Size s) {
     final x = s.width * (.76 + .02 * math.sin(progress * math.pi * 2));
-    final y = s.height * (visual == _WeatherVisual.sunrise ? .53 : visual == _WeatherVisual.sunset ? .62 : .23);
+    final y =
+        s.height *
+        (visual == _WeatherVisual.sunrise
+            ? .53
+            : visual == _WeatherVisual.sunset
+            ? .62
+            : .23);
     final p = Paint()..color = const Color(0xFFFFE28A);
     c.drawCircle(Offset(x, y), 27, p);
-    p..style = PaintingStyle.stroke..strokeWidth = 2..color = const Color(0xFFFFF1B8);
-    for (var i = 0; i < 10; i++) { final a = i * math.pi / 5 + progress; c.drawLine(Offset(x + 34 * math.cos(a), y + 34 * math.sin(a)), Offset(x + 43 * math.cos(a), y + 43 * math.sin(a)), p); }
+    p
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = const Color(0xFFFFF1B8);
+    for (var i = 0; i < 10; i++) {
+      final a = i * math.pi / 5 + progress;
+      c.drawLine(
+        Offset(x + 34 * math.cos(a), y + 34 * math.sin(a)),
+        Offset(x + 43 * math.cos(a), y + 43 * math.sin(a)),
+        p,
+      );
+    }
   }
 
   void _clouds(Canvas c, Size s) {
     final offset = (progress * s.width * .18) - 20;
-    final p = Paint()..color = Colors.white.withValues(alpha: visual == _WeatherVisual.rain ? .38 : .7);
-    for (final base in [Offset(s.width * .20 + offset, s.height * .28), Offset(s.width * .64 - offset, s.height * .42)]) {
-      c.drawCircle(base, 25, p); c.drawCircle(base + const Offset(27, -8), 31, p); c.drawCircle(base + const Offset(56, 3), 22, p);
-      c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(base.dx - 20, base.dy, 98, 28), const Radius.circular(18)), p);
+    final p = Paint()
+      ..color = Colors.white.withValues(
+        alpha: visual == _WeatherVisual.rain ? .38 : .7,
+      );
+    for (final base in [
+      Offset(s.width * .20 + offset, s.height * .28),
+      Offset(s.width * .64 - offset, s.height * .42),
+    ]) {
+      c.drawCircle(base, 25, p);
+      c.drawCircle(base + const Offset(27, -8), 31, p);
+      c.drawCircle(base + const Offset(56, 3), 22, p);
+      c.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(base.dx - 20, base.dy, 98, 28),
+          const Radius.circular(18),
+        ),
+        p,
+      );
     }
   }
 
   void _rain(Canvas c, Size s) {
-    final p = Paint()..color = const Color(0xFFB9E7FF).withValues(alpha: .78)..strokeWidth = 2..strokeCap = StrokeCap.round;
-    for (var i = 0; i < 38; i++) { final x = (i * 37.0) % s.width; final y = ((i * 53.0 + progress * s.height * 1.8) % (s.height + 30)) - 20; c.drawLine(Offset(x, y), Offset(x - 7, y + 18), p); }
+    final p = Paint()
+      ..color = const Color(0xFFB9E7FF).withValues(alpha: .78)
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 38; i++) {
+      final x = (i * 37.0) % s.width;
+      final y = ((i * 53.0 + progress * s.height * 1.8) % (s.height + 30)) - 20;
+      c.drawLine(Offset(x, y), Offset(x - 7, y + 18), p);
+    }
   }
 
   void _snow(Canvas c, Size s) {
     final p = Paint()..color = Colors.white.withValues(alpha: .8);
-    for (var i = 0; i < 32; i++) { final x = (i * 43.0 + progress * 20) % s.width; final y = ((i * 31.0 + progress * s.height) % (s.height + 12)) - 6; c.drawCircle(Offset(x, y), 2 + (i % 3), p); }
+    for (var i = 0; i < 32; i++) {
+      final x = (i * 43.0 + progress * 20) % s.width;
+      final y = ((i * 31.0 + progress * s.height) % (s.height + 12)) - 6;
+      c.drawCircle(Offset(x, y), 2 + (i % 3), p);
+    }
   }
 
   void _leaves(Canvas c, Size s) {
     final spring = visual == _WeatherVisual.spring;
-    final p = Paint()..color = (spring ? const Color(0xFFFFD1E6) : const Color(0xFFFFC25B)).withValues(alpha: .85);
-    for (var i = 0; i < 18; i++) { final x = ((i * 62.0) + progress * s.width) % (s.width + 20) - 10; final y = (i * 39.0 + progress * s.height * .35) % s.height; c.save(); c.translate(x, y); c.rotate(progress * math.pi * 4 + i); c.drawOval(Rect.fromCenter(center: Offset.zero, width: 10, height: 5), p); c.restore(); }
+    final p = Paint()
+      ..color = (spring ? const Color(0xFFFFD1E6) : const Color(0xFFFFC25B))
+          .withValues(alpha: .85);
+    for (var i = 0; i < 18; i++) {
+      final x = ((i * 62.0) + progress * s.width) % (s.width + 20) - 10;
+      final y = (i * 39.0 + progress * s.height * .35) % s.height;
+      c.save();
+      c.translate(x, y);
+      c.rotate(progress * math.pi * 4 + i);
+      c.drawOval(Rect.fromCenter(center: Offset.zero, width: 10, height: 5), p);
+      c.restore();
+    }
   }
 
-  void _stars(Canvas c, Size s) { final p = Paint()..color = Colors.white.withValues(alpha: .8); for (var i = 0; i < 28; i++) { final x = (i * 41.0) % s.width; final y = (i * 29.0) % (s.height * .65); c.drawCircle(Offset(x, y), i % 4 == 0 ? 1.8 : .8, p); } }
-  void _moon(Canvas c, Size s) { final o = Offset(s.width * .76, s.height * .23); c.drawCircle(o, 23, Paint()..color = const Color(0xFFF5F0CA)); c.drawCircle(o + const Offset(9, -5), 23, Paint()..color = const Color(0xFF14213D)); }
-  @override bool shouldRepaint(covariant _WeatherScenePainter old) => old.visual != visual || old.progress != progress || old.darkMode != darkMode;
+  void _stars(Canvas c, Size s) {
+    final p = Paint()..color = Colors.white.withValues(alpha: .8);
+    for (var i = 0; i < 28; i++) {
+      final x = (i * 41.0) % s.width;
+      final y = (i * 29.0) % (s.height * .65);
+      c.drawCircle(Offset(x, y), i % 4 == 0 ? 1.8 : .8, p);
+    }
+  }
+
+  void _moon(Canvas c, Size s) {
+    final o = Offset(s.width * .76, s.height * .23);
+    c.drawCircle(o, 23, Paint()..color = const Color(0xFFF5F0CA));
+    c.drawCircle(
+      o + const Offset(9, -5),
+      23,
+      Paint()..color = const Color(0xFF14213D),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _WeatherScenePainter old) =>
+      old.visual != visual ||
+      old.progress != progress ||
+      old.darkMode != darkMode;
 }
 
 class HajjMapPainter extends CustomPainter {
@@ -3416,7 +4953,9 @@ class HajjMapPainter extends CustomPainter {
     final double cy = size.height / 2;
 
     final gridPaint = Paint()
-      ..color = isDarkMode ? Colors.white10 : Colors.blue.withValues(alpha: 0.05)
+      ..color = isDarkMode
+          ? Colors.white10
+          : Colors.blue.withValues(alpha: 0.05)
       ..strokeWidth = 1.0;
 
     for (double i = 0; i < size.width; i += 40) {
@@ -3448,8 +4987,10 @@ class HajjMapPainter extends CustomPainter {
     final roadPath = Path()
       ..moveTo(makkahPos.dx, makkahPos.dy)
       ..quadraticBezierTo(
-        (makkahPos.dx + minaPos.dx) / 2, (makkahPos.dy + minaPos.dy) / 2 - 10,
-        minaPos.dx, minaPos.dy,
+        (makkahPos.dx + minaPos.dx) / 2,
+        (makkahPos.dy + minaPos.dy) / 2 - 10,
+        minaPos.dx,
+        minaPos.dy,
       )
       ..lineTo(muzdalifahPos.dx, muzdalifahPos.dy)
       ..lineTo(arafatPos.dx, arafatPos.dy);
@@ -3457,7 +4998,9 @@ class HajjMapPainter extends CustomPainter {
     canvas.drawPath(roadPath, roadPaint);
 
     final siteFillPaint = Paint()
-      ..color = isDarkMode ? Colors.black26 : Colors.green.withValues(alpha: 0.07)
+      ..color = isDarkMode
+          ? Colors.black26
+          : Colors.green.withValues(alpha: 0.07)
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(makkahPos, 35 * zoomScale, siteFillPaint);
@@ -3468,16 +5011,37 @@ class HajjMapPainter extends CustomPainter {
     final kaabaPaint = Paint()
       ..color = const Color(0xFFD84315)
       ..style = PaintingStyle.fill;
-    canvas.drawRect(Rect.fromCenter(center: makkahPos, width: 14 * zoomScale, height: 14 * zoomScale), kaabaPaint);
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: makkahPos,
+        width: 14 * zoomScale,
+        height: 14 * zoomScale,
+      ),
+      kaabaPaint,
+    );
     final kaabaCover = Paint()
       ..color = Colors.black
       ..style = PaintingStyle.fill;
-    canvas.drawRect(Rect.fromCenter(center: makkahPos, width: 12 * zoomScale, height: 12 * zoomScale), kaabaCover);
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: makkahPos,
+        width: 12 * zoomScale,
+        height: 12 * zoomScale,
+      ),
+      kaabaCover,
+    );
     final kaabaBelt = Paint()
       ..color = const Color(0xFFFFD54F)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0 * zoomScale;
-    canvas.drawRect(Rect.fromCenter(center: makkahPos, width: 12 * zoomScale, height: 4 * zoomScale), kaabaBelt);
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: makkahPos,
+        width: 12 * zoomScale,
+        height: 4 * zoomScale,
+      ),
+      kaabaBelt,
+    );
 
     final tentPaint = Paint()
       ..color = Colors.green[700]!
@@ -3489,17 +5053,56 @@ class HajjMapPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     _drawMountain(canvas, arafatPos, 12 * zoomScale, mtPaint);
 
-    _drawText(canvas, "Makkah Haram", makkahPos.dx, makkahPos.dy + 15 * zoomScale, isDarkMode);
-    _drawText(canvas, "Mina Camps", minaPos.dx, minaPos.dy + 15 * zoomScale, isDarkMode);
-    _drawText(canvas, "Muzdalifah", muzdalifahPos.dx, muzdalifahPos.dy + 15 * zoomScale, isDarkMode);
-    _drawText(canvas, "Mount Arafat", arafatPos.dx, arafatPos.dy + 15 * zoomScale, isDarkMode);
+    _drawText(
+      canvas,
+      "Makkah Haram",
+      makkahPos.dx,
+      makkahPos.dy + 15 * zoomScale,
+      isDarkMode,
+    );
+    _drawText(
+      canvas,
+      "Mina Camps",
+      minaPos.dx,
+      minaPos.dy + 15 * zoomScale,
+      isDarkMode,
+    );
+    _drawText(
+      canvas,
+      "Muzdalifah",
+      muzdalifahPos.dx,
+      muzdalifahPos.dy + 15 * zoomScale,
+      isDarkMode,
+    );
+    _drawText(
+      canvas,
+      "Mount Arafat",
+      arafatPos.dx,
+      arafatPos.dy + 15 * zoomScale,
+      isDarkMode,
+    );
 
     final crossPaint = Paint()
       ..color = Colors.green[600]!
       ..style = PaintingStyle.fill;
-    _drawMedicalCross(canvas, gpsToCanvas(21.4172, 39.8821), 6 * zoomScale, crossPaint);
-    _drawMedicalCross(canvas, gpsToCanvas(21.3533, 39.9839), 6 * zoomScale, crossPaint);
-    _drawMedicalCross(canvas, gpsToCanvas(21.4192, 39.8286), 6 * zoomScale, crossPaint);
+    _drawMedicalCross(
+      canvas,
+      gpsToCanvas(21.4172, 39.8821),
+      6 * zoomScale,
+      crossPaint,
+    );
+    _drawMedicalCross(
+      canvas,
+      gpsToCanvas(21.3533, 39.9839),
+      6 * zoomScale,
+      crossPaint,
+    );
+    _drawMedicalCross(
+      canvas,
+      gpsToCanvas(21.4192, 39.8286),
+      6 * zoomScale,
+      crossPaint,
+    );
 
     for (var member in groupMembers) {
       final double mLat = member['lat'] as double;
@@ -3511,7 +5114,9 @@ class HajjMapPainter extends CustomPainter {
       final mPos = gpsToCanvas(mLat, mLng);
 
       final memberPaint = Paint()
-        ..color = mStatus.contains("BREACH") ? Colors.orange[800]! : Colors.red[800]!
+        ..color = mStatus.contains("BREACH")
+            ? Colors.orange[800]!
+            : Colors.red[800]!
         ..style = PaintingStyle.fill;
       canvas.drawCircle(mPos, 5.0 * zoomScale, memberPaint);
 
@@ -3521,7 +5126,13 @@ class HajjMapPainter extends CustomPainter {
         ..strokeWidth = 1.0;
       canvas.drawCircle(mPos, 9.0 * zoomScale, memberPulse);
 
-      _drawText(canvas, "$mName (${mDist.toStringAsFixed(1)}km)", mPos.dx, mPos.dy - 10 * zoomScale, isDarkMode);
+      _drawText(
+        canvas,
+        "$mName (${mDist.toStringAsFixed(1)}km)",
+        mPos.dx,
+        mPos.dy - 10 * zoomScale,
+        isDarkMode,
+      );
     }
 
     final pilgrimPaint = Paint()
@@ -3584,7 +5195,14 @@ class HajjMapPainter extends CustomPainter {
     canvas.drawPath(path, paint);
   }
 
-  void _drawText(Canvas canvas, String text, double x, double y, bool isDarkMode, {bool isBold = false}) {
+  void _drawText(
+    Canvas canvas,
+    String text,
+    double x,
+    double y,
+    bool isDarkMode, {
+    bool isBold = false,
+  }) {
     final span = TextSpan(
       text: text,
       style: GoogleFonts.inter(
@@ -3592,7 +5210,11 @@ class HajjMapPainter extends CustomPainter {
         fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
         color: isDarkMode ? Colors.white60 : AppColors.navyBlue,
         shadows: [
-          const Shadow(color: Colors.white70, blurRadius: 2, offset: Offset(0, 1)),
+          const Shadow(
+            color: Colors.white70,
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
         ],
       ),
     );
