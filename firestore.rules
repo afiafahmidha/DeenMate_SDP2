@@ -166,16 +166,18 @@ service cloud.firestore {
           allow read: if isPlanMember(userId, planId);
           allow create: if signedIn()
             && request.auth.uid == memberId
-            && request.resource.data.keys().hasOnly(['name', 'joinedAt', 'updatedAt'])
-            && request.resource.data.keys().hasAll(['name', 'joinedAt', 'updatedAt'])
+            && request.resource.data.keys().hasOnly(['name', 'shares', 'joinedAt', 'updatedAt'])
+            && request.resource.data.keys().hasAll(['name', 'shares', 'joinedAt', 'updatedAt'])
             && validShortText(request.resource.data.name, 80)
+            && request.resource.data.shares is int && request.resource.data.shares >= 1 && request.resource.data.shares <= 7
             && request.resource.data.joinedAt is timestamp
             && request.resource.data.updatedAt is timestamp;
           allow update: if signedIn()
             && request.auth.uid == memberId
-            && request.resource.data.keys().hasOnly(['name', 'joinedAt', 'updatedAt'])
-            && request.resource.data.keys().hasAll(['name', 'joinedAt', 'updatedAt'])
+            && request.resource.data.keys().hasOnly(['name', 'shares', 'joinedAt', 'updatedAt'])
+            && request.resource.data.keys().hasAll(['name', 'shares', 'joinedAt', 'updatedAt'])
             && validShortText(request.resource.data.name, 80)
+            && request.resource.data.shares is int && request.resource.data.shares >= 1 && request.resource.data.shares <= 7
             && request.resource.data.joinedAt == resource.data.joinedAt
             && request.resource.data.updatedAt is timestamp;
           allow delete: if signedIn()
