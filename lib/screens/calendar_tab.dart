@@ -6,9 +6,8 @@ import 'package:intl/intl.dart';
 import 'package:adhan/adhan.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../widgets/auth_header.dart'; // Import AppColors
+import '../widgets/auth_header.dart'; 
 
-// File-level theme helpers so widgets in this file can share logic.
 bool _isDarkModeCtx(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
 
 Color _surfaceColor(BuildContext context) {
@@ -92,7 +91,7 @@ class HijriDate {
   }
 }
 
-// ===== STAR CONFIG =====
+
 class _CalendarStarConfig {
   final double topFraction;
   final double leftFraction;
@@ -102,7 +101,6 @@ class _CalendarStarConfig {
   _CalendarStarConfig({required this.topFraction, required this.leftFraction, required this.size, required this.delayMs});
 }
 
-// ===== TWINKLING STAR WIDGET =====
 class _CalendarTwinklingStar extends StatefulWidget {
   final double topFraction;
   final double leftFraction;
@@ -182,7 +180,7 @@ class _CalendarStarPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ===== VERY SMALL TEXTURE PAINTER =====
+
 class _CalendarTexturePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -269,7 +267,7 @@ class HijriConverter {
   }
 }
 
-// ===== ISLAMIC EVENT MODEL =====
+
 class IslamicEvent {
   final String title;
   final String titleBengali;
@@ -302,8 +300,7 @@ class IslamicEvent {
     this.heroImages = const [],
   });
 
-  // Resolves the actual list of images to show in the hero carousel,
-  // falling back gracefully so nothing crashes before real assets exist.
+
   List<String> get carouselImages {
     if (heroImages.isNotEmpty) return heroImages;
     if (backgroundImagePath != null) return [backgroundImagePath!];
