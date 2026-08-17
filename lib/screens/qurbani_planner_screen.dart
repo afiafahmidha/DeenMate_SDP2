@@ -1948,6 +1948,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             Text("Whoever adds a participant owns their record. Anyone else must send an edit request with a note.",
                 style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4)),
             const SizedBox(height: 12),
+            _householdGroupCard(),
+            const SizedBox(height: 16),
             if (!snap.hasData)
               const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator()))
             else if (participants.isEmpty)
@@ -1959,6 +1961,64 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           ],
         );
       },
+    );
+  }
+
+  Widget _householdGroupCard() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final isOwner = _repo!.ownerUid == QurbaniRepository.currentUid();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.midTeal.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.groups_rounded, color: AppColors.midTeal, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Household share group',
+                    style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isOwner
+                ? 'Create a code here, then share it with people you want to add to this plan.'
+                : 'Enter a household code here to join the shared Qurbani plan.',
+            style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5, height: 1.35),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _showHouseholdSharingSheet,
+              icon: Icon(isOwner ? Icons.add_link_rounded : Icons.login_rounded, size: 18),
+              label: Text(isOwner ? 'Create or join group' : 'Join household group'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.midTeal,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(42),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
