@@ -11,9 +11,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import '../services/emergency_group_service.dart';
 import '../services/emergency_sos_service.dart';
+import '../services/encrypted_group_chat_service.dart';
 import '../services/weather_service.dart';
 import '../services/notification_service.dart';
 
@@ -111,6 +113,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   final _groupChatController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _groupMembersSubscription;
   StreamSubscription<Map<String, dynamic>?>? _groupSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _groupChatSubscription;
   List<Map<String, dynamic>> _liveGroupMembers = [];
   double _groupRangeMeters = 1000;
   String _groupLeaderName = '';
@@ -122,6 +125,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       'time': 'Now',
     },
   ];
+  static const _secureStorage = FlutterSecureStorage();
+  String? _groupChatSecret;
   EmergencyWeatherData? _weather;
   DateTime? _lastWeatherFetch;
   bool _weatherLoading = false;
@@ -235,6 +240,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     _positionStreamSubscription?.cancel();
     _groupMembersSubscription?.cancel();
     _groupSubscription?.cancel();
+    _groupChatSubscription?.cancel();
 
     _nameController.dispose();
     _passportController.dispose();
@@ -1070,7 +1076,74 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         _groupNameController.text = group['name'] as String? ?? '';
       });
     }, onError: _showGroupError);
+    _loadGroupChatSecret(code);
     if (_currentPosition != null) _publishGroupLocation(_currentPosition!);
+  }
+
+  Future<void> _loadGroupChatSecret(String code) async {
+    final secret = await _secureStorage.read(key: 'group_chat_secret_$code');
+    if (!mounted || secret == null || secret.isEmpty) return;
+    _groupChatSecret = secret;
+    _listenToEncryptedGroupChat(code, secret);
+  }
+
+  void _listenToEncryptedGroupChat(String code, String secret) {
+    _groupChatSubscription?.cancel();
+    _groupChatSubscription = EncryptedGroupChatService.instance
+        .messages(code)
+        .listen((encryptedMessages) async {
+          final messages = <Map<String, String>>[];
+          for (final message in encryptedMessages) {
+            try {
+              final text = await EncryptedGroupChatService.instance.decrypt(
+                groupCode: code,
+                groupSecret: secret,
+                message: message,
+              );
+              messages.add({
+                'sender': (message['senderName'] ?? 'Group member').toString(),
+                'text': text,
+                'time': 'Now',
+              });
+            } catch (_) {
+              // A different secret must never reveal message content.
+            }
+          }
+          if (mounted) setState(() {
+            _groupChatMessages
+              ..clear()
+              ..addAll(messages);
+          });
+        }, onError: _showGroupError);
+  }
+
+  Future<void> _configureGroupChatSecret() async {
+    final code = _groupCodeController.text.trim().toUpperCase();
+    if (code.isEmpty) return;
+    final controller = TextEditingController(text: _groupChatSecret ?? '');
+    final secret = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Group chat secret'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: const InputDecoration(
+            hintText: 'Enter the secret shared by the leader',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (secret == null || secret.isEmpty) return;
+    await _secureStorage.write(key: 'group_chat_secret_$code', value: secret);
+    if (!mounted) return;
+    setState(() => _groupChatSecret = secret);
+    _listenToEncryptedGroupChat(code, secret);
   }
 
   void _publishGroupLocation(Position position) {
@@ -1148,6 +1221,47 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _deleteGroup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete group?'),
+        content: const Text('This removes the group for all members.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await EmergencyGroupService.instance.deleteGroup(
+        _groupCodeController.text.trim().toUpperCase(),
+      );
+      _groupMembersSubscription?.cancel();
+      _groupSubscription?.cancel();
+      _groupChatSubscription?.cancel();
+      if (!mounted) return;
+      setState(() {
+        _isGroupJoined = false;
+        _isGroupLeader = false;
+        _groupCodeController.clear();
+        _groupLeaderName = '';
+        _liveGroupMembers = [];
+      });
+      await _saveProfileData();
+    } catch (error) {
+      _showGroupError(error);
     }
   }
 
@@ -4142,7 +4256,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   Widget _buildOwnerGroupHub(Color cardBg, Color textColor) {
     // Use the complete Firestore member list here. Unlike the radar map, the
     // manifest must also show members who have not shared a location yet.
-    final members = _liveGroupMembers;
+    final members = _mockGroupMembers;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4236,6 +4350,17 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         const SizedBox(height: 8),
         ...members.map(
           (member) => _buildOwnerMemberRow(cardBg, textColor, member),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _deleteGroup,
+          icon: const Icon(Icons.delete_forever_outlined),
+          label: const Text('DELETE GROUP'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.red,
+            side: const BorderSide(color: Colors.red),
+            minimumSize: const Size(double.infinity, 44),
+          ),
         ),
         const SizedBox(height: 12),
         _buildOwnerIncidentCard(cardBg, textColor),
@@ -4406,6 +4531,18 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     final isOwner = member['isLeader'] == true;
     final id = member['id'] as String?;
     final status = member['status'] as String? ?? 'SAFE';
+    final photoUrl = member['photoUrl'] as String? ?? '';
+    final lat = member['latitude'] as num?;
+    final lng = member['longitude'] as num?;
+    final distanceKm = _currentPosition != null && lat != null && lng != null
+        ? Geolocator.distanceBetween(
+                _currentPosition!.latitude,
+                _currentPosition!.longitude,
+                lat.toDouble(),
+                lng.toDouble(),
+              ) /
+            1000
+        : null;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -4415,11 +4552,18 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       ),
       child: Row(
         children: [
-          Icon(
-            status == 'SAFE'
-                ? Icons.person_pin_circle_rounded
-                : Icons.warning_amber_rounded,
-            color: status == 'SAFE' ? AppColors.midTeal : Colors.orange,
+          CircleAvatar(
+            radius: 17,
+            backgroundColor: AppColors.midTeal.withValues(alpha: .16),
+            backgroundImage: photoUrl.isEmpty ? null : NetworkImage(photoUrl),
+            child: photoUrl.isEmpty
+                ? Icon(
+                    status == 'SAFE'
+                        ? Icons.person_rounded
+                        : Icons.warning_amber_rounded,
+                    color: status == 'SAFE' ? AppColors.midTeal : Colors.orange,
+                  )
+                : null,
           ),
           const SizedBox(width: 9),
           Expanded(
@@ -4511,6 +4655,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             color: textColor,
           ),
         ),
+        TextButton.icon(
+          onPressed: _configureGroupChatSecret,
+          icon: const Icon(Icons.lock_outline_rounded, size: 16),
+          label: Text(_groupChatSecret == null ? 'Set chat secret' : 'Change chat secret'),
+        ),
         const SizedBox(height: 8),
         ..._groupChatMessages
             .take(3)
@@ -4546,19 +4695,24 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         ),
       ]);
 
-  void _sendGroupMessage() {
+  Future<void> _sendGroupMessage() async {
     final message = _groupChatController.text.trim();
     if (message.isEmpty) return;
-    setState(() {
-      _groupChatMessages.insert(0, {
-        'sender': _nameController.text.trim().isEmpty
-            ? 'You'
-            : _nameController.text.trim(),
-        'text': message,
-        'time': 'Now',
-      });
+    if (_groupChatSecret == null) {
+      await _configureGroupChatSecret();
+      if (_groupChatSecret == null) return;
+    }
+    try {
+      await EncryptedGroupChatService.instance.send(
+        groupCode: _groupCodeController.text.trim().toUpperCase(),
+        groupSecret: _groupChatSecret!,
+        senderName: _nameController.text,
+        plaintext: message,
+      );
       _groupChatController.clear();
-    });
+    } catch (error) {
+      _showGroupError(error);
+    }
   }
 
   void _sendSafeCheckIn() => setState(
