@@ -20,7 +20,9 @@
 - Settlements are append-only after creation, preventing a member from
   rewriting another household member's recorded payment.
 - User profile documents are not exposed to plan members, avoiding private profile/PII disclosure.
-- The current client-side invite join flow cannot securely prove possession of an invite code to Firestore Rules when it updates membership. Rules therefore intentionally reject that membership update. A Cloud Function or callable backend should perform invite redemption before household joining is enabled broadly.
+- Qurbani uses the same group-code pattern as Emergency SOS. A signed-in user
+  who has an exact code creates only their own membership document; they cannot
+  edit the plan or another member's record.
 
 ## Rule review attack checklist
 
@@ -30,4 +32,5 @@
 - Non-owner membership escalation: denied because only the plan owner can update a plan.
 - Ownership/creation timestamp mutation: denied on plan, participant, and expense updates where those fields apply.
 - Oversized or schema-polluting plan, participant, expense, settlement, and edit-request records: denied by key/type/size validators.
-- Invite enumeration: denied (`list` is false); only exact-code fetches by signed-in users are allowed.
+- Invite enumeration: denied (`list` is false); only exact-code fetches by
+  signed-in users are allowed.
