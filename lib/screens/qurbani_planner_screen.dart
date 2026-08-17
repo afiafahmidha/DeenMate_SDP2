@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -486,10 +488,10 @@ class QurbaniRepository {
     await prefs.setString(_prefsPlanKey, planId);
   }
 
-  /// Generates a short shareable code for this plan and stores the lookup
-  /// entry, so another household member can join via [joinByCode].
+  /// Generates a shareable code, using the same local-code pattern as the SOS
+  /// emergency group feature.
   Future<String> createInviteCode() async {
-    final code = _generateCode();
+    final code = await _newUnusedInviteCode();
     await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(code).set({
       'ownerUid': ownerUid,
       'planId': planId,
@@ -498,9 +500,16 @@ class QurbaniRepository {
     return code;
   }
 
-  static String _generateCode() {
-    final rnd = DateTime.now().millisecondsSinceEpoch.remainder(1000000);
-    return 'QRB${rnd.toString().padLeft(6, '0')}';
+  static Future<String> _newUnusedInviteCode() async {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final random = Random.secure();
+    for (var attempt = 0; attempt < 5; attempt++) {
+      final suffix = List.generate(6, (_) => chars[random.nextInt(chars.length)]).join();
+      final code = 'QRB-$suffix';
+      final existing = await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(code).get();
+      if (!existing.exists) return code;
+    }
+    throw StateError('Could not create a unique invite code. Please try again.');
   }
 
   /// Joins an existing household plan by its invite code: looks up the
@@ -515,10 +524,18 @@ class QurbaniRepository {
     final targetOwner = data['ownerUid'] as String;
     final targetPlan = data['planId'] as String;
 
-    final planRef = FirebaseFirestore.instance.collection('users').doc(targetOwner).collection('qurbaniPlans').doc(targetPlan);
-    await planRef.update({
-      'memberIds': FieldValue.arrayUnion([currentUid()]),
-    });
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetOwner)
+        .collection('qurbaniPlans')
+        .doc(targetPlan)
+        .collection('members')
+        .doc(currentUid())
+        .set({
+      'name': currentDisplayName(),
+      'joinedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
     await _persist(targetOwner, targetPlan);
     return QurbaniRepository._(targetOwner, targetPlan);
@@ -1139,11 +1156,18 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       ? null
                       : () async {
                           setD(() => generating = true);
-                          final code = await _repo!.createInviteCode();
-                          setD(() {
-                            generatedCode = code;
-                            generating = false;
-                          });
+                          try {
+                            final code = await _repo!.createInviteCode();
+                            setD(() {
+                              generatedCode = code;
+                              generating = false;
+                            });
+                          } catch (_) {
+                            setD(() {
+                              error = 'Could not generate an invite code. Please try again.';
+                              generating = false;
+                            });
+                          }
                         },
                   icon: generating
                       ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
@@ -1162,7 +1186,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 controller: joinCtrl,
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
-                  hintText: 'Enter invite code (e.g. QRB123456)',
+                  hintText: 'Enter invite code (e.g. QRB-AB12CD)',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   errorText: error,
                 ),

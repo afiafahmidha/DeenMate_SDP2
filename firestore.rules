@@ -18,7 +18,8 @@ service cloud.firestore {
     function isPlanMember(ownerUid, planId) {
       return signedIn()
         && (request.auth.uid == ownerUid
-          || request.auth.uid in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds);
+          || request.auth.uid in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds
+          || exists(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)/members/$(request.auth.uid)));
     }
 
     function validShortText(value, maxLength) {
@@ -152,13 +153,34 @@ service cloud.firestore {
         allow create: if isOwner(userId)
           && validQurbaniPlan(request.resource.data, userId)
           && request.resource.data.memberIds.hasOnly([request.auth.uid]);
-        allow read: if signedIn()
-          && (request.auth.uid == userId || request.auth.uid in resource.data.memberIds);
+        allow read: if isPlanMember(userId, planId);
         allow update: if isOwner(userId)
           && validQurbaniPlan(request.resource.data, userId)
           && request.resource.data.ownerId == resource.data.ownerId
           && request.resource.data.createdAt == resource.data.createdAt;
         allow delete: if isOwner(userId);
+
+        // Mirrors emergencyGroups/members: knowing a valid share code lets a
+        // signed-in person create only their own membership record.
+        match /members/{memberId} {
+          allow read: if isPlanMember(userId, planId);
+          allow create: if signedIn()
+            && request.auth.uid == memberId
+            && request.resource.data.keys().hasOnly(['name', 'joinedAt', 'updatedAt'])
+            && request.resource.data.keys().hasAll(['name', 'joinedAt', 'updatedAt'])
+            && validShortText(request.resource.data.name, 80)
+            && request.resource.data.joinedAt is timestamp
+            && request.resource.data.updatedAt is timestamp;
+          allow update: if signedIn()
+            && request.auth.uid == memberId
+            && request.resource.data.keys().hasOnly(['name', 'joinedAt', 'updatedAt'])
+            && request.resource.data.keys().hasAll(['name', 'joinedAt', 'updatedAt'])
+            && validShortText(request.resource.data.name, 80)
+            && request.resource.data.joinedAt == resource.data.joinedAt
+            && request.resource.data.updatedAt is timestamp;
+          allow delete: if signedIn()
+            && (request.auth.uid == memberId || request.auth.uid == userId);
+        }
 
         match /participants/{participantId} {
           allow read: if isPlanMember(userId, planId);
@@ -220,8 +242,8 @@ service cloud.firestore {
       }
     }
 
-    // Invite codes can only be created by the plan owner. A signed-in user
-    // may fetch one by its unguessable document ID, but may never list them.
+    // SOS-style share-code lookup. Codes cannot be listed, and only a plan
+    // owner may create a code that points to their own plan.
     match /qurbaniPlanInvites/{code} {
       allow get: if signedIn();
       allow list: if false;
