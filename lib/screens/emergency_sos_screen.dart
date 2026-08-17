@@ -11,13 +11,13 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import '../services/emergency_group_service.dart';
 import '../services/emergency_sos_service.dart';
 import '../services/encrypted_group_chat_service.dart';
 import '../services/weather_service.dart';
 import '../services/notification_service.dart';
+import '../services/push_notification_service.dart';
 
 class EmergencyContact {
   final TextEditingController nameController;
@@ -114,7 +114,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   StreamSubscription<List<Map<String, dynamic>>>? _groupMembersSubscription;
   StreamSubscription<Map<String, dynamic>?>? _groupSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _groupChatSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _groupIncidentsSubscription;
   List<Map<String, dynamic>> _liveGroupMembers = [];
+  List<Map<String, dynamic>> _liveGroupIncidents = [];
+  String? _activeGroupIncidentId;
   double _groupRangeMeters = 1000;
   String _groupLeaderName = '';
   final Set<String> _geofenceAlertedMembers = {};
@@ -125,8 +128,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       'time': 'Now',
     },
   ];
-  static const _secureStorage = FlutterSecureStorage();
-  String? _groupChatSecret;
   EmergencyWeatherData? _weather;
   DateTime? _lastWeatherFetch;
   bool _weatherLoading = false;
@@ -171,7 +172,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     final double uLng = _currentPosition?.longitude ?? 39.8262;
 
     if (_isGroupJoined) {
-      return _liveGroupMembers
+      return _groupMembersWithStatus
           .where(
             (member) => member['latitude'] is num && member['longitude'] is num,
           )
@@ -186,7 +187,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               'lng': lng,
               'dist': distance / 1000,
               'battery': member['battery'] ?? 0,
-              'status': outOfRange ? 'OUT OF RANGE' : 'SAFE',
+              'status': member['status'] == 'NEEDS HELP'
+                  ? 'NEEDS HELP'
+                  : (outOfRange ? 'OUT OF RANGE' : 'SAFE'),
             };
           })
           .toList();
@@ -224,6 +227,22 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     return members;
   }
 
+  List<Map<String, dynamic>> get _groupMembersWithStatus {
+    final activeSenderIds = _liveGroupIncidents
+        .where((incident) => incident['status'] == 'active')
+        .map((incident) => incident['senderId'] as String?)
+        .whereType<String>()
+        .toSet();
+
+    return _liveGroupMembers.map((member) {
+      final id = member['id'] as String?;
+      return {
+        ...member,
+        'status': activeSenderIds.contains(id) ? 'NEEDS HELP' : 'SAFE',
+      };
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -231,6 +250,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     _loadIncidentLogs();
     _loadOfflineQueue();
     _initLocationTracking();
+    PushNotificationService.instance.registerDevice();
   }
 
   @override
@@ -241,6 +261,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     _groupMembersSubscription?.cancel();
     _groupSubscription?.cancel();
     _groupChatSubscription?.cancel();
+    _groupIncidentsSubscription?.cancel();
 
     _nameController.dispose();
     _passportController.dispose();
@@ -264,6 +285,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   // ===== DATA STORAGE =====
   Future<void> _loadProfileData() async {
     final prefs = await SharedPreferences.getInstance();
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final storedGroupUid = prefs.getString('sos_group_member_uid');
+    final restoreGroup = currentUid != null && storedGroupUid == currentUid;
     setState(() {
       _nameController.clear();
       _passportController.clear();
@@ -274,9 +298,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       _medsController.clear();
       _groupNameController.clear();
       _hotelController.clear();
-      _isGroupJoined = prefs.getBool('sos_is_group_joined') ?? false;
-      _isGroupLeader = prefs.getBool('sos_is_group_leader') ?? false;
-      _groupCodeController.text = prefs.getString('sos_group_code') ?? '';
+      _isGroupJoined = restoreGroup && (prefs.getBool('sos_is_group_joined') ?? false);
+      _isGroupLeader = restoreGroup && (prefs.getBool('sos_is_group_leader') ?? false);
+      _groupCodeController.text = restoreGroup ? (prefs.getString('sos_group_code') ?? '') : '';
       _activeIncidentId = prefs.getString('sos_active_incident_id');
 
       _contacts = [];
@@ -300,6 +324,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     await prefs.setString('sos_hotel', _hotelController.text);
     await prefs.setBool('sos_is_group_joined', _isGroupJoined);
     await prefs.setBool('sos_is_group_leader', _isGroupLeader);
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid != null) {
+      await prefs.setString('sos_group_member_uid', currentUid);
+    }
     await prefs.setString(
       'sos_group_code',
       _groupCodeController.text.trim().toUpperCase(),
@@ -800,6 +828,16 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         );
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('sos_active_incident_id', _activeIncidentId!);
+        if (_isGroupJoined && _groupCodeController.text.trim().isNotEmpty) {
+          _activeGroupIncidentId = await EmergencyGroupService.instance
+              .createIncident(
+                code: _groupCodeController.text.trim().toUpperCase(),
+                senderName: _nameController.text,
+                latitude: lat,
+                longitude: lng,
+                address: _currentAddress,
+              );
+        }
         success = true;
       } catch (error) {
         debugPrint('[SOS] Incident creation failed: $error');
@@ -890,6 +928,16 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         debugPrint('[SOS] Incident resolution sync failed: $error');
       }
     }
+    if (!_isOfflineSimulated && _activeGroupIncidentId != null) {
+      try {
+        await EmergencyGroupService.instance.resolveIncident(
+          code: _groupCodeController.text.trim().toUpperCase(),
+          incidentId: _activeGroupIncidentId!,
+        );
+      } catch (error) {
+        debugPrint('[SOS] Group incident resolution sync failed: $error');
+      }
+    }
 
     NotificationService.instance.showCustomNotification(
       id: 9998,
@@ -913,6 +961,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     }
     if (incidentResolved) {
       _activeIncidentId = null;
+      _activeGroupIncidentId = null;
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('sos_active_incident_id');
     }
@@ -1059,6 +1108,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     if (code.isEmpty) return;
     _groupMembersSubscription?.cancel();
     _groupSubscription?.cancel();
+    _groupIncidentsSubscription?.cancel();
     _groupMembersSubscription = EmergencyGroupService.instance
         .members(code)
         .listen((members) {
@@ -1076,39 +1126,33 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         _groupNameController.text = group['name'] as String? ?? '';
       });
     }, onError: _showGroupError);
-    _loadGroupChatSecret(code);
+    _groupIncidentsSubscription = EmergencyGroupService.instance
+        .incidents(code)
+        .listen(
+          (incidents) {
+            if (mounted) setState(() => _liveGroupIncidents = incidents);
+          },
+          onError: _showGroupError,
+        );
+    _listenToGroupChat(code);
     if (_currentPosition != null) _publishGroupLocation(_currentPosition!);
   }
 
-  Future<void> _loadGroupChatSecret(String code) async {
-    final secret = await _secureStorage.read(key: 'group_chat_secret_$code');
-    if (!mounted || secret == null || secret.isEmpty) return;
-    _groupChatSecret = secret;
-    _listenToEncryptedGroupChat(code, secret);
-  }
-
-  void _listenToEncryptedGroupChat(String code, String secret) {
+  void _listenToGroupChat(String code) {
     _groupChatSubscription?.cancel();
     _groupChatSubscription = EncryptedGroupChatService.instance
         .messages(code)
         .listen((encryptedMessages) async {
-          final messages = <Map<String, String>>[];
-          for (final message in encryptedMessages) {
-            try {
-              final text = await EncryptedGroupChatService.instance.decrypt(
-                groupCode: code,
-                groupSecret: secret,
-                message: message,
-              );
-              messages.add({
-                'sender': (message['senderName'] ?? 'Group member').toString(),
-                'text': text,
-                'time': 'Now',
-              });
-            } catch (_) {
-              // A different secret must never reveal message content.
-            }
-          }
+          final messages = encryptedMessages
+              .map((message) => <String, String>{
+                    'sender': (message['senderName'] ?? 'Group member').toString(),
+                    'text': (message['text'] ?? '').toString(),
+                    'time': (message['createdAt'] as Timestamp?)
+                            ?.toDate()
+                            .toIso8601String() ??
+                        DateTime.now().toIso8601String(),
+                  })
+              .toList();
           if (mounted) setState(() {
             _groupChatMessages
               ..clear()
@@ -1117,34 +1161,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         }, onError: _showGroupError);
   }
 
-  Future<void> _configureGroupChatSecret() async {
-    final code = _groupCodeController.text.trim().toUpperCase();
-    if (code.isEmpty) return;
-    final controller = TextEditingController(text: _groupChatSecret ?? '');
-    final secret = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Group chat secret'),
-        content: TextField(
-          controller: controller,
-          obscureText: true,
-          decoration: const InputDecoration(
-            hintText: 'Enter the secret shared by the leader',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save')),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (secret == null || secret.isEmpty) return;
-    await _secureStorage.write(key: 'group_chat_secret_$code', value: secret);
-    if (!mounted) return;
-    setState(() => _groupChatSecret = secret);
-    _listenToEncryptedGroupChat(code, secret);
-  }
 
   void _publishGroupLocation(Position position) {
     if (!_isGroupJoined || _isOfflineSimulated) return;
@@ -1250,6 +1266,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       );
       _groupMembersSubscription?.cancel();
       _groupSubscription?.cancel();
+      _groupIncidentsSubscription?.cancel();
       _groupChatSubscription?.cancel();
       if (!mounted) return;
       setState(() {
@@ -1258,6 +1275,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         _groupCodeController.clear();
         _groupLeaderName = '';
         _liveGroupMembers = [];
+        _liveGroupIncidents = [];
       });
       await _saveProfileData();
     } catch (error) {
@@ -2985,8 +3003,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       for (var member in _mockGroupMembers) {
         final double mLat = member['lat'] as double;
         final double mLng = member['lng'] as double;
-        final String mName = member['name'] as String;
-        final String mStatus = member['status'] as String;
+        final String mName = member['name']?.toString() ?? 'Group member';
+        final String mStatus = member['status']?.toString() ?? 'SAFE';
 
         markers.add(
           Marker(
@@ -4256,7 +4274,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   Widget _buildOwnerGroupHub(Color cardBg, Color textColor) {
     // Use the complete Firestore member list here. Unlike the radar map, the
     // manifest must also show members who have not shared a location yet.
-    final members = _mockGroupMembers;
+    final members = _groupMembersWithStatus;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4447,6 +4465,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           ),
         ]),
         const SizedBox(height: 12),
+        _buildMemberRoster(cardBg, textColor),
+        const SizedBox(height: 12),
         _buildGroupChat(cardBg, textColor),
         const SizedBox(height: 12),
         OutlinedButton.icon(
@@ -4486,17 +4506,17 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
+                _groupNameController.text.trim().isEmpty
+                    ? 'Emergency SOS group'
+                    : _groupNameController.text,
                 style: GoogleFonts.poppins(
-                  fontSize: 15,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: textColor,
                 ),
               ),
               Text(
-                _groupNameController.text.trim().isEmpty
-                    ? 'Emergency SOS group'
-                    : _groupNameController.text,
+                title,
                 style: GoogleFonts.inter(
                   fontSize: 11,
                   color: textColor.withValues(alpha: .6),
@@ -4532,6 +4552,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     final id = member['id'] as String?;
     final status = member['status'] as String? ?? 'SAFE';
     final photoUrl = member['photoUrl'] as String? ?? '';
+    final photoBase64 = member['photoBase64'] as String? ?? '';
     final lat = member['latitude'] as num?;
     final lng = member['longitude'] as num?;
     final distanceKm = _currentPosition != null && lat != null && lng != null
@@ -4555,14 +4576,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           CircleAvatar(
             radius: 17,
             backgroundColor: AppColors.midTeal.withValues(alpha: .16),
-            backgroundImage: photoUrl.isEmpty ? null : NetworkImage(photoUrl),
-            child: photoUrl.isEmpty
-                ? Icon(
-                    status == 'SAFE'
-                        ? Icons.person_rounded
-                        : Icons.warning_amber_rounded,
-                    color: status == 'SAFE' ? AppColors.midTeal : Colors.orange,
-                  )
+            backgroundImage: photoBase64.isNotEmpty
+                ? MemoryImage(base64Decode(photoBase64))
+                : (photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null),
+            child: photoUrl.isEmpty && photoBase64.isEmpty
+                ? const Icon(Icons.person_rounded, color: AppColors.midTeal)
                 : null,
           ),
           const SizedBox(width: 9),
@@ -4570,13 +4588,28 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  member['name'] as String? ?? 'Member',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        member['name'] as String? ?? 'Member',
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                    if (status != 'SAFE') ...[
+                      const SizedBox(width: 5),
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        size: 16,
+                        color: Colors.orange,
+                      ),
+                    ],
+                  ],
                 ),
                 Text(
                   isOwner
@@ -4607,9 +4640,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   }
 
   Widget _buildOwnerIncidentCard(Color cardBg, Color textColor) {
-    final active = _incidentLogs
-        .where((log) => log['resolved'] != true)
-        .cast<Map<String, dynamic>>()
+    final active = _liveGroupIncidents
+        .where((incident) => incident['status'] == 'active')
         .toList();
     return _buildSectionCard(cardBg, [
       Text(
@@ -4632,16 +4664,101 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       ),
       if (active.isNotEmpty) ...[
         const SizedBox(height: 10),
-        ElevatedButton.icon(
-          onPressed: _resolveLatestIncident,
-          icon: const Icon(Icons.check_circle_outline_rounded),
-          label: const Text('MARK ALL CLEAR'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            foregroundColor: Colors.white,
+        ...active.map(
+          (incident) => Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.redAccent.withValues(alpha: .45)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${incident['senderName'] ?? 'Group member'} NEEDS HELP',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.redAccent,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  (incident['address'] ?? 'Live location shared').toString(),
+                  style: GoogleFonts.inter(fontSize: 10.5, color: textColor),
+                ),
+                Text(
+                  '${(incident['latitude'] as num?)?.toStringAsFixed(5) ?? '—'}, ${(incident['longitude'] as num?)?.toStringAsFixed(5) ?? '—'}',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    color: textColor.withValues(alpha: .6),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
+    ]);
+  }
+
+  Widget _buildMemberRoster(Color cardBg, Color textColor) {
+    final members = _groupMembersWithStatus;
+    return _buildSectionCard(cardBg, [
+      Text(
+        'Group members (${members.length})',
+        style: GoogleFonts.poppins(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: textColor,
+        ),
+      ),
+      const SizedBox(height: 8),
+      ...members.map((member) {
+        final needsHelp = member['status'] == 'NEEDS HELP';
+        final photoUrl = member['photoUrl'] as String? ?? '';
+        final photoBase64 = member['photoBase64'] as String? ?? '';
+        return ListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          leading: CircleAvatar(
+            radius: 16,
+            backgroundColor: needsHelp
+                ? Colors.red.withValues(alpha: .15)
+                : AppColors.midTeal.withValues(alpha: .15),
+            backgroundImage: photoBase64.isNotEmpty
+                ? MemoryImage(base64Decode(photoBase64))
+                : (photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null),
+            child: photoUrl.isEmpty && photoBase64.isEmpty
+                ? Icon(
+                    needsHelp ? Icons.emergency_rounded : Icons.person_rounded,
+                    color: needsHelp ? Colors.redAccent : AppColors.midTeal,
+                  )
+                : null,
+          ),
+          title: Text(
+            member['name'] as String? ?? 'Member',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: textColor,
+            ),
+          ),
+          subtitle: Text(
+            member['isLeader'] == true
+                ? 'Group owner'
+                : (needsHelp ? 'NEEDS HELP' : 'Safe'),
+            style: GoogleFonts.inter(
+              fontSize: 10.5,
+              fontWeight: needsHelp ? FontWeight.bold : FontWeight.normal,
+              color: needsHelp ? Colors.redAccent : textColor.withValues(alpha: .6),
+            ),
+          ),
+        );
+      }),
     ]);
   }
 
@@ -4655,26 +4772,40 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             color: textColor,
           ),
         ),
-        TextButton.icon(
-          onPressed: _configureGroupChatSecret,
-          icon: const Icon(Icons.lock_outline_rounded, size: 16),
-          label: Text(_groupChatSecret == null ? 'Set chat secret' : 'Change chat secret'),
-        ),
         const SizedBox(height: 8),
-        ..._groupChatMessages
-            .take(3)
-            .map(
-              (message) => Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Text(
+        ...List.generate(_groupChatMessages.take(20).length, (index) {
+          final messages = _groupChatMessages.take(20).toList();
+          final message = messages[index];
+          final showTime = _shouldShowChatTime(messages, index);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 5),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (showTime)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        _formatChatTime(message['time'] ?? ''),
+                        style: GoogleFonts.inter(
+                          fontSize: 9.5,
+                          color: textColor.withValues(alpha: .5),
+                        ),
+                      ),
+                    ),
+                  ),
+                Text(
                   '${message['sender']}: ${message['text']}',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     color: textColor.withValues(alpha: .8),
                   ),
                 ),
-              ),
+              ],
             ),
+          );
+        }),
         Row(
           children: [
             Expanded(
@@ -4698,16 +4829,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   Future<void> _sendGroupMessage() async {
     final message = _groupChatController.text.trim();
     if (message.isEmpty) return;
-    if (_groupChatSecret == null) {
-      await _configureGroupChatSecret();
-      if (_groupChatSecret == null) return;
-    }
     try {
       await EncryptedGroupChatService.instance.send(
         groupCode: _groupCodeController.text.trim().toUpperCase(),
-        groupSecret: _groupChatSecret!,
         senderName: _nameController.text,
-        plaintext: message,
+        text: message,
       );
       _groupChatController.clear();
     } catch (error) {
@@ -4715,7 +4841,26 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     }
   }
 
-  void _sendSafeCheckIn() => setState(
+  bool _shouldShowChatTime(List<Map<String, String>> messages, int index) {
+    if (index == 0) return true;
+    final current = DateTime.tryParse(messages[index]['time'] ?? '');
+    final newer = DateTime.tryParse(messages[index - 1]['time'] ?? '');
+    if (current == null || newer == null) return false;
+    return newer.difference(current).abs() >= const Duration(minutes: 5) ||
+        !DateUtils.isSameDay(current, newer);
+  }
+
+  String _formatChatTime(String rawTime) {
+    final time = DateTime.tryParse(rawTime);
+    if (time == null) return '';
+    final now = DateTime.now();
+    final clock = TimeOfDay.fromDateTime(time).format(context);
+    return DateUtils.isSameDay(time, now)
+        ? 'Today at $clock'
+        : '${time.day}/${time.month}/${time.year} at $clock';
+  }
+
+  void _sendSafeCheckInLocal() => setState(
     () => _groupChatMessages.insert(0, {
       'sender': _nameController.text.trim().isEmpty
           ? 'Member'
@@ -4724,6 +4869,32 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       'time': 'Now',
     }),
   );
+
+  Future<void> _sendSafeCheckIn() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final activeIncident = _liveGroupIncidents
+        .cast<Map<String, dynamic>>()
+        .firstWhere(
+          (incident) =>
+              incident['senderId'] == userId && incident['status'] == 'active',
+          orElse: () => <String, dynamic>{},
+        );
+    try {
+      if (activeIncident.isNotEmpty) {
+        await EmergencyGroupService.instance.resolveIncident(
+          code: _groupCodeController.text.trim().toUpperCase(),
+          incidentId: activeIncident['id'] as String,
+        );
+      }
+      await EncryptedGroupChatService.instance.send(
+        groupCode: _groupCodeController.text.trim().toUpperCase(),
+        senderName: _nameController.text,
+        text: 'I am safe.',
+      );
+    } catch (error) {
+      _showGroupError(error);
+    }
+  }
 
   void _resolveLatestIncident() {
     final activeIndex = _incidentLogs.indexWhere(
@@ -5119,7 +5290,24 @@ class HajjMapPainter extends CustomPainter {
       canvas.drawLine(Offset(0, i), Offset(size.width, i), gridPaint);
     }
 
-    final double scale = 14000.0 * zoomScale;
+    // Fit the current member positions into the radar instead of using a
+    // fixed Makkah-only scale. This keeps distant members visible.
+    var minLat = userLat;
+    var maxLat = userLat;
+    var minLng = userLng;
+    var maxLng = userLng;
+    for (final member in groupMembers) {
+      final lat = member['lat'] as double;
+      final lng = member['lng'] as double;
+      minLat = math.min(minLat, lat);
+      maxLat = math.max(maxLat, lat);
+      minLng = math.min(minLng, lng);
+      maxLng = math.max(maxLng, lng);
+    }
+    final latSpan = math.max((maxLat - minLat) * 1.35, 0.02);
+    final lngSpan = math.max((maxLng - minLng) * 1.35, 0.02);
+    final double scale =
+        math.min(size.width / lngSpan, size.height / latSpan) * zoomScale;
 
     Offset gpsToCanvas(double lat, double lng) {
       final double dy = (lat - userLat) * scale;
@@ -5262,8 +5450,8 @@ class HajjMapPainter extends CustomPainter {
       final double mLat = member['lat'] as double;
       final double mLng = member['lng'] as double;
       final double mDist = member['dist'] as double;
-      final String mName = member['name'] as String;
-      final String mStatus = member['status'] as String;
+      final String mName = member['name']?.toString() ?? 'Group member';
+      final String mStatus = member['status']?.toString() ?? 'SAFE';
 
       final mPos = gpsToCanvas(mLat, mLng);
 
