@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -46,6 +47,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
   // Profile photo — a real picked file now, instead of a preset gradient avatar.
   File? _avatarImage;
+  String? _avatarBase64;
 
   // Quran reading preferences (merged in from the old "Quran Journey" settings page).
   double _arabicFontSize = 24;
@@ -56,12 +58,12 @@ class _ProfileTabState extends State<ProfileTab> {
   bool _notificationsEnabled = true;
 
   // ===== EDITABLE FIELDS ===== (email is intentionally NOT included — it's locked)
-  final _fullNameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _addressController = TextEditingController();
+  final _fullNameController = TextEditingController(text: "Rahim Uddin");
+  final _phoneController = TextEditingController(text: "+8801987654321");
+  final _addressController = TextEditingController(text: "Dhaka, Bangladesh");
 
   // Locked — shown as plain text everywhere, never becomes a TextField.
-  String _email = "";
+  String _email = "rahimuddin@gmail.com";
 
   final ImagePicker _picker = ImagePicker();
 
@@ -77,6 +79,7 @@ class _ProfileTabState extends State<ProfileTab> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final savedImagePath = prefs.getString('profile_avatar_path');
+    String savedImageBase64 = prefs.getString('profile_avatar_base64') ?? "";
 
     // Default values from SharedPreferences/constants
     String name = prefs.getString('profile_name') ?? "";
@@ -98,27 +101,28 @@ class _ProfileTabState extends State<ProfileTab> {
           final data = doc.data();
           if (data != null && data['profile'] != null) {
             final profile = data['profile'] as Map<String, dynamic>;
-            if (name.isEmpty ||
-                (profile['fullName'] as String?)?.isNotEmpty == true) {
+            if (name.isEmpty || (profile['fullName'] as String?)?.isNotEmpty == true) {
               name = profile['fullName'] ?? name;
             }
-            if (phone.isEmpty ||
-                (profile['phone'] as String?)?.isNotEmpty == true) {
+            if (phone.isEmpty || (profile['phone'] as String?)?.isNotEmpty == true) {
               phone = profile['phone'] ?? phone;
             }
-            if (address.isEmpty ||
-                (profile['address'] as String?)?.isNotEmpty == true) {
+            if (address.isEmpty || (profile['address'] as String?)?.isNotEmpty == true) {
               address = profile['address'] ?? address;
             }
             if (profile['email'] != null) {
               email = profile['email'];
             }
-
+            if (profile['avatarBase64'] != null) {
+              savedImageBase64 = profile['avatarBase64'];
+            }
+            
             // Save to SharedPreferences so they stay cached
             await prefs.setString('profile_name', name);
             await prefs.setString('profile_phone', phone);
             await prefs.setString('profile_address', address);
             await prefs.setString('profile_email', email);
+            await prefs.setString('profile_avatar_base64', savedImageBase64);
           }
         } else {
           // If no document exists yet, create one for this user
@@ -126,18 +130,19 @@ class _ProfileTabState extends State<ProfileTab> {
               .collection('users')
               .doc(user.uid)
               .set({
-                'profile': {
-                  'fullName': user.displayName ?? name,
-                  'email': user.email ?? email,
-                  'phone': phone.isNotEmpty ? phone : null,
-                  'address': address.isNotEmpty ? address : null,
-                  'avatarPath': user.photoURL,
-                  'language': 'en',
-                  'darkMode': false,
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'updatedAt': FieldValue.serverTimestamp(),
-                },
-              });
+            'profile': {
+              'fullName': user.displayName ?? name,
+              'email': user.email ?? email,
+              'phone': phone.isNotEmpty ? phone : null,
+              'address': address.isNotEmpty ? address : null,
+              'avatarPath': user.photoURL,
+              'avatarBase64': savedImageBase64.isNotEmpty ? savedImageBase64 : null,
+              'language': 'en',
+              'darkMode': false,
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            }
+          });
           name = user.displayName ?? name;
           email = user.email ?? email;
         }
@@ -145,6 +150,11 @@ class _ProfileTabState extends State<ProfileTab> {
         debugPrint("Error loading profile from Firestore: $e");
       }
     }
+
+    if (name.isEmpty) name = "User";
+    if (phone.isEmpty) phone = "+8801987654321";
+    if (address.isEmpty) address = "Dhaka, Bangladesh";
+    if (email.isEmpty) email = "user@deenmate.com";
 
     setState(() {
       _fullNameController.text = name;
@@ -158,6 +168,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
       _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
 
+      _avatarBase64 = savedImageBase64;
       if (savedImagePath != null && savedImagePath.isNotEmpty) {
         _avatarImage = File(savedImagePath);
       }
@@ -185,6 +196,8 @@ class _ProfileTabState extends State<ProfileTab> {
     if (_avatarImage != null) {
       await prefs.setString('profile_avatar_path', _avatarImage!.path);
     }
+    
+    final avatarBase64 = prefs.getString('profile_avatar_base64');
 
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -193,12 +206,13 @@ class _ProfileTabState extends State<ProfileTab> {
             .collection('users')
             .doc(user.uid)
             .update({
-              'profile.fullName': fullName,
-              'profile.phone': phone,
-              'profile.address': address,
-              'profile.updatedAt': FieldValue.serverTimestamp(),
-            });
-
+          'profile.fullName': fullName,
+          'profile.phone': phone,
+          'profile.address': address,
+          'profile.avatarBase64': avatarBase64,
+          'profile.updatedAt': FieldValue.serverTimestamp(),
+        });
+        
         // Also update FirebaseAuth display name
         await user.updateDisplayName(fullName);
       } catch (e) {
@@ -208,18 +222,19 @@ class _ProfileTabState extends State<ProfileTab> {
               .collection('users')
               .doc(user.uid)
               .set({
-                'profile': {
-                  'fullName': fullName,
-                  'email': user.email ?? _email,
-                  'phone': phone,
-                  'address': address,
-                  'avatarPath': user.photoURL,
-                  'language': 'en',
-                  'darkMode': false,
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'updatedAt': FieldValue.serverTimestamp(),
-                },
-              }, SetOptions(merge: true));
+            'profile': {
+              'fullName': fullName,
+              'email': user.email ?? _email,
+              'phone': phone,
+              'address': address,
+              'avatarPath': user.photoURL,
+              'avatarBase64': avatarBase64,
+              'language': 'en',
+              'darkMode': false,
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            }
+          }, SetOptions(merge: true));
         } catch (err) {
           debugPrint("Error updating profile in Firestore: $err");
         }
@@ -232,12 +247,21 @@ class _ProfileTabState extends State<ProfileTab> {
     try {
       final XFile? picked = await _picker.pickImage(
         source: source,
-        maxWidth: 800,
-        imageQuality: 85,
+        maxWidth: 200,
+        maxHeight: 200,
+        imageQuality: 75,
       );
       if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        final base64Str = base64Encode(bytes);
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile_avatar_base64', base64Str);
+        await prefs.setString('profile_avatar_path', picked.path);
+
         setState(() {
           _avatarImage = File(picked.path);
+          _avatarBase64 = base64Str;
         });
         await _saveSettings();
       }
@@ -245,11 +269,7 @@ class _ProfileTabState extends State<ProfileTab> {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${l10n.tr("could_not_open")} ${source == ImageSource.camera ? l10n.tr("take_photo") : l10n.tr("gallery")}: $e',
-            ),
-          ),
+          SnackBar(content: Text('${l10n.tr("could_not_open")} ${source == ImageSource.camera ? l10n.tr("take_photo") : l10n.tr("gallery")}: $e')),
         );
       }
     }
@@ -257,17 +277,13 @@ class _ProfileTabState extends State<ProfileTab> {
 
   Color _getPrimaryThemeColor() => AppColors.midTeal;
 
-  Color _getBgColor() =>
-      widget.isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F9FC);
+  Color _getBgColor() => widget.isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F9FC);
 
-  Color _getCardColor() =>
-      widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+  Color _getCardColor() => widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
 
-  Color _getTextColor() =>
-      widget.isDarkMode ? Colors.white : const Color(0xFF2C3E50);
+  Color _getTextColor() => widget.isDarkMode ? Colors.white : const Color(0xFF2C3E50);
 
-  Color _getSubtextColor() =>
-      widget.isDarkMode ? Colors.white70 : Colors.black54;
+  Color _getSubtextColor() => widget.isDarkMode ? Colors.white70 : Colors.black54;
 
   bool get _isBengali => LanguageService.currentLanguage == LanguageService.bn;
   String _t(String key) => AppLocalizations.of(context)!.tr(key);
@@ -286,12 +302,7 @@ class _ProfileTabState extends State<ProfileTab> {
         bottom: false,
         child: Column(
           children: [
-            _buildProfileAvatarCard(
-              primaryColor,
-              cardBg,
-              textColor,
-              subtextColor,
-            ),
+            _buildProfileAvatarCard(primaryColor, cardBg, textColor, subtextColor),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
@@ -306,23 +317,14 @@ class _ProfileTabState extends State<ProfileTab> {
                     children: [
                       _buildProfileField(_t('full_name'), _fullNameController),
                       _buildLockedEmailField(textColor, subtextColor),
-                      _buildProfileField(
-                        _t('phone'),
-                        _phoneController,
-                        keyboardType: TextInputType.phone,
-                      ),
+                      _buildProfileField(_t('phone'), _phoneController, keyboardType: TextInputType.phone),
                       _buildProfileField(_t('address'), _addressController),
                     ],
                   ),
                   const SizedBox(height: 14),
 
                   // App Settings: theme + language.
-                  _buildSettingsCard(
-                    primaryColor,
-                    cardBg,
-                    textColor,
-                    subtextColor,
-                  ),
+                  _buildSettingsCard(primaryColor, cardBg, textColor, subtextColor),
                   const SizedBox(height: 14),
 
                   // Notifications Section
@@ -336,11 +338,7 @@ class _ProfileTabState extends State<ProfileTab> {
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         dense: true,
-                        leading: Icon(
-                          Icons.settings_suggest_rounded,
-                          color: primaryColor,
-                          size: 18,
-                        ),
+                        leading: Icon(Icons.settings_suggest_rounded, color: primaryColor, size: 18),
                         title: Text(
                           'Notification Center & Controls',
                           style: GoogleFonts.poppins(
@@ -356,11 +354,7 @@ class _ProfileTabState extends State<ProfileTab> {
                             color: textColor.withValues(alpha: 0.6),
                           ),
                         ),
-                        trailing: const Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 12,
-                          color: Colors.grey,
-                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
                         onTap: () {
                           NotificationCenterModal.show(
                             context,
@@ -383,24 +377,10 @@ class _ProfileTabState extends State<ProfileTab> {
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         dense: true,
-                        leading: Icon(
-                          Icons.support_agent_rounded,
-                          color: primaryColor,
-                          size: 18,
-                        ),
-                        title: Text(
-                          _t('contact_us'),
-                          style: GoogleFonts.poppins(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
-                          ),
-                        ),
-                        trailing: const Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 12,
-                          color: Colors.grey,
-                        ),
+                        leading: Icon(Icons.support_agent_rounded, color: primaryColor, size: 18),
+                        title: Text(_t('contact_us'),
+                            style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor)),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
                         onTap: () {
                           Navigator.push(
                             context,
@@ -415,30 +395,17 @@ class _ProfileTabState extends State<ProfileTab> {
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         dense: true,
-                        leading: Icon(
-                          Icons.info_outline_rounded,
-                          color: primaryColor,
-                          size: 18,
-                        ),
-                        title: Text(
-                          _t('about'),
-                          style: GoogleFonts.poppins(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
-                          ),
-                        ),
-                        trailing: const Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 12,
-                          color: Colors.grey,
-                        ),
+                        leading: Icon(Icons.info_outline_rounded, color: primaryColor, size: 18),
+                        title: Text(_t('about'),
+                            style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textColor)),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  AboutScreen(isDarkMode: widget.isDarkMode),
+                              builder: (_) => AboutScreen(
+                                isDarkMode: widget.isDarkMode,
+                              ),
                             ),
                           );
                         },
@@ -452,25 +419,15 @@ class _ProfileTabState extends State<ProfileTab> {
                     child: ElevatedButton.icon(
                       onPressed: widget.onLogout,
                       icon: const Icon(Icons.logout_rounded, size: 16),
-                      label: Text(
-                        _t('logout'),
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13.5,
-                        ),
-                      ),
+                      label: Text(_t('logout'), style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13.5)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: widget.isDarkMode
-                            ? const Color(0xFF3B1E1E)
-                            : Colors.red[50],
+                        backgroundColor: widget.isDarkMode ? const Color(0xFF3B1E1E) : Colors.red[50],
                         foregroundColor: Colors.red[400],
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
-                          side: BorderSide(
-                            color: Colors.red.withValues(alpha: 0.2),
-                          ),
+                          side: BorderSide(color: Colors.red.withValues(alpha: 0.2)),
                         ),
                       ),
                     ),
@@ -485,22 +442,13 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   // ===== HEADER: photo, name, locked email, edit toggle =====
-  Widget _buildProfileAvatarCard(
-    Color primaryColor,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-  ) {
+  Widget _buildProfileAvatarCard(Color primaryColor, Color cardBg, Color textColor, Color subtextColor) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 18),
       decoration: BoxDecoration(
         color: cardBg,
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2)),
         ],
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
@@ -516,32 +464,21 @@ class _ProfileTabState extends State<ProfileTab> {
                     shape: BoxShape.circle,
                     color: primaryColor.withValues(alpha: 0.15),
                     image: _avatarImage != null
-                        ? DecorationImage(
-                            image: FileImage(_avatarImage!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
+                        ? DecorationImage(image: FileImage(_avatarImage!), fit: BoxFit.cover)
+                        : (_avatarBase64 != null && _avatarBase64!.isNotEmpty)
+                            ? DecorationImage(image: MemoryImage(base64Decode(_avatarBase64!)), fit: BoxFit.cover)
+                            : null,
                     boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
+                      BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 8, offset: const Offset(0, 3)),
                     ],
                   ),
-                  child: _avatarImage == null
+                  child: (_avatarImage == null && (_avatarBase64 == null || _avatarBase64!.isEmpty))
                       ? Center(
                           child: Text(
                             _fullNameController.text.isNotEmpty
-                                ? _fullNameController.text
-                                      .substring(0, 1)
-                                      .toUpperCase()
+                                ? _fullNameController.text.substring(0, 1).toUpperCase()
                                 : "U",
-                            style: GoogleFonts.poppins(
-                              fontSize: 34,
-                              fontWeight: FontWeight.bold,
-                              color: primaryColor,
-                            ),
+                            style: GoogleFonts.poppins(fontSize: 34, fontWeight: FontWeight.bold, color: primaryColor),
                           ),
                         )
                       : null,
@@ -559,11 +496,7 @@ class _ProfileTabState extends State<ProfileTab> {
                         shape: BoxShape.circle,
                         border: Border.all(color: cardBg, width: 2),
                       ),
-                      child: const Icon(
-                        Icons.camera_alt_rounded,
-                        color: Colors.white,
-                        size: 16,
-                      ),
+                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
                     ),
                   ),
                 ),
@@ -579,31 +512,18 @@ class _ProfileTabState extends State<ProfileTab> {
                   child: TextField(
                     controller: _fullNameController,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                    decoration: const InputDecoration(
-                      contentPadding: EdgeInsets.symmetric(vertical: 4),
-                    ),
+                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
+                    decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(vertical: 4)),
                   ),
                 )
               : Text(
                   _fullNameController.text,
-                  style: GoogleFonts.poppins(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
+                  style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.bold, color: textColor),
                 ),
           const SizedBox(height: 2),
 
           // Email — always plain text here too, never editable.
-          Text(
-            _email,
-            style: GoogleFonts.inter(fontSize: 12, color: subtextColor),
-          ),
+          Text(_email, style: GoogleFonts.inter(fontSize: 12, color: subtextColor)),
           const SizedBox(height: 10),
 
           OutlinedButton.icon(
@@ -617,24 +537,15 @@ class _ProfileTabState extends State<ProfileTab> {
                 }
               });
             },
-            icon: Icon(
-              _isEditing ? Icons.check_circle_rounded : Icons.edit_rounded,
-              size: 14,
-              color: widget.isDarkMode ? Colors.white : Colors.black87,
-            ),
+            icon: Icon(_isEditing ? Icons.check_circle_rounded : Icons.edit_rounded,
+                size: 14, color: widget.isDarkMode ? Colors.white : Colors.black87),
             label: Text(
               _isEditing ? _t('save') : _t('edit'),
-              style: GoogleFonts.poppins(
-                fontSize: 11.5,
-                fontWeight: FontWeight.bold,
-                color: widget.isDarkMode ? Colors.white : Colors.black87,
-              ),
+              style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white : Colors.black87),
             ),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               side: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
             ),
           ),
@@ -652,9 +563,7 @@ class _ProfileTabState extends State<ProfileTab> {
     showModalBottomSheet(
       context: context,
       backgroundColor: cardBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         return SafeArea(
           child: Padding(
@@ -663,26 +572,14 @@ class _ProfileTabState extends State<ProfileTab> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _t('change_photo'),
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
+                Text(_t('change_photo'),
+                    style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: textColor)),
                 const SizedBox(height: 12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.camera_alt_rounded, color: primaryColor),
-                  title: Text(
-                    _t('take_photo'),
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                  ),
+                  title: Text(_t('take_photo'),
+                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
                   onTap: () {
                     Navigator.pop(ctx);
                     _pickImage(ImageSource.camera);
@@ -690,18 +587,9 @@ class _ProfileTabState extends State<ProfileTab> {
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    Icons.photo_library_rounded,
-                    color: primaryColor,
-                  ),
-                  title: Text(
-                    _t('choose_gallery'),
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                  ),
+                  leading: Icon(Icons.photo_library_rounded, color: primaryColor),
+                  title: Text(_t('choose_gallery'),
+                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
                   onTap: () {
                     Navigator.pop(ctx);
                     _pickImage(ImageSource.gallery);
@@ -716,23 +604,14 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   // ===== App Settings: theme + language =====
-  Widget _buildSettingsCard(
-    Color primaryColor,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-  ) {
+  Widget _buildSettingsCard(Color primaryColor, Color cardBg, Color textColor, Color subtextColor) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -742,37 +621,20 @@ class _ProfileTabState extends State<ProfileTab> {
             children: [
               Icon(Icons.tune_rounded, color: primaryColor, size: 18),
               const SizedBox(width: 8),
-              Text(
-                _t('app_settings'),
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
+              Text(_t('app_settings'),
+                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
             ],
           ),
           const Divider(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _t('language'),
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                ),
-              ),
+              Text(_t('language'), style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
               DropdownButton<bool>(
                 value: _isBengali,
                 underline: const SizedBox(),
                 dropdownColor: cardBg,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: textColor,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: GoogleFonts.poppins(fontSize: 12, color: textColor, fontWeight: FontWeight.bold),
                 items: const [
                   DropdownMenuItem(value: false, child: Text("English")),
                   DropdownMenuItem(value: true, child: Text("বাংলা")),
@@ -789,14 +651,7 @@ class _ProfileTabState extends State<ProfileTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _t('theme_mode'),
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                ),
-              ),
+              Text(_t('theme_mode'), style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
               Switch(
                 value: widget.isDarkMode,
                 activeThumbColor: primaryColor,
@@ -809,23 +664,15 @@ class _ProfileTabState extends State<ProfileTab> {
             contentPadding: EdgeInsets.zero,
             dense: true,
             leading: Icon(Icons.style_rounded, color: primaryColor, size: 18),
-            title: Text(
+             title: Text(
               _t('prayer_card_theme_selection'),
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: textColor,
-              ),
+              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor),
             ),
             subtitle: Text(
               _t('hero_video_or_vector'),
               style: GoogleFonts.inter(fontSize: 10, color: subtextColor),
             ),
-            trailing: const Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 12,
-              color: Colors.grey,
-            ),
+            trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
             onTap: () {
               Navigator.push(
                 context,
@@ -842,6 +689,8 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
+
+
   // ===== Generic section wrapper =====
   Widget _buildSectionCard({
     required String title,
@@ -857,11 +706,7 @@ class _ProfileTabState extends State<ProfileTab> {
         color: cardBg,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -871,14 +716,7 @@ class _ProfileTabState extends State<ProfileTab> {
             children: [
               Icon(icon, color: accentColor, size: 18),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
+              Text(title, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
             ],
           ),
           const Divider(height: 18),
@@ -889,12 +727,8 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   // ===== Editable text field (name / phone / address) =====
-  Widget _buildProfileField(
-    String label,
-    TextEditingController controller, {
-    TextInputType keyboardType = TextInputType.text,
-    int maxLines = 1,
-  }) {
+  Widget _buildProfileField(String label, TextEditingController controller,
+      {TextInputType keyboardType = TextInputType.text, int maxLines = 1}) {
     final textColor = _getTextColor();
     final labelColor = widget.isDarkMode ? Colors.white38 : Colors.grey[500]!;
 
@@ -903,14 +737,7 @@ class _ProfileTabState extends State<ProfileTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: labelColor,
-            ),
-          ),
+          Text(label, style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w600, color: labelColor)),
           const SizedBox(height: 4),
           _isEditing
               ? TextField(
@@ -919,19 +746,12 @@ class _ProfileTabState extends State<ProfileTab> {
                   maxLines: maxLines,
                   style: GoogleFonts.poppins(fontSize: 12.5, color: textColor),
                   decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     filled: true,
-                    fillColor: widget.isDarkMode
-                        ? const Color(0xFF2C2C2C)
-                        : Colors.grey[50],
+                    fillColor: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: Colors.grey.withValues(alpha: 0.2),
-                      ),
+                      borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -941,11 +761,7 @@ class _ProfileTabState extends State<ProfileTab> {
                 )
               : Text(
                   controller.text.isEmpty ? "—" : controller.text,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
+                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: textColor),
                 ),
         ],
       ),
@@ -962,14 +778,7 @@ class _ProfileTabState extends State<ProfileTab> {
         children: [
           Row(
             children: [
-              Text(
-                _t('email'),
-                style: GoogleFonts.inter(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                  color: labelColor,
-                ),
-              ),
+              Text(_t('email'), style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w600, color: labelColor)),
               const SizedBox(width: 6),
               Icon(Icons.lock_outline_rounded, size: 11, color: labelColor),
             ],
@@ -978,23 +787,13 @@ class _ProfileTabState extends State<ProfileTab> {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  _email,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
-                ),
+                child: Text(_email, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
               ),
             ],
           ),
           if (_isEditing) ...[
             const SizedBox(height: 3),
-            Text(
-              _t('email_locked'),
-              style: GoogleFonts.inter(fontSize: 10, color: subtextColor),
-            ),
+            Text(_t('email_locked'), style: GoogleFonts.inter(fontSize: 10, color: subtextColor)),
           ],
         ],
       ),
@@ -1007,16 +806,18 @@ class _ProfileTabState extends State<ProfileTab> {
 class PrayerCardThemeSelectionScreen extends StatefulWidget {
   final bool isDarkMode;
 
-  const PrayerCardThemeSelectionScreen({super.key, required this.isDarkMode});
+  const PrayerCardThemeSelectionScreen({
+    super.key,
+    required this.isDarkMode,
+  });
 
   @override
-  State<PrayerCardThemeSelectionScreen> createState() =>
-      _PrayerCardThemeSelectionScreenState();
+  State<PrayerCardThemeSelectionScreen> createState() => _PrayerCardThemeSelectionScreenState();
 }
 
-class _PrayerCardThemeSelectionScreenState
-    extends State<PrayerCardThemeSelectionScreen>
+class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectionScreen>
     with SingleTickerProviderStateMixin {
+
   // Vector art animation controller
   late AnimationController _vectorAnimController;
   late Animation<double> _vectorAnim;
@@ -1028,10 +829,7 @@ class _PrayerCardThemeSelectionScreenState
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat();
-    _vectorAnim = CurvedAnimation(
-      parent: _vectorAnimController,
-      curve: Curves.linear,
-    );
+    _vectorAnim = CurvedAnimation(parent: _vectorAnimController, curve: Curves.linear);
   }
 
   @override
@@ -1042,20 +840,14 @@ class _PrayerCardThemeSelectionScreenState
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = widget.isDarkMode
-        ? const Color(0xFF121212)
-        : const Color(0xFFF7F9FC);
+    final bgColor = widget.isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F9FC);
     final cardBg = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = widget.isDarkMode
-        ? Colors.white
-        : const Color(0xFF2C3E50);
+    final textColor = widget.isDarkMode ? Colors.white : const Color(0xFF2C3E50);
     final subtextColor = widget.isDarkMode ? Colors.white70 : Colors.black54;
     final primaryColor = AppColors.midTeal;
 
     return Scaffold(
-      backgroundColor: widget.isDarkMode
-          ? Colors.black
-          : const Color(0xFFE8ECEF),
+      backgroundColor: widget.isDarkMode ? Colors.black : const Color(0xFFE8ECEF),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
@@ -1066,10 +858,7 @@ class _PrayerCardThemeSelectionScreenState
                 children: [
                   // ── Header ──
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 10,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                     decoration: BoxDecoration(
                       color: cardBg,
                       boxShadow: [
@@ -1083,11 +872,7 @@ class _PrayerCardThemeSelectionScreenState
                     child: Row(
                       children: [
                         IconButton(
-                          icon: Icon(
-                            Icons.arrow_back_ios_new_rounded,
-                            color: textColor,
-                            size: 18,
-                          ),
+                          icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor, size: 18),
                           onPressed: () => Navigator.pop(context),
                         ),
                         const SizedBox(width: 2),
@@ -1095,24 +880,17 @@ class _PrayerCardThemeSelectionScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                AppLocalizations.of(
-                                  context,
-                                )!.tr('prayer_card_theme_selection'),
+                               Text(
+                                 AppLocalizations.of(context)!.tr('prayer_card_theme_selection'),
                                 style: GoogleFonts.poppins(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
                                   color: textColor,
                                 ),
                               ),
-                              Text(
-                                AppLocalizations.of(
-                                  context,
-                                )!.tr('hero_video_or_vector'),
-                                style: GoogleFonts.inter(
-                                  fontSize: 10.5,
-                                  color: subtextColor,
-                                ),
+                               Text(
+                                 AppLocalizations.of(context)!.tr('hero_video_or_vector'),
+                                style: GoogleFonts.inter(fontSize: 10.5, color: subtextColor),
                               ),
                             ],
                           ),
@@ -1177,15 +955,11 @@ class _PrayerCardThemeSelectionScreenState
       onTap: () async {
         await savePrayerCardThemePreference('video');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context)!.tr('video_theme_selected'),
-              ),
-              duration: const Duration(seconds: 1),
-              backgroundColor: primaryColor,
-            ),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(AppLocalizations.of(context)!.tr('video_theme_selected')),
+            duration: const Duration(seconds: 1),
+            backgroundColor: primaryColor,
+          ));
         }
       },
       child: AnimatedContainer(
@@ -1193,9 +967,7 @@ class _PrayerCardThemeSelectionScreenState
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected
-                ? primaryColor
-                : Colors.grey.withValues(alpha: 0.2),
+            color: isSelected ? primaryColor : Colors.grey.withValues(alpha: 0.2),
             width: isSelected ? 2.5 : 1,
           ),
           boxShadow: [
@@ -1223,32 +995,23 @@ class _PrayerCardThemeSelectionScreenState
                     _ActualVideoPreview(videoAsset: 'assets/videos/fajr.mp4'),
                     // subtle bottom scrim
                     Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
+                      bottom: 0, left: 0, right: 0,
                       child: Container(
                         height: 48,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.bottomCenter,
                             end: Alignment.topCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.55),
-                              Colors.transparent,
-                            ],
+                            colors: [Colors.black.withValues(alpha: 0.55), Colors.transparent],
                           ),
                         ),
                       ),
                     ),
                     // VIDEO badge
                     Positioned(
-                      top: 8,
-                      left: 8,
+                      top: 8, left: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 3,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(10),
@@ -1256,21 +1019,12 @@ class _PrayerCardThemeSelectionScreenState
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
-                              Icons.videocam_rounded,
-                              color: Color(0xFF4ECDC4),
-                              size: 11,
-                            ),
+                            const Icon(Icons.videocam_rounded, color: Color(0xFF4ECDC4), size: 11),
                             const SizedBox(width: 3),
-                            Text(
-                              'VIDEO',
-                              style: GoogleFonts.inter(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
+                            Text('VIDEO', style: GoogleFonts.inter(
+                              fontSize: 9, fontWeight: FontWeight.w800,
+                              color: Colors.white, letterSpacing: 0.5,
+                            )),
                           ],
                         ),
                       ),
@@ -1278,19 +1032,11 @@ class _PrayerCardThemeSelectionScreenState
                     // Selected check
                     if (isSelected)
                       Positioned(
-                        top: 8,
-                        right: 8,
+                        top: 8, right: 8,
                         child: Container(
                           padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.green,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check_rounded,
-                            color: Colors.white,
-                            size: 13,
-                          ),
+                          decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                          child: const Icon(Icons.check_rounded, color: Colors.white, size: 13),
                         ),
                       ),
                   ],
@@ -1299,29 +1045,18 @@ class _PrayerCardThemeSelectionScreenState
               // Label
               Container(
                 color: cardBg,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 10,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                     Text(
                       AppLocalizations.of(context)!.tr('video_theme'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
+                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       AppLocalizations.of(context)!.tr('video_theme_desc'),
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: subtextColor,
-                        height: 1.3,
-                      ),
+                      style: GoogleFonts.inter(fontSize: 10, color: subtextColor, height: 1.3),
                     ),
                   ],
                 ),
@@ -1345,15 +1080,11 @@ class _PrayerCardThemeSelectionScreenState
       onTap: () async {
         await savePrayerCardThemePreference('vector');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context)!.tr('vector_theme_selected'),
-              ),
-              duration: const Duration(seconds: 1),
-              backgroundColor: primaryColor,
-            ),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(AppLocalizations.of(context)!.tr('vector_theme_selected')),
+            duration: const Duration(seconds: 1),
+            backgroundColor: primaryColor,
+          ));
         }
       },
       child: AnimatedContainer(
@@ -1361,9 +1092,7 @@ class _PrayerCardThemeSelectionScreenState
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected
-                ? primaryColor
-                : Colors.grey.withValues(alpha: 0.2),
+            color: isSelected ? primaryColor : Colors.grey.withValues(alpha: 0.2),
             width: isSelected ? 2.5 : 1,
           ),
           boxShadow: [
@@ -1394,11 +1123,7 @@ class _PrayerCardThemeSelectionScreenState
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [
-                            Color(0xFF0D1B3E),
-                            Color(0xFF1B2A56),
-                            Color(0xFF2C3E6B),
-                          ],
+                          colors: [Color(0xFF0D1B3E), Color(0xFF1B2A56), Color(0xFF2C3E6B)],
                         ),
                       ),
                     ),
@@ -1406,20 +1131,14 @@ class _PrayerCardThemeSelectionScreenState
                     AnimatedBuilder(
                       animation: _vectorAnim,
                       builder: (context, child) => CustomPaint(
-                        painter: _ActualVectorPainter(
-                          animValue: _vectorAnim.value,
-                        ),
+                        painter: _ActualVectorPainter(animValue: _vectorAnim.value),
                       ),
                     ),
                     // VECTOR badge
                     Positioned(
-                      top: 8,
-                      left: 8,
+                      top: 8, left: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 3,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(10),
@@ -1427,21 +1146,12 @@ class _PrayerCardThemeSelectionScreenState
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
-                              Icons.auto_awesome_rounded,
-                              color: Color(0xFFFFD166),
-                              size: 11,
-                            ),
+                            const Icon(Icons.auto_awesome_rounded, color: Color(0xFFFFD166), size: 11),
                             const SizedBox(width: 3),
-                            Text(
-                              'VECTOR',
-                              style: GoogleFonts.inter(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
+                            Text('VECTOR', style: GoogleFonts.inter(
+                              fontSize: 9, fontWeight: FontWeight.w800,
+                              color: Colors.white, letterSpacing: 0.5,
+                            )),
                           ],
                         ),
                       ),
@@ -1449,19 +1159,11 @@ class _PrayerCardThemeSelectionScreenState
                     // Selected check
                     if (isSelected)
                       Positioned(
-                        top: 8,
-                        right: 8,
+                        top: 8, right: 8,
                         child: Container(
                           padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.green,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check_rounded,
-                            color: Colors.white,
-                            size: 13,
-                          ),
+                          decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                          child: const Icon(Icons.check_rounded, color: Colors.white, size: 13),
                         ),
                       ),
                   ],
@@ -1470,29 +1172,18 @@ class _PrayerCardThemeSelectionScreenState
               // Label
               Container(
                 color: cardBg,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 10,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                     Text(
                       AppLocalizations.of(context)!.tr('vector_art'),
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
+                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       AppLocalizations.of(context)!.tr('vector_theme_desc'),
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: subtextColor,
-                        height: 1.3,
-                      ),
+                      style: GoogleFonts.inter(fontSize: 10, color: subtextColor, height: 1.3),
                     ),
                   ],
                 ),
@@ -1545,12 +1236,8 @@ class _ActualVideoPreviewState extends State<_ActualVideoPreview> {
         color: const Color(0xFF1B2A44),
         child: const Center(
           child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.white54,
-            ),
+            width: 20, height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
           ),
         ),
       );
@@ -1687,11 +1374,7 @@ class _ActualVectorPainter extends CustomPainter {
 
     // Spire on center dome
     final spireTopY = centerDomeY - centerDomeH;
-    canvas.drawLine(
-      Offset(cx, spireTopY),
-      Offset(cx, spireTopY - 18),
-      crispLinePaint,
-    );
+    canvas.drawLine(Offset(cx, spireTopY), Offset(cx, spireTopY - 18), crispLinePaint);
     canvas.drawCircle(Offset(cx, spireTopY - 18), 3.0, bodyPaint);
     canvas.drawCircle(Offset(cx, spireTopY - 18), 3.0, crispLinePaint);
 
@@ -1760,20 +1443,14 @@ class _ActualVectorPainter extends CustomPainter {
 
     path.moveTo(cx - w2, by);
     path.cubicTo(
-      cx - w2 - bulge,
-      by - height * 0.35,
-      cx - w2 + bulge * 0.2,
-      by - height * 0.75,
-      cx,
-      by - height,
+      cx - w2 - bulge, by - height * 0.35,
+      cx - w2 + bulge * 0.2, by - height * 0.75,
+      cx, by - height,
     );
     path.cubicTo(
-      cx + w2 - bulge * 0.2,
-      by - height * 0.75,
-      cx + w2 + bulge,
-      by - height * 0.35,
-      cx + w2,
-      by,
+      cx + w2 - bulge * 0.2, by - height * 0.75,
+      cx + w2 + bulge, by - height * 0.35,
+      cx + w2, by,
     );
     path.close();
 
@@ -1797,34 +1474,19 @@ class _ActualVectorPainter extends CustomPainter {
     final double balconyW = width * 1.25;
 
     // Column body
-    final colRect = Rect.fromLTRB(
-      cx - colW / 2,
-      by - height,
-      cx + colW / 2,
-      by,
-    );
+    final colRect = Rect.fromLTRB(cx - colW / 2, by - height, cx + colW / 2, by);
     canvas.drawRect(colRect, bodyPaint);
     canvas.drawRect(colRect, glowPaint);
     canvas.drawRect(colRect, crispPaint);
 
     // Lower Balcony
-    final b1Rect = Rect.fromLTRB(
-      cx - balconyW / 2,
-      by - height * 0.75,
-      cx + balconyW / 2,
-      by - height * 0.71,
-    );
+    final b1Rect = Rect.fromLTRB(cx - balconyW / 2, by - height * 0.75, cx + balconyW / 2, by - height * 0.71);
     canvas.drawRect(b1Rect, bodyPaint);
     canvas.drawRect(b1Rect, glowPaint);
     canvas.drawRect(b1Rect, crispPaint);
 
     // Upper Balcony
-    final b2Rect = Rect.fromLTRB(
-      cx - balconyW / 2,
-      by - height - 4,
-      cx + balconyW / 2,
-      by - height,
-    );
+    final b2Rect = Rect.fromLTRB(cx - balconyW / 2, by - height - 4, cx + balconyW / 2, by - height);
     canvas.drawRect(b2Rect, bodyPaint);
     canvas.drawRect(b2Rect, glowPaint);
     canvas.drawRect(b2Rect, crispPaint);
@@ -1843,6 +1505,5 @@ class _ActualVectorPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _ActualVectorPainter old) =>
-      old.animValue != animValue;
+  bool shouldRepaint(covariant _ActualVectorPainter old) => old.animValue != animValue;
 }
