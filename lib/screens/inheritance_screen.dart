@@ -11,7 +11,7 @@ import '../widgets/auth_header.dart'; // AppColors
 
 const Color kLinkGreen = Color(0xFF6FE6A8);
 
-// ============================================================
+
 // ENTRY POINT
 // ============================================================
 class InheritanceGuideScreen extends StatelessWidget {
@@ -21,7 +21,7 @@ class InheritanceGuideScreen extends StatelessWidget {
   Widget build(BuildContext context) => const InheritanceScreen();
 }
 
-// ============================================================
+
 // MODELS
 // ============================================================
 enum Gender { male, female }
@@ -88,7 +88,7 @@ class FaraidShareResult {
   });
 }
 
-// ============================================================
+
 // FARAID ENGINE (Hanafi-style, with exclusion notes)
 // ============================================================
 class FaraidEngine {
