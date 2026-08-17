@@ -515,7 +515,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
         color: Colors.purple,
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => GuidesAndWalkthroughScreen(isDarkMode: widget.isDarkMode)),
+          MaterialPageRoute(builder: (_) => const GuidesAndWalkthroughScreen()),
         ),
       ),
       _QuickAccessItem(
