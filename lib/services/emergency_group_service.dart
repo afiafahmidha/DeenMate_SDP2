@@ -53,6 +53,12 @@ class EmergencyGroupService {
     required String code,
     required String memberName,
   }) async {
+    // Resolve and refresh the user before accessing the shared-code document.
+    // Without this, a missing/expired auth session surfaces as the generic
+    // Firestore permission-denied error rather than an actionable sign-in one.
+    final uid = _uid;
+    await _auth.currentUser?.getIdToken(true);
+
     final normalized = code.trim().toUpperCase();
     final group = _groups.doc(normalized);
     if (!(await group.get()).exists) {
@@ -60,25 +66,40 @@ class EmergencyGroupService {
         'That group code does not exist. Ask the leader to check it.',
       );
     }
-    await group
-        .collection('members')
-        .doc(_uid)
-        .set(
-          _memberData(name: memberName, isLeader: false),
-          SetOptions(merge: true),
-        );
+
+    final membership = group.collection('members').doc(uid);
+    final existingMembership = await membership.get();
+
+    if (existingMembership.exists) {
+      // A re-join is an update, not a new membership. Keep joinedAt immutable
+      // so it complies with the member update rule and retains the real date.
+      await membership.update({
+        'name': memberName.trim().isEmpty ? 'Group member' : memberName.trim(),
+        'photoUrl': _auth.currentUser?.photoURL ?? '',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    await membership.set(_memberData(name: memberName, isLeader: false));
   }
 
   Future<void> updateMyLocation({
     required String code,
     required double latitude,
     required double longitude,
-  }) => _groups.doc(code).collection('members').doc(_uid).set({
-    'latitude': latitude,
-    'longitude': longitude,
-    'photoUrl': _auth.currentUser?.photoURL ?? '',
-    'updatedAt': FieldValue.serverTimestamp(),
-  }, SetOptions(merge: true));
+  }) async {
+    final uid = _uid;
+    final profile = await _db.collection('users').doc(uid).get();
+    final profileData = profile.data()?['profile'] as Map?;
+    await _groups.doc(code).collection('members').doc(uid).set({
+      'latitude': latitude,
+      'longitude': longitude,
+      'photoUrl': _auth.currentUser?.photoURL ?? '',
+      'photoBase64': profileData?['avatarBase64'] ?? '',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
 
   /// Owner-only in the UI; enforce the same ownership check in Firestore rules.
   Future<void> updateRadarRadius({
@@ -104,6 +125,52 @@ class EmergencyGroupService {
 
   Stream<Map<String, dynamic>?> group(String code) =>
       _groups.doc(code).snapshots().map((doc) => doc.data());
+
+  Stream<List<Map<String, dynamic>>> incidents(String code) => _groups
+      .doc(code)
+      .collection('incidents')
+      .snapshots()
+      .map((snapshot) {
+        final incidents = snapshot.docs
+            .map((doc) => {...doc.data(), 'id': doc.id})
+            .toList();
+        incidents.sort((a, b) {
+          final aTime = a['createdAt'] as Timestamp?;
+          final bTime = b['createdAt'] as Timestamp?;
+          return (bTime?.millisecondsSinceEpoch ?? 0)
+              .compareTo(aTime?.millisecondsSinceEpoch ?? 0);
+        });
+        return incidents;
+      });
+
+  Future<String> createIncident({
+    required String code,
+    required String senderName,
+    required double latitude,
+    required double longitude,
+    required String address,
+  }) async {
+    final reference = _groups.doc(code).collection('incidents').doc();
+    await reference.set({
+      'senderId': _uid,
+      'senderName': senderName.trim().isEmpty ? 'Group member' : senderName.trim(),
+      'latitude': latitude,
+      'longitude': longitude,
+      'address': address.length > 240 ? address.substring(0, 240) : address,
+      'status': 'active',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return reference.id;
+  }
+
+  Future<void> resolveIncident({
+    required String code,
+    required String incidentId,
+  }) => _groups.doc(code).collection('incidents').doc(incidentId).update({
+    'status': 'resolved',
+    'updatedAt': FieldValue.serverTimestamp(),
+    'resolvedAt': FieldValue.serverTimestamp(),
+  });
 
   Future<void> leaveGroup(String code) =>
       _groups.doc(code).collection('members').doc(_uid).delete();
