@@ -31,7 +31,7 @@ service cloud.firestore {
           'year', 'status', 'animalType', 'totalShares', 'myShares',
           'estimatedCost', 'paidAmount', 'vendorName', 'vendorPhone',
           'slaughterDate', 'notes', 'ownerId', 'ownerName', 'memberIds',
-          'createdAt', 'updatedAt'
+          'inviteCode', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasAll([
           'year', 'status', 'animalType', 'totalShares', 'myShares',
@@ -52,6 +52,7 @@ service cloud.firestore {
         && data.ownerId == ownerUid
         && validShortText(data.ownerName, 80)
         && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 20
+        && (!data.keys().hasAll(['inviteCode']) || validShortText(data.inviteCode, 20))
         && data.createdAt is timestamp && data.updatedAt is timestamp;
     }
 
@@ -101,6 +102,45 @@ service cloud.firestore {
       return latitude is number && longitude is number
         && latitude >= -90 && latitude <= 90
         && longitude >= -180 && longitude <= 180;
+    }
+
+    function validEmergencyGroup(data, groupCode) {
+      return data.keys().hasOnly([
+          'code', 'name', 'leaderId', 'leaderName', 'rangeMeters',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'code', 'name', 'leaderId', 'leaderName', 'rangeMeters',
+          'createdAt'
+        ])
+        && data.code == groupCode
+        && validShortText(data.code, 20)
+        && validShortText(data.name, 120)
+        && data.leaderId is string && data.leaderId == request.auth.uid
+        && validShortText(data.leaderName, 80)
+        && data.rangeMeters is number
+        && data.rangeMeters >= 100 && data.rangeMeters <= 10000
+        && data.createdAt is timestamp
+        && (!data.keys().hasAll(['updatedAt']) || data.updatedAt is timestamp);
+    }
+
+    function validEmergencyMember(data) {
+      return data.keys().hasOnly([
+          'name', 'photoUrl', 'photoBase64', 'isLeader', 'joinedAt',
+          'updatedAt', 'latitude', 'longitude'
+        ])
+        && data.keys().hasAll(['name', 'photoUrl', 'isLeader', 'joinedAt', 'updatedAt'])
+        && validShortText(data.name, 80)
+        && validShortText(data.photoUrl, 2048)
+        && (!data.keys().hasAll(['photoBase64'])
+          || validShortText(data.photoBase64, 200000))
+        && data.isLeader is bool
+        && data.joinedAt is timestamp
+        && data.updatedAt is timestamp
+        && ((data.keys().hasAll(['latitude', 'longitude'])
+          && validLocation(data.latitude, data.longitude))
+          || (!data.keys().hasAll(['latitude'])
+            && !data.keys().hasAll(['longitude'])));
     }
 
     function validSosIncident() {
@@ -254,8 +294,12 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['ownerUid', 'planId', 'createdAt'])
         && request.resource.data.ownerUid == request.auth.uid
         && validShortText(request.resource.data.planId, 128)
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)/qurbaniPlans/$(request.resource.data.planId))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)/qurbaniPlans/$(request.resource.data.planId)).data.ownerId == request.auth.uid
         && request.resource.data.createdAt is timestamp;
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if signedIn()
+        && resource.data.ownerUid == request.auth.uid;
     }
 
     match /support_messages/{messageId} {
@@ -267,44 +311,101 @@ service cloud.firestore {
       // groups is deliberately forbidden, so codes cannot be enumerated.
       allow get: if request.auth != null;
       allow list: if false;
-      allow create: if request.auth != null
-        && request.resource.data.leaderId == request.auth.uid;
-      allow update, delete: if request.auth != null
+      allow create: if signedIn()
+        && validEmergencyGroup(request.resource.data, groupCode)
+        && request.resource.data.createdAt == request.time;
+      allow update: if signedIn()
+        && resource.data.leaderId == request.auth.uid
+        && validEmergencyGroup(request.resource.data, groupCode)
+        && request.resource.data.leaderId == resource.data.leaderId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['rangeMeters', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if signedIn()
         && resource.data.leaderId == request.auth.uid;
 
       match /members/{memberId} {
-        allow read: if request.auth != null
+        // A user may check only their own membership before joining. Listing
+        // the roster remains restricted to established group members.
+        allow get: if signedIn()
+          && (request.auth.uid == memberId
+            || exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid)));
+        allow list: if signedIn()
           && exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid));
-        allow create: if request.auth != null && request.auth.uid == memberId;
+        allow create: if signedIn()
+          && request.auth.uid == memberId
+          && validEmergencyMember(request.resource.data)
+          && request.resource.data.joinedAt == request.time
+          && request.resource.data.updatedAt == request.time
+          // A joining user cannot grant themselves leadership. The creator's
+          // leader membership is permitted only in the same atomic batch.
+          && (request.resource.data.isLeader == false
+            || getAfter(/databases/$(database)/documents/emergencyGroups/$(groupCode)).data.leaderId == request.auth.uid);
         // A member can update only their own presence fields. The owner can
         // remove a member but cannot impersonate or edit them.
-        allow update: if request.auth != null
+        allow update: if signedIn()
           && request.auth.uid == memberId
-          && request.resource.data.isLeader == resource.data.isLeader;
-        allow delete: if request.auth != null
+          && validEmergencyMember(request.resource.data)
+          && request.resource.data.isLeader == resource.data.isLeader
+          && request.resource.data.joinedAt == resource.data.joinedAt
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'photoUrl', 'photoBase64', 'latitude', 'longitude', 'updatedAt']);
+        allow delete: if signedIn()
           && (request.auth.uid == memberId
             || get(/databases/$(database)/documents/emergencyGroups/$(groupCode)).data.leaderId == request.auth.uid);
       }
 
-      // End-to-end encrypted group chat. Firestore stores ciphertext only;
-      // clients decrypt it locally with the separately shared group secret.
+      // Group chat is visible only to current group members.
       match /messages/{messageId} {
         allow read: if request.auth != null
           && exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid));
         allow create: if request.auth != null
           && exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid))
-          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'ciphertext', 'nonce', 'mac', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'text', 'createdAt'])
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.senderName is string
           && request.resource.data.senderName.size() <= 80
-          && request.resource.data.ciphertext is string
-          && request.resource.data.ciphertext.size() <= 8000
-          && request.resource.data.nonce is string
-          && request.resource.data.nonce.size() <= 100
-          && request.resource.data.mac is string
-          && request.resource.data.mac.size() <= 100
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
           && request.resource.data.createdAt == request.time;
         allow update, delete: if false;
+      }
+
+      match /incidents/{incidentId} {
+        allow read: if request.auth != null
+          && exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid));
+        allow create: if request.auth != null
+          && exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid))
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'latitude', 'longitude', 'address', 'status', 'createdAt'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.senderName is string && request.resource.data.senderName.size() <= 80
+          && validLocation(request.resource.data.latitude, request.resource.data.longitude)
+          && request.resource.data.address is string && request.resource.data.address.size() <= 240
+          && request.resource.data.status == 'active'
+          && request.resource.data.createdAt == request.time;
+        // Only the person who raised the alert may mark it resolved. This
+        // prevents a leader or another member from hiding someone else's SOS.
+        allow update: if signedIn()
+          && exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid))
+          && resource.data.senderId == request.auth.uid
+          && resource.data.status == 'active'
+          && request.resource.data.senderId == resource.data.senderId
+          && request.resource.data.senderName == resource.data.senderName
+          && request.resource.data.latitude == resource.data.latitude
+          && request.resource.data.longitude == resource.data.longitude
+          && request.resource.data.address == resource.data.address
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.status == 'resolved'
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.resolvedAt == request.time
+          && request.resource.data.keys().hasOnly([
+            'senderId', 'senderName', 'latitude', 'longitude', 'address',
+            'status', 'createdAt', 'updatedAt', 'resolvedAt'
+          ]);
+        allow delete: if false;
       }
     }
   }

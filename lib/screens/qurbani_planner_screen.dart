@@ -82,6 +82,25 @@ class QParticipant {
       );
 }
 
+/// A signed-in person who joined the shared plan. This is deliberately
+/// separate from expense participants so the group roster stays accurate.
+class QPlanMember {
+  final String id;
+  final String name;
+  final int shares;
+
+  const QPlanMember({required this.id, required this.name, required this.shares});
+
+  factory QPlanMember.fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
+    final data = d.data() ?? {};
+    return QPlanMember(
+      id: d.id,
+      name: data['name'] as String? ?? 'Unnamed member',
+      shares: (data['shares'] as num?)?.toInt() ?? 1,
+    );
+  }
+}
+
 // A single payer contribution on an expense entry (supports unequal
 // multi-payer contributions on one line item).
 class QPayer {
@@ -443,17 +462,16 @@ class QurbaniRepository {
   static const _prefsOwnerKey = 'qurbani_plan_owner_uid';
   static const _prefsPlanKey = 'qurbani_plan_id';
 
-  /// Loads the locally-remembered plan (created or joined earlier). If none
-  /// exists yet, creates a brand-new plan owned by the current user under
-  /// users/{uid}/qurbaniPlans/{newId}, matching the existing schema shape.
-  static Future<QurbaniRepository> load() async {
+  /// Loads the locally remembered group. A group is created only when the
+  /// user explicitly chooses "Create a group" in the planner.
+  static Future<QurbaniRepository?> load() async {
     final prefs = await SharedPreferences.getInstance();
     final savedOwner = prefs.getString(_prefsOwnerKey);
     final savedPlan = prefs.getString(_prefsPlanKey);
     if (savedOwner != null && savedPlan != null) {
       return QurbaniRepository._(savedOwner, savedPlan);
     }
-    return _createNewPlan();
+    return null;
   }
 
   static Future<QurbaniRepository> _createNewPlan() async {
@@ -478,6 +496,22 @@ class QurbaniRepository {
       'createdAt': now,
       'updatedAt': now,
     });
+    await docRef.collection('members').doc(uid).set({
+      'name': currentDisplayName(),
+      'shares': 1,
+      'joinedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await docRef.collection('participants').doc(uid).set({
+      'name': currentDisplayName(),
+      'phone': null,
+      'shares': 1,
+      'amountDue': 0.0,
+      'amountPaid': 0.0,
+      'paymentStatus': 'unpaid',
+      'ownerId': uid,
+      'ownerName': currentDisplayName(),
+    });
     await _persist(uid, docRef.id);
     return QurbaniRepository._(uid, docRef.id);
   }
@@ -491,13 +525,59 @@ class QurbaniRepository {
   /// Generates a shareable code, using the same local-code pattern as the SOS
   /// emergency group feature.
   Future<String> createInviteCode() async {
+    if (ownerUid != currentUid()) {
+      throw StateError('Only the group owner can generate a code.');
+    }
+    final existingCode = await getInviteCode();
+    if (existingCode != null) return existingCode;
     final code = await _newUnusedInviteCode();
     await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(code).set({
       'ownerUid': ownerUid,
       'planId': planId,
       'createdAt': FieldValue.serverTimestamp(),
     });
+    await planRef.update({
+      'inviteCode': code,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
     return code;
+  }
+
+  static Future<void> _clearPersistedPlan() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsOwnerKey);
+    await prefs.remove(_prefsPlanKey);
+  }
+
+  /// Starts a new shared plan. The authenticated creator is its owner.
+  static Future<QurbaniRepository> createGroup() => _createNewPlan();
+
+  Future<String?> getInviteCode() async {
+    final value = (await planRef.get()).data()?['inviteCode'];
+    return value is String && value.isNotEmpty ? value : null;
+  }
+
+  /// Leaves a shared plan without affecting the owner or other members.
+  Future<void> leaveGroup() async {
+    if (ownerUid == currentUid()) {
+      throw StateError('The owner must delete the group instead of leaving it.');
+    }
+    await planRef.collection('members').doc(currentUid()).delete();
+    await _clearPersistedPlan();
+  }
+
+  /// Deletes the plan entry and its join code. Firestore subcollections become
+  /// inaccessible once the parent plan is deleted.
+  Future<void> deleteGroup() async {
+    if (ownerUid != currentUid()) {
+      throw StateError('Only the group owner can delete this group.');
+    }
+    final code = await getInviteCode();
+    if (code != null) {
+      await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(code).delete();
+    }
+    await planRef.delete();
+    await _clearPersistedPlan();
   }
 
   static Future<String> _newUnusedInviteCode() async {
@@ -512,7 +592,7 @@ class QurbaniRepository {
     throw StateError('Could not create a unique invite code. Please try again.');
   }
 
-  /// Joins an existing household plan by its invite code: looks up the
+  /// Joins an existing shared plan by its invite code: looks up the
   /// (ownerUid, planId) pair, adds the current user to memberIds, and
   /// switches local storage to point at that plan from now on.
   Future<void> joinCurrentUserWithShares(int shares) async {
@@ -561,6 +641,9 @@ class QurbaniRepository {
 
   Stream<List<QParticipant>> watchParticipants() =>
       participantsRef.orderBy('name').snapshots().map((s) => s.docs.map(QParticipant.fromDoc).toList());
+
+  Stream<List<QPlanMember>> watchMembers() =>
+      planRef.collection('members').orderBy('name').snapshots().map((s) => s.docs.map(QPlanMember.fromDoc).toList());
 
   Stream<List<QExpense>> watchExpenses() =>
       expensesRef.orderBy('createdAt', descending: true).snapshots().map((s) => s.docs.map(QExpense.fromDoc).toList());
@@ -985,34 +1068,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
     final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55);
 
-    if (_repo == null) {
-      if (_repositoryError != null) {
-        return Container(
-          color: containerBg,
-          alignment: Alignment.center,
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off_rounded, size: 42, color: Colors.orange),
-              const SizedBox(height: 12),
-              Text(_repositoryError!, textAlign: TextAlign.center, style: GoogleFonts.inter(color: textColor)),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _loadRepository,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Try again'),
-              ),
-            ],
-          ),
-        );
-      }
-      return Container(
-        color: containerBg,
-        child: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
     return Container(
       decoration: BoxDecoration(
         color: containerBg,
@@ -1049,7 +1104,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                             style: GoogleFonts.poppins(color: textColor, fontSize: 15.5, fontWeight: FontWeight.bold)),
                         GestureDetector(
                           onTap: _showHouseholdSharingSheet,
-                          child: Text('Share plan with household  ·  tap here',
+                          child: Text('Share this plan  ·  tap here',
                               style: GoogleFonts.inter(color: subtextColor, fontSize: 11)),
                         ),
                       ],
@@ -1087,7 +1142,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                             style: GoogleFonts.poppins(color: AppColors.navyBlue, fontSize: 18, fontWeight: FontWeight.bold)),
                         GestureDetector(
                           onTap: _showHouseholdSharingSheet,
-                          child: Text('Share plan with household  ·  tap here',
+                          child: Text('Share this plan  ·  tap here',
                               style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12)),
                         ),
                       ],
@@ -1110,10 +1165,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     );
   }
 
-  // Lets the plan owner generate an invite code to share with household
-  // members, or lets any user enter someone else's code to join their plan
+  // Lets the plan owner generate an invite code, or lets any user enter
+  // someone else's code to join their plan
   // instead (switching this device to point at that shared Firestore path).
   void _showHouseholdSharingSheet() {
+    final repo = _repo;
+    final isOwner = repo?.ownerUid == QurbaniRepository.currentUid();
     final joinCtrl = TextEditingController();
     String? generatedCode;
     bool generating = false;
@@ -1135,7 +1192,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Text('Share this plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 17)),
               const SizedBox(height: 6),
               Text(
-                'Generate a code so household members see the same participants, expenses and settlements — or enter someone else\'s code to join their plan instead.',
+                'Use one code to share the same member list, expenses, and settlements. Anyone with the code can join this plan.',
                 style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600], height: 1.4),
               ),
               const SizedBox(height: 20),
@@ -1148,7 +1205,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 Expanded(child: Text('Choose your own shares before creating or joining.', style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[600]))),
               ]),
 
-              Text('Invite others', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+              if (isOwner) ...[
+              Text('Your group code', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 8),
               if (generatedCode != null)
                 Container(
@@ -1168,8 +1226,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       : () async {
                           setD(() => generating = true);
                           try {
-                            await _repo!.joinCurrentUserWithShares(shares);
-                            final code = await _repo!.createInviteCode();
+                            await repo!.joinCurrentUserWithShares(shares);
+                            final code = await repo.createInviteCode();
                             setD(() {
                               generatedCode = code;
                               generating = false;
@@ -1184,15 +1242,16 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   icon: generating
                       ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.qr_code_rounded, size: 18),
-                  label: const Text('Generate invite code'),
+                  label: const Text('Generate group code'),
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 44)),
                 ),
+              ],
 
               const SizedBox(height: 24),
               const Divider(),
               const SizedBox(height: 12),
 
-              Text('Join a household plan instead', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text('Join a shared plan', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 8),
               TextField(
                 controller: joinCtrl,
@@ -1873,7 +1932,91 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   // ===========================================================================
   // SHARES TAB — Participants / Expenses / Settlements / Edit Requests
   // ===========================================================================
+  Future<void> _createGroup() async {
+    if (FirebaseAuth.instance.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please sign in to create a shared plan.')));
+      return;
+    }
+    try {
+      final group = await QurbaniRepository.createGroup();
+      if (mounted) setState(() => _repo = group);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not create group: $error')));
+    }
+  }
+
+  void _confirmGroupAction({required bool isOwner}) {
+    final action = isOwner ? 'Delete group' : 'Leave group';
+    final message = isOwner
+        ? 'This removes the shared plan and stops the group code from being used. This cannot be undone.'
+        : 'You will lose access to this shared plan, its members, expenses, and settlements.';
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(action),
+        content: Text(message),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              try {
+                if (isOwner) {
+                  await _repo!.deleteGroup();
+                } else {
+                  await _repo!.leaveGroup();
+                }
+                if (mounted) {
+                  setState(() => _repo = null);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isOwner ? 'Group deleted.' : 'You left the group.')));
+                }
+              } catch (error) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not ${action.toLowerCase()}: $error')));
+              }
+            },
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSharesTab(NumberFormat fmt) {
+    if (_repo == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.groups_outlined, size: 42, color: AppColors.midTeal),
+              const SizedBox(height: 12),
+              Text(
+                _repositoryError ?? 'Create a shared plan to become its owner, generate a group code, and invite others.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
+              ),
+              if (_repositoryError != null) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _loadRepository,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Try again'),
+                ),
+              ],
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _createGroup,
+                icon: const Icon(Icons.group_add_rounded),
+                label: const Text('Create a group'),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final subLabels = ['Participants', 'Expenses', 'Settlements', 'Requests'];
     final subIcons = [Icons.people_alt_rounded, Icons.payments_rounded, Icons.handshake_rounded, Icons.edit_note_rounded];
     final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
@@ -1957,14 +2100,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           children: [
             Text('Participants', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 4),
-            Text("Each participant joins with the household code and chooses their own share count.",
+            Text("Each member joins with the group code and chooses their own share count.",
                 style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4)),
             const SizedBox(height: 12),
-            _householdGroupCard(),
+            _sharedGroupCard(),
             const SizedBox(height: 16),
-            if (!snap.hasData)
-              const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator()))
-            else if (participants.isEmpty)
+            if (participants.isEmpty)
               _emptyState('No participants yet. Add the first one below.')
             else
               ...participants.map((p) => _participantCard(p, myUid)),
@@ -1975,61 +2116,91 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     );
   }
 
-  Widget _householdGroupCard() {
+  Widget _sharedGroupCard() {
     final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
     final isOwner = _repo!.ownerUid == QurbaniRepository.currentUid();
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.midTeal.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.groups_rounded, color: AppColors.midTeal, size: 20),
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _repo!.planRef.snapshots(),
+      builder: (context, planSnapshot) {
+        final code = planSnapshot.data?.data()?['inviteCode'] as String?;
+        return StreamBuilder<List<QPlanMember>>(
+          stream: _repo!.watchMembers(),
+          builder: (context, membersSnapshot) {
+            final members = membersSnapshot.data ?? const <QPlanMember>[];
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.35)),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text('Household share group',
-                    style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.groups_rounded, color: AppColors.midTeal, size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text('Shared plan group', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 14))),
+                  ]),
+                  const SizedBox(height: 8),
+                  Text(
+                    isOwner ? 'Share your code to invite people to this plan.' : 'You are a member of this shared plan.',
+                    style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5, height: 1.35),
+                  ),
+                  if (isOwner && code != null) ...[
+                    const SizedBox(height: 12),
+                    Text('GROUP CODE', style: GoogleFonts.inter(color: textColor, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.8)),
+                    const SizedBox(height: 5),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(10)),
+                      child: SelectableText(code, style: GoogleFonts.poppins(color: AppColors.midTeal, fontWeight: FontWeight.bold, fontSize: 19, letterSpacing: 2)),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Text('Members (${members.length})', style: GoogleFonts.inter(color: textColor, fontWeight: FontWeight.w700, fontSize: 12)),
+                  const SizedBox(height: 6),
+                  if (members.isEmpty)
+                    Text('No members yet.', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5))
+                  else
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: members.map((member) => Chip(label: Text('${member.name} (${member.shares})', style: const TextStyle(fontSize: 11)))).toList(),
+                    ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _showHouseholdSharingSheet,
+                      icon: Icon(isOwner ? Icons.add_link_rounded : Icons.login_rounded, size: 18),
+                      label: Text(isOwner && code == null ? 'Generate group code' : 'Open group sharing'),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(42)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _confirmGroupAction(isOwner: isOwner),
+                      icon: Icon(isOwner ? Icons.delete_outline_rounded : Icons.logout_rounded, size: 18),
+                      label: Text(isOwner ? 'Delete group' : 'Leave group'),
+                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            isOwner
-                ? 'Create a code here, then share it with people you want to add to this plan.'
-                : 'Enter a household code here to join the shared Qurbani plan.',
-            style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5, height: 1.35),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _showHouseholdSharingSheet,
-              icon: Icon(isOwner ? Icons.add_link_rounded : Icons.login_rounded, size: 18),
-              label: Text(isOwner ? 'Create or join group' : 'Join household group'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.midTeal,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(42),
-              ),
-            ),
-          ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -2253,8 +2424,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 const SizedBox(height: 12),
                 if (participants.isEmpty)
                   _emptyState('Add participants first, then log expenses against them.')
-                else if (!eSnap.hasData)
-                  const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator()))
                 else if (expenses.isEmpty)
                   _emptyState('No expenses logged yet.')
                 else
@@ -2807,9 +2976,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             Text("Only the person who added an entry can edit it directly. Anyone else can propose a change here, with a required reason.",
                 style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4)),
             const SizedBox(height: 12),
-            if (!snap.hasData)
-              const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator()))
-            else if (requests.isEmpty)
+            if (requests.isEmpty)
               _emptyState('No edit requests yet.')
             else
               ...requests.map((r) => _editRequestCard(r, myUid)),
