@@ -12,6 +12,90 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    // Qurbani plans are private household records. The plan owner controls
+    // membership; a member may work only inside a plan that already includes
+    // their UID.
+    function isPlanMember(ownerUid, planId) {
+      return signedIn()
+        && (request.auth.uid == ownerUid
+          || request.auth.uid in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds);
+    }
+
+    function validShortText(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+
+    function validQurbaniPlan(data, ownerUid) {
+      return data.keys().hasOnly([
+          'year', 'status', 'animalType', 'totalShares', 'myShares',
+          'estimatedCost', 'paidAmount', 'vendorName', 'vendorPhone',
+          'slaughterDate', 'notes', 'ownerId', 'ownerName', 'memberIds',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'year', 'status', 'animalType', 'totalShares', 'myShares',
+          'estimatedCost', 'paidAmount', 'ownerId', 'ownerName', 'memberIds',
+          'createdAt', 'updatedAt'
+        ])
+        && data.year is int && data.year >= 2020 && data.year <= 2100
+        && data.status in ['planned', 'confirmed', 'completed', 'cancelled']
+        && data.animalType in ['cow', 'goat', 'sheep', 'camel']
+        && data.totalShares is int && data.totalShares >= 1 && data.totalShares <= 7
+        && data.myShares is int && data.myShares >= 1 && data.myShares <= data.totalShares
+        && data.estimatedCost is number && data.estimatedCost >= 0 && data.estimatedCost <= 10000000
+        && data.paidAmount is number && data.paidAmount >= 0 && data.paidAmount <= 10000000
+        && (data.vendorName == null || validShortText(data.vendorName, 120))
+        && (data.vendorPhone == null || validShortText(data.vendorPhone, 30))
+        && (data.slaughterDate == null || data.slaughterDate is timestamp)
+        && (data.notes == null || validShortText(data.notes, 2000))
+        && data.ownerId == ownerUid
+        && validShortText(data.ownerName, 80)
+        && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 20
+        && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function validParticipant(data) {
+      return data.keys().hasOnly(['name', 'phone', 'shares', 'amountDue', 'amountPaid', 'paymentStatus', 'ownerId', 'ownerName'])
+        && data.keys().hasAll(['name', 'shares', 'amountDue', 'amountPaid', 'paymentStatus', 'ownerId', 'ownerName'])
+        && validShortText(data.name, 100)
+        && (data.phone == null || validShortText(data.phone, 30))
+        && data.shares is int && data.shares >= 1 && data.shares <= 7
+        && data.amountDue is number && data.amountDue >= 0 && data.amountDue <= 10000000
+        && data.amountPaid is number && data.amountPaid >= 0 && data.amountPaid <= 10000000
+        && data.paymentStatus in ['unpaid', 'partial', 'paid']
+        && validShortText(data.ownerId, 128) && validShortText(data.ownerName, 80);
+    }
+
+    function validExpense(data) {
+      return data.keys().hasOnly(['category', 'amount', 'notes', 'payers', 'ownerId', 'ownerName', 'createdAt'])
+        && data.keys().hasAll(['category', 'amount', 'notes', 'payers', 'ownerId', 'ownerName', 'createdAt'])
+        && validShortText(data.category, 80)
+        && data.amount is number && data.amount > 0 && data.amount <= 10000000
+        && validShortText(data.notes, 1000)
+        && data.payers is list && data.payers.size() <= 20
+        && validShortText(data.ownerId, 128) && validShortText(data.ownerName, 80)
+        && data.createdAt is timestamp;
+    }
+
+    function validSettlement(data) {
+      return data.keys().hasOnly(['fromId', 'fromName', 'toId', 'toName', 'amount', 'confirmed', 'date'])
+        && data.keys().hasAll(['fromId', 'fromName', 'toId', 'toName', 'amount', 'confirmed', 'date'])
+        && validShortText(data.fromId, 128) && validShortText(data.fromName, 100)
+        && validShortText(data.toId, 128) && validShortText(data.toName, 100)
+        && data.amount is number && data.amount > 0 && data.amount <= 10000000
+        && data.confirmed is bool && data.date is timestamp;
+    }
+
+    function validEditRequest(data) {
+      return data.keys().hasOnly(['targetType', 'targetId', 'targetLabel', 'requestedById', 'requestedByName', 'reason', 'proposedChanges', 'status', 'createdAt'])
+        && data.keys().hasAll(['targetType', 'targetId', 'targetLabel', 'requestedById', 'requestedByName', 'reason', 'proposedChanges', 'status', 'createdAt'])
+        && data.targetType in ['participant', 'expense']
+        && validShortText(data.targetId, 128) && validShortText(data.targetLabel, 160)
+        && validShortText(data.requestedById, 128) && validShortText(data.requestedByName, 80)
+        && validShortText(data.reason, 500) && data.proposedChanges is map && data.proposedChanges.size() <= 5
+        && data.status in ['pending', 'approved', 'rejected'] && data.createdAt is timestamp;
+    }
+
     function validLocation(latitude, longitude) {
       return latitude is number && longitude is number
         && latitude >= -90 && latitude <= 90
@@ -60,6 +144,94 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Assumed model: a private Qurbani plan is stored below its owner's
+      // user document. memberIds is the access-control list and may be
+      // changed only by that owner.
+      match /qurbaniPlans/{planId} {
+        allow create: if isOwner(userId)
+          && validQurbaniPlan(request.resource.data, userId)
+          && request.resource.data.memberIds.hasOnly([request.auth.uid]);
+        allow read: if signedIn()
+          && (request.auth.uid == userId || request.auth.uid in resource.data.memberIds);
+        allow update: if isOwner(userId)
+          && validQurbaniPlan(request.resource.data, userId)
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(userId);
+
+        match /participants/{participantId} {
+          allow read: if isPlanMember(userId, planId);
+          allow create: if isPlanMember(userId, planId)
+            && validParticipant(request.resource.data)
+            && request.resource.data.ownerId == request.auth.uid;
+          allow update: if isPlanMember(userId, planId)
+            && validParticipant(request.resource.data)
+            && request.resource.data.ownerId == resource.data.ownerId
+            && (request.auth.uid == userId
+              || request.auth.uid == resource.data.ownerId
+              || request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['amountDue', 'amountPaid', 'paymentStatus']));
+          allow delete: if isPlanMember(userId, planId)
+            && (request.auth.uid == userId || request.auth.uid == resource.data.ownerId);
+        }
+
+        match /expenses/{expenseId} {
+          allow read: if isPlanMember(userId, planId);
+          allow create: if isPlanMember(userId, planId)
+            && validExpense(request.resource.data)
+            && request.resource.data.ownerId == request.auth.uid;
+          allow update: if isPlanMember(userId, planId)
+            && validExpense(request.resource.data)
+            && request.resource.data.ownerId == resource.data.ownerId
+            && request.resource.data.createdAt == resource.data.createdAt
+            && (request.auth.uid == userId || request.auth.uid == resource.data.ownerId);
+          allow delete: if isPlanMember(userId, planId)
+            && (request.auth.uid == userId || request.auth.uid == resource.data.ownerId);
+        }
+
+        match /settlements/{settlementId} {
+          allow read: if isPlanMember(userId, planId);
+          allow create: if isPlanMember(userId, planId)
+            && validSettlement(request.resource.data);
+          allow update, delete: if false;
+        }
+
+        match /editRequests/{requestId} {
+          allow read: if isPlanMember(userId, planId);
+          allow create: if isPlanMember(userId, planId)
+            && validEditRequest(request.resource.data)
+            && request.resource.data.requestedById == request.auth.uid
+            && request.resource.data.status == 'pending';
+          allow update: if isOwner(userId)
+            && validEditRequest(request.resource.data)
+            && request.resource.data.requestedById == resource.data.requestedById
+            && request.resource.data.createdAt == resource.data.createdAt;
+          allow delete: if false;
+        }
+
+        match /checklist/{itemId} {
+          allow read: if isPlanMember(userId, planId);
+          allow create, update: if isPlanMember(userId, planId)
+            && request.resource.data.keys().hasOnly(['done'])
+            && request.resource.data.done is bool;
+          allow delete: if isPlanMember(userId, planId);
+        }
+      }
+    }
+
+    // Invite codes can only be created by the plan owner. A signed-in user
+    // may fetch one by its unguessable document ID, but may never list them.
+    match /qurbaniPlanInvites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'planId', 'createdAt'])
+        && request.resource.data.keys().hasAll(['ownerUid', 'planId', 'createdAt'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && validShortText(request.resource.data.planId, 128)
+        && request.resource.data.createdAt is timestamp;
+      allow update, delete: if false;
     }
 
     match /support_messages/{messageId} {

@@ -798,6 +798,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
 
   bool _isDarkMode = false;
   QurbaniRepository? _repo;
+  String? _repositoryError;
 
   // Eligibility
   final TextEditingController _savingsCtrl = TextEditingController(text: '0');
@@ -853,9 +854,34 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     _loadTheme();
     _calculateCosts();
     _calculateAqiqahCosts();
-    QurbaniRepository.load().then((r) {
-      if (mounted) setState(() => _repo = r);
+    _loadRepository();
+  }
+
+  Future<void> _loadRepository() async {
+    setState(() {
+      _repo = null;
+      _repositoryError = null;
     });
+
+    if (FirebaseAuth.instance.currentUser == null) {
+      if (mounted) {
+        setState(() => _repositoryError = 'Please sign in before using the Qurbani Planner.');
+      }
+      return;
+    }
+
+    try {
+      final repository = await QurbaniRepository.load();
+      if (mounted) setState(() => _repo = repository);
+    } on FirebaseException catch (error) {
+      if (mounted) {
+        setState(() => _repositoryError = error.code == 'permission-denied'
+            ? 'The Qurbani Planner is not permitted by Firestore yet. Deploy the updated Firestore rules, then try again.'
+            : 'Could not load your Qurbani plan: ${error.message ?? error.code}');
+      }
+    } catch (error) {
+      if (mounted) setState(() => _repositoryError = 'Could not load your Qurbani plan: $error');
+    }
   }
 
   Future<void> _loadTheme() async {
@@ -941,6 +967,27 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55);
 
     if (_repo == null) {
+      if (_repositoryError != null) {
+        return Container(
+          color: containerBg,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_rounded, size: 42, color: Colors.orange),
+              const SizedBox(height: 12),
+              Text(_repositoryError!, textAlign: TextAlign.center, style: GoogleFonts.inter(color: textColor)),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _loadRepository,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Try again'),
+              ),
+            ],
+          ),
+        );
+      }
       return Container(
         color: containerBg,
         child: const Center(child: CircularProgressIndicator()),
