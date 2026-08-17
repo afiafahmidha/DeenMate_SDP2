@@ -60,119 +60,112 @@ class _RegistrationPageState extends State<RegistrationPage> {
   // ============================================================
   // 🔥 FIREBASE EMAIL/PASSWORD REGISTRATION
   // ============================================================
-Future<void> _registerWithEmailAndPassword() async {
-  if (_isLoading) return;
+  Future<void> _registerWithEmailAndPassword() async {
+    if (_isLoading) return;
 
-  // Validate passwords match
-  if (passwordController.text != confirmPasswordController.text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          AppLocalizations.of(context)!.tr('passwords_do_not_match'),
-        ),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
-
-  setState(() => _isLoading = true);
-
-  try {
-    // 1. Create Firebase Authentication account
-    final userCredential =
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
-      email: emailController.text.trim(),
-      password: passwordController.text,
-    );
-
-    final user = userCredential.user;
-
-    if (user == null) {
-      throw Exception('User creation failed.');
-    }
-
-    // 2. Update Firebase Auth display name
-    final fullName = nameController.text.trim();
-
-    await user.updateDisplayName(fullName);
-
-   // 3. Create user's profile in Cloud Firestore
-await FirebaseFirestore.instance
-    .collection('users')
-    .doc(user.uid)
-    .set({
-  'profile': {
-    'fullName': fullName,
-    'email': emailController.text.trim(),
-    'phone': null,
-    'address': null,
-    'avatarPath': null,
-    'language': 'en',
-    'darkMode': false,
-    'createdAt': FieldValue.serverTimestamp(),
-    'updatedAt': FieldValue.serverTimestamp(),
-  },
-});
-
-    // 4. Send email verification
-    await user.sendEmailVerification();
-
-    // 5. Go to email verification screen
-    if (mounted) {
-      widget.onRegisterSuccess();
-    }
-  } on FirebaseAuthException catch (e) {
-    String message =
-        AppLocalizations.of(context)!.tr('registration_failed');
-
-    switch (e.code) {
-      case 'email-already-in-use':
-        message =
-            AppLocalizations.of(context)!.tr('email_already_in_use');
-        break;
-
-      case 'invalid-email':
-        message =
-            AppLocalizations.of(context)!.tr('invalid_email');
-        break;
-
-      case 'weak-password':
-        message =
-            AppLocalizations.of(context)!.tr('password_too_weak');
-        break;
-
-      default:
-        message = e.message ??
-            '${AppLocalizations.of(context)!.tr('registration_failed')}.';
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
+    // Validate passwords match
+    if (passwordController.text != confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            AppLocalizations.of(context)!.tr('unexpected_error'),
+            AppLocalizations.of(context)!.tr('passwords_do_not_match'),
           ),
           backgroundColor: Colors.red,
         ),
       );
+      return;
     }
-  } finally {
-    if (mounted) {
-      setState(() => _isLoading = false);
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Create Firebase Authentication account
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: emailController.text.trim(),
+            password: passwordController.text,
+          );
+
+      final user = userCredential.user;
+
+      if (user == null) {
+        throw Exception('User creation failed.');
+      }
+
+      // 2. Update Firebase Auth display name
+      final fullName = nameController.text.trim();
+
+      await user.updateDisplayName(fullName);
+
+      // 3. Create user's profile in Cloud Firestore
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'profile': {
+          'fullName': fullName,
+          'email': emailController.text.trim(),
+          'phone': null,
+          'address': null,
+          'avatarPath': null,
+          'language': 'en',
+          'darkMode': false,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      });
+
+      // 4. Send email verification
+      await user.sendEmailVerification();
+
+      // 5. Go to email verification screen
+      if (mounted) {
+        widget.onRegisterSuccess();
+      }
+    } on FirebaseAuthException catch (e) {
+      String message = AppLocalizations.of(context)!.tr('registration_failed');
+
+      switch (e.code) {
+        case 'email-already-in-use':
+          message = AppLocalizations.of(context)!.tr('email_already_in_use');
+          break;
+
+        case 'invalid-email':
+          message = AppLocalizations.of(context)!.tr('invalid_email');
+          break;
+
+        case 'weak-password':
+          message = AppLocalizations.of(context)!.tr('password_too_weak');
+          break;
+
+        default:
+          message =
+              e.message ??
+              '${AppLocalizations.of(context)!.tr('registration_failed')}.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.tr('unexpected_error')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
-}
+
   // ============================================================
   // 🔥 FIREBASE GOOGLE SIGN-IN (for Registration)
   // ============================================================
@@ -199,38 +192,36 @@ await FirebaseFirestore.instance
         idToken: googleAuth.idToken,
       );
 
-      final userCredential =
-    await FirebaseAuth.instance.signInWithCredential(credential);
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
 
-final user = userCredential.user;
+      final user = userCredential.user;
 
-if (user == null) {
-  throw Exception('Google user creation failed.');
-}
+      if (user == null) {
+        throw Exception('Google user creation failed.');
+      }
 
-final userDoc = await FirebaseFirestore.instance
-    .collection('users')
-    .doc(user.uid)
-    .get();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
 
-if (!userDoc.exists) {
-  await FirebaseFirestore.instance
-      .collection('users')
-      .doc(user.uid)
-      .set({
-    'profile': {
-      'fullName': user.displayName ?? 'User',
-      'email': user.email ?? '',
-      'phone': null,
-      'address': null,
-      'avatarPath': user.photoURL,
-      'language': 'en',
-      'darkMode': false,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    },
-  });
-}
+      if (!userDoc.exists) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'profile': {
+            'fullName': user.displayName ?? '',
+            'email': user.email ?? '',
+            'phone': null,
+            'address': null,
+            'avatarPath': user.photoURL,
+            'language': 'en',
+            'darkMode': false,
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+        });
+      }
 
       if (mounted) {
         widget.onRegisterSuccess();
@@ -239,7 +230,10 @@ if (!userDoc.exists) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-             content: Text(e.message ?? AppLocalizations.of(context)!.tr('google_sign_in_failed')),
+            content: Text(
+              e.message ??
+                  AppLocalizations.of(context)!.tr('google_sign_in_failed'),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -285,15 +279,20 @@ if (!userDoc.exists) {
               ),
             ),
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(24, 28, 24, 24 + MediaQuery.of(context).padding.bottom),
+              padding: EdgeInsets.fromLTRB(
+                24,
+                28,
+                24,
+                24 + MediaQuery.of(context).padding.bottom,
+              ),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Center(
-                     child: Text(
-                      AppLocalizations.of(context)!.tr('create_account'),
+                      child: Text(
+                        AppLocalizations.of(context)!.tr('create_account'),
                         style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -303,8 +302,8 @@ if (!userDoc.exists) {
                     ),
                     const SizedBox(height: 8),
                     Center(
-                   child: Text(
-                      AppLocalizations.of(context)!.tr('register_welcome'),
+                      child: Text(
+                        AppLocalizations.of(context)!.tr('register_welcome'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 12.5,
@@ -320,7 +319,9 @@ if (!userDoc.exists) {
                       icon: Icons.account_circle_outlined,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return AppLocalizations.of(context)!.tr('please_enter_full_name');
+                          return AppLocalizations.of(
+                            context,
+                          )!.tr('please_enter_full_name');
                         }
                         return null;
                       },
@@ -333,10 +334,16 @@ if (!userDoc.exists) {
                       keyboardType: TextInputType.emailAddress,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return AppLocalizations.of(context)!.tr('please_enter_email');
+                          return AppLocalizations.of(
+                            context,
+                          )!.tr('please_enter_email');
                         }
-                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
-                          return AppLocalizations.of(context)!.tr('valid_email');
+                        if (!RegExp(
+                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                        ).hasMatch(value.trim())) {
+                          return AppLocalizations.of(
+                            context,
+                          )!.tr('valid_email');
                         }
                         return null;
                       },
@@ -349,10 +356,14 @@ if (!userDoc.exists) {
                       keyboardType: TextInputType.phone,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return AppLocalizations.of(context)!.tr('please_enter_phone');
+                          return AppLocalizations.of(
+                            context,
+                          )!.tr('please_enter_phone');
                         }
                         if (value.trim().length < 10) {
-                          return AppLocalizations.of(context)!.tr('valid_phone');
+                          return AppLocalizations.of(
+                            context,
+                          )!.tr('valid_phone');
                         }
                         return null;
                       },
@@ -365,10 +376,14 @@ if (!userDoc.exists) {
                       obscureText: obscurePassword,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return AppLocalizations.of(context)!.tr('please_enter_password');
+                          return AppLocalizations.of(
+                            context,
+                          )!.tr('please_enter_password');
                         }
                         if (value.length < 6) {
-                          return AppLocalizations.of(context)!.tr('password_too_short');
+                          return AppLocalizations.of(
+                            context,
+                          )!.tr('password_too_short');
                         }
                         return null;
                       },
@@ -387,16 +402,22 @@ if (!userDoc.exists) {
                     ),
                     const SizedBox(height: 16),
                     _buildLabeledField(
-                      label: AppLocalizations.of(context)!.tr('confirm_password'),
+                      label: AppLocalizations.of(
+                        context,
+                      )!.tr('confirm_password'),
                       controller: confirmPasswordController,
                       icon: Icons.lock_reset_rounded,
                       obscureText: obscureConfirmPassword,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return AppLocalizations.of(context)!.tr('please_confirm_password');
+                          return AppLocalizations.of(
+                            context,
+                          )!.tr('please_confirm_password');
                         }
                         if (value != passwordController.text) {
-                          return AppLocalizations.of(context)!.tr('passwords_do_not_match');
+                          return AppLocalizations.of(
+                            context,
+                          )!.tr('passwords_do_not_match');
                         }
                         return null;
                       },
@@ -409,8 +430,10 @@ if (!userDoc.exists) {
                           size: 20,
                         ),
                         onPressed: () {
-                          setState(() =>
-                              obscureConfirmPassword = !obscureConfirmPassword);
+                          setState(
+                            () => obscureConfirmPassword =
+                                !obscureConfirmPassword,
+                          );
                         },
                       ),
                     ),
@@ -473,9 +496,7 @@ if (!userDoc.exists) {
       child: Stack(
         alignment: Alignment.topCenter,
         children: [
-          const Positioned.fill(
-            child: RegistrationHeader(),
-          ),
+          const Positioned.fill(child: RegistrationHeader()),
           ..._headerStars.map((star) {
             return TwinklingStar(
               top: star.top,
@@ -490,7 +511,7 @@ if (!userDoc.exists) {
               children: [
                 const AppLogo(size: 64),
                 const SizedBox(height: 12),
-                 Text(
+                Text(
                   AppLocalizations.of(context)!.tr('app_name'),
                   style: GoogleFonts.playfairDisplay(
                     fontSize: 28,
@@ -501,7 +522,7 @@ if (!userDoc.exists) {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                   AppLocalizations.of(context)!.tr('app_subtitle'),
+                  AppLocalizations.of(context)!.tr('app_subtitle'),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontSize: 12,
@@ -533,7 +554,11 @@ if (!userDoc.exists) {
       keyboardType: keyboardType,
       validator: validator,
       enabled: !_isLoading,
-      style: GoogleFonts.inter(color: AppColors.navyBlue, fontSize: 14, fontWeight: FontWeight.w500),
+      style: GoogleFonts.inter(
+        color: AppColors.navyBlue,
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      ),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: GoogleFonts.poppins(
@@ -560,16 +585,25 @@ if (!userDoc.exists) {
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 14,
+          horizontal: 16,
+        ),
         alignLabelWithHint: true,
         floatingLabelBehavior: FloatingLabelBehavior.auto,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.dustyBlueTeal, width: 1.0),
+          borderSide: const BorderSide(
+            color: AppColors.dustyBlueTeal,
+            width: 1.0,
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.dustyBlueTeal.withValues(alpha: 0.3), width: 1.0),
+          borderSide: BorderSide(
+            color: AppColors.dustyBlueTeal.withValues(alpha: 0.3),
+            width: 1.0,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -587,8 +621,6 @@ if (!userDoc.exists) {
     );
   }
 
-
-
   // ===== LANGUAGE SELECTOR =====
   Widget _buildLanguageSelector() {
     return Column(
@@ -598,8 +630,8 @@ if (!userDoc.exists) {
           children: [
             const Icon(Icons.language, color: AppColors.midTeal, size: 18),
             const SizedBox(width: 8),
-             Text(
-                AppLocalizations.of(context)!.tr('app_language'),
+            Text(
+              AppLocalizations.of(context)!.tr('app_language'),
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -616,10 +648,7 @@ if (!userDoc.exists) {
           ],
         ),
         Row(
-          children: [
-            const SizedBox(width: 26),
-            _buildLanguageOption('বাংলা'),
-          ],
+          children: [const SizedBox(width: 26), _buildLanguageOption('বাংলা')],
         ),
       ],
     );
@@ -630,7 +659,9 @@ if (!userDoc.exists) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: GestureDetector(
-        onTap: _isLoading ? null : () => setState(() => selectedLanguage = lang),
+        onTap: _isLoading
+            ? null
+            : () => setState(() => selectedLanguage = lang),
         child: Row(
           children: [
             Container(
@@ -654,7 +685,10 @@ if (!userDoc.exists) {
                   : null,
             ),
             const SizedBox(width: 8),
-            Text(lang, style: GoogleFonts.inter(color: AppColors.navyBlue, fontSize: 13)),
+            Text(
+              lang,
+              style: GoogleFonts.inter(color: AppColors.navyBlue, fontSize: 13),
+            ),
           ],
         ),
       ),
@@ -673,7 +707,9 @@ if (!userDoc.exists) {
             activeColor: AppColors.navyBlue,
             checkColor: AppColors.white,
             side: const BorderSide(color: AppColors.dustyBlueTeal, width: 1.5),
-            onChanged: _isLoading ? null : (value) => setState(() => agreedToTerms = value!),
+            onChanged: _isLoading
+                ? null
+                : (value) => setState(() => agreedToTerms = value!),
           ),
         ),
         const SizedBox(width: 8),
@@ -684,7 +720,7 @@ if (!userDoc.exists) {
               children: [
                 const TextSpan(text: 'I agree to the '),
                 TextSpan(
-                   text: AppLocalizations.of(context)!.tr('terms_privacy'),
+                  text: AppLocalizations.of(context)!.tr('terms_privacy'),
                   style: GoogleFonts.inter(
                     color: AppColors.midTeal,
                     fontWeight: FontWeight.w600,
@@ -739,7 +775,7 @@ if (!userDoc.exists) {
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                   Text(
+                  Text(
                     AppLocalizations.of(context)!.tr('create_account'),
                     style: GoogleFonts.poppins(
                       color: AppColors.white,
@@ -749,7 +785,11 @@ if (!userDoc.exists) {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Icon(Icons.arrow_forward, color: AppColors.white, size: 18),
+                  const Icon(
+                    Icons.arrow_forward,
+                    color: AppColors.white,
+                    size: 18,
+                  ),
                 ],
               ),
       ),
@@ -760,13 +800,23 @@ if (!userDoc.exists) {
   Widget _buildDivider() {
     return Row(
       children: [
-        Expanded(child: Divider(color: AppColors.placeholder.withValues(alpha: 0.3))),
+        Expanded(
+          child: Divider(color: AppColors.placeholder.withValues(alpha: 0.3)),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(AppLocalizations.of(context)!.tr('or'),
-              style: GoogleFonts.inter(color: AppColors.placeholder, fontSize: 12, fontWeight: FontWeight.w600)),
+          child: Text(
+            AppLocalizations.of(context)!.tr('or'),
+            style: GoogleFonts.inter(
+              color: AppColors.placeholder,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
-        Expanded(child: Divider(color: AppColors.placeholder.withValues(alpha: 0.3))),
+        Expanded(
+          child: Divider(color: AppColors.placeholder.withValues(alpha: 0.3)),
+        ),
       ],
     );
   }
@@ -798,7 +848,11 @@ if (!userDoc.exists) {
             const SizedBox(width: 10),
             Text(
               AppLocalizations.of(context)!.tr('continue_with_google'),
-              style: GoogleFonts.inter(color: AppColors.navyBlue, fontSize: 14, fontWeight: FontWeight.w600),
+              style: GoogleFonts.inter(
+                color: AppColors.navyBlue,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -820,8 +874,7 @@ if (!userDoc.exists) {
                 color: AppColors.midTeal,
                 fontWeight: FontWeight.w600,
               ),
-              recognizer: TapGestureRecognizer()
-                ..onTap = widget.onShowLogin,
+              recognizer: TapGestureRecognizer()..onTap = widget.onShowLogin,
             ),
           ],
         ),
