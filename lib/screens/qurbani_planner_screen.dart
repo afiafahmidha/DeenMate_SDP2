@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -513,7 +514,19 @@ class QurbaniRepository {
       'ownerName': currentDisplayName(),
     });
     await _persist(uid, docRef.id);
-    return QurbaniRepository._(uid, docRef.id);
+    final repository = QurbaniRepository._(uid, docRef.id);
+    // Generate the group's invite code immediately, the same way the
+    // Emergency SOS group gets its code the moment it's created, so the
+    // owner never has to remember a separate "generate" step — the code is
+    // simply always there, ready to be shared, from the very first screen.
+    try {
+      await repository.createInviteCode();
+    } catch (_) {
+      // Non-fatal: the group still exists without a code yet. The owner can
+      // retry from the "Share this plan" sheet, which always checks for
+      // (and shows) an existing code before offering to generate one.
+    }
+    return repository;
   }
 
   static Future<void> _persist(String ownerUid, String planId) async {
@@ -608,8 +621,22 @@ class QurbaniRepository {
     }, SetOptions(merge: true));
   }
 
+  /// Lets the owner (or any existing member) change only their own share
+  /// count without touching anyone else's — a thin, clearly-named wrapper
+  /// around the same join/update path used to set shares initially.
+  Future<void> updateOwnShares(int shares) => joinCurrentUserWithShares(shares);
+
+  /// Forgets this plan locally without touching Firestore. Used when a
+  /// member discovers the plan they were pointing at no longer exists
+  /// (e.g. the owner deleted the group).
+  Future<void> forgetLocally() => _clearPersistedPlan();
+
   static Future<QurbaniRepository> joinByCode(String code, int shares) async {
-    final inviteDoc = await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(code.trim().toUpperCase()).get();
+    final trimmed = code.trim().toUpperCase();
+    if (trimmed.isEmpty) {
+      throw Exception('Enter an invite code first');
+    }
+    final inviteDoc = await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(trimmed).get();
     if (!inviteDoc.exists) {
       throw Exception('Invite code not found');
     }
@@ -1165,19 +1192,37 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     );
   }
 
-  // Lets the plan owner generate an invite code, or lets any user enter
-  // someone else's code to join their plan
-  // instead (switching this device to point at that shared Firestore path).
-  void _showHouseholdSharingSheet() {
+  // Lets the plan owner see/generate their invite code (persistent, like the
+  // Emergency SOS group code), or lets any user enter someone else's code to
+  // join their plan instead (switching this device to point at that shared
+  // Firestore path).
+  Future<void> _showHouseholdSharingSheet() async {
     final repo = _repo;
     final isOwner = repo?.ownerUid == QurbaniRepository.currentUid();
     final joinCtrl = TextEditingController();
-    String? generatedCode;
-    bool generating = false;
-    bool joining = false;
-    String? error;
-    int shares = 1;
 
+    // Fetch whatever code already exists BEFORE opening the sheet, so the
+    // owner always lands on "here is your code", never on a stale
+    // "Generate" button for a code that was already created (e.g. at
+    // group-creation time).
+    String? generatedCode;
+    String? loadError;
+    if (isOwner && repo != null) {
+      try {
+        generatedCode = await repo.getInviteCode();
+      } catch (error) {
+        loadError = 'Could not load your existing code: $error';
+      }
+    }
+
+    bool generating = false;
+    bool updatingShares = false;
+    bool joining = false;
+    String? error = loadError;
+    int myShares = 1;
+    int joinShares = 1;
+
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1185,110 +1230,173 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => Padding(
           padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Share this plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 17)),
-              const SizedBox(height: 6),
-              Text(
-                'Use one code to share the same member list, expenses, and settlements. Anyone with the code can join this plan.',
-                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600], height: 1.4),
-              ),
-              const SizedBox(height: 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Share this plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 17)),
+                const SizedBox(height: 6),
+                Text(
+                  'Use one code to share the same member list, expenses, and settlements. Anyone with the code can join this plan.',
+                  style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600], height: 1.4),
+                ),
+                const SizedBox(height: 20),
 
-              Text('My shares', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
-              Row(children: [
-                IconButton(onPressed: shares > 1 ? () => setD(() => shares--) : null, icon: const Icon(Icons.remove_circle_outline)),
-                Text('$shares', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
-                IconButton(onPressed: shares < 7 ? () => setD(() => shares++) : null, icon: const Icon(Icons.add_circle_outline)),
-                Expanded(child: Text('Choose your own shares before creating or joining.', style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[600]))),
-              ]),
-
-              if (isOwner) ...[
-              Text('Your group code', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 8),
-              if (generatedCode != null)
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(generatedCode!, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 2, color: AppColors.midTeal)),
-                    ],
+                if (isOwner) ...[
+                  Text('Your group code', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Keep this screen handy — this code stays the same and is shown here any time you need to give it to a new member.',
+                    style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[600], height: 1.3),
                   ),
-                )
-              else
-                ElevatedButton.icon(
-                  onPressed: generating
+                  const SizedBox(height: 8),
+                  if (generatedCode != null)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(generatedCode!,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 2, color: AppColors.midTeal)),
+                          ),
+                          IconButton(
+                            tooltip: 'Copy code',
+                            icon: const Icon(Icons.copy_rounded, color: AppColors.midTeal),
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: generatedCode!));
+                              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Code copied')));
+                            },
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ElevatedButton.icon(
+                      onPressed: generating
+                          ? null
+                          : () async {
+                              setD(() {
+                                generating = true;
+                                error = null;
+                              });
+                              try {
+                                final code = await repo!.createInviteCode();
+                                setD(() {
+                                  generatedCode = code;
+                                  generating = false;
+                                });
+                              } catch (e) {
+                                setD(() {
+                                  error = e is FirebaseException
+                                      ? (e.code == 'permission-denied'
+                                          ? 'Could not generate a code: Firestore rules for this plan are not deployed yet.'
+                                          : 'Could not generate a code: ${e.message ?? e.code}')
+                                      : 'Could not generate a code: $e';
+                                  generating = false;
+                                });
+                              }
+                            },
+                      icon: generating
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.qr_code_rounded, size: 18),
+                      label: const Text('Generate group code'),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 44)),
+                    ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(error!, style: GoogleFonts.inter(color: Colors.red, fontSize: 12)),
+                  ],
+                  const SizedBox(height: 20),
+                ],
+
+                Text('My shares in this plan', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 4),
+                Row(children: [
+                  IconButton(onPressed: myShares > 1 ? () => setD(() => myShares--) : null, icon: const Icon(Icons.remove_circle_outline)),
+                  Text('$myShares', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(onPressed: myShares < 7 ? () => setD(() => myShares++) : null, icon: const Icon(Icons.add_circle_outline)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: (repo == null || updatingShares)
+                          ? null
+                          : () async {
+                              setD(() => updatingShares = true);
+                              try {
+                                await repo.updateOwnShares(myShares);
+                                setD(() => updatingShares = false);
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Your shares were updated')));
+                                }
+                              } catch (e) {
+                                setD(() {
+                                  updatingShares = false;
+                                  error = 'Could not update your shares: $e';
+                                });
+                              }
+                            },
+                      child: updatingShares
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Update my shares'),
+                    ),
+                  ),
+                ]),
+
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 12),
+
+                Text('Join a shared plan', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 4),
+                Row(children: [
+                  Text('Shares to join with:', style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600])),
+                  IconButton(onPressed: joinShares > 1 ? () => setD(() => joinShares--) : null, icon: const Icon(Icons.remove_circle_outline, size: 20)),
+                  Text('$joinShares', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold)),
+                  IconButton(onPressed: joinShares < 7 ? () => setD(() => joinShares++) : null, icon: const Icon(Icons.add_circle_outline, size: 20)),
+                ]),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: joinCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: InputDecoration(
+                    hintText: 'Enter invite code (e.g. QRB-AB12CD)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton(
+                  onPressed: joining
                       ? null
                       : () async {
-                          setD(() => generating = true);
+                          if (joinCtrl.text.trim().isEmpty) return;
+                          setD(() {
+                            joining = true;
+                            error = null;
+                          });
                           try {
-                            await repo!.joinCurrentUserWithShares(shares);
-                            final code = await repo.createInviteCode();
+                            final r = await QurbaniRepository.joinByCode(joinCtrl.text, joinShares);
+                            if (mounted) {
+                              setState(() => _repo = r);
+                            }
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          } catch (e) {
                             setD(() {
-                              generatedCode = code;
-                              generating = false;
-                            });
-                          } catch (_) {
-                            setD(() {
-                              error = 'Could not generate an invite code. Please try again.';
-                              generating = false;
+                              joining = false;
+                              error = e is FirebaseException
+                                  ? 'Could not join: ${e.message ?? e.code}'
+                                  : 'Could not join: $e';
                             });
                           }
                         },
-                  icon: generating
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.qr_code_rounded, size: 18),
-                  label: const Text('Generate group code'),
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 44)),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 44)),
+                  child: joining ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Join with this code'),
                 ),
               ],
-
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 12),
-
-              Text('Join a shared plan', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: joinCtrl,
-                textCapitalization: TextCapitalization.characters,
-                decoration: InputDecoration(
-                  hintText: 'Enter invite code (e.g. QRB-AB12CD)',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  errorText: error,
-                ),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton(
-                onPressed: joining
-                    ? null
-                    : () async {
-                        if (joinCtrl.text.trim().isEmpty) return;
-                        setD(() {
-                          joining = true;
-                          error = null;
-                        });
-                        try {
-                          final r = await QurbaniRepository.joinByCode(joinCtrl.text, shares);
-                          if (mounted) {
-                            setState(() => _repo = r);
-                            Navigator.pop(ctx);
-                          }
-                        } catch (_) {
-                          setD(() {
-                            joining = false;
-                            error = 'Code not found. Double-check and try again.';
-                          });
-                        }
-                      },
-                style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 44)),
-                child: joining ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Join with this code'),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -2124,6 +2232,43 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: _repo!.planRef.snapshots(),
       builder: (context, planSnapshot) {
+        // A non-owner's device can keep pointing at a plan the owner has
+        // since deleted. Detect that and offer a clean way out instead of
+        // silently showing an empty/broken group.
+        if (planSnapshot.connectionState != ConnectionState.waiting &&
+            planSnapshot.hasData &&
+            !planSnapshot.data!.exists) {
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.red.withValues(alpha: 0.35)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('This group no longer exists',
+                    style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 6),
+                Text('The owner deleted this shared plan. You can create your own group or join a different one.',
+                    style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5, height: 1.35)),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await _repo!.forgetLocally();
+                      if (mounted) setState(() => _repo = null);
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white),
+                    child: const Text('OK'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
         final code = planSnapshot.data?.data()?['inviteCode'] as String?;
         return StreamBuilder<List<QPlanMember>>(
           stream: _repo!.watchMembers(),
@@ -2159,9 +2304,23 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     const SizedBox(height: 5),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(10)),
-                      child: SelectableText(code, style: GoogleFonts.poppins(color: AppColors.midTeal, fontWeight: FontWeight.bold, fontSize: 19, letterSpacing: 2)),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: SelectableText(code, style: GoogleFonts.poppins(color: AppColors.midTeal, fontWeight: FontWeight.bold, fontSize: 19, letterSpacing: 2)),
+                          ),
+                          IconButton(
+                            tooltip: 'Copy code',
+                            icon: const Icon(Icons.copy_rounded, color: AppColors.midTeal, size: 20),
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: code));
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code copied')));
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -2205,26 +2364,85 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   }
 
   Widget _participantCard(QParticipant p, String myUid) {
-    final isOwner = p.ownerId == myUid;
+    // "Whoever adds it owns it": you can edit/delete a participant record
+    // directly if you're the one who added it (including yourself, via
+    // joining with a code), or if you're the plan owner. Anyone else can
+    // only propose a change via an edit request.
+    final recordOwnedByMe = p.ownerId == myUid;
+    final isPlanOwner = _repo != null && _repo!.ownerUid == myUid;
+    final canEditDirect = recordOwnedByMe || isPlanOwner;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          CircleAvatar(backgroundColor: AppColors.navyBlue.withValues(alpha: 0.1), child: const Icon(Icons.person, color: AppColors.navyBlue)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(p.name, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : null)),
-                Text('${p.shares} Share(s) · added by ${isOwner ? "you" : p.ownerName}',
-                    style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
-              ],
-            ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => canEditDirect ? _editParticipantDirect(p) : _requestParticipantEdit(p),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              CircleAvatar(backgroundColor: AppColors.navyBlue.withValues(alpha: 0.1), child: const Icon(Icons.person, color: AppColors.navyBlue)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(p.name, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : null)),
+                    Text('${p.shares} Share(s) · added by ${recordOwnedByMe ? "you" : p.ownerName}',
+                        style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                  ],
+                ),
+              ),
+              if (canEditDirect)
+                IconButton(
+                  tooltip: 'Edit shares',
+                  icon: const Icon(Icons.edit_rounded, color: AppColors.midTeal, size: 19),
+                  onPressed: () => _editParticipantDirect(p),
+                )
+              else
+                IconButton(
+                  tooltip: 'Request a change',
+                  icon: Icon(Icons.rate_review_outlined, color: _isDarkMode ? Colors.white54 : Colors.grey[500], size: 19),
+                  onPressed: () => _requestParticipantEdit(p),
+                ),
+              if (canEditDirect)
+                IconButton(
+                  tooltip: 'Remove participant',
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 19),
+                  onPressed: () => _confirmDeleteParticipant(p),
+                )
+              else
+                const Icon(Icons.verified_user_rounded, color: AppColors.midTeal, size: 20),
+            ],
           ),
-          const Icon(Icons.verified_user_rounded, color: AppColors.midTeal, size: 20),
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteParticipant(QParticipant p) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove participant'),
+        content: Text('Remove ${p.name} and their ${p.shares} share(s) from this plan\'s expense split? This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              try {
+                await _repo!.deleteParticipant(p.id);
+              } catch (error) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not remove participant: $error')));
+                }
+              }
+            },
+            child: const Text('Remove'),
+          ),
         ],
       ),
     );
@@ -2269,9 +2487,15 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             onPressed: () async {
               final name = _participantNameCtrl.text.trim();
               if (name.isEmpty) return;
-              await _repo!.addParticipant(name, _newParticipantShares);
-              _participantNameCtrl.clear();
-              setState(() => _newParticipantShares = 1);
+              try {
+                await _repo!.addParticipant(name, _newParticipantShares);
+                _participantNameCtrl.clear();
+                setState(() => _newParticipantShares = 1);
+              } catch (error) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not add participant: $error')));
+                }
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.midTeal,
@@ -2313,8 +2537,16 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
               onPressed: () async {
-                await _repo!.updateParticipantDirect(p.id, name: nameCtrl.text.trim(), shares: shares);
-                if (mounted) Navigator.pop(ctx);
+                final name = nameCtrl.text.trim();
+                if (name.isEmpty) return;
+                try {
+                  await _repo!.updateParticipantDirect(p.id, name: name, shares: shares);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (error) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Could not save: $error')));
+                  }
+                }
               },
               child: const Text('Save'),
             ),
@@ -2359,14 +2591,20 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             ElevatedButton(
               onPressed: () async {
                 if (reasonCtrl.text.trim().isEmpty) return;
-                await _repo!.submitEditRequest(
-                  type: QEditTargetType.participant,
-                  targetId: p.id,
-                  targetLabel: p.name,
-                  reason: reasonCtrl.text.trim(),
-                  proposedChanges: {'name': nameCtrl.text.trim(), 'shares': shares},
-                );
-                if (mounted) Navigator.pop(ctx);
+                try {
+                  await _repo!.submitEditRequest(
+                    type: QEditTargetType.participant,
+                    targetId: p.id,
+                    targetLabel: p.name,
+                    reason: reasonCtrl.text.trim(),
+                    proposedChanges: {'name': nameCtrl.text.trim(), 'shares': shares},
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (error) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Could not send request: $error')));
+                  }
+                }
               },
               child: const Text('Send request'),
             ),
