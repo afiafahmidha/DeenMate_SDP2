@@ -76,6 +76,7 @@ class EmergencyGroupService {
   }) => _groups.doc(code).collection('members').doc(_uid).set({
     'latitude': latitude,
     'longitude': longitude,
+    'photoUrl': _auth.currentUser?.photoURL ?? '',
     'updatedAt': FieldValue.serverTimestamp(),
   }, SetOptions(merge: true));
 
@@ -107,11 +108,26 @@ class EmergencyGroupService {
   Future<void> leaveGroup(String code) =>
       _groups.doc(code).collection('members').doc(_uid).delete();
 
+  /// Removes the group document. Its subcollections become inaccessible because
+  /// their membership rule requires the parent group to exist. Use an admin
+  /// backend job for physical recursive deletion of large chat histories.
+  Future<void> deleteGroup(String code) async {
+    final group = _groups.doc(code);
+    final snapshot = await group.get();
+    if (!snapshot.exists || snapshot.data()?['leaderId'] != _uid) {
+      throw StateError('Only the group owner can delete this group.');
+    }
+    await group.delete();
+  }
+
   Map<String, dynamic> _memberData({
     required String name,
     required bool isLeader,
   }) => {
     'name': name.trim().isEmpty ? 'Group member' : name.trim(),
+    // Only public Auth profile data is replicated to the group roster; private
+    // SOS and medical data stay in the owner's user document.
+    'photoUrl': _auth.currentUser?.photoURL ?? '',
     'isLeader': isLeader,
     'joinedAt': FieldValue.serverTimestamp(),
     'updatedAt': FieldValue.serverTimestamp(),
