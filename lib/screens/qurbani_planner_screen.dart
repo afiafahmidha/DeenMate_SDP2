@@ -11,24 +11,43 @@ import '../services/notification_service.dart';
 // MODELS
 // =============================================================================
 
+// Matches users/{ownerUid}/qurbaniPlans/{planId}/participants/{participantId}
+// from the app-wide Firestore schema. amountDue / amountPaid / paymentStatus
+// are kept as denormalized fields (recomputed and written back after every
+// balance calculation) so other screens/teammates reading this schema see
+// up-to-date numbers without needing to run the settlement engine themselves.
+// ownerId / ownerName are additions on top of the base schema, needed for the
+// "whoever adds it owns it" edit-request rule.
 class QParticipant {
   final String id;
   final String name;
+  final String? phone;
   final int shares;
+  final double amountDue;
+  final double amountPaid;
+  final String paymentStatus; // "unpaid" | "partial" | "paid"
   final String ownerId;
   final String ownerName;
 
   QParticipant({
     required this.id,
     required this.name,
+    this.phone,
     required this.shares,
+    this.amountDue = 0,
+    this.amountPaid = 0,
+    this.paymentStatus = 'unpaid',
     required this.ownerId,
     required this.ownerName,
   });
 
   Map<String, dynamic> toMap() => {
         'name': name,
+        'phone': phone,
         'shares': shares,
+        'amountDue': amountDue,
+        'amountPaid': amountPaid,
+        'paymentStatus': paymentStatus,
         'ownerId': ownerId,
         'ownerName': ownerName,
       };
@@ -38,7 +57,11 @@ class QParticipant {
     return QParticipant(
       id: d.id,
       name: m['name'] ?? '',
+      phone: m['phone'],
       shares: (m['shares'] ?? 1) as int,
+      amountDue: (m['amountDue'] ?? 0).toDouble(),
+      amountPaid: (m['amountPaid'] ?? 0).toDouble(),
+      paymentStatus: m['paymentStatus'] ?? 'unpaid',
       ownerId: m['ownerId'] ?? '',
       ownerName: m['ownerName'] ?? 'Unknown',
     );
@@ -47,7 +70,11 @@ class QParticipant {
   QParticipant copyWith({String? name, int? shares}) => QParticipant(
         id: id,
         name: name ?? this.name,
+        phone: phone,
         shares: shares ?? this.shares,
+        amountDue: amountDue,
+        amountPaid: amountPaid,
+        paymentStatus: paymentStatus,
         ownerId: ownerId,
         ownerName: ownerName,
       );
@@ -351,37 +378,124 @@ class SettlementEngine {
 // REPOSITORY — Cloud Firestore backed storage
 // =============================================================================
 //
-// Data is grouped under a single shared "planner code" so every participant
-// in the same household/group reads and writes the same records:
+// Aligned with the app-wide schema already in use elsewhere in DeenMate:
 //
-//   qurbani_planners/{plannerCode}/participants/{id}
-//   qurbani_planners/{plannerCode}/expenses/{id}
-//   qurbani_planners/{plannerCode}/edit_requests/{id}
-//   qurbani_planners/{plannerCode}/settlements/{id}
-//   qurbani_planners/{plannerCode}/checklist/{itemId}   (doc: {done: bool})
+//   users/{ownerUid}/qurbaniPlans/{planId}
+//   ├── year, status, animalType, totalShares, myShares, estimatedCost,
+//   │   paidAmount, vendorName, vendorPhone, slaughterDate, notes,
+//   │   createdAt, updatedAt                       (existing schema fields)
+//   ├── ownerId, ownerName, memberIds: array<string> (added for sharing —
+//   │   same pattern as emergencyGroups' members-based access)
+//   │
+//   ├── participants/{participantId}
+//   │     name, phone?, shares, amountDue, amountPaid, paymentStatus,
+//   │     ownerId, ownerName                        (ownerId/ownerName added)
+//   │
+//   ├── distributions/{distributionId}               (existing schema, as-is)
+//   │
+//   ├── expenses/{expenseId}                         (new sub-collection)
+//   │     category, amount, notes, payers[], ownerId, ownerName, createdAt
+//   │
+//   ├── editRequests/{requestId}                     (new sub-collection)
+//   │     targetType, targetId, targetLabel, requestedById, requestedByName,
+//   │     reason, proposedChanges, status, createdAt
+//   │
+//   ├── settlements/{settlementId}                   (new sub-collection)
+//   │     fromId, fromName, toId, toName, amount, confirmed, date
+//   │
+//   └── checklist/{itemId}                           (new sub-collection)
+//         done: bool
 //
-// The planner code is generated once per household and persisted locally via
-// SharedPreferences ('qurbani_planner_code'); share this code with the other
-// participants (e.g. via the app's existing invite/share flow) so their app
-// points at the same Firestore path. Swap this for your app's real
-// family/household id if one already exists elsewhere in the project.
+// Top-level lookup collection (mirrors the SOS feature's inviteTokens idea,
+// simplified — this is a low-stakes join code, not a security-sensitive one,
+// so it's stored in plain text rather than hashed):
+//
+//   qurbaniPlanInvites/{code} -> { ownerUid, planId, createdAt }
+//
+// A user's own plans are found locally (planId + ownerUid cached via
+// SharedPreferences after creation/joining) rather than via a collection
+// group query, so no extra composite index is required. If you'd rather
+// list "my plans" straight from Firestore (e.g. for a plans-picker screen),
+// add `collectionGroup('qurbaniPlans').where('memberIds', arrayContains: uid)`
+// once the corresponding security rule and index are in place.
+//
+// SECURITY RULES — add alongside your existing rules:
+//   match /users/{ownerUid}/qurbaniPlans/{planId} {
+//     allow read, write: if request.auth.uid in resource.data.memberIds
+//         || request.auth.uid == ownerUid;
+//     match /{sub=**} {
+//       allow read, write: if request.auth.uid in
+//           get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds
+//           || request.auth.uid == ownerUid;
+//     }
+//   }
+//   match /qurbaniPlanInvites/{code} {
+//     allow read: if request.auth != null;
+//     allow create: if request.auth.uid == request.resource.data.ownerUid;
+//   }
 class QurbaniRepository {
-  QurbaniRepository._(this.plannerCode);
-  final String plannerCode;
+  QurbaniRepository._(this.ownerUid, this.planId);
+  final String ownerUid;
+  final String planId;
 
+  static const _prefsOwnerKey = 'qurbani_plan_owner_uid';
+  static const _prefsPlanKey = 'qurbani_plan_id';
+
+  /// Loads the locally-remembered plan (created or joined earlier). If none
+  /// exists yet, creates a brand-new plan owned by the current user under
+  /// users/{uid}/qurbaniPlans/{newId}, matching the existing schema shape.
   static Future<QurbaniRepository> load() async {
     final prefs = await SharedPreferences.getInstance();
-    var code = prefs.getString('qurbani_planner_code');
-    if (code == null || code.isEmpty) {
-      code = _generateCode();
-      await prefs.setString('qurbani_planner_code', code);
+    final savedOwner = prefs.getString(_prefsOwnerKey);
+    final savedPlan = prefs.getString(_prefsPlanKey);
+    if (savedOwner != null && savedPlan != null) {
+      return QurbaniRepository._(savedOwner, savedPlan);
     }
-    return QurbaniRepository._(code);
+    return _createNewPlan();
   }
 
-  static Future<void> setPlannerCode(String code) async {
+  static Future<QurbaniRepository> _createNewPlan() async {
+    final uid = currentUid();
+    final docRef = FirebaseFirestore.instance.collection('users').doc(uid).collection('qurbaniPlans').doc();
+    final now = FieldValue.serverTimestamp();
+    await docRef.set({
+      'year': DateTime.now().year,
+      'status': 'planned',
+      'animalType': 'cow',
+      'totalShares': 7,
+      'myShares': 1,
+      'estimatedCost': 0.0,
+      'paidAmount': 0.0,
+      'vendorName': null,
+      'vendorPhone': null,
+      'slaughterDate': null,
+      'notes': null,
+      'ownerId': uid,
+      'ownerName': currentDisplayName(),
+      'memberIds': [uid],
+      'createdAt': now,
+      'updatedAt': now,
+    });
+    await _persist(uid, docRef.id);
+    return QurbaniRepository._(uid, docRef.id);
+  }
+
+  static Future<void> _persist(String ownerUid, String planId) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('qurbani_planner_code', code.trim().toUpperCase());
+    await prefs.setString(_prefsOwnerKey, ownerUid);
+    await prefs.setString(_prefsPlanKey, planId);
+  }
+
+  /// Generates a short shareable code for this plan and stores the lookup
+  /// entry, so another household member can join via [joinByCode].
+  Future<String> createInviteCode() async {
+    final code = _generateCode();
+    await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(code).set({
+      'ownerUid': ownerUid,
+      'planId': planId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return code;
   }
 
   static String _generateCode() {
@@ -389,14 +503,36 @@ class QurbaniRepository {
     return 'QRB${rnd.toString().padLeft(6, '0')}';
   }
 
-  DocumentReference<Map<String, dynamic>> get _root =>
-      FirebaseFirestore.instance.collection('qurbani_planners').doc(plannerCode);
+  /// Joins an existing household plan by its invite code: looks up the
+  /// (ownerUid, planId) pair, adds the current user to memberIds, and
+  /// switches local storage to point at that plan from now on.
+  static Future<QurbaniRepository> joinByCode(String code) async {
+    final inviteDoc = await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(code.trim().toUpperCase()).get();
+    if (!inviteDoc.exists) {
+      throw Exception('Invite code not found');
+    }
+    final data = inviteDoc.data()!;
+    final targetOwner = data['ownerUid'] as String;
+    final targetPlan = data['planId'] as String;
 
-  CollectionReference<Map<String, dynamic>> get participantsRef => _root.collection('participants');
-  CollectionReference<Map<String, dynamic>> get expensesRef => _root.collection('expenses');
-  CollectionReference<Map<String, dynamic>> get editRequestsRef => _root.collection('edit_requests');
-  CollectionReference<Map<String, dynamic>> get settlementsRef => _root.collection('settlements');
-  CollectionReference<Map<String, dynamic>> get checklistRef => _root.collection('checklist');
+    final planRef = FirebaseFirestore.instance.collection('users').doc(targetOwner).collection('qurbaniPlans').doc(targetPlan);
+    await planRef.update({
+      'memberIds': FieldValue.arrayUnion([currentUid()]),
+    });
+
+    await _persist(targetOwner, targetPlan);
+    return QurbaniRepository._(targetOwner, targetPlan);
+  }
+
+  DocumentReference<Map<String, dynamic>> get planRef =>
+      FirebaseFirestore.instance.collection('users').doc(ownerUid).collection('qurbaniPlans').doc(planId);
+
+  CollectionReference<Map<String, dynamic>> get participantsRef => planRef.collection('participants');
+  CollectionReference<Map<String, dynamic>> get expensesRef => planRef.collection('expenses');
+  CollectionReference<Map<String, dynamic>> get editRequestsRef => planRef.collection('editRequests');
+  CollectionReference<Map<String, dynamic>> get settlementsRef => planRef.collection('settlements');
+  CollectionReference<Map<String, dynamic>> get checklistRef => planRef.collection('checklist');
+  CollectionReference<Map<String, dynamic>> get distributionsRef => planRef.collection('distributions');
 
   static String currentUid() => FirebaseAuth.instance.currentUser?.uid ?? 'local_device';
   static String currentDisplayName() =>
@@ -404,65 +540,70 @@ class QurbaniRepository {
       FirebaseAuth.instance.currentUser?.email?.split('@').first ??
       'Me';
 
-  Stream<List<QParticipant>> watchParticipants() => participantsRef
-      .orderBy('name')
-      .snapshots()
-      .map((s) => s.docs.map(QParticipant.fromDoc).toList());
+  Stream<List<QParticipant>> watchParticipants() =>
+      participantsRef.orderBy('name').snapshots().map((s) => s.docs.map(QParticipant.fromDoc).toList());
 
-  Stream<List<QExpense>> watchExpenses() => expensesRef
-      .orderBy('createdAt', descending: true)
-      .snapshots()
-      .map((s) => s.docs.map(QExpense.fromDoc).toList());
+  Stream<List<QExpense>> watchExpenses() =>
+      expensesRef.orderBy('createdAt', descending: true).snapshots().map((s) => s.docs.map(QExpense.fromDoc).toList());
 
-  Stream<List<QEditRequest>> watchEditRequests() => editRequestsRef
-      .orderBy('createdAt', descending: true)
-      .snapshots()
-      .map((s) => s.docs.map(QEditRequest.fromDoc).toList());
+  Stream<List<QEditRequest>> watchEditRequests() =>
+      editRequestsRef.orderBy('createdAt', descending: true).snapshots().map((s) => s.docs.map(QEditRequest.fromDoc).toList());
 
-  Stream<List<QSettlement>> watchSettlements() => settlementsRef
-      .orderBy('date', descending: true)
-      .snapshots()
-      .map((s) => s.docs.map(QSettlement.fromDoc).toList());
+  Stream<List<QSettlement>> watchSettlements() =>
+      settlementsRef.orderBy('date', descending: true).snapshots().map((s) => s.docs.map(QSettlement.fromDoc).toList());
 
-  Future<void> addParticipant(String name, int shares) => participantsRef.add(
-        QParticipant(
-          id: '',
-          name: name,
-          shares: shares,
-          ownerId: currentUid(),
-          ownerName: currentDisplayName(),
-        ).toMap(),
-      );
+  Future<void> addParticipant(String name, int shares, {String? phone}) async {
+    await participantsRef.add(
+      QParticipant(
+        id: '',
+        name: name,
+        phone: phone,
+        shares: shares,
+        ownerId: currentUid(),
+        ownerName: currentDisplayName(),
+      ).toMap(),
+    );
+    await _recalcAndSyncBalances();
+  }
 
-  Future<void> updateParticipantDirect(String id, {String? name, int? shares}) {
+  Future<void> updateParticipantDirect(String id, {String? name, int? shares}) async {
     final data = <String, dynamic>{};
     if (name != null) data['name'] = name;
     if (shares != null) data['shares'] = shares;
-    return participantsRef.doc(id).update(data);
+    await participantsRef.doc(id).update(data);
+    await _recalcAndSyncBalances();
   }
 
-  Future<void> deleteParticipant(String id) => participantsRef.doc(id).delete();
+  Future<void> deleteParticipant(String id) async {
+    await participantsRef.doc(id).delete();
+    await _recalcAndSyncBalances();
+  }
 
   Future<void> addExpense({
     required String category,
     required double amount,
     required String notes,
     required List<QPayer> payers,
-  }) =>
-      expensesRef.add(
-        QExpense(
-          id: '',
-          category: category,
-          amount: amount,
-          notes: notes,
-          payers: payers,
-          ownerId: currentUid(),
-          ownerName: currentDisplayName(),
-          createdAt: DateTime.now(),
-        ).toMap(),
-      );
+  }) async {
+    await expensesRef.add(
+      QExpense(
+        id: '',
+        category: category,
+        amount: amount,
+        notes: notes,
+        payers: payers,
+        ownerId: currentUid(),
+        ownerName: currentDisplayName(),
+        createdAt: DateTime.now(),
+      ).toMap(),
+    );
+    await _recalcAndSyncBalances();
+  }
 
-  Future<void> deleteExpense(String id) => expensesRef.doc(id).delete();
+  Future<void> deleteExpense(String id) async {
+    await expensesRef.doc(id).delete();
+    await _recalcAndSyncBalances();
+  }
 
   Future<void> submitEditRequest({
     required QEditTargetType type,
@@ -493,6 +634,7 @@ class QurbaniRepository {
       await expensesRef.doc(req.targetId).update(req.proposedChanges);
     }
     await editRequestsRef.doc(req.id).update({'status': 'approved'});
+    await _recalcAndSyncBalances();
   }
 
   Future<void> rejectEditRequest(String id) => editRequestsRef.doc(id).update({'status': 'rejected'});
@@ -502,26 +644,63 @@ class QurbaniRepository {
     required QParticipant to,
     required double amount,
     bool confirmed = true,
-  }) =>
-      settlementsRef.add(
-        QSettlement(
-          id: '',
-          fromId: from.id,
-          fromName: from.name,
-          toId: to.id,
-          toName: to.name,
-          amount: amount,
-          confirmed: confirmed,
-          date: DateTime.now(),
-        ).toMap(),
-      );
+  }) async {
+    await settlementsRef.add(
+      QSettlement(
+        id: '',
+        fromId: from.id,
+        fromName: from.name,
+        toId: to.id,
+        toName: to.name,
+        amount: amount,
+        confirmed: confirmed,
+        date: DateTime.now(),
+      ).toMap(),
+    );
+    await _recalcAndSyncBalances();
+  }
+
+  /// Reads participants/expenses/settlements once, recomputes balances via
+  /// [SettlementEngine], and writes amountDue/amountPaid/paymentStatus back
+  /// onto each participant doc. Called automatically after any mutation that
+  /// affects balances so the denormalized fields never go stale.
+  Future<void> _recalcAndSyncBalances() async {
+    final pSnap = await participantsRef.get();
+    final eSnap = await expensesRef.get();
+    final sSnap = await settlementsRef.get();
+    final participants = pSnap.docs.map(QParticipant.fromDoc).toList();
+    final expenses = eSnap.docs.map(QExpense.fromDoc).toList();
+    final settlements = sSnap.docs.map(QSettlement.fromDoc).toList();
+    final balances = SettlementEngine.computeBalances(participants: participants, expenses: expenses, settlements: settlements);
+    await syncParticipantBalances(balances);
+  }
 
   Future<void> setChecklistDone(String itemId, bool done) =>
       checklistRef.doc(itemId).set({'done': done}, SetOptions(merge: true));
 
-  Stream<Map<String, bool>> watchChecklistState() => checklistRef.snapshots().map(
-        (s) => {for (final d in s.docs) d.id: (d.data()['done'] ?? false) as bool},
-      );
+  Stream<Map<String, bool>> watchChecklistState() =>
+      checklistRef.snapshots().map((s) => {for (final d in s.docs) d.id: (d.data()['done'] ?? false) as bool});
+
+  /// Writes the freshly-computed balances back onto each participant doc's
+  /// amountDue / amountPaid / paymentStatus fields, so any other screen
+  /// reading the base schema (e.g. a dashboard your teammates already built
+  /// against qurbaniPlans/participants) sees current numbers without having
+  /// to run the settlement engine itself. Call this after any change to
+  /// expenses or settlements.
+  Future<void> syncParticipantBalances(List<QBalanceRow> balances) async {
+    final batch = FirebaseFirestore.instance.batch();
+    for (final b in balances) {
+      final status = b.totalPaid <= 0
+          ? 'unpaid'
+          : (b.totalPaid >= b.shareOfCost ? 'paid' : 'partial');
+      batch.update(participantsRef.doc(b.participant.id), {
+        'amountDue': b.shareOfCost,
+        'amountPaid': b.totalPaid,
+        'paymentStatus': status,
+      });
+    }
+    await batch.commit();
+  }
 }
 
 // =============================================================================
@@ -803,8 +982,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         Text('Qurbani & Aqiqah Planner',
                             style: GoogleFonts.poppins(color: textColor, fontSize: 15.5, fontWeight: FontWeight.bold)),
                         GestureDetector(
-                          onTap: _showPlannerCodeDialog,
-                          child: Text('Household code: ${_repo!.plannerCode}  ·  tap to change',
+                          onTap: _showHouseholdSharingSheet,
+                          child: Text('Share plan with household  ·  tap here',
                               style: GoogleFonts.inter(color: subtextColor, fontSize: 11)),
                         ),
                       ],
@@ -841,8 +1020,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         Text('Qurbani & Aqiqah Planner',
                             style: GoogleFonts.poppins(color: AppColors.navyBlue, fontSize: 18, fontWeight: FontWeight.bold)),
                         GestureDetector(
-                          onTap: _showPlannerCodeDialog,
-                          child: Text('Household code: ${_repo!.plannerCode}  ·  tap to change',
+                          onTap: _showHouseholdSharingSheet,
+                          child: Text('Share plan with household  ·  tap here',
                               style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12)),
                         ),
                       ],
@@ -865,37 +1044,111 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     );
   }
 
-  // Lets a household join an existing shared planner by entering the code
-  // another member already has, or generates a fresh one to share out.
-  void _showPlannerCodeDialog() {
-    final ctrl = TextEditingController(text: _repo!.plannerCode);
-    showDialog(
+  // Lets the plan owner generate an invite code to share with household
+  // members, or lets any user enter someone else's code to join their plan
+  // instead (switching this device to point at that shared Firestore path).
+  void _showHouseholdSharingSheet() {
+    final joinCtrl = TextEditingController();
+    String? generatedCode;
+    bool generating = false;
+    bool joining = false;
+    String? error;
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Household planner code'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Share this code with your household so everyone sees the same participants, expenses and settlements. Enter someone else\'s code to join their planner instead.'),
-            const SizedBox(height: 12),
-            TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'Planner code')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              await QurbaniRepository.setPlannerCode(ctrl.text);
-              final r = await QurbaniRepository.load();
-              if (mounted) {
-                setState(() => _repo = r);
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Share this plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 17)),
+              const SizedBox(height: 6),
+              Text(
+                'Generate a code so household members see the same participants, expenses and settlements — or enter someone else\'s code to join their plan instead.',
+                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600], height: 1.4),
+              ),
+              const SizedBox(height: 20),
+
+              Text('Invite others', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              if (generatedCode != null)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(generatedCode!, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 2, color: AppColors.midTeal)),
+                    ],
+                  ),
+                )
+              else
+                ElevatedButton.icon(
+                  onPressed: generating
+                      ? null
+                      : () async {
+                          setD(() => generating = true);
+                          final code = await _repo!.createInviteCode();
+                          setD(() {
+                            generatedCode = code;
+                            generating = false;
+                          });
+                        },
+                  icon: generating
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.qr_code_rounded, size: 18),
+                  label: const Text('Generate invite code'),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 44)),
+                ),
+
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 12),
+
+              Text('Join a household plan instead', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: joinCtrl,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  hintText: 'Enter invite code (e.g. QRB123456)',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  errorText: error,
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: joining
+                    ? null
+                    : () async {
+                        if (joinCtrl.text.trim().isEmpty) return;
+                        setD(() {
+                          joining = true;
+                          error = null;
+                        });
+                        try {
+                          final r = await QurbaniRepository.joinByCode(joinCtrl.text);
+                          if (mounted) {
+                            setState(() => _repo = r);
+                            Navigator.pop(ctx);
+                          }
+                        } catch (_) {
+                          setD(() {
+                            joining = false;
+                            error = 'Code not found. Double-check and try again.';
+                          });
+                        }
+                      },
+                style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 44)),
+                child: joining ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Join with this code'),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
