@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -486,10 +488,10 @@ class QurbaniRepository {
     await prefs.setString(_prefsPlanKey, planId);
   }
 
-  /// Generates a short shareable code for this plan and stores the lookup
-  /// entry, so another household member can join via [joinByCode].
+  /// Generates a shareable code, using the same local-code pattern as the SOS
+  /// emergency group feature.
   Future<String> createInviteCode() async {
-    final code = _generateCode();
+    final code = await _newUnusedInviteCode();
     await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(code).set({
       'ownerUid': ownerUid,
       'planId': planId,
@@ -498,15 +500,35 @@ class QurbaniRepository {
     return code;
   }
 
-  static String _generateCode() {
-    final rnd = DateTime.now().millisecondsSinceEpoch.remainder(1000000);
-    return 'QRB${rnd.toString().padLeft(6, '0')}';
+  static Future<String> _newUnusedInviteCode() async {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final random = Random.secure();
+    for (var attempt = 0; attempt < 5; attempt++) {
+      final suffix = List.generate(6, (_) => chars[random.nextInt(chars.length)]).join();
+      final code = 'QRB-$suffix';
+      final existing = await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(code).get();
+      if (!existing.exists) return code;
+    }
+    throw StateError('Could not create a unique invite code. Please try again.');
   }
 
   /// Joins an existing household plan by its invite code: looks up the
   /// (ownerUid, planId) pair, adds the current user to memberIds, and
   /// switches local storage to point at that plan from now on.
-  static Future<QurbaniRepository> joinByCode(String code) async {
+  Future<void> joinCurrentUserWithShares(int shares) async {
+    final uid = currentUid();
+    final name = currentDisplayName();
+    await planRef.collection('members').doc(uid).set({
+      'name': name, 'shares': shares,
+      'joinedAt': FieldValue.serverTimestamp(), 'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await participantsRef.doc(uid).set({
+      'name': name, 'phone': null, 'shares': shares, 'amountDue': 0.0,
+      'amountPaid': 0.0, 'paymentStatus': 'unpaid', 'ownerId': uid, 'ownerName': name,
+    }, SetOptions(merge: true));
+  }
+
+  static Future<QurbaniRepository> joinByCode(String code, int shares) async {
     final inviteDoc = await FirebaseFirestore.instance.collection('qurbaniPlanInvites').doc(code.trim().toUpperCase()).get();
     if (!inviteDoc.exists) {
       throw Exception('Invite code not found');
@@ -515,13 +537,10 @@ class QurbaniRepository {
     final targetOwner = data['ownerUid'] as String;
     final targetPlan = data['planId'] as String;
 
-    final planRef = FirebaseFirestore.instance.collection('users').doc(targetOwner).collection('qurbaniPlans').doc(targetPlan);
-    await planRef.update({
-      'memberIds': FieldValue.arrayUnion([currentUid()]),
-    });
-
     await _persist(targetOwner, targetPlan);
-    return QurbaniRepository._(targetOwner, targetPlan);
+    final repository = QurbaniRepository._(targetOwner, targetPlan);
+    await repository.joinCurrentUserWithShares(shares);
+    return repository;
   }
 
   DocumentReference<Map<String, dynamic>> get planRef =>
@@ -1100,6 +1119,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     bool generating = false;
     bool joining = false;
     String? error;
+    int shares = 1;
 
     showModalBottomSheet(
       context: context,
@@ -1120,6 +1140,14 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               ),
               const SizedBox(height: 20),
 
+              Text('My shares', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+              Row(children: [
+                IconButton(onPressed: shares > 1 ? () => setD(() => shares--) : null, icon: const Icon(Icons.remove_circle_outline)),
+                Text('$shares', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
+                IconButton(onPressed: shares < 7 ? () => setD(() => shares++) : null, icon: const Icon(Icons.add_circle_outline)),
+                Expanded(child: Text('Choose your own shares before creating or joining.', style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[600]))),
+              ]),
+
               Text('Invite others', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 8),
               if (generatedCode != null)
@@ -1139,11 +1167,19 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       ? null
                       : () async {
                           setD(() => generating = true);
-                          final code = await _repo!.createInviteCode();
-                          setD(() {
-                            generatedCode = code;
-                            generating = false;
-                          });
+                          try {
+                            await _repo!.joinCurrentUserWithShares(shares);
+                            final code = await _repo!.createInviteCode();
+                            setD(() {
+                              generatedCode = code;
+                              generating = false;
+                            });
+                          } catch (_) {
+                            setD(() {
+                              error = 'Could not generate an invite code. Please try again.';
+                              generating = false;
+                            });
+                          }
                         },
                   icon: generating
                       ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
@@ -1162,7 +1198,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 controller: joinCtrl,
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
-                  hintText: 'Enter invite code (e.g. QRB123456)',
+                  hintText: 'Enter invite code (e.g. QRB-AB12CD)',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   errorText: error,
                 ),
@@ -1178,7 +1214,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           error = null;
                         });
                         try {
-                          final r = await QurbaniRepository.joinByCode(joinCtrl.text);
+                          final r = await QurbaniRepository.joinByCode(joinCtrl.text, shares);
                           if (mounted) {
                             setState(() => _repo = r);
                             Navigator.pop(ctx);
@@ -1921,9 +1957,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           children: [
             Text('Participants', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 4),
-            Text("Whoever adds a participant owns their record. Anyone else must send an edit request with a note.",
+            Text("Each participant joins with the household code and chooses their own share count.",
                 style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4)),
             const SizedBox(height: 12),
+            _householdGroupCard(),
+            const SizedBox(height: 16),
             if (!snap.hasData)
               const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Center(child: CircularProgressIndicator()))
             else if (participants.isEmpty)
@@ -1931,10 +1969,67 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             else
               ...participants.map((p) => _participantCard(p, myUid)),
             const SizedBox(height: 16),
-            _addParticipantCard(),
           ],
         );
       },
+    );
+  }
+
+  Widget _householdGroupCard() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    final isOwner = _repo!.ownerUid == QurbaniRepository.currentUid();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.midTeal.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.groups_rounded, color: AppColors.midTeal, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Household share group',
+                    style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isOwner
+                ? 'Create a code here, then share it with people you want to add to this plan.'
+                : 'Enter a household code here to join the shared Qurbani plan.',
+            style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5, height: 1.35),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _showHouseholdSharingSheet,
+              icon: Icon(isOwner ? Icons.add_link_rounded : Icons.login_rounded, size: 18),
+              label: Text(isOwner ? 'Create or join group' : 'Join household group'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.midTeal,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(42),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1958,15 +2053,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               ],
             ),
           ),
-          if (isOwner) ...[
-            IconButton(icon: const Icon(Icons.edit_outlined, size: 18), onPressed: () => _editParticipantDirect(p)),
-            IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18), onPressed: () => _repo!.deleteParticipant(p.id)),
-          ] else
-            IconButton(
-              icon: Icon(Icons.edit_note_rounded, size: 20, color: AppColors.coralOrange),
-              tooltip: 'Request an edit',
-              onPressed: () => _requestParticipantEdit(p),
-            ),
+          const Icon(Icons.verified_user_rounded, color: AppColors.midTeal, size: 20),
         ],
       ),
     );

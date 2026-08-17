@@ -18,7 +18,8 @@ service cloud.firestore {
     function isPlanMember(ownerUid, planId) {
       return signedIn()
         && (request.auth.uid == ownerUid
-          || request.auth.uid in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds);
+          || request.auth.uid in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds
+          || exists(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)/members/$(request.auth.uid)));
     }
 
     function validShortText(value, maxLength) {
@@ -152,13 +153,36 @@ service cloud.firestore {
         allow create: if isOwner(userId)
           && validQurbaniPlan(request.resource.data, userId)
           && request.resource.data.memberIds.hasOnly([request.auth.uid]);
-        allow read: if signedIn()
-          && (request.auth.uid == userId || request.auth.uid in resource.data.memberIds);
+        allow read: if isPlanMember(userId, planId);
         allow update: if isOwner(userId)
           && validQurbaniPlan(request.resource.data, userId)
           && request.resource.data.ownerId == resource.data.ownerId
           && request.resource.data.createdAt == resource.data.createdAt;
         allow delete: if isOwner(userId);
+
+        // Mirrors emergencyGroups/members: knowing a valid share code lets a
+        // signed-in person create only their own membership record.
+        match /members/{memberId} {
+          allow read: if isPlanMember(userId, planId);
+          allow create: if signedIn()
+            && request.auth.uid == memberId
+            && request.resource.data.keys().hasOnly(['name', 'shares', 'joinedAt', 'updatedAt'])
+            && request.resource.data.keys().hasAll(['name', 'shares', 'joinedAt', 'updatedAt'])
+            && validShortText(request.resource.data.name, 80)
+            && request.resource.data.shares is int && request.resource.data.shares >= 1 && request.resource.data.shares <= 7
+            && request.resource.data.joinedAt is timestamp
+            && request.resource.data.updatedAt is timestamp;
+          allow update: if signedIn()
+            && request.auth.uid == memberId
+            && request.resource.data.keys().hasOnly(['name', 'shares', 'joinedAt', 'updatedAt'])
+            && request.resource.data.keys().hasAll(['name', 'shares', 'joinedAt', 'updatedAt'])
+            && validShortText(request.resource.data.name, 80)
+            && request.resource.data.shares is int && request.resource.data.shares >= 1 && request.resource.data.shares <= 7
+            && request.resource.data.joinedAt == resource.data.joinedAt
+            && request.resource.data.updatedAt is timestamp;
+          allow delete: if signedIn()
+            && (request.auth.uid == memberId || request.auth.uid == userId);
+        }
 
         match /participants/{participantId} {
           allow read: if isPlanMember(userId, planId);
@@ -220,8 +244,8 @@ service cloud.firestore {
       }
     }
 
-    // Invite codes can only be created by the plan owner. A signed-in user
-    // may fetch one by its unguessable document ID, but may never list them.
+    // SOS-style share-code lookup. Codes cannot be listed, and only a plan
+    // owner may create a code that points to their own plan.
     match /qurbaniPlanInvites/{code} {
       allow get: if signedIn();
       allow list: if false;
@@ -260,6 +284,27 @@ service cloud.firestore {
         allow delete: if request.auth != null
           && (request.auth.uid == memberId
             || get(/databases/$(database)/documents/emergencyGroups/$(groupCode)).data.leaderId == request.auth.uid);
+      }
+
+      // End-to-end encrypted group chat. Firestore stores ciphertext only;
+      // clients decrypt it locally with the separately shared group secret.
+      match /messages/{messageId} {
+        allow read: if request.auth != null
+          && exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid));
+        allow create: if request.auth != null
+          && exists(/databases/$(database)/documents/emergencyGroups/$(groupCode)/members/$(request.auth.uid))
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'ciphertext', 'nonce', 'mac', 'createdAt'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.senderName is string
+          && request.resource.data.senderName.size() <= 80
+          && request.resource.data.ciphertext is string
+          && request.resource.data.ciphertext.size() <= 8000
+          && request.resource.data.nonce is string
+          && request.resource.data.nonce.size() <= 100
+          && request.resource.data.mac is string
+          && request.resource.data.mac.size() <= 100
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
       }
     }
   }
