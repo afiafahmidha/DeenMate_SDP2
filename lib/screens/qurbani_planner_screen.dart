@@ -654,6 +654,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     'Payment': false,
     'Collection': false,
     'Distribution': false,
+    'Eligibility': false,
   };
 
   // Shares sub-tabs: 0 Participants, 1 Expenses, 2 Settlements, 3 Edit Requests
@@ -1057,7 +1058,110 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             ),
           ),
         ],
+        const SizedBox(height: 24),
+
+        // General Rules & Guidelines -- quick-reference summary. The full
+        // Qur'anic verses + detailed fiqh notes live in Tasks > Rules & Verses;
+        // this is the short version kept right where eligibility is checked.
+        Text('General Rules & Guidelines',
+            style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.12)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _labeledRuleBullet('Age limits:', 'Goat/Sheep must be 1+ years. Cow/Buffalo must be 2+ years. Camel must be 5+ years.'),
+              _labeledRuleBullet('Health conditions:', 'The animal must be healthy and free of defects like blindness, severe limp, or extreme emaciation.'),
+              _labeledRuleBullet('Timing:', 'Valid from after Eid prayer on 10 Dhul Hijjah until sunset on 13 Dhul Hijjah.'),
+              _labeledRuleBullet('Important Sunnahs:', 'Fast during the first 9 days of Dhul Hijjah, avoid cutting hair or nails from 1st Dhul Hijjah until sacrifice is done (if you are the one sacrificing), and recite Takbeer Tashreeq after prayers.'),
+              _labeledRuleBullet('Meat distribution:', 'Recommended to divide the meat into three parts: 1/3 for family, 1/3 for relatives/friends, 1/3 for poor/needy.', last: true),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => setState(() {
+                    _tab = 4;
+                    _tasksSubTab = 1;
+                  }),
+                  icon: const Icon(Icons.menu_book_rounded, size: 16),
+                  label: const Text("Read full Qur'anic basis & detailed rulings"),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.midTeal, padding: EdgeInsets.zero),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Eligibility / Nisab reminder -- separate from the Settlements-tab
+        // reminders since this one is about re-checking Nisab as Dhul Hijjah
+        // approaches, not about payments or the animal.
+        Text('\ud83d\udd14 Eligibility Reminder', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white, borderRadius: BorderRadius.circular(14)),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Re-check Nisab before Dhul Hijjah',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: _isDarkMode ? Colors.white : null)),
+                    const SizedBox(height: 4),
+                    Text('Get a nudge a few days before Eid to re-check your assets against the current Nisab value, since gold/silver prices change.',
+                        style: GoogleFonts.inter(color: _isDarkMode ? Colors.white54 : Colors.grey, fontSize: 10)),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _activeReminders['Eligibility'] ?? false,
+                activeThumbColor: AppColors.navyBlue,
+                onChanged: (val) => _toggleReminder(
+                  'Eligibility',
+                  '\ud83d\udccb Nisab Re-check Reminder',
+                  'Eid al-Adha is approaching. Re-check your savings, gold/silver and cash against the current Nisab value to confirm Qurbani eligibility.',
+                  DateTime.now().add(const Duration(seconds: 20)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _labeledRuleBullet(String boldText, String text, {bool last = false}) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: last ? 0 : 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Icon(Icons.brightness_1, size: 6, color: _isDarkMode ? AppColors.midTeal : AppColors.navyBlue),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[800], fontSize: 13, height: 1.4),
+                children: [
+                  TextSpan(text: '$boldText ', style: TextStyle(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : Colors.black87)),
+                  TextSpan(text: text),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1434,33 +1538,56 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   // SHARES TAB — Participants / Expenses / Settlements / Edit Requests
   // ===========================================================================
   Widget _buildSharesTab(NumberFormat fmt) {
-    final subLabels = ['Participants', 'Expenses', 'Settlements', 'Edit Requests'];
+    final subLabels = ['Participants', 'Expenses', 'Settlements', 'Requests'];
+    final subIcons = [Icons.people_alt_rounded, Icons.payments_rounded, Icons.handshake_rounded, Icons.edit_note_rounded];
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+
     return Column(
       children: [
+        // Segmented sub-tab bar, styled to match the main tab bar above it so
+        // it reads as one connected navigation system rather than a loose
+        // row of pills.
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: List.generate(subLabels.length, (i) {
-              final active = _sharesSubTab == i;
-              return GestureDetector(
-                onTap: () => setState(() => _sharesSubTab = i),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.midTeal : (_isDarkMode ? const Color(0xFF1E1E1E) : Colors.white),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: active ? AppColors.midTeal : Colors.grey.withValues(alpha: 0.3)),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
+            ),
+            child: Row(
+              children: List.generate(subLabels.length, (i) {
+                final active = _sharesSubTab == i;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _sharesSubTab = i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        color: active ? AppColors.midTeal : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(subIcons[i],
+                              size: 16,
+                              color: active ? Colors.white : (_isDarkMode ? Colors.white54 : Colors.grey[500])),
+                          const SizedBox(height: 3),
+                          Text(subLabels[i],
+                              style: GoogleFonts.inter(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: active ? Colors.white : (_isDarkMode ? Colors.white54 : Colors.grey[500]))),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: Text(subLabels[i],
-                      style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: active ? Colors.white : (_isDarkMode ? Colors.white70 : Colors.grey[700]))),
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ),
         Expanded(
