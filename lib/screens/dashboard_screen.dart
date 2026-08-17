@@ -46,6 +46,21 @@ class _DashboardScreenState extends State<DashboardScreen>
   bool _isDarkMode = false; // Global Dark Mode state for the app
   String _userName = 'User';
 
+  // Keeps the home shortcuts personal to the signed-in user's habits.
+  // This stays on-device so opening a card remains instant and private.
+  final Map<String, int> _featureUsage = {};
+  static const List<String> _quickStartFeatureIds = [
+    'quran_tracker',
+    'dhikr_counter',
+    'salat_guide',
+    'zakat_calculator',
+    'qurbani_planner',
+    'hajj_umrah',
+    'inheritance',
+    'halal_scanner',
+    'emergency_sos',
+  ];
+
 
   // Animation controllers
   late AnimationController _staggerController;
@@ -389,11 +404,48 @@ Future<void> _loadUserProfile() async {
     }
   }
 
+  String _featureUsageKey(String featureId) {
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    return 'quick_start_usage_${userId}_$featureId';
+  }
+
+  Future<void> _loadFeatureUsage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final usage = <String, int>{
+      for (final id in _quickStartFeatureIds)
+        id: prefs.getInt(_featureUsageKey(id)) ?? 0,
+    };
+
+    if (mounted) {
+      setState(() {
+        _featureUsage
+          ..clear()
+          ..addAll(usage);
+      });
+    }
+  }
+
+  Future<void> _recordFeatureUse(String featureId) async {
+    final nextCount = (_featureUsage[featureId] ?? 0) + 1;
+    if (mounted) {
+      setState(() => _featureUsage[featureId] = nextCount);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_featureUsageKey(featureId), nextCount);
+  }
+
+  void _openFeature(String featureId, VoidCallback destination) {
+    _recordFeatureUse(featureId);
+    destination();
+  }
+
   @override
   void initState() {
     super.initState();
     _loadAppTheme();
     _loadUserProfile();
+    _loadFeatureUsage();
 
     _staggerController = AnimationController(
       vsync: this,
@@ -1213,6 +1265,13 @@ _buildAnimatedEntry(
   delay: 0.15,
   child: _buildTodaysGuidance(),
 ),
+const SizedBox(height: 20),
+
+// Personalized shortcuts, based on cards opened most often.
+_buildAnimatedEntry(
+  delay: 0.2,
+  child: _buildQuickStart(),
+),
 const SizedBox(height: 28),
 
 
@@ -1537,6 +1596,122 @@ _buildAnimatedEntry(
     );
   }
 
+  List<_QuickStartFeature> _quickStartFeatures() {
+    final tr = AppLocalizations.of(context)!.tr;
+    return [
+      _QuickStartFeature('quran_tracker', tr('quran_tracker'), Icons.menu_book_rounded,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QuranTrackerScreen()))),
+      _QuickStartFeature('dhikr_counter', tr('dhikr_counter'), Icons.fingerprint_rounded,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DhikrCounterScreen(isDarkMode: _isDarkMode)))),
+      _QuickStartFeature('salat_guide', tr('salat_guide'), Icons.crop_portrait_rounded,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SalatGuideScreen(isDarkMode: _isDarkMode)))),
+      _QuickStartFeature('zakat_calculator', tr('zakat_calculator'), Icons.calculate_rounded,
+          _showZakatCalculatorSheet),
+      _QuickStartFeature('qurbani_planner', tr('qurbani_planner'), Icons.pets_rounded,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QurbaniPlannerPage()))),
+      _QuickStartFeature('hajj_umrah', tr('hajj_umrah'), Icons.flight_takeoff_rounded,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HajjUmrahPlannerScreen()))),
+      _QuickStartFeature('inheritance', tr('inheritance'), Icons.account_balance_rounded,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InheritanceGuideScreen()))),
+      _QuickStartFeature('halal_scanner', tr('halal_scanner'), Icons.qr_code_scanner_rounded,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => HalalScannerHomeScreen(isDarkMode: _isDarkMode)))),
+      _QuickStartFeature('emergency_sos', tr('emergency_sos'), Icons.health_and_safety_rounded,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => EmergencySosScreen(isDarkMode: _isDarkMode)))),
+    ];
+  }
+
+  Widget _buildQuickStart() {
+    final shortcuts = _quickStartFeatures()
+      ..sort((a, b) {
+        final countCompare = (_featureUsage[b.id] ?? 0).compareTo(_featureUsage[a.id] ?? 0);
+        return countCompare != 0 ? countCompare : _quickStartFeatureIds.indexOf(a.id).compareTo(_quickStartFeatureIds.indexOf(b.id));
+      });
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.bolt_rounded, color: AppColors.midTeal, size: 21),
+              const SizedBox(width: 7),
+              Text(
+                'Quick Start',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Your most used tools',
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  color: _isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.55),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 96,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: 4,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final shortcut = shortcuts[index];
+                return SizedBox(
+                  width: 104,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => _openFeature(shortcut.id, shortcut.onOpen),
+                      child: Ink(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _isDarkMode ? Colors.black : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: _isDarkMode
+                                ? Colors.white.withValues(alpha: 0.16)
+                                : AppColors.navyBlue.withValues(alpha: 0.16),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(shortcut.icon, color: AppColors.midTeal, size: 24),
+                            const Spacer(),
+                            Text(
+                              shortcut.label,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                height: 1.15,
+                                fontWeight: FontWeight.w600,
+                                color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ===== SECTION TITLE =====
   Widget _buildSectionTitle(String title) {
     return Padding(
@@ -1566,7 +1741,7 @@ _buildAnimatedEntry(
                   icon: Icons.calculate_rounded,
                    label: AppLocalizations.of(context)!.tr('zakat_calculator'),
                   iconPainter: _ZakatIconPainter(isDark: _isDarkMode),
-                  onTap: _showZakatCalculatorSheet,
+                  onTap: () => _openFeature('zakat_calculator', _showZakatCalculatorSheet),
                 ),
               ),
               const SizedBox(width: 14),
@@ -1575,13 +1750,13 @@ _buildAnimatedEntry(
                   icon: Icons.pets_rounded,
                    label: AppLocalizations.of(context)!.tr('qurbani_planner'),
                   iconPainter: _QurbaniIconPainter(isDark: _isDarkMode),
-                  onTap: () {
+                  onTap: () => _openFeature('qurbani_planner', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const QurbaniPlannerPage(),
                       ),
                     );
-                  },
+                  }),
                 ),
               ),
             ],
@@ -1594,13 +1769,13 @@ _buildAnimatedEntry(
                   icon: Icons.flight_takeoff_rounded,
                    label: AppLocalizations.of(context)!.tr('hajj_umrah'),
                   iconPainter: _HajjIconPainter(isDark: _isDarkMode),
-                  onTap: () {
+                  onTap: () => _openFeature('hajj_umrah', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const HajjUmrahPlannerScreen(),
                       ),
                     );
-                  },
+                  }),
                 ),
               ),
               const SizedBox(width: 14),
@@ -1609,13 +1784,13 @@ _buildAnimatedEntry(
                   icon: Icons.account_balance_rounded,
                    label: AppLocalizations.of(context)!.tr('inheritance'),
                   iconPainter: _InheritanceIconPainter(isDark: _isDarkMode),
-                  onTap: () {
+                  onTap: () => _openFeature('inheritance', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const InheritanceGuideScreen(),
                       ),
                     );
-                  },
+                  }),
                 ),
               ),
             ],
@@ -1638,13 +1813,13 @@ _buildAnimatedEntry(
                   icon: Icons.menu_book_rounded,
                    label: AppLocalizations.of(context)!.tr('quran_tracker'),
                   iconPainter: _QuranIconPainter(isDark: _isDarkMode),
-                  onTap: () {
+                  onTap: () => _openFeature('quran_tracker', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const QuranTrackerScreen(),
                       ),
                     );
-                  },
+                  }),
                 ),
               ),
               const SizedBox(width: 14),
@@ -1653,13 +1828,13 @@ _buildAnimatedEntry(
                   icon: Icons.fingerprint_rounded,
                    label: AppLocalizations.of(context)!.tr('dhikr_counter'),
                   iconPainter: _DhikrIconPainter(isDark: _isDarkMode),
-                  onTap: () {
+                  onTap: () => _openFeature('dhikr_counter', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => DhikrCounterScreen(isDarkMode: _isDarkMode),
                       ),
                     );
-                  },
+                  }),
                 ),
               ),
             ],
@@ -1672,13 +1847,13 @@ _buildAnimatedEntry(
                   icon: Icons.qr_code_scanner_rounded,
                    label: AppLocalizations.of(context)!.tr('halal_scanner'),
                   iconPainter: _HalalIconPainter(isDark: _isDarkMode),
-                  onTap: () {
+                  onTap: () => _openFeature('halal_scanner', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => HalalScannerHomeScreen(isDarkMode: _isDarkMode),
                       ),
                     );
-                  },
+                  }),
                 ),
               ),
               const SizedBox(width: 14),
@@ -1687,14 +1862,14 @@ _buildAnimatedEntry(
                   icon: Icons.health_and_safety_rounded,
                    label: AppLocalizations.of(context)!.tr('emergency_sos'),
                   iconPainter: _EmergencyIconPainter(isDark: _isDarkMode),
-                  onTap: () {
+                  onTap: () => _openFeature('emergency_sos', () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => EmergencySosScreen(isDarkMode: _isDarkMode),
                       ),
                     );
-                  },
+                  }),
                 ),
               ),
             ],
@@ -1707,13 +1882,13 @@ _buildAnimatedEntry(
                   icon: Icons.crop_portrait_rounded,
                    label: AppLocalizations.of(context)!.tr('salat_guide'),
                   iconPainter: _SalatGuideIconPainter(isDark: _isDarkMode),
-                  onTap: () {
+                  onTap: () => _openFeature('salat_guide', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => SalatGuideScreen(isDarkMode: _isDarkMode),
                       ),
                     );
-                  },
+                  }),
                 ),
               ),
               const SizedBox(width: 14),
@@ -1923,6 +2098,16 @@ _buildAnimatedEntry(
   }
 
 }
+
+class _QuickStartFeature {
+  const _QuickStartFeature(this.id, this.label, this.icon, this.onOpen);
+
+  final String id;
+  final String label;
+  final IconData icon;
+  final VoidCallback onOpen;
+}
+
 class _DashboardStarConfig {
   final double topFraction;
   final double leftFraction;
