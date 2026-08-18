@@ -893,6 +893,11 @@ class _CalendarTabState extends State<CalendarTab> {
     return hijri.day == 13 || hijri.day == 14 || hijri.day == 15;
   }
 
+// Ayyam al-Beedh (13/14/15) marker color — kept distinct from
+// AppColors.midTeal (used for regular Mon/Thu Sunnah fasts) and
+// AppColors.coralOrange (used for Islamic events).
+    static const Color _ayyamBeedhColor = Color(0xFF9C6ADE); // soft purple
+  
   Color _surfaceColor(BuildContext context) {
     final isDark = widget.isDarkMode || Theme.of(context).brightness == Brightness.dark;
     return isDark ? const Color(0xFF1E1E1E) : Colors.white;
@@ -1271,6 +1276,8 @@ class _CalendarTabState extends State<CalendarTab> {
                     _legendDot(AppColors.coralOrange, _isBengali ? 'ইসলামিক দিবস' : 'Islamic event'),
                     const SizedBox(width: 16),
                     _legendDot(AppColors.midTeal, _isBengali ? 'নফল রোজা' : 'Sunnah fast'),
+                    const SizedBox(width: 16),
+                    _legendDot(_ayyamBeedhColor, _isBengali ? 'আইয়ামে বিজ' : 'Ayyam al-Beedh'),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -1633,28 +1640,34 @@ class _CalendarTabState extends State<CalendarTab> {
         final now = DateTime.now();
         final isToday =
             cellDate.year == now.year && cellDate.month == now.month && cellDate.day == now.day;
-        final event = CalendarDatabase.getEvent(cellDate, cellHijri);
-        final hasEvent = event != null;
-        final isFasting = _isMondayOrThursday(cellDate) || _isWhiteDay(cellHijri);
+final event = CalendarDatabase.getEvent(cellDate, cellHijri);
+final hasEvent = event != null;
+final isWhiteDay = _isWhiteDay(cellHijri);          // 13, 14, 15 — Ayyam al-Beedh
+final isSunnahFast = _isMondayOrThursday(cellDate);  // Mon/Thu (non white-day)
+final isFasting = isSunnahFast || isWhiteDay;
 
-        Color cellBgColor = Colors.transparent;
-        Border? cellBorder;
+Color cellBgColor = Colors.transparent;
+Border? cellBorder;
 
-        if (isSelected) {
-          cellBgColor = widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue;
-        } else {
-          if (hasEvent) {
-            cellBgColor = AppColors.coralOrange.withValues(alpha: 0.15);
-            cellBorder = Border.all(color: AppColors.coralOrange.withValues(alpha: 0.4), width: 1);
-          } else if (isFasting) {
-            cellBgColor = AppColors.midTeal.withValues(alpha: 0.15);
-            cellBorder = Border.all(color: AppColors.midTeal.withValues(alpha: 0.4), width: 1);
-          }
+if (isSelected) {
+  cellBgColor = widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue;
+} else {
+  if (hasEvent) {
+    cellBgColor = AppColors.coralOrange.withValues(alpha: 0.15);
+    cellBorder = Border.all(color: AppColors.coralOrange.withValues(alpha: 0.4), width: 1);
+  } else if (isWhiteDay) {
+    // Ayyam al-Beedh gets its own color, distinct from regular Sunnah fasts
+    cellBgColor = _ayyamBeedhColor.withValues(alpha: 0.15);
+    cellBorder = Border.all(color: _ayyamBeedhColor.withValues(alpha: 0.4), width: 1);
+  } else if (isSunnahFast) {
+    cellBgColor = AppColors.midTeal.withValues(alpha: 0.15);
+    cellBorder = Border.all(color: AppColors.midTeal.withValues(alpha: 0.4), width: 1);
+  }
 
-          if (isToday) {
-            cellBorder = Border.all(color: widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue, width: 1.5);
-          }
-        }
+  if (isToday) {
+    cellBorder = Border.all(color: widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue, width: 1.5);
+  }
+}
 
         return GestureDetector(
           onTap: () {
@@ -1706,7 +1719,7 @@ class _CalendarTabState extends State<CalendarTab> {
                       decoration: BoxDecoration(
                         color: isSelected
                             ? Colors.white
-                            : (hasEvent ? AppColors.coralOrange : AppColors.midTeal),
+                            : (hasEvent ? AppColors.coralOrange  : (isWhiteDay ? _ayyamBeedhColor : AppColors.midTeal)), 
                         shape: BoxShape.circle,
                       ),
                     ),
