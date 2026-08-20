@@ -136,21 +136,42 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'الإحرام للحج (تمتع)',
       'day': '8th Dhul Hijjah - From Makkah residence',
       'dayAr': '٨ ذو الحجة - من مكان الإقامة بمكة',
-      'overviewEn':
-          'For Hajj al-Tamattu\', pilgrims re-enter the state of Ihram on the 8th of Dhul Hijjah from their hotel or residence in Makkah. It involves physical purification, putting on the Ihram garments, making the intention for Hajj, and chanting the Talbiyah.',
-      'overviewAr':
-          'بالنسبة لحج التمتع، يحرم الحاج بالحج ضحى يوم التروية (٨ ذو الحجة) من مكان إقامته في مكة المكرمة، حيث يغتسل ويتطيب ويلبس ملابس الإحرام وينوي الحج قائلاً: لَبَّيْكَ اللَّهُمَّ حَجًّا.',
-      'keyActionsEn': [
-        'Perform Ghusl (ritual bath) at your residence in Makkah.',
-        'Wear Ihram garments (for men) or modest dress (for women).',
-        'Offer 2 Rakah prayer if possible, then make intention: "Labbayk Allahumma Hajjah" (لَبَّيْكَ اللَّهُمَّ حَجًّا).',
-        'Begin reciting Talbiyah: "Labbayk Allahumma Labbayk..."',
-      ],
-      'keyActionsAr': [
-        'الاغتسال والتنظف في السكن بمكة المكرمة.',
-        'لبس الإزار والرداء للرجال واللباس الساتر للمرأة.',
-        'صلاة ركعتين ثم النية: "لَبَّيْكَ اللَّهُمَّ حَجًّا".',
-        'البدء في التلبية ورفع الصوت بها للرجال.',
+      'overviewEn': 'For Hajj al-Tamattu\', pilgrims re-enter the state of Ihram on the 8th of Dhul Hijjah from their hotel or residence in Makkah. It involves physical purification, putting on the Ihram garments, making the intention for Hajj, and chanting the Talbiyah.',
+      'overviewAr': 'بالنسبة لحج التمتع، يحرم الحاج بالحج ضحى يوم التروية (٨ ذو الحجة) من مكان إقامته في مكة المكرمة، حيث يغتسل ويتطيب ويلبس ملابس الإحرام وينوي الحج قائلاً: لَبَّيْكَ اللَّهُمَّ حَجًّا.',
+      'actionDetails': [
+        {
+          'title': 'Perform Ghusl (ritual bath) at your residence in Makkah.',
+          'details': 'Before entering Ihram, it is highly recommended (Sunnah) to perform Ghusl. This involves a full-body bath. Trim your nails, shave underarms/pubic hair, and take a complete bath. If Ghusl is not possible, perform Wudu instead.',
+          'glossary': [
+            {'term': 'Ghusl', 'meaning': 'The full-body ritual purification bath in Islam.'},
+            {'term': 'Sunnah', 'meaning': 'The practices and traditions of Prophet Muhammad (ﷺ).'},
+            {'term': 'Wudu', 'meaning': 'The ritual ablution performed before prayers.'}
+          ]
+        },
+        {
+          'title': 'Wear Ihram garments (for men) or modest dress (for women).',
+          'details': 'Men wrap the Izar around the waist and drape the Rida over the shoulders. No underwear, socks, or head coverings are allowed. Women wear modest, loose-fitting clothing covering the entire body except the face and hands.',
+          'glossary': [
+            {'term': 'Ihram', 'meaning': 'The sacred state of consecration and the unstitched garments worn by pilgrims.'},
+            {'term': 'Izar', 'meaning': 'The lower sheet of unstitched white cloth wrapped around the waist.'},
+            {'term': 'Rida', 'meaning': 'The upper sheet of unstitched white cloth covering the shoulders.'}
+          ]
+        },
+        {
+          'title': 'Offer 2 Rakah prayer if possible, then make intention.',
+          'details': 'Offer two units of prayer (Nafl) if not in a forbidden prayer time, then declare the intention: "Labbayk Allahumma Hajjah" (لَبَّيْكَ اللَّهُمَّ حَجًّا).',
+          'glossary': [
+            {'term': 'Rakah', 'meaning': 'A unit of Islamic prayer.'},
+            {'term': 'Niyyah', 'meaning': 'The intention in the heart to perform an act of worship.'}
+          ]
+        },
+        {
+          'title': 'Begin reciting Talbiyah.',
+          'details': 'Recite "Labbayk Allahumma Labbayk..." loudly for men, and quietly for women. This is chanted continuously until stoning the first Jamrah on the 10th of Dhul Hijjah.',
+          'glossary': [
+            {'term': 'Talbiyah', 'meaning': 'The standard prayer chanted by pilgrims during Hajj: "Labbayk Allahumma Labbayk..." (Here I am, O Allah, here I am...).'}
+          ]
+        }
       ],
       'quran': {
         'textAr': 'وَأَتِمُّوا الْحَجَّ وَالْعُمْرَةَ لِلَّهِ',
@@ -160,46 +181,76 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'Divine command to complete the rituals of Hajj and Umrah sincerely for the sake of Allah.',
         'explanationAr': 'الأمر بوجوب إكمال أعمال الحج والعمرة وإخلاصها لله تعالى.',
       },
-      'hadith': {
-        'textAr': 'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ: «أَمَرَنَا النَّبِيُّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ لَمَّا حَلَلْنَا أَنْ نُحْرِمَ إِذَا تَوَجَّهْنَا إِلَى مِنًى، فَأَهْلَلْنَا مِنَ الأَبْطَحِ»',
-        'referenceAr': 'صحيح البخاري وصحيح مسلم',
-        'textEn': 'Jabir narrated: "The Prophet (ﷺ) commanded us to assume Ihram when we directed ourselves towards Mina; so we assumed Ihram from Al-Abtah (Makkah Residence)."',
-        'referenceEn': 'Sahih al-Bukhari & Sahih Muslim',
-        'explanationEn': 'This Hadith establishes that pilgrims performing Tamattu\' should enter Ihram for Hajj from their location of stay in Makkah on the 8th of Dhul Hijjah.',
-        'explanationAr': 'يوضح الحديث سنة الإحرام بالحج من مكة عند التوجه إلى منى في يوم التروية.',
-      },
-      'originStory': {
-        'title': 'Rooted in Ibrahim\'s Call',
-        'source': 'Sahih Muslim 1218 · Ibn Kathir, Al-Bidayah wa\'n-Nihayah',
-        'textEn': 'Hajj was first instituted when Allah commanded Ibrahim (AS) to "proclaim to mankind the Hajj" (Surah Al-Hajj 22:27). Over centuries the rites were mixed with idolatry by the pre-Islamic Quraysh. In 10 AH, the Prophet Muhammad (ﷺ) performed his only complete Hajj — the Hajjat al-Wada\' (Farewell Pilgrimage) — restoring every step to its original form. His companion Jabir ibn Abdullah narrated this journey move-by-move, including entering Ihram for Hajj from Makkah on the 8th of Dhul Hijjah; this narration (Sahih Muslim 1218) is the primary source scholars use to reconstruct the Tamattu\' sequence.',
-      },
-      'dua': {
-        'title': 'Intention for Hajj (Tamattu\')',
-        'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا',
-        'translit': 'Labbayk Allahumma Hajjah',
-        'meaningEn': 'O Allah, I answer Your call to perform Hajj.',
-        'meaningAr': 'التلفظ بالنية للدخول في مناسك الحج.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ: «أَمَرَنَا النَّبِيُّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ لَمَّا حَلَلْنَا أَنْ نُحْرِمَ إِذَا تَوَجَّهْنَا إِلَى مِنًى، فَأَهْلَلْنَا مِنَ الأَبْطَحِ»',
+          'translitEn': 'An Jabir radiya-allahu anhu: "Amarana an-nabiyyu salla-allahu alayhi wa sallama lamma halalna an nuhri-ma idha tawajjahna ila Mina, fa ahlalna mina-l-Abtah."',
+          'referenceEn': 'Sahih al-Bukhari & Sahih Muslim',
+          'textEn': 'Jabir narrated: "The Prophet (ﷺ) commanded us to assume Ihram when we directed ourselves towards Mina; so we assumed Ihram from Al-Abtah (Makkah Residence)."',
+          'explanationEn': 'This Hadith establishes that pilgrims performing Tamattu\'-type Hajj should enter Ihram for Hajj from their location of stay in Makkah on the 8th of Dhul Hijjah.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'These are the two most authentic collections of Hadith in Sunni Islam, compiled by Imam Al-Bukhari and Imam Muslim.'
+        },
+        {
+          'textAr': 'عَنِ ابْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ سُئِلَ: مَا يَلْبَسُ الْمُحْرِمُ؟ فَقَالَ: «لاَ يَلْبَسُ الْقُمُصَ وَلاَ الْعَمَائِمَ وَلاَ السَّرَاوِيلاَتِ وَلاَ الْبَرَانِسَ وَلاَ الْخِفَافَ...»',
+          'translitEn': 'An ibni Umar radiya-allahu anhuma anna rasula-llahi salla-allahu alayhi wa sallama su\'ila: Ma yalbasu-l-muhrim? Faqala: La yalbasu-l-qumusa wa la-l-ama\'ima wa la-s-sarawilati wa la-l-baranisa wa la-l-khifafa...',
+          'referenceEn': 'Sahih al-Bukhari 1542 & Sahih Muslim 1177',
+          'textEn': 'Narrated Abdullah ibn Umar: A man asked the Prophet (ﷺ), "What should a pilgrim in Ihram wear?" The Prophet replied, "He should not wear shirts, turbans, trousers, hooded cloaks, or leather socks..."',
+          'explanationEn': 'This Hadith lays out the essential dress code for men in Ihram to strip away worldly status and distinctions before Almighty Allah.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'These are the two most authentic collections of Hadith in Sunni Islam, compiled by Imam Al-Bukhari and Imam Muslim.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Intention for Hajj (Tamattu\')',
+          'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا',
+          'translit': 'Labbayk Allahumma Hajjah',
+          'meaningEn': 'O Allah, I answer Your call to perform Hajj.',
+          'meaningAr': 'التلفظ بالنية للدخول في مناسك الحج.',
+        },
+        {
+          'title': 'The Talbiyah',
+          'arabic': 'لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لا شَرِيكَ لَكَ لَبَّيْكَ، إِنَّ الْحَمْدَ وَالنِّعْمَةَ لَكَ وَالْمُلْكُ، لا شَرِيكَ لَكَ',
+          'translit': 'Labbayk Allahumma Labbayk, Labbayka la sharika laka labbayk, innal-hamda wan-ni’mata laka wal-mulk, la sharika lak.',
+          'meaningEn': 'Here I am, O Allah, here I am. Here I am, You have no partner, here I am. Verily all praise, grace, and sovereignty belong to You. You have no partner.',
+          'meaningAr': 'التلبية إعلاناً للتوحيد وإجابةً لنداء الله عز وجل.',
+        }
+      ]
     },
 
     'ihram_qiran': {
       'titleEn': 'Enter Ihram for Hajj Qiran',
       'titleAr': 'الإحرام لحج القران',
-      'day': 'At Miqat - Before entering the Haram boundaries',
+      'day': 'At Miqat - Before entering Haram boundaries',
       'dayAr': 'الميقات - قبل دخول حدود الحرم',
-      'overviewEn':
-          'In Hajj al-Qiran, the pilgrim enters the state of Ihram at the Miqat with the intention of performing both Umrah and Hajj combined. The pilgrim remains in Ihram without shaving or cutting hair after Umrah, staying in Ihram until the 10th of Dhul Hijjah.',
-      'overviewAr':
-          'حج القران هو أن يحرم الحاج بالعمرة والحج معاً من الميقات، أو يحرم بالعمرة ثم يدخل عليها الحج قبل الطواف. ويلتزم بمحظورات الإحرام ولا يتحلل منه بعد طواف القدوم وسعيه بل يبقى محرماً حتى يوم النحر.',
-      'keyActionsEn': [
-        'Perform Ghusl and wear Ihram garments at the Miqat.',
-        'Make intention for both Hajj and Umrah: "Labbayk Allahumma Hajjah wa Umrah" (لَبَّيْكَ اللَّهُمَّ حَجًّا وَعُمْرَةً).',
-        'Begin reciting Talbiyah and maintain Ihram restrictions throughout.',
-      ],
-      'keyActionsAr': [
-        'الغسل والنظافة ولبس ملابس الإحرام في الميقات.',
-        'النية للنسكين معاً: "لَبَّيْكَ اللَّهُمَّ حَجًّا وَعُمْرَةً".',
-        'الاستمرار في التلبية والالتزام الكامل بمحظورات الإحرام.',
+      'overviewEn': 'In Hajj al-Qiran, the pilgrim enters the state of Ihram at the Miqat with the intention of performing both Umrah and Hajj combined. The pilgrim remains in Ihram without shaving or cutting hair after Umrah, staying in Ihram until the 10th of Dhul Hijjah.',
+      'overviewAr': 'حج القران هو أن يحرم الحاج بالعمرة والحج معاً من الميقات، أو يحرم بالعمرة ثم يدخل عليها الحج قبل الطواف. ويلتزم بمحظورات الإحرام ولا يتحلل منه بعد طواف القدوم وسعيه بل يبقى محرماً حتى يوم النحر.',
+      'actionDetails': [
+        {
+          'title': 'Perform Ghusl and wear Ihram garments at the Miqat.',
+          'details': 'Take a complete ritual purification bath (Ghusl) before reaching the Miqat boundary. Wear the two sheets of unstitched white cloth (Izar and Rida) for men, or modest, clean dress for women.',
+          'glossary': [
+            {'term': 'Miqat', 'meaning': 'The designated geographic boundary points where pilgrims must enter Ihram.'},
+            {'term': 'Ghusl', 'meaning': 'The full-body ritual purification bath in Islam.'}
+          ]
+        },
+        {
+          'title': 'Make intention for both Hajj and Umrah.',
+          'details': 'After praying 2 Rakat, state your intention clearly: "Labbayk Allahumma Hajjah wa Umrah" (لَبَّيْكَ اللَّهُمَّ حَجًّا وَعُمْرَةً).',
+          'glossary': [
+            {'term': 'Hajj', 'meaning': 'The major pilgrimage to Makkah performed during Dhul Hijjah.'},
+            {'term': 'Umrah', 'meaning': 'The minor pilgrimage to Makkah which can be performed at any time.'}
+          ]
+        },
+        {
+          'title': 'Begin reciting Talbiyah and maintain Ihram restrictions.',
+          'details': 'Chant the Talbiyah aloud (for men). You must strictly avoid all Ihram restrictions (no perfume, no cutting hair/nails, no hunting) until you pelt the major Jamrah on the 10th of Dhul Hijjah.',
+          'glossary': [
+            {'term': 'Talbiyah', 'meaning': 'The chant recited by pilgrims: Labbayk Allahumma Labbayk.'},
+            {'term': 'Ihram Restrictions', 'meaning': 'Prohibited acts while in Ihram state such as wearing sewn clothes (for men) or using scent.'}
+          ]
+        }
       ],
       'quran': {
         'textAr': 'فَمَن تَمَتَّعَ بِالْعُمْرَةِ إِلَى الْحَجِّ فَمَا اسْتَيْسَرَ مِنَ الْهَدْيِ',
@@ -209,46 +260,74 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'The Quran commands those who combine Umrah and Hajj (Tamattu\' or Qiran) to offer an animal sacrifice (Qurbani) out of gratitude.',
         'explanationAr': 'وجوب الهدي (ذبْح شاة) شُكراً لله على تيسير الجمع بين النسكين في سفرة واحدة.',
       },
-      'hadith': {
-        'textAr': 'عَنْ أَنَسٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: سَمِعْتُ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ يَقُولُ: «لَبَّيْكَ عُمْرَةً وَحَجًّا»',
-        'referenceAr': 'صحيح مسلم (١٢٥١)',
-        'textEn': 'Anas reported: "I heard the Messenger of Allah (ﷺ) saying: Labbayk for Umrah and Hajj together."',
-        'referenceEn': 'Sahih Muslim 1251',
-        'explanationEn': 'This Hadith provides direct evidence for the legality of Qiran (combining Hajj and Umrah in one Ihram).',
-        'explanationAr': 'دليل صريح على مشروعية حج القران وهو ما فعله النبي صلى الله عليه وسلم في حجته.',
-      },
-      'originStory': {
-        'title': 'Rooted in Ibrahim\'s Call',
-        'source': 'Sahih Muslim 1251 · Sahih al-Bukhari 1562',
-        'textEn': 'Combining the intentions of Hajj and Umrah in a single Ihram (Qiran) is directly attributed to the Prophet (ﷺ) himself. Anas ibn Malik reported hearing him say the talbiyah for "Umrah and Hajj together" (Sahih Muslim 1251), and Ibn Umar confirmed this was one of the three valid ways the companions entered Ihram during the Farewell Pilgrimage (Sahih al-Bukhari 1562), preserving it as a recognised Sunnah alongside Tamattu\' and Ifrad.',
-      },
-      'dua': {
-        'title': 'Intention for Hajj Qiran',
-        'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا وَعُمْرَةً',
-        'translit': 'Labbayk Allahumma Hajjah wa \'Umrah',
-        'meaningEn': 'O Allah, I answer Your call to perform Hajj and Umrah together.',
-        'meaningAr': 'النية للجمع بين العمرة والحج في إحرام واحد.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ أَنَسٍ رَضِيَ اللَّهُ عَنْهُمَا قَالَ: سَمِعْتُ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ يَقُولُ: «لَبَّيْكَ عُمْرَةً وَحَجًّا»',
+          'translitEn': 'An Anas radiya-allahu anhuma qala: Sami\'tu rasula-llahi salla-allahu alayhi wa sallama yaqulu: Labbayk Umratan wa Hajjah.',
+          'referenceEn': 'Sahih Muslim 1251',
+          'textEn': 'Anas reported: "I heard the Messenger of Allah (ﷺ) saying: Labbayk for Umrah and Hajj together."',
+          'explanationEn': 'This Hadith provides direct evidence for the legality of Qiran (combining Hajj and Umrah in one Ihram).',
+          'sourceBook': 'Sahih Muslim',
+          'sourceBookDesc': 'Sahih Muslim is one of the six major Hadith collections, compiled by Imam Muslim ibn al-Hajjaj.'
+        },
+        {
+          'textAr': 'عَنِ ابْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ أَحْرَمَ بِالْعُمْرَةِ وَالْحَجِّ مَعاً',
+          'translitEn': 'An ibni Umar radiya-allahu anhuma anna rasula-llahi salla-allahu alayhi wa sallama ahrama bil-umrati wal-hajji ma\'an.',
+          'referenceEn': 'Sahih al-Bukhari 1562',
+          'textEn': 'Ibn Umar reported that the Messenger of Allah (ﷺ) entered the state of Ihram for both Umrah and Hajj together.',
+          'explanationEn': 'Confirms that the Prophet ﷺ himself performed Hajj Qiran during his Farewell Pilgrimage.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'Sahih al-Bukhari is the most authentic book of Hadith, compiled by Imam Muhammad ibn Ismail al-Bukhari.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Intention for Hajj Qiran',
+          'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا وَعُمْرَةً',
+          'translit': 'Labbayk Allahumma Hajjah wa \'Umrah',
+          'meaningEn': 'O Allah, I answer Your call to perform Hajj and Umrah together.',
+          'meaningAr': 'النية للجمع بين العمرة والحج في إحرام واحد.',
+        },
+        {
+          'title': 'The Talbiyah chant',
+          'arabic': 'لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لا شَرِيكَ لَكَ لَبَّيْكَ...',
+          'translit': 'Labbayk Allahumma Labbayk, Labbayka la sharika laka labbayk...',
+          'meaningEn': 'Here I am, O Allah, here I am, You have no partner...',
+          'meaningAr': 'التلبية إعلاناً للتوحيد وإجابةً لنداء الله عز وجل.',
+        }
+      ]
     },
 
     'ihram_ifrad': {
       'titleEn': 'Enter Ihram for Hajj Ifrad',
       'titleAr': 'الإحرام لحج الإفراد',
-      'day': 'At Miqat - Before entering the Haram boundaries',
+      'day': 'At Miqat - Before entering Haram boundaries',
       'dayAr': 'الميقات - قبل دخول حدود الحرم',
-      'overviewEn':
-          'Hajj al-Ifrad is performing Hajj alone, without Umrah. The pilgrim enters Ihram at the Miqat with the intention of Hajj only, performs Tawaf al-Qudum, and remains in the state of Ihram until the 10th of Dhul Hijjah. No sacrificial animal (Hady) is obligatory for Ifrad.',
-      'overviewAr':
-          'حج الإفراد هو أن يحرم الحاج بالحج وحده من الميقات قائلاً: لَبَّيْكَ اللَّهُمَّ حَجًّا. ويطوف للقدوم ويسعى للحج ويبقى على إحرامه حتى يوم النحر. ولا يجب عليه الهدي (ذبح فدية).',
-      'keyActionsEn': [
-        'Perform Ghusl and wear Ihram garments at the Miqat.',
-        'Make intention for Hajj only: "Labbayk Allahumma Hajjah" (لَبَّيْكَ اللَّهُمَّ حَجًّا).',
-        'Recite Talbiyah and strictly follow Ihram rules until the 10th of Dhul Hijjah.',
-      ],
-      'keyActionsAr': [
-        'الاغتسال ولبس ثياب الإحرام في الميقات.',
-        'النية للحج فقط: "لَبَّيْكَ اللَّهُمَّ حَجًّا".',
-        'الالتزام بالتلبية ومحظورات الإحرام إلى يوم عيد الأضحى.',
+      'overviewEn': 'Hajj al-Ifrad is performing Hajj alone, without Umrah. The pilgrim enters Ihram at the Miqat with the intention of Hajj only, performs Tawaf al-Qudum, and remains in the state of Ihram until the 10th of Dhul Hijjah. No sacrificial animal (Hady) is obligatory for Ifrad.',
+      'overviewAr': 'حج الإفراد هو أن يحرم الحاج بالحج وحده من الميقات قائلاً: لَبَّيْكَ اللَّهُمَّ حَجًّا. ويطوف للقدوم ويسعى للحج ويبقى على إحرامه حتى يوم النحر. ولا يجب عليه الهدي (ذبح فدية).',
+      'actionDetails': [
+        {
+          'title': 'Perform Ghusl and wear Ihram garments at the Miqat.',
+          'details': 'Purify your body with Ghusl. Men wear the Izar and Rida sheets. Women wear standard clean modest dress covering everything except face and hands.',
+          'glossary': [
+            {'term': 'Ghusl', 'meaning': 'The full-body ritual bath taken for purification.'},
+            {'term': 'Ifrad', 'meaning': 'A type of Hajj performed on its own without Umrah.'}
+          ]
+        },
+        {
+          'title': 'Make intention for Hajj only.',
+          'details': 'After performing 2 Rakat prayer, make your intention: "Labbayk Allahumma Hajjah" (لَبَّيْكَ اللَّهُمَّ حَجًّا) for Hajj only.',
+          'glossary': [
+            {'term': 'Niyyah', 'meaning': 'The intention in the heart to perform an act of worship.'}
+          ]
+        },
+        {
+          'title': 'Recite Talbiyah and follow Ihram rules strictly.',
+          'details': 'Keep reciting the Talbiyah. You must remain in the state of Ihram with all its restrictions until the 10th of Dhul Hijjah.',
+          'glossary': [
+            {'term': 'Talbiyah', 'meaning': 'The pilgrim\'s chant answering the call of Allah.'}
+          ]
+        }
       ],
       'quran': {
         'textAr': 'وَلِلَّهِ عَلَى النَّاسِ حِجُّ الْبَيْتِ مَنِ اسْتَتَاعَ إِلَيْهِ سَبِيلًا',
@@ -258,26 +337,42 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'This general command shows Hajj itself is the core duty, which the Mufrid (pilgrim performing Ifrad) fulfills directly.',
         'explanationAr': 'وجوب الحج العيني على المستطيع مرة واحدة في العمر.',
       },
-      'hadith': {
-        'textAr': 'عَنْ عَائِشَةَ رَضِيَ اللَّهُ عَنْهَا قَالَتْ: «خَرَجْنَا مَعَ رَسُولِ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ... فَمِنَّا مَنْ أَهَلَّ بِعُمْرَةٍ، وَمِنَّا مَنْ أَهَلَّ بِحَجٍّ وَعُمْرَةٍ، وَمِنَّا مَنْ أَهَلَّ بِحَجٍّ مُفْرِدٍ»',
-        'referenceAr': 'صحيح البخاري وصحيح مسلم',
-        'textEn': 'Aisha narrated: "We set out with the Messenger of Allah (ﷺ)... some of us assumed Ihram for Umrah, some for both Hajj and Umrah, and some for Hajj only (Ifrad)."',
-        'referenceEn': 'Sahih al-Bukhari & Sahih Muslim',
-        'explanationEn': 'This confirms that all three types of Hajj (Tamattu\', Qiran, and Ifrad) are valid and were practiced by the Companions under the guidance of the Prophet.',
-        'explanationAr': 'دليل على جواز الإفراد وتخيير الحاج بين الأنساك الثلاثة.',
-      },
-      'originStory': {
-        'title': 'Rooted in Ibrahim\'s Call',
-        'source': 'Sahih al-Bukhari 1562 · Sahih Muslim 1211',
-        'textEn': 'Aisha (RA) narrated that when the companions set out with the Prophet (ﷺ) for his Farewell Pilgrimage, some intended Umrah alone, some intended both Hajj and Umrah together, and some intended Hajj alone (Ifrad) — and the Prophet approved of all three (Sahih al-Bukhari 1562, Sahih Muslim 1211). This companion-era testimony is the historical basis for Ifrad remaining a valid, distinct path through Hajj to this day.',
-      },
-      'dua': {
-        'title': 'Intention for Hajj Ifrad',
-        'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا',
-        'translit': 'Labbayk Allahumma Hajjah',
-        'meaningEn': 'O Allah, I answer Your call to perform Hajj.',
-        'meaningAr': 'النية لأداء الحج مفرداً.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ عَائِشَةَ رَضِيَ اللَّهُ عَنْهَا قَالَتْ: «خَرَجْنَا مَعَ رَسُولِ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ... فَمِنَّا مَنْ أَهَلَّ بِعُمْرَةٍ، وَمِنَّا مَنْ أَهَلَّ بِحَجٍّ وَعُمْرَةٍ، وَمِنَّا مَنْ أَهَلَّ بِحَجٍّ مُفْرِدٍ»',
+          'translitEn': 'An Aisha radiya-allahu anha qalat: Kharajna ma\'a rasuli-llahi salla-allahu alayhi wa sallama... faminna man ahalla bi umrah, wa minna man ahalla bi hajjin wa umrah, wa minna man ahalla bi hajjin mufrid.',
+          'referenceEn': 'Sahih al-Bukhari & Sahih Muslim',
+          'textEn': 'Aisha narrated: "We set out with the Messenger of Allah (ﷺ)... some of us assumed Ihram for Umrah, some for both Hajj and Umrah, and some for Hajj only (Ifrad)."',
+          'explanationEn': 'This confirms that all three types of Hajj (Tamattu\', Qiran, and Ifrad) are valid and were practiced by the Companions under the guidance of the Prophet.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'These are the two most authentic collections of Hadith in Sunni Islam.'
+        },
+        {
+          'textAr': 'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ أَفْرَدَ الْحَجَّ',
+          'translitEn': 'An ibni Umar radiya-allahu anhuma anna-nabiyya salla-allahu alayhi wa sallama afrada-l-hajj.',
+          'referenceEn': 'Sahih Muslim 1211',
+          'textEn': 'Ibn Umar narrated that the Prophet (ﷺ) performed Hajj Ifrad (Hajj only).',
+          'explanationEn': 'Provides direct evidence of the validity and practice of Hajj Ifrad by the Prophet ﷺ.',
+          'sourceBook': 'Sahih Muslim',
+          'sourceBookDesc': 'Sahih Muslim is compiled by Imam Muslim and contains highly authentic narrations.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Intention for Hajj Ifrad',
+          'arabic': 'لَبَّيْكَ اللَّهُمَّ حَجًّا',
+          'translit': 'Labbayk Allahumma Hajjah',
+          'meaningEn': 'O Allah, I answer Your call to perform Hajj.',
+          'meaningAr': 'النية لأداء الحج مفرداً.',
+        },
+        {
+          'title': 'General Talbiyah',
+          'arabic': 'لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لا شَرِيكَ لَكَ لَبَّيْكَ...',
+          'translit': 'Labbayk Allahumma Labbayk, Labbayka la sharika laka labbayk...',
+          'meaningEn': 'Here I am, O Allah, here I am...',
+          'meaningAr': 'التلبية إجابة نداء إبراهيم عليه السلام بالحج.'
+        }
+      ]
     },
 
     'halq_ifrad': {
@@ -285,20 +380,38 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'الحلق أو التقصير للمفرد',
       'day': '10th Dhul Hijjah (Yawm an-Nahr)',
       'dayAr': '١٠ ذو الحجة (يوم النحر)',
-      'overviewEn':
-          'After stoning Jamarat al-Aqabah on the 10th of Dhul Hijjah, the pilgrim performing Hajj Ifrad shaves or trims their hair to complete the first partial deconsecration (Tahallul al-Asghar). Because this is Hajj Ifrad, Qurbani (sacrifice) is not obligatory, so they proceed directly from stoning to shaving.',
-      'overviewAr':
-          'بعد رمي جمرة العقبة الكبرى يوم النحر، يقوم المفرد بحلق رأسه أو تقصيره مباشرة (حيث لا يجب عليه ذبح هدي) ليتحلل التحلل الأول، فيلبس ثيابه ويتطيب وتزول عنه محظورات الإحرام عدا النساء.',
-      'keyActionsEn': [
-        'Proceed directly to shave (Halq) or trim (Taqsir) hair after pelting.',
-        'Men are highly recommended to shave completely.',
-        'Women trim a fingertip length of hair.',
-        'Achieve Tahallul al-Asghar and change into regular clothes.',
-      ],
-      'keyActionsAr': [
-        'الحلق بالموسى للرجال وهو الأفضل، أو تقصير كامل الرأس.',
-        'تقصير النساء قدر أنملة من أطراف الشعر.',
-        'التحلل الأصغر ولبس المخيط والتطيب.',
+      'overviewEn': 'After stoning Jamarat al-Aqabah on the 10th of Dhul Hijjah, the pilgrim performing Hajj Ifrad shaves or trims their hair to complete the first partial deconsecration (Tahallul al-Asghar). Because this is Hajj Ifrad, Qurbani (sacrifice) is not obligatory, so they proceed directly from stoning to shaving.',
+      'overviewAr': 'بعد رمي جمرة العقبة الكبرى يوم النحر، يقوم المفرد بحلق رأسه أو تقصيره مباشرة (حيث لا يجب عليه ذبح هدي) ليتحلل التحلل الأول، فيلبس ثيابه ويتطيب وتزول عنه محظورات الإحرام عدا النساء.',
+      'actionDetails': [
+        {
+          'title': 'Proceed directly to shave (Halq) or trim (Taqsir) hair after pelting.',
+          'details': 'Once you complete stoning the major Jamrah, go to a barber to shave or trim your hair. Qurbani is not obligatory for Ifrad pilgrims, so you can do this immediately.',
+          'glossary': [
+            {'term': 'Halq', 'meaning': 'Shaving the head completely (applicable for men).'},
+            {'term': 'Taqsir', 'meaning': 'Trimming/shortening the hair evenly all around.'}
+          ]
+        },
+        {
+          'title': 'Men are highly recommended to shave completely.',
+          'details': 'Shaving the entire head (Halq) is superior to trimming, as the Prophet ﷺ supplicated three times for those who shave and only once for those who trim.',
+          'glossary': [
+            {'term': 'Prophetic Supplication', 'meaning': 'Prayers made by the Prophet ﷺ carrying immense blessing.'}
+          ]
+        },
+        {
+          'title': 'Women trim a fingertip length of hair.',
+          'details': 'Women do not shave their heads. They gather their hair and cut a small portion, about the length of a fingertip (1.5–2 cm), from the ends.',
+          'glossary': [
+            {'term': 'Fingertip length', 'meaning': 'The measure used for women trimming hair (approx. 2 cm).'}
+          ]
+        },
+        {
+          'title': 'Achieve Tahallul al-Asghar and change into regular clothes.',
+          'details': 'Once the hair is shaved or trimmed, you enter the state of partial deconsecration (Tahallul al-Asghar). You can now shower, wear regular clothes, and use perfume.',
+          'glossary': [
+            {'term': 'Tahallul al-Asghar', 'meaning': 'The first stage of exiting Ihram which lifts all restrictions except marital relations.'}
+          ]
+        }
       ],
       'quran': {
         'textAr': 'مُحَلِّقِينَ رُءُوسَكُمْ وَمُقَصِّرِينَ لَا تَخَافُونَ',
@@ -308,26 +421,42 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'Shaving and trimming are recognized by Allah as the sacred conclusion of the state of Ihram.',
         'explanationAr': 'مشروعية الحلق والتقصير لإنهاء الإحرام والتحلل.',
       },
-      'hadith': {
-        'textAr': 'عَنِ ابْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ حَلَقَ فِي حَجَّتِهِ',
-        'referenceAr': 'صحيح البخاري وصحيح مسلم',
-        'textEn': 'Ibn Umar narrated: "The Messenger of Allah (ﷺ) had his head shaved during his Hajj pilgrimage."',
-        'referenceEn': 'Sahih al-Bukhari & Sahih Muslim',
-        'explanationEn': 'Prophetic action showing head shaving is the optimal way to conclude the pilgrimage.',
-        'explanationAr': 'اقتداء الحجاج بالنبي صلى الله عليه وسلم بالحلق يوم النحر.',
-      },
-      'originStory': {
-        'title': 'A Vision Fulfilled',
-        'source': 'Surah Al-Fath 48:27 · Sahih al-Bukhari 2731',
-        'textEn': 'Before the Treaty of Hudaybiyyah (6 AH), the Prophet (ﷺ) had seen in a vision that he and his companions would enter Makkah "with heads shaved and hair shortened." The treaty delayed that entry by a year, but the vision was fulfilled exactly as described when the pilgrims shaved their heads at the end of their rites (Surah Al-Fath 48:27; the background is recorded in Sahih al-Bukhari\'s account of Hudaybiyyah, no. 2731-2732). Ibn Umar confirmed the Prophet himself shaved his head during his own Hajj (Sahih al-Bukhari & Muslim).',
-      },
-      'dua': {
-        'title': 'Dua of Gratitude upon Shaving',
-        'arabic': 'الْحَمْدُ لِلَّهِ الَّذِي قَضَى عَنَّا نُسُكَنَا',
-        'translit': 'Alhamdu lillahil-ladhi qada \'anna nusukana',
-        'meaningEn': 'Praise be to Allah Who has enabled us to complete our rituals.',
-        'meaningAr': 'الحمد والشكر لله على إتمام مناسك التحلل الأصغر.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنِ ابْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ حَلَقَ فِي حَجَّتِهِ',
+          'translitEn': 'An ibni Umar radiya-allahu anhuma anna-nabiyya salla-allahu alayhi wa sallama halaqa fi hajjatihi.',
+          'referenceEn': 'Sahih al-Bukhari & Sahih Muslim',
+          'textEn': 'Ibn Umar narrated: "The Messenger of Allah (ﷺ) had his head shaved during his Hajj pilgrimage."',
+          'explanationEn': 'Prophetic action showing head shaving is the optimal way to conclude the pilgrimage.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'These are the two primary authentic collections of prophetic traditions.'
+        },
+        {
+          'textAr': 'عَنْ أَبِي هُرَيْرَةَ رَضِيَ اللَّهُ عَنْهُ قَالَ: قَالَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ: «اللَّهُمَّ اغْفِرْ لِلْمُحَلِّقِينَ»، قَالُوا: وَلِلْمُقَصِّرِينَ...؟',
+          'translitEn': 'An Abi Hurairah radiya-allahu anhu qala: Qala rasulu-llahi salla-allahu alayhi wa sallama: Allahumma-ghfir lil-muhalliqina. Qalu: Wa lil-muqassirina...?',
+          'referenceEn': 'Sahih al-Bukhari 1727 & Sahih Muslim 1301',
+          'textEn': 'Abu Hurairah reported: The Prophet (ﷺ) said, "O Allah, forgive those who shave their heads!" The companions asked, "And those who trim, O Messenger of Allah?" He said, "O Allah, forgive those who shave!" They asked again, and on the third time he said, "And those who trim."',
+          'explanationEn': 'Demonstrates that head-shaving is thrice blessed by the Prophet ﷺ compared to trimming.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'Compiled by Imams Al-Bukhari and Muslim, these books represent the peak of Hadith authenticity.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua of Gratitude upon Shaving',
+          'arabic': 'الْحَمْدُ لِلَّهِ الَّذِي قَضَى عَنَّا نُسُكَنَا',
+          'translit': 'Alhamdu lillahil-ladhi qada \'anna nusukana',
+          'meaningEn': 'Praise be to Allah Who has enabled us to complete our rituals.',
+          'meaningAr': 'الحمد والشكر لله على إتمام مناسك التحلل الأصغر.',
+        },
+        {
+          'title': 'Dua for Forgiveness upon Shaving',
+          'arabic': 'اللَّهُمَّ ثَبِّتْ لِي بِكُلِّ شَعْرَةٍ حَسَنَةً وَامْحُ عَنِّي بِهَا سَيِّئَةً',
+          'translit': 'Allahumma thabbit li bikulli sha\'ratin hasanataw-wamhu \'anni biha sayyi\'ah',
+          'meaningEn': 'O Allah, record for me a good deed for every hair and wipe out a sin for it.',
+          'meaningAr': 'سؤال الله الثواب والمغفرة مع تساقط شعر الرأس.'
+        }
+      ]
     },
 
     'sai_h': {
@@ -335,21 +464,33 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'سعي الحج (الصفا والمروة)',
       'day': '10th Dhul Hijjah or Days of Tashreeq',
       'dayAr': '١٠ ذو الحجة أو أيام التشريق',
-      'overviewEn':
-          'Sa’i of Hajj is a mandatory ritual consisting of walking seven times between the hills of Safa and Marwah. For Hajj Tamattu\', this Sa\'i is performed after Tawaf al-Ifadah. For Hajj Qiran and Ifrad, it is typically performed after Tawaf al-Qudum or Tawaf al-Ifadah.',
-      'overviewAr':
-          'سعي الحج هو المشي بين الصفا والمروة سبعة أشواط، وهو ركن من أركان الحج عند جمهور العلماء. يؤديه القارن والمفرد بعد طواف القدوم (أو طواف الإفاضة)، بينما يؤديه المتمتع بعد طواف الإفاضة وجوباً.',
-      'keyActionsEn': [
-        'Perform 7 laps starting from Safa and ending at Marwah.',
-        'Safa to Marwah is 1 lap; Marwah to Safa is the 2nd lap.',
-        'Men should jog/run briskly between the green lights (Raml).',
-        'Make sincere Duas and remember Allah at the peaks of Safa and Marwah.',
-      ],
-      'keyActionsAr': [
-        'السعي ٧ أشواط كاملة تبدأ بالصفا وتنتهي بالمروة.',
-        'الذهاب من الصفا إلى المروة يعتبر شوطاً، والرجوع شوطاً آخر.',
-        'يُسن للرجال الهرولة بين العلمين الأخضرين.',
-        'الوقوف عند الصفا والمروة مستقبل القبلة والدعاء بالتكبير والتهليل.',
+      'overviewEn': 'Sa’i of Hajj is a mandatory ritual consisting of walking seven times between the hills of Safa and Marwah. For Hajj Tamattu\', this Sa\'i is performed after Tawaf al-Ifadah. For Hajj Qiran and Ifrad, it is typically performed after Tawaf al-Qudum or Tawaf al-Ifadah.',
+      'overviewAr': 'سعي الحج هو المشي بين الصفا والمروة سبعة أشواط، وهو ركن من أركان الحج عند جمهور العلماء. يؤديه القارن والمفرد بعد طواف القدوم (أو طواف الإفاضة)، بينما يؤديه المتمتع بعد طواف الإفاضة وجوباً.',
+      'actionDetails': [
+        {
+          'title': 'Perform 7 laps starting from Safa and ending at Marwah.',
+          'details': 'Walk from Safa to Marwah (1st lap), then back to Safa (2nd lap), and repeat until you complete 7 laps, ending at Marwah.',
+          'glossary': [
+            {'term': 'Sa\'i', 'meaning': 'The ritual of walking seven times between Safa and Marwah.'},
+            {'term': 'Safa', 'meaning': 'The small hill where the Sa\'i begins.'},
+            {'term': 'Marwah', 'meaning': 'The small hill where the Sa\'i ends.'}
+          ]
+        },
+        {
+          'title': 'Men should jog/run briskly between the green lights (Raml).',
+          'details': 'When men reach the area marked by green fluorescent lights, they should run or jog briskly (Raml) while maintaining dignity. Women walk normally.',
+          'glossary': [
+            {'term': 'Raml', 'meaning': 'Brushing/brisk running performed by men in specific parts of Tawaf and Sa\'i.'}
+          ]
+        },
+        {
+          'title': 'Make sincere Duas and remember Allah at the peaks.',
+          'details': 'At the top of Safa and Marwah, face the Kaaba, raise your hands, and make personal supplications. Recite the prophetic praise three times before making your own prayers.',
+          'glossary': [
+            {'term': 'Kaaba', 'meaning': 'The cuboid building at the center of Islam\'s most sacred mosque, Al-Masjid al-Haram.'},
+            {'term': 'Dhikr', 'meaning': 'The remembrance of Allah through chanting praises.'}
+          ]
+        }
       ],
       'quran': {
         'textAr': 'إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ ۖ فَمَنْ حَجَّ الْبَيْتَ أَوِ اعْتَمَرَ فَلَا جُنَاحَ عَلَيْهِ أَن يَطَّوَّفَ بِهِمَا',
@@ -359,26 +500,42 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'Allah establishes Safa and Marwah as sacred signs of His worship, honoring the persistence and faith of Hajar (peace be upon her).',
         'explanationAr': 'تبيّن الآية أن الصفا والمروة من شعائر الدين ومواضع العبادة، وتشرع السعي بينهما.',
       },
-      'hadith': {
-        'textAr': 'عَنْ جَابِرِ بْنِ عَبْدِ اللَّهِ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ فِي سَعْيِهِ: «ابْدَءُوا بِمَا بَدَأَ اللَّهُ بِهِ» فَبَدَأَ بِالصَّفَا',
-        'referenceAr': 'صحيح مسلم (١٢١٨)',
-        'textEn': 'Jabir bin Abdullah reported: The Prophet (ﷺ) said regarding Sa’i: "Begin with that which Allah has begun with." So he started with Safa.',
-        'referenceEn': 'Sahih Muslim 1218',
-        'explanationEn': 'This Hadith confirms the obligation of starting the Sa’i from Mount Safa as demonstrated by the Prophet (ﷺ).',
-        'explanationAr': 'يبين الحديث وجوب البداية بالصفا اقتداءً بفعله صلى الله عليه وسلم وتفسيره للقرآن.',
-      },
-      'originStory': {
-        'title': 'Hajar\'s Search for Water',
-        'source': 'Sahih al-Bukhari 3364 (Hadith of Ibn Abbas)',
-        'textEn': 'Long before Ibrahim (AS) rebuilt the Kaaba, he left his wife Hajar and infant son Ismail in the barren valley of Makkah on Allah\'s command. When their water ran out, Hajar ran back and forth between the hills of Safa and Marwah seven times searching desperately for help, until Allah caused the spring of Zamzam to burst forth beneath baby Ismail\'s feet. Ibn Abbas narrates this story at length in Sahih al-Bukhari (3364). Allah later immortalised her run as a rite for every pilgrim, declaring in the Quran that "Safa and Marwah are among the symbols of Allah" (2:158).',
-      },
-      'dua': {
-        'title': 'Dua on Safa & Marwah',
-        'arabic': 'لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ، لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ، أَنْجَزَ وَعْدَهُ، وَنَصَرَ عَبْدَهُ، وَهَزَمَ الأَحْزَابَ وَحْدَهُ',
-        'translit': 'La ilaha illallahu wahdahu la sharika lahu, lahul-mulku wa lahul-hamdu, wa huwa \'ala kulli shay\'in qadir. La ilaha illallahu wahdahu, anjaza wa\'dahu, wa nasara \'abdahu, wa hazamal-ahzaba wahdah.',
-        'meaningEn': 'There is no deity except Allah alone, without partner. To Him belongs sovereignty and praise, and He has power over all things. There is no deity except Allah alone, He fulfilled His promise, granted victory to His servant, and defeated the confederates alone.',
-        'meaningAr': 'التكبير والتهليل والثناء على الله عند صعود جبل الصفا والمروة والاستقبال للقبلة.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ جَابِرِ بْنِ عَبْدِ اللَّهِ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ فِي سَعْيِهِ: «ابْدَءُوا بِمَا بَدَأَ اللَّهُ بِهِ» فَبَدَأَ بِالصَّفَا',
+          'translitEn': 'An Jabiri-bni Abdillah radiya-allahu anhuma anna-nabiyya salla-allahu alayhi wa sallama qala fi sa\'yihi: Ibda\'u bima bada\'a-llahu bihi, fabada\'a bis-Safa.',
+          'referenceEn': 'Sahih Muslim 1218',
+          'textEn': 'Jabir bin Abdullah reported: The Prophet (ﷺ) said regarding Sa’i: "Begin with that which Allah has begun with." So he started with Safa.',
+          'explanationEn': 'This Hadith confirms the obligation of starting the Sa’i from Mount Safa as demonstrated by the Prophet (ﷺ).',
+          'sourceBook': 'Sahih Muslim',
+          'sourceBookDesc': 'One of the authentic Hadith collections compiled by Imam Muslim.'
+        },
+        {
+          'textAr': 'عَنْ حَبِيبَةَ بِنْتِ أَبِي تَجْرَاةَ قَالَتْ: رَأَيْتُ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ يَسْعَى بَيْنَ الصَّفَا وَالْمَرْوَةَ وَهُوَ يَقُولُ: «اسْعَوْا فَإِنَّ اللَّهَ كَتَبَ عَلَيْكُمُ السَّعْيَ»',
+          'translitEn': 'An Habibata binti Abi Tajra\'ata qalat: Ra\'aytu rasula-llahi salla-allahu alayhi wa sallama yas\'a baynas-Safa wal-Marwata wa huwa yaqul: Is\'aw fa-inna-llaha kataba alaykumu-s-sa\'y.',
+          'referenceEn': 'Musnad Ahmad 27410 & Sunan al-Kubra of Al-Bayhaqi',
+          'textEn': 'Habibah bint Abi Tajrah narrated: "I saw the Messenger of Allah (ﷺ) performing Sa\'i between Safa and Marwah, and he was saying: Run, for Allah has decreed running (Sa\'i) upon you."',
+          'explanationEn': 'Establishes that Sa\'i is a binding obligation (Wajib/Rukn) on the pilgrim by divine decree.',
+          'sourceBook': 'Musnad Ahmad',
+          'sourceBookDesc': 'A major collection of Hadith compiled by Imam Ahmad ibn Hanbal, organized by narrating Companions.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Prophetic Praise on Safa & Marwah',
+          'arabic': 'لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ، لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ، أَنْجَزَ وَعْدَهُ، وَنَصَرَ عَبْدَهُ، وَهَزَمَ الأَحْزَابَ وَحْدَهُ',
+          'translit': 'La ilaha illallahu wahdahu la sharika lahu, lahul-mulku wa lahul-hamdu, wa huwa \'ala kulli shay\'in qadir. La ilaha illallahu wahdahu, anjaza wa\'dahu, wa nasara \'abdahu, wa hazamal-ahzaba wahdah.',
+          'meaningEn': 'There is no deity except Allah alone, without partner. To Him belongs sovereignty and praise, and He has power over all things. There is no deity except Allah alone, He fulfilled His promise, granted victory to His servant, and defeated the confederates alone.',
+          'meaningAr': 'التكبير والتهليل والثناء على الله عند صعود جبل الصفا والمروة والاستقبال للقبلة.',
+        },
+        {
+          'title': 'Dua of Hajar\'s Commemoration',
+          'arabic': 'إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ فَمَنْ حَجَّ الْبَيْتَ أَوِ اعْتَمَرَ فَلَا جُنَاحَ عَلَيْهِ أَن يَطَّوَّفَ بِهِمَا',
+          'translit': 'Innas-Safa wal-Marwata min sha\'a\'irillah faman hajjal-bayta awi-\'tamara fala junaha \'alayhi ay-yattawwafa bihima.',
+          'meaningEn': 'Indeed, Safa and Marwah are among the symbols of Allah. So whoever makes Hajj to the House or performs Umrah - there is no blame upon him for walking between them.',
+          'meaningAr': 'تلاوة الآية عند الإقبال على جبل الصفا لبدء السعي.',
+        }
+      ]
     },
 
     'ihram': {
@@ -386,59 +543,92 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'الإحرام والنية',
       'day': 'Miqat - Before entering the Haram boundaries',
       'dayAr': 'الميقات - قبل دخول حدود الحرم',
-      'overviewEn':
-          'Ihram is the sacred state a pilgrim enters to perform Hajj or Umrah. It involves specific physical purifications (Ghusl), wearing designated unstitched white sheets (for men), reciting the Niyyah (intention), and continuously chanting the Talbiyah. Once in Ihram, prohibitions such as cutting hair, applying perfume, clipping nails, and hunting apply until deconsecration.',
-      'overviewAr':
-          'الإحرام هو النية والنية في الدخول في النسك مع التجرُّد من المَخِيط للرجال. ويبدأ بالتطهر والغسل، ثم لبس رداء وإزار أبيضين نظيفين، بينما تلبس المرأة ما شاءت من اللباس الساتر دون تبرج، ثم التلفظ بالنية والالتزام بمحظورات الإحرام كَقَصّ الشعر والطيب والجدال.',
-      'keyActionsEn': [
-        'Perform Ghusl (ritual bath) and trim nails/mustache before Miqat.',
-        'Wear 2 unstitched white sheets (Izar & Rida) for men; loose modest dress for women.',
-        'Offer 2 Rakat Sunnah prayer at the Miqat.',
-        'Make explicit intention: "Labbayk Allahumma Hajjah" (لَبَّيْكَ اللَّهُمَّ حَجًّا).',
-        'Begin loud recitation of Talbiyah: "Labbayk Allahumma Labbayk..."',
-      ],
-      'keyActionsAr': [
-        'الاغتسال والتطيب في البدن قبل الإحرام (للرجال والنساء).',
-        'ارتداء ملابس الإحرام (إزار ورداء أبيضين غير محيطين للرجال).',
-        'صلاة ركعتين سُنة الإحرام في الميقات.',
-        'التلفظ بالنية: "لَبَّيْكَ اللَّهُمَّ حَجًّا" أو "لَبَّيْكَ عُمْرَةً".',
-        'رفع الصوت بالتلبية للرجال ورفعها بقدر ما تسمع نفسها للنساء.',
+      'overviewEn': 'Ihram is the sacred state a pilgrim enters to perform Hajj or Umrah. It involves specific physical purifications (Ghusl), wearing designated unstitched white sheets (for men), reciting the Niyyah (intention), and continuously chanting the Talbiyah. Once in Ihram, prohibitions such as cutting hair, applying perfume, clipping nails, and hunting apply until deconsecration.',
+      'overviewAr': 'الإحرام هو النية والنية في الدخول في النسك مع التجرُّد من المَخِيط للرجال. ويبدأ بالتطهر والغسل، ثم لبس رداء وإزار أبيضين نظيفين، بينما تلبس المرأة ما شاءت من اللباس الساتر دون تبرج، ثم التلفظ بالنية والالتزام بمحظورات الإحرام كَقَصّ الشعر والطيب والجدال.',
+      'actionDetails': [
+        {
+          'title': 'Perform Ghusl (ritual bath) and trim nails/mustache before Miqat.',
+          'details': 'Take a physical purification bath, clean your body, clip nails, and trim hair if necessary before passing the Miqat boundary.',
+          'glossary': [
+            {'term': 'Ghusl', 'meaning': 'The full-body ritual purification bath in Islam.'},
+            {'term': 'Miqat', 'meaning': 'The geographical boundaries set by the Prophet ﷺ where entering Ihram is required.'}
+          ]
+        },
+        {
+          'title': 'Wear 2 unstitched white sheets (Izar & Rida) for men; loose modest dress for women.',
+          'details': 'Men wrap one sheet around the waist (Izar) and one over the shoulders (Rida). No sewn clothing, underwear, or socks are allowed. Women wear clean modest clothes and leave their face and hands uncovered.',
+          'glossary': [
+            {'term': 'Izar', 'meaning': 'The lower sheet of Ihram cloth wrapped around the waist.'},
+            {'term': 'Rida', 'meaning': 'The upper sheet of Ihram cloth covering the shoulders.'}
+          ]
+        },
+        {
+          'title': 'Offer 2 Rakat Sunnah prayer at the Miqat.',
+          'details': 'If appropriate (not during disliked prayer times), offer 2 Rakat of optional prayer (Nafl) after wearing the Ihram sheets.',
+          'glossary': [
+            {'term': 'Rakat', 'meaning': 'Units of prayer.'},
+            {'term': 'Nafl', 'meaning': 'Supererogatory (voluntary) prayer.'}
+          ]
+        },
+        {
+          'title': 'Make explicit intention (Niyyah).',
+          'details': 'State your intention for Hajj or Umrah: "Labbayk Allahumma Umrah" (لَبَّيْكَ اللَّهُمَّ عُمْرَةً) or "Labbayk Allahumma Hajjah" (لَبَّيْكَ اللَّهُمَّ حَجًّا).',
+          'glossary': [
+            {'term': 'Niyyah', 'meaning': 'Sincere intention in the heart to initiate an act of worship.'}
+          ]
+        },
+        {
+          'title': 'Begin loud recitation of Talbiyah.',
+          'details': 'Chant the Talbiyah loudly (for men) and quietly (for women). This must be recited regularly until you start stoning the Jamrah or performing Tawaf.',
+          'glossary': [
+            {'term': 'Talbiyah', 'meaning': 'The chant recited by pilgrims: Labbayk Allahumma Labbayk.'}
+          ]
+        }
       ],
       'quran': {
-        'textAr':
-            'الْحَجُّ أَشْهُرٌ مَّعْلُومَاتٌ ۚ فَمَن فَرَضَ فِيهِنَّ الْحَجَّ فَلَا رَفَثَ وَلَا فُسُوقَ وَلَا جِدَالَ فِي الْحَجِّ ۗ وَمَا تَفْعَلُوا مِنْ خَيْرٍ يَعْلَمْهُ اللَّهُ',
+        'textAr': 'الْحَجُّ أَشْهُرٌ مَّعْلُومَاتٌ ۚ فَمَن فَرَضَ فِيهِنَّ الْحَجَّ فَلَا رَفَثَ وَلَا فُسُوقَ وَلَا جِدَالَ فِي الْحَجِّ ۗ وَمَا تَفْعَلُوا مِنْ خَيْرٍ يَعْلَمْهُ اللَّهُ',
         'referenceAr': 'سورة البقرة - الآية ١٩٧',
-        'textEn':
-            'Hajj is [during] well-known months, so whoever has made Hajj obligatory upon himself therein [by entering the state of ihram], there is [to be for him] no sexual relations and no disobedience and no disputing during Hajj. And whatever good you do - Allah knows it.',
+        'textEn': 'Hajj is [during] well-known months, so whoever has made Hajj obligatory upon himself therein [by entering the state of ihram], there is [to be for him] no sexual relations and no disobedience and no disputing during Hajj. And whatever good you do - Allah knows it.',
         'referenceEn': 'Surah Al-Baqarah (2:197)',
-        'explanationEn':
-            'Allah explicitly establishes that entering Ihram requires refraining from immoral actions, disputes, and earthly desires, elevating spiritual focus solely towards Allah.',
-        'explanationAr':
-            'توضح الآية الكريمة حرمة وقت الإحرام ووجوب اجتناب الرفث والفسوق والجدال بالباطل، ليتفرغ الحاج لذكر الله والتقوى.',
+        'explanationEn': 'Allah explicitly establishes that entering Ihram requires refraining from immoral actions, disputes, and earthly desires, elevating spiritual focus solely towards Allah.',
+        'explanationAr': 'توضح الآية الكريمة حرمة وقت الإحرام ووجوب اجتناب الرفث والفسوق والجدال بالباطل، ليتفرغ الحاج لذكر الله والتقوى.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ سُئِلَ: مَا يَلْبَسُ الْمُحْرِمُ؟ فَقَالَ: «لاَ يَلْبَسُ الْقُمُصَ وَلاَ الْعَمَائِمَ وَلاَ السََّرَاوِيلاَتِ وَلاَ الْبَرَانِسَ وَلاَ الْخِفَافَ...»',
-        'referenceAr': 'صحيح البخاري (١٥٤٢) وصحيح مسلم (١١٧٧)',
-        'textEn':
-            'Narrated Abdullah ibn Umar: A man asked the Prophet (ﷺ), "What should a pilgrim in Ihram wear?" The Prophet replied, "He should not wear shirts, turbans, trousers, hooded cloaks, or leather socks..."',
-        'referenceEn': 'Sahih al-Bukhari 1542, Sahih Muslim 1177',
-        'explanationEn':
-            'This Hadith lays out the essential dress code for men in Ihram to strip away worldly status and distinctions before Almighty Allah.',
-        'explanationAr':
-            'يبين الحديث الشريف أحكام اللباس للمحرم وتجرده من المظاهر والطبقية، ليتساوى الجميع أمام الله تعالى.',
-      },
-      'dua': {
-        'title': 'Intention & Talbiyah (التلبية والنية)',
-        'arabic':
-            'لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لا شَرِيكَ لَكَ لَبَّيْكَ، إِنَّ الْحَمْدَ وَالنِّعْمَةَ لَكَ وَالْمُلْكُ، لا شَرِيكَ لَكَ',
-        'translit':
-            'Labbayk Allahumma Labbayk, Labbayka la sharika laka labbayk, innal-hamda wan-ni’mata laka wal-mulk, la sharika lak.',
-        'meaningEn':
-            'Here I am O Allah, here I am. Here I am, You have no partner, here I am. Verily all praise, grace, and sovereignty belong to You. You have no partner.',
-        'meaningAr':
-            'إجابة بعد إجابة لك يا الله، لا شريك لك، إن الحمد والنعمة والملك لك وحدك لا شريك لك.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ سُئِلَ: مَا يَلْبَسُ الْمُحْرِمُ؟ فَقَالَ: «لاَ يَلْبَسُ الْقُمُصَ وَلاَ الْعَمَائِمَ وَلاَ السَّرَاوِيلاَتِ وَلاَ الْبَرَانِسَ وَلاَ الْخِفَافَ...»',
+          'translitEn': 'An ibni Umar radiya-allahu anhuma anna rasula-llahi salla-allahu alayhi wa sallama su\'ila: Ma yalbasu-l-muhrim? Faqala: La yalbasu-l-qumusa wa la-l-ama\'ima wa la-s-sarawilati wa la-l-baranisa wa la-l-khifafa...',
+          'referenceEn': 'Sahih al-Bukhari 1542, Sahih Muslim 1177',
+          'textEn': 'Narrated Abdullah ibn Umar: A man asked the Prophet (ﷺ), "What should a pilgrim in Ihram wear?" The Prophet replied, "He should not wear shirts, turbans, trousers, hooded cloaks, or leather socks..."',
+          'explanationEn': 'This Hadith lays out the essential dress code for men in Ihram to strip away worldly status and distinctions before Almighty Allah.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'These are the two primary authentic collections of prophetic traditions.'
+        },
+        {
+          'textAr': 'عَنْ عُمَرَ بْنِ الْخَطَّابِ رَضِيَ اللَّهُ عَنْهُ قَالَ: سَمِعْتُ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ يَقُولُ: «إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ»',
+          'translitEn': 'An Umara-bni-l-Khattabi radiya-allahu anhu qala: Sami\'tu rasula-llahi salla-allahu alayhi wa sallama yaqulu: Innama-l-a\'malu bin-niyyat.',
+          'referenceEn': 'Sahih al-Bukhari 1 & Sahih Muslim 1907',
+          'textEn': 'Umar ibn al-Khattab narrated: I heard the Messenger of Allah (ﷺ) say: "Indeed, actions are only judged by intentions..."',
+          'explanationEn': 'Establishes that the internal intention (Niyyah) in the heart is the foundation for all religious acts including Hajj and Umrah.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'The first and most authentic compiler of authentic prophetic statements.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'The Talbiyah (التلبية)',
+          'arabic': 'لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لا شَرِيكَ لَكَ لَبَّيْكَ، إِنَّ الْحَمْدَ وَالنِّعْمَةَ لَكَ وَالْمُلْكُ، لا شَرِيكَ لَكَ',
+          'translit': 'Labbayk Allahumma Labbayk, Labbayka la sharika laka labbayk, innal-hamda wan-ni’mata laka wal-mulk, la sharika lak.',
+          'meaningEn': 'Here I am O Allah, here I am. Here I am, You have no partner, here I am. Verily all praise, grace, and sovereignty belong to You. You have no partner.',
+          'meaningAr': 'إجابة بعد إجابة لك يا الله، لا شريك لك، إن الحمد والنعمة والملك لك وحدك لا شريك لك.',
+        },
+        {
+          'title': 'Dua for Intention of Hajj',
+          'arabic': 'اللَّهُمَّ إِنِّي أُرِيدُ الْحَجَّ فَيَسِّرْهُ لِي وَتَقَبَّلْهُ مِنِّي',
+          'translit': 'Allahumma inni ureedul-hajja fayassirhu li wa taqabbalhu minni',
+          'meaningEn': 'O Allah, I intend to perform Hajj, so make it easy for me and accept it from me.',
+          'meaningAr': 'التوسل بتسهيل وقبول الحج.',
+        }
+      ]
     },
 
     'tawaf_qudum': {
@@ -446,64 +636,92 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'طواف القدوم',
       'day': 'Upon arrival in Makkah',
       'dayAr': 'فور الوصول إلى مكة المكرمة',
-      'overviewEn':
-          'Tawaf al-Qudum is the welcome circumambulation performed around the Holy Kaaba upon reaching Makkah. Pilgrims circle the Kaaba seven times counter-clockwise, starting from the Black Stone (Hajar al-Aswad). For men, Idtiba (uncovering the right shoulder) and Raml (brisk walking in the first 3 rounds) are Sunnah.',
-      'overviewAr':
-          'طواف القدوم هو تحية البيت الحرام للمُفْرِد والمقترن فور وصولهما إلى مكة. يطوف الحاج سبعة أشواط يبدأ كل شوط من الحجر الأسود وينتهي عنده، ويُسن للرجال الانطباع (كشف الكتف الأيمن) والرَّمَل (الهرولة الخفيفة في الأشواط الثلاثة الأولى).',
-      'keyActionsEn': [
-        'Uncover the right shoulder (Idtiba) for men during Tawaf.',
-        'Start each circuit at the Hajar al-Aswad pointing/touching and saying "Bismillahi Allahu Akbar".',
-        'Perform Raml (quick brisk walking) in the first 3 rounds.',
-        'Recite "Rabbana atina fid-dunya hasanatan..." between RUKN AL-YAMANI and HAJAR AL-ASWAD.',
-        'Offer 2 Rakat behind Maqam Ibrahim upon completion.',
-      ],
-      'keyActionsAr': [
-        'الاضطباع للرجل بكشف الكتف الأيمن أثناء الطواف.',
-        'استلام الحجر الأسود أو الإشارة إليه قائلًا: "بسم الله والله أكبر".',
-        'الرَّمَل (الإسراع في المشي مع تقارب الخطى) في الأشواط الثلاثة الأولى.',
-        'الدعاء بين الركن اليماني والحجر الأسود: "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ".',
-        'صلاة ركعتين خلف مقام إبراهيم بعد الطواف.',
+      'overviewEn': 'Tawaf al-Qudum is the welcome circumambulation performed around the Holy Kaaba upon reaching Makkah. Pilgrims circle the Kaaba seven times counter-clockwise, starting from the Black Stone (Hajar al-Aswad). For men, Idtiba (uncovering the right shoulder) and Raml (brisk walking in the first 3 rounds) are Sunnah.',
+      'overviewAr': 'طواف القدوم هو تحية البيت الحرام للمُفْرِد والمقترن فور وصولهما إلى مكة. يطوف الحاج سبعة أشواط يبدأ كل شوط من الحجر الأسود وينتهي عنده، ويُسن للرجال الانطباع (كشف الكتف الأيمن) والرَّمَل (الهرولة الخفيفة في الأشواط الثلاثة الأولى).',
+      'actionDetails': [
+        {
+          'title': 'Uncover the right shoulder (Idtiba) for men during Tawaf.',
+          'details': 'Pass the upper sheet of the Ihram (Rida) under your right armpit and drape it over your left shoulder, leaving your right shoulder uncovered throughout the Tawaf.',
+          'glossary': [
+            {'term': 'Idtiba', 'meaning': 'Uncovering the right shoulder for men during Tawaf.'},
+            {'term': 'Rida', 'meaning': 'The upper sheet of the unstitched Ihram cloth.'}
+          ]
+        },
+        {
+          'title': 'Start each circuit at the Hajar al-Aswad saying "Bismillahi Allahu Akbar".',
+          'details': 'Align yourself with the Black Stone corner of the Kaaba. Point your right hand towards the stone, kiss it if possible without causing harm, and say "Bismillahi Allahu Akbar" to start your circuit.',
+          'glossary': [
+            {'term': 'Hajar al-Aswad', 'meaning': 'The Black Stone set in the southeastern corner of the Kaaba.'},
+            {'term': 'Allahu Akbar', 'meaning': 'Allah is the Greatest.'}
+          ]
+        },
+        {
+          'title': 'Perform Raml (quick brisk walking) in the first 3 rounds.',
+          'details': 'Men should perform the first three rounds with quick, short steps (Raml), slightly jogging if space permits. The remaining four rounds are done at a normal walking pace.',
+          'glossary': [
+            {'term': 'Raml', 'meaning': 'Walking with quick, short steps and moving the shoulders, sunnah in the first 3 rounds.'}
+          ]
+        },
+        {
+          'title': 'Recite "Rabbana atina fid-dunya hasanatan..." between Rukn al-Yamani and the Black Stone.',
+          'details': 'Between the Yemeni corner and the Black Stone, it is sunnah to recite the prayer asking for good in this life and the hereafter.',
+          'glossary': [
+            {'term': 'Rukn al-Yamani', 'meaning': 'The southwestern corner of the Kaaba, facing Yemen.'}
+          ]
+        },
+        {
+          'title': 'Offer 2 Rakat behind Maqam Ibrahim upon completion.',
+          'details': 'Once 7 rounds are complete, cover your shoulder. Go behind the Station of Abraham (or anywhere in the mosque) and pray 2 units of prayer.',
+          'glossary': [
+            {'term': 'Maqam Ibrahim', 'meaning': 'The crystal and bronze dome containing the stone with the footprints of Ibrahim (AS).'},
+            {'term': 'Rakat', 'meaning': 'Units of prayer.'}
+          ]
+        }
       ],
       'quran': {
-        'textAr':
-            'وَإِذْ جَعَلْنَا الْبَيْتَ مَثَابَةً لِّلنَّاسِ وَأَمْنًا وَاتَّخِذُوا مِن مَّقَامِ إِبْرَاهِيمَ مُصَلًّى',
+        'textAr': 'وَإِذْ جَعَلْنَا الْبَيْتَ مَثَابَةً لِّلنَّاسِ وَأَمْنًا وَاتَّخِذُوا مِن مَّقَامِ إِبْرَاهِيمَ مُصَلًّى',
         'referenceAr': 'سورة البقرة - الآية ١٢٥',
-        'textEn':
-            'And [remember] when We made the House a place of return for the people and [a place of] security. And take, [O believers], from the standing place of Abraham a place of prayer.',
+        'textEn': 'And [remember] when We made the House a place of return for the people and [a place of] security. And take, [O believers], from the standing place of Abraham a place of prayer.',
         'referenceEn': 'Surah Al-Baqarah (2:125)',
-        'explanationEn':
-            'Allah commands believers to make the Sanctuary a place of worship and to pray behind Maqam Ibrahim after performing Tawaf.',
-        'explanationAr':
-            'أمر الله تعالى بتعظيم الكعبة وأداء الصلاة عند مقام إبراهيم عليه السلام تخليداً لذكراه واقتداءً بالأنبياء.',
+        'explanationEn': 'Allah commands believers to make the Sanctuary a place of worship and to pray behind Maqam Ibrahim after performing Tawaf.',
+        'explanationAr': 'أمر الله تعالى بتعظيم الكعبة وأداء الصلاة عند مقام إبراهيم عليه السلام تخليداً لذكراه واقتداءً بالأنبياء.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ جَابِرِ بْنِ عَبْدِ اللَّهِ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ لَمَّا قَدِمَ مَكَّةَ أَتَى الْحَجَرَ فَاسْتَلَمَهُ فََرَمَلَ ثَلاَثًا وَمَشَى أَرْبَعًا، ثُمَّ تَقَدَّمَ إِلَى مَقَامِ إِبْرَاهِيمَ فَقَرَأَ: {وَاتَّخِذُوا مِنْ مَقَامِ إِبْرَاهِيمَ مُصَلًّى}',
-        'referenceAr': 'صحيح مسلم (١٢١٨)',
-        'textEn':
-            'Jabir bin Abdullah reported: When Allah’s Messenger (ﷺ) came to Makkah, he touched the Black Stone, then walked briskly (Raml) for three circuits and walked normally for four. Then he proceeded to Maqam Ibrahim and recited: "Take from the standing place of Abraham a place of prayer."',
-        'referenceEn': 'Sahih Muslim 1218',
-        'explanationEn':
-            'This Hadith details the exact Sunnah method of Tawaf al-Qudum as demonstrated by Prophet Muhammad (ﷺ).',
-        'explanationAr':
-            'يوضح الحديث هيئة طواف النبي صلى الله عليه وسلم وصفة الرمل والصلاة خلف المقام.',
-      },
-      'originStory': {
-        'title': 'Raising the House',
-        'source': 'Surah Al-Baqarah 2:127 · Al-Azraqi, Akhbar Makkah',
-        'textEn': 'Tawaf traces back to Ibrahim (AS) and his son Ismail (AS) raising the foundations of the Kaaba and being commanded to "purify My House for those who circumambulate" (Surah Al-Baqarah 2:125, 127). The early Makkan historian Al-Azraqi (d. c. 837 CE) recorded in Akhbar Makkah how this rite of circling the House was practised by the descendants of Ibrahim\'s line and preserved — despite later idolatrous additions by the Quraysh — until the Prophet (ﷺ) cleared the Kaaba of idols and restored pure Tawaf in 8 AH.',
-      },
-      'dua': {
-        'title': 'Dua Between Yamani Corner & Black Stone',
-        'arabic':
-            'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
-        'translit':
-            'Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
-        'meaningEn':
-            'Our Lord, grant us good in this world and good in the Hereafter and protect us from the punishment of the Fire.',
-        'meaningAr':
-            'ربنا منحنا الخير في الدنيا والآخرة ونجنا من عذاب النار.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ جَابِرِ بْنِ عَبْدِ اللَّهِ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ لَمَّا قَدِمَ مَكَّةَ أَتَى الْحَجَرَ فَاسْتَلَمَهُ فَرَمَلَ ثَلاَثًا وَمَشَى أَرْبَعًا، ثُمَّ تَقَدَّمَ إِلَى مَقَامِ إِبْرَاهِيمَ...',
+          'translitEn': 'An Jabir radiya-allahu anhuma anna rasula-llahi salla-allahu alayhi wa sallama lamma qadima Makkata atal-hajara fastalamahu faramala thalathan wa masha arba\'an...',
+          'referenceEn': 'Sahih Muslim 1218',
+          'textEn': 'Jabir bin Abdullah reported: When Allah’s Messenger (ﷺ) came to Makkah, he touched the Black Stone, then walked briskly (Raml) for three circuits and walked normally for four. Then he proceeded to Maqam Ibrahim...',
+          'explanationEn': 'This Hadith details the exact Sunnah method of Tawaf al-Qudum as demonstrated by Prophet Muhammad (ﷺ).',
+          'sourceBook': 'Sahih Muslim',
+          'sourceBookDesc': 'One of the two most authentic collections of Hadith in Sunni Islam.'
+        },
+        {
+          'textAr': 'عَنِ ابْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ كَانَ لاَ يَدَعُ أَنْ يَسْتَلِمَ الرُّكْنَ الْيَمَانِيَ وَالْحَجَرَ فِي كُلِّ طَوَافٍ',
+          'translitEn': 'An ibni Umar radiya-allahu anhuma anna rasula-llahi salla-allahu alayhi wa sallama kana la yada\'u an yastalima-r-rukna-l-yamaniya wal-hajara fi kulli tawaf.',
+          'referenceEn': 'Sahih al-Bukhari 1609 & Sahih Muslim 1267',
+          'textEn': 'Ibn Umar reported: "The Messenger of Allah (ﷺ) did not omit to touch the Yamani corner and the Black Stone in every circuit of Tawaf."',
+          'explanationEn': 'Underlines the Sunnah of touching the Yemeni Corner and kissing/touching the Black Stone during circumambulation.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'Imam Bukhari and Imam Muslim collections containing highly verified prophetic traditions.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua Between Corners',
+          'arabic': 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
+          'translit': 'Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
+          'meaningEn': 'Our Lord, grant us good in this world and good in the Hereafter and protect us from the punishment of the Fire.',
+          'meaningAr': 'ربنا منحنا الخير في الدنيا والآخرة ونجنا من عذاب النار.',
+        },
+        {
+          'title': 'Dua upon starting Tawaf',
+          'arabic': 'بِسْمِ اللَّهِ وَاللَّهُ أَكْبَرُ، اللَّهُمَّ إِيمَانًا بِكَ وَتَصْدِيقًا بِكِتَابِكَ',
+          'translit': 'Bismillahi wallahu Akbar, Allahumma imanam-bika wa tasdeeqam-bikitabik',
+          'meaningEn': 'In the name of Allah, Allah is the Greatest. O Allah, out of faith in You and belief in Your Book.',
+          'meaningAr': 'البدء بالطواف بذكر اسم الله والتكبير والتصديق بكتابه.',
+        }
+      ]
     },
 
     'mina1': {
@@ -511,64 +729,84 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'يوم التروية (٨ ذو الحجة)',
       'day': '8th Dhul Hijjah - Stay in Mina',
       'dayAr': '٨ ذو الحجة - المبيت بمنى',
-      'overviewEn':
-          'The Day of Tarwiyah marks the official start of Hajj. Pilgrims move to the tent city of Mina in the morning. They perform Dhuhr, Asr, Maghrib, Isha, and Fajr of the 9th Dhul Hijjah in Mina, shortening 4-rak’at prayers to 2 rak’at (Qasr) without combining them. Pilgrims spend the night in spiritual preparation and remembrance.',
-      'overviewAr':
-          'يوم التروية هو بداية أعمال الحج الفعلية. يتوجه الحجاج إلى منى في الصباح، ويصلون فيها الظهر والعصر والمغرب والعشاء وفجر يوم عرفة، يقصرون الصلاة الرباعية ركعتين دون جمع، ويبيتون في منى اتباعاً لسنة النبي صلى الله عليه وسلم.',
-      'keyActionsEn': [
-        'Enter Ihram from residence if not already in Ihram.',
-        'Depart for Mina after sunrise on 8th Dhul Hijjah.',
-        'Pray Dhuhr, Asr, Maghrib, Isha, and Fajr at Mina (Qasr: shortened to 2 rakah, no combining).',
-        'Recite Talbiyah continuously and engage in Dhikr & Qur\'an recitation.',
-        'Spend the entire night at Mina resting for the Day of Arafah.',
-      ],
-      'keyActionsAr': [
-        'الإحرام بالحج لمن كان حلالاً بمكة صباح يوم التروية.',
-        'الخروج إلى منى والتلبية طوال الطريق.',
-        'أداء الصلوات الخمس بمنى (الظهر والعصر والمغرب والعشاء وفجر ٩ ذو الحجة) قصراً بلا جمع.',
-        'الإكثار من الذكر والاستغفار والتلبية وقراءة القرآن.',
-        'المبيت بمنى ليلة عرفة وهو سنة مؤكدة.',
+      'overviewEn': 'The Day of Tarwiyah marks the official start of Hajj. Pilgrims move to the tent city of Mina in the morning. They perform Dhuhr, Asr, Maghrib, Isha, and Fajr of the 9th Dhul Hijjah in Mina, shortening 4-rak’at prayers to 2 rak’at (Qasr) without combining them. Pilgrims spend the night in spiritual preparation and remembrance.',
+      'overviewAr': 'يوم التروية هو بداية أعمال الحج الفعلية. يتوجه الحجاج إلى منى في الصباح، ويصلون فيها الظهر والعصر والمغرب والعشاء وفجر يوم عرفة، يقصرون الصلاة الرباعية ركعتين دون جمع، ويبيتون في منى اتباعاً لسنة النبي صلى الله عليه وسلم.',
+      'actionDetails': [
+        {
+          'title': 'Enter Ihram from residence if not already in Ihram.',
+          'details': 'Tamattu\'-type pilgrims assume Hajj Ihram from Makkah in the morning of the 8th. Perform Ghusl, wear sheets, set Hajj intention, and begin chanting Talbiyah.',
+          'glossary': [
+            {'term': 'Tarwiyah', 'meaning': 'The Day of Watering (8th Dhul Hijjah) when pilgrims historically prepared water reserves.'},
+            {'term': 'Ihram', 'meaning': 'The state of consecration necessary for performing Hajj.'}
+          ]
+        },
+        {
+          'title': 'Depart for Mina after sunrise on the 8th of Dhul Hijjah.',
+          'details': 'Move towards the tent city of Mina calmly, repeating the Talbiyah along the way.',
+          'glossary': [
+            {'term': 'Mina', 'meaning': 'A valley located 8 kilometers east of Makkah where pilgrims reside in tents.'}
+          ]
+        },
+        {
+          'title': 'Pray five daily prayers at Mina with Qasr (shortened).',
+          'details': 'Pray Dhuhr, Asr, Maghrib, Isha, and the Fajr of the 9th of Dhul Hijjah in Mina. Shorten the 4-Rakat prayers (Dhuhr, Asr, Isha) to 2 Rakat, but pray them on their own times without combining.',
+          'glossary': [
+            {'term': 'Qasr', 'meaning': 'The practice of shortening 4-Rakat prayers to 2 units while traveling.'},
+            {'term': 'Jam\'', 'meaning': 'Combining two prayers in one prayer time.'}
+          ]
+        },
+        {
+          'title': 'Spend the entire night at Mina resting for Arafah.',
+          'details': 'Sleeping and staying overnight in Mina on this night is a highly emphasized Sunnah of the Prophet ﷺ.',
+          'glossary': [
+            {'term': 'Sunnah', 'meaning': 'The normative practices of the Prophet ﷺ.'}
+          ]
+        }
       ],
       'quran': {
-        'textAr':
-            'وَاذْكُرُوا اللَّهَ فِي أَيَّامٍ مَّعْدُودَاتٍ ۚ فَمَن تَعَجَّلَ فِي يَوْمَيْنِ فَلَا إِثْمَ عَلَيْهِ وَمَن تَأَخَّرَ فَلَا إِثْمَ عَلَيْهِ ۚ لِمَنِ اتَّقَىٰ',
+        'textAr': 'وَاذْكُرُوا اللَّهَ فِي أَيَّامٍ مَّعْلُومَاتٍ ۚ فَمَن تَعَجَّلَ فِي يَوْمَيْنِ فَلَا إِثْمَ عَلَيْهِ وَمَن تَأَخَّرَ فَلَا إِثْمَ عَلَيْهِ ۚ لِمَنِ اتَّقَىٰ',
         'referenceAr': 'سورة البقرة - الآية ٢٠٣',
-        'textEn':
-            'And remember Allah during specific numbered days. Then whoever hastens [his departure] in two days, there is no sin upon him; and whoever delays, there is no sin upon him - for him who fears Allah.',
+        'textEn': 'And remember Allah during specific numbered days. Then whoever hastens [his departure] in two days, there is no sin upon him; and whoever delays, there is no sin upon him - for him who fears Allah.',
         'referenceEn': 'Surah Al-Baqarah (2:203)',
-        'explanationEn':
-            'The Quran does not name the 8th of Dhul Hijjah specifically — this day\'s itinerary is preserved entirely through the Sunnah (see the Origin Story tab). This verse instead refers to the numbered days of Mina overall, highlighting the importance of constant Remembrance (Dhikr) of Allah throughout the stay.',
-        'explanationAr':
-            'الأيام المعدودات هي أيام التشريق ومنى، وأمر الله فيها بإكثار الذكر والتقوى.',
+        'explanationEn': 'This verse refers to the numbered days of Mina overall, highlighting the importance of constant Remembrance (Dhikr) of Allah throughout the stay.',
+        'explanationAr': 'الأيام المعدودات هي أيام التشريق ومنى، وأمر الله فيها بإكثار الذكر والتقوى.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ فِي صِفَةِ حَجَّةِ النَّبِيِّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ: «فَلَمَّا كَانَ يَوْمُ التَّرْوِيَةِ تَوَجَّهُوا إِلَى مِنًى، فَرَكِبَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ، فَصَلَّى بِهَا الظُّهْرَ وَالْعَصْرَ وَالْمَغْرِبَ وَالْعِشَاءَ وَالْفَجْرَ، ثُمَّ مَكَثَ قَلِيلاً حَتَّى طَلَعَتِ الشَّمْسُ...»',
-        'referenceAr': 'صحيح مسلم (١٢١٨)',
-        'textEn':
-            'Jabir (RA) narrated regarding the Prophet’s Hajj: "When the Day of Tarwiyah arrived, they turned towards Mina. The Messenger of Allah (ﷺ) rode there and offered Dhuhr, Asr, Maghrib, Isha, and Fajr prayers. Then he waited until sunrise..."',
-        'referenceEn': 'Sahih Muslim 1218',
-        'explanationEn':
-            'This establishes the Sunnah of traveling to Mina on the 8th and performing shortened prayers before advancing to Arafah.',
-        'explanationAr':
-            'يؤكد الحديث حرص النبي صلى الله عليه وسلم على المبيت بمنى وأداء الصلوات الخمس مقصورة فيها.',
-      },
-      'originStory': {
-        'title': 'A Day of Preparation',
-        'source': 'Sahih Muslim 1218 (Hadith of Jabir) · Al-Fakihi, Akhbar Makkah',
-        'textEn': 'There is no verse of the Quran naming the 8th of Dhul Hijjah specifically; the day\'s practice comes entirely from the Prophet\'s ﷺ own example. Jabir ibn Abdullah\'s detailed account of the Farewell Pilgrimage (Sahih Muslim 1218) describes how the Prophet rode to Mina on this day and led five consecutive shortened prayers there before departing for Arafat at sunrise. Early Makkan historians such as Al-Fakihi (Akhbar Makkah) note the day was traditionally called \'Yawm al-Tarwiyah\' (the Day of Watering), as pilgrims once used it to draw and carry water before the waterless plain of Arafat ahead.',
-      },
-      'dua': {
-        'title': 'Dua of Remembrance in Mina',
-        'arabic':
-            'اللَّهُمَّ إِلَيْكَ تَوَجَّهْتُ، وَوَجْهَكَ أَرَدْتُ، فَاجْعَلْ ذَنْبِي مَغْفُوراً، وَحَجِّي مَبْرُوراً، وَارْحَمْنِي وَلا تُخَيِّبْنِي',
-        'translit':
-            'Allahumma ilayka tawajjahtu, wa wajhaka aradtu, faj’al dhanbi maghfuran, wa hajji mabruran, warhamni wa la tukhayyibni.',
-        'meaningEn':
-            'O Allah, unto You I have turned, and Your Countenance I seek. Forgive my sins, accept my Hajj, show mercy upon me, and do not disappoint me.',
-        'meaningAr':
-            'اللهم إني توجهت إليك وابتغيت وجهك الكريم، فاغفر ذنبي واجعل حجي مبروراً وارحمني.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ فِي صِفَةِ حَجَّةِ النَّبِيِّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ: «فَلَمَّا كَانَ يَوْمُ التَّرْوِيَةِ تَوَجَّهُوا إِلَى مِنًى، فَرَكِبَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ، فَصَلَّى بِهَا الظُّهْرَ وَالْعَعْصَرَ وَالْمَغْرِبَ وَالْعِشَاءَ وَالْفَجْرَ...»',
+          'translitEn': 'An Jabir radiya-allahu anhu: Falamma kana yawmu-t-tarwiyati tawajjahu ila Mina, farakiba rasulu-llahi salla-allahu alayhi wa sallama, fasalla bihad-Duhra wal-Asra wal-Maghriba wal-Isha\'a wal-Fajr...',
+          'referenceEn': 'Sahih Muslim 1218',
+          'textEn': 'Jabir (RA) narrated regarding the Prophet’s Hajj: "When the Day of Tarwiyah arrived, they turned towards Mina. The Messenger of Allah (ﷺ) rode there and offered Dhuhr, Asr, Maghrib, Isha, and Fajr prayers. Then he waited until sunrise..."',
+          'explanationEn': 'This establishes the Sunnah of traveling to Mina on the 8th and performing shortened prayers before advancing to Arafah.',
+          'sourceBook': 'Sahih Muslim',
+          'sourceBookDesc': 'One of the six major Hadith collections, compiled by Imam Muslim.'
+        },
+        {
+          'textAr': 'عَنِ ابْنِ عَبَّاسٍ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ صَلَّى بِالْمَبِيتِ فِي مِنى ثَمَّ غَدَا إِلَى عَرَفَاتٍ',
+          'translitEn': 'An ibni Abbas radiya-allahu anhuma anna-nabiyya salla-allahu alayhi wa sallama salla bil-mabeeti fi Mina thumma ghada ila Arafat.',
+          'referenceEn': 'Sahih al-Bukhari 1657',
+          'textEn': 'Ibn Abbas narrated that the Prophet (ﷺ) stayed overnight in Mina, then departed for Arafat in the morning.',
+          'explanationEn': 'Confirms the sequence of staying the night in Mina before departing to the plains of Arafat.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'The primary source of authentic prophetic statements, compiled by Imam Al-Bukhari.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua of Remembrance in Mina',
+          'arabic': 'اللَّهُمَّ إِلَيْكَ تَوَجَّهْتُ، وَوَجْهَكَ أَرَدْتُ، فَاجْعَلْ ذَنْبِي مَغْفُوراً، وَحَجِّي مَبْرُوراً، وَارْحَمْنِي وَلا تُخَيِّبْنِي',
+          'translit': 'Allahumma ilayka tawajjahtu, wa wajhaka aradtu, faj’al dhanbi maghfuran, wa hajji mabruran, warhamni wa la tukhayyibni.',
+          'meaningEn': 'O Allah, unto You I have turned, and Your Countenance I seek. Forgive my sins, accept my Hajj, show mercy upon me, and do not disappoint me.',
+          'meaningAr': 'اللهم إني توجهت إليك وابتغيت وجهك الكريم، فاغفر ذنبي واجعل حجي مبروراً وارحمني.',
+        },
+        {
+          'title': 'Constant Talbiyah chant',
+          'arabic': 'لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لا شَرِيكَ لَكَ لَبَّيْكَ...',
+          'translit': 'Labbayk Allahumma Labbayk, Labbayka la sharika laka labbayk...',
+          'meaningEn': 'Here I am, O Allah, here I am...',
+          'meaningAr': 'شعار الحج بالتلبية والإعلان عن التوحيد.'
+        }
+      ]
     },
 
     'arafat': {
@@ -576,64 +814,85 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'يوم عرفة (٩ ذو الحجة) - ركن الحج الأعظم',
       'day': '9th Dhul Hijjah - Standing at Arafat (Wuquf)',
       'dayAr': '٩ ذو الحجة - الوقوف بعرفة',
-      'overviewEn':
-          'The Day of Arafah is the pinnacle and supreme ritual of Hajj ("Hajj is Arafah"). Pilgrims move from Mina to the plain of Arafat. Standing at Arafat (Wuquf) takes place from Dhuhr until Maghrib. Dhuhr and Asr are prayed together combined and shortened (Jam\' & Qasr) at Dhuhr time. Pilgrims spend the entire afternoon crying, seeking forgiveness, and making earnest Duas.',
-      'overviewAr':
-          'يوم عرفة هو العيد الأكبر والحج الأعظم ("الحج عرفة"). يتوجه الحجاج من منى إلى عرفات. يبدأ وقت الوقوف من زوال الشمس (الظهر) حتى غروبها. يصلى الظهر والعصر جمع تقديم وقصراً بأذان وإقامتين. ويقضي الحاج ما بعد الظهر إلى الغروب بالتضرع والدعاء والبكاء لله تعالى.',
-      'keyActionsEn': [
-        'Travel to Arafat after sunrise on the 9th Dhul Hijjah.',
-        'Pray Dhuhr & Asr combined and shortened (Jam\' al-Taqdeem) at Dhuhr time with 1 Adhan and 2 Iqamahs.',
-        'Stand at Mount Arafat / Plains of Arafat facing Qiblah with raised hands until sunset.',
-        'Make maximum Duas, Istighfar, Qur\'an recitation, and recite the best Dua of Arafah.',
-        'Do NOT leave Arafat before sunset.',
-      ],
-      'keyActionsAr': [
-        'الانتقال من منى إلى عرفة بعد طلوع شمس يوم التاسع.',
-        'صلاة الظهر والعصر جمع تقديم وقصراً في وقت الظهر بأذان وإقامتين.',
-        'الوقوف بعرفة مستقبلاً القبلة داعياً رافعاً اليدين حتى غروب الشمس.',
-        'الإكثار من التضرع والاستغفار وقول: "لا إله إلا الله وحده لا شريك له...".',
-        'عدم الانصراف من عرفة إلا بعد غروب الشمس بالكلية.',
+      'overviewEn': 'The Day of Arafah is the pinnacle and supreme ritual of Hajj ("Hajj is Arafah"). Pilgrims move from Mina to the plain of Arafat. Standing at Arafat (Wuquf) takes place from Dhuhr until Maghrib. Dhuhr and Asr are prayed together combined and shortened (Jam\' & Qasr) at Dhuhr time. Pilgrims spend the entire afternoon crying, seeking forgiveness, and making earnest Duas.',
+      'overviewAr': 'يوم عرفة هو العيد الأكبر والحج الأعظم ("الحج عرفة"). يتوجه الحجاج من منى إلى عرفات. يبدأ وقت الوقوف من زوال الشمس (الظهر) حتى غروبها. يصلى الظهر والعصر جمع تقديم وقصراً بأذان وإقامتين. ويقضي الحاج ما بعد الظهر إلى الغروب بالتضرع والدعاء والبكاء لله تعالى.',
+      'actionDetails': [
+        {
+          'title': 'Travel to Arafat after sunrise on the 9th of Dhul Hijjah.',
+          'details': 'Leave your tent in Mina after Fajr and sunrise. Travel to Arafat by bus, train, or walking, chanting the Talbiyah.',
+          'glossary': [
+            {'term': 'Arafat', 'meaning': 'The vast plain located southeast of Makkah where the core Hajj standing is observed.'}
+          ]
+        },
+        {
+          'title': 'Pray Dhuhr & Asr combined and shortened at Dhuhr time.',
+          'details': 'Pray Dhuhr (2 Rakat) and Asr (2 Rakat) combined (Jam\' al-Taqdeem) during Dhuhr time with 1 Adhan and 2 separate Iqamahs. No voluntary prayers are offered between them.',
+          'glossary': [
+            {'term': 'Jam\' al-Taqdeem', 'meaning': 'Combining two prayers ahead of time, in the first prayer\'s time.'},
+            {'term': 'Adhan', 'meaning': 'The call to prayer.'},
+            {'term': 'Iqamah', 'meaning': 'The second call to stand for prayer.'}
+          ]
+        },
+        {
+          'title': 'Observe Wuquf (standing) facing the Qiblah until sunset.',
+          'details': 'Spend the afternoon from Dhuhr until sunset standing or sitting, facing the Qiblah (direction of Kaaba), raising your hands in earnest prayer, and seeking forgiveness.',
+          'glossary': [
+            {'term': 'Wuquf', 'meaning': 'The obligatory standing/staying at Arafat, the single most important pillar of Hajj.'},
+            {'term': 'Qiblah', 'meaning': 'The direction of the Kaaba in Makkah.'}
+          ]
+        },
+        {
+          'title': 'Make maximum Duas and do not leave before sunset.',
+          'details': 'Maintain focus and continue praying until the sun has completely set. Leaving Arafat before sunset is prohibited and requires a penalty.',
+          'glossary': [
+            {'term': 'Dua', 'meaning': 'Supplication or making request to Allah.'}
+          ]
+        }
       ],
       'quran': {
-        'textAr':
-            'فَإِذَا أَفَضْتُمْ مِّنْ عَرَفَاتٍ فَاذْكُرُوا اللَّهَ عِندَ الْمَشْعَرِ الْحَرَامِ',
+        'textAr': 'فَإِذَا أَفَضْتُمْ مِّنْ عَرَفَاتٍ فَاذْكُرُوا اللَّهَ عِندَ الْمَشْعَرِ الْحَرَامِ',
         'referenceAr': 'سورة البقرة - الآية ١٩٨',
-        'textEn':
-            'Then when you depart from Arafat, remember Allah at Al-Mash\'ar al-Haram.',
+        'textEn': 'Then when you depart from Arafat, remember Allah at Al-Mash\'ar al-Haram.',
         'referenceEn': 'Surah Al-Baqarah (2:198)',
-        'explanationEn':
-            'This is the only verse in the Quran that names Arafat directly, commanding pilgrims to stand and remember Allah there before departing toward Muzdalifah. (The famous verse "This day I have perfected your religion for you," Surah Al-Ma\'idah 5:3, was also revealed while the Prophet ﷺ stood at Arafat — see the Origin Story tab.)',
-        'explanationAr':
-            'هذه هي الآية الوحيدة في القرآن التي تسمي عرفة صراحةً، وتأمر الحجاج بالوقوف وذكر الله فيها قبل الانصراف إلى المزدلفة.',
+        'explanationEn': 'This is the only verse in the Quran that names Arafat directly, commanding pilgrims to stand and remember Allah there before departing toward Muzdalifah.',
+        'explanationAr': 'هذه هي الآية الوحيدة في القرآن التي تسمي عرفة صراحةً، وتأمر الحجاج بالوقوف وذكر الله فيها قبل الانصراف إلى المزدلفة.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ عَبْدِ الرَّحْمَنِ بْنِ يَعْمَرَ رَضِيَ اللَّهُ عَنْهُ أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «الْحَجُّ عَرَفَةُ، فَمَنْ جَاءَ قَبْلَ صَلاَةِ الْفَجْرِ مِنْ لَيْلَةِ جَمْعٍ فَقَدْ تَمَّ حَجُّهُ»',
-        'referenceAr': 'سنن الترمذي (٨٨٩) وسنن أبا داود (١٩٤٩)',
-        'textEn':
-            'Abdur-Rahman ibn Ya\'mar reported: The Prophet (ﷺ) said: "Hajj is Arafah. Whoever arrives before Fajr prayer on the night of Muzdalifah has completed his Hajj."',
-        'referenceEn': 'Jami\' at-Tirmidhi 889, Sunan Abi Dawud 1949',
-        'explanationEn':
-            'Standing at Arafat is the single non-negotiable pillar (Rukn) of Hajj without which Hajj is invalid.',
-        'explanationAr':
-            'يبين الحديث أن الوقوف بعرفة هو الركن الأعظم للحج، وبدونه لا يصح الحج.',
-      },
-      'originStory': {
-        'title': 'Correcting a Pre-Islamic Practice',
-        'source': 'Surah Al-Baqarah 2:198-199 · Sahih al-Bukhari 1664',
-        'textEn': 'Standing at Arafat predates Islam, but the Quraysh — who called themselves \'Al-Hums\' — considered themselves too noble to leave the Haram boundary and would stop short at Muzdalifah instead of going all the way to Arafat like the rest of the Arabs. The Quran corrected this in Surah Al-Baqarah (2:199): "Then depart from the place from where all the people depart." The Prophet (ﷺ) himself stood at Arafat with the entire nation, unifying the rite for everyone, as recorded by Aisha in Sahih al-Bukhari (1664). Arafat is literally named in the Quran at 2:198, the only verse in which the place is mentioned by name.',
-      },
-      'dua': {
-        'title': 'The Supreme Dua of Arafah (خَيْرُ الدُّعَاءِ دُعَاءُ يَوْمِ عَرَفَةَ)',
-        'arabic':
-            'لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ',
-        'translit':
-            'La ilaha illallahu wahdahu la sharika lahu, lahul-mulku wa lahul-hamdu, wa huwa \'ala kulli shay\'in qadir.',
-        'meaningEn':
-            'There is no deity worthy of worship except Allah, alone without partner. To Him belongs sovereignty and praise, and He has power over all things.',
-        'meaningAr':
-            'أفضل ما قال النبي صلى الله عليه وسلم والنبيون من قبله عشية عرفة: التوحيد والتمجيد لله وحده.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ عَبْدِ الرَّحْمَنِ بْنِ يَعْمَرَ رَضِيَ اللَّهُ عَنْهُ أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «الْحَجُّ عَرَفَةُ...»',
+          'translitEn': 'An Abdir-Rahmani-bni Ya\'mara radiya-allahu anhu anna-nabiyya salla-allahu alayhi wa sallama qala: Al-Hajju Arafah...',
+          'referenceEn': 'Tirmidhi 889, Sunan Abi Dawud 1949',
+          'textEn': 'Abdur-Rahman ibn Ya\'mar reported: The Prophet (ﷺ) said: "Hajj is Arafah. Whoever arrives before Fajr prayer on the night of Muzdalifah has completed his Hajj."',
+          'explanationEn': 'Standing at Arafat is the single non-negotiable pillar (Rukn) of Hajj without which Hajj is invalid.',
+          'sourceBook': 'Jami\' at-Tirmidhi',
+          'sourceBookDesc': 'One of the six major Hadith books, compiled by Imam Abu Isa at-Tirmidhi.'
+        },
+        {
+          'textAr': 'عَنْ عَمْرِو بْنِ شُعَيْبٍ عَنْ أَبِيهِ عَنْ جَدِّهِ أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «خَيْرُ الدُّعَاءِ دُعَاءُ يَوْمِ عَرَفَةَ»',
+          'translitEn': 'An Amri-bni Shu\'aybin an abeehi an jaddihi anna-nabiyya salla-allahu alayhi wa sallama qala: Khayru-d-du\'a\'i du\'a\'u yawmi Arafah.',
+          'referenceEn': 'Jami\' at-Tirmidhi 3585',
+          'textEn': 'Amr ibn Shuayb narrated from his father, from his grandfather, that the Prophet (ﷺ) said: "The best of supplications is the supplication on the Day of Arafah."',
+          'explanationEn': 'Stresses the unique spiritual power of the supplications made during the afternoon of Arafah.',
+          'sourceBook': 'Jami\' at-Tirmidhi',
+          'sourceBookDesc': 'Hadith collection containing valuable classifications and details on chains of narration.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'The Supreme Dua of Arafah',
+          'arabic': 'لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ',
+          'translit': 'La ilaha illallahu wahdahu la sharika lahu, lahul-mulku wa lahul-hamdu, wa huwa \'ala kulli shay\'in qadir.',
+          'meaningEn': 'There is no deity worthy of worship except Allah, alone without partner. To Him belongs sovereignty and praise, and He has power over all things.',
+          'meaningAr': 'أفضل ما قال النبي صلى الله عليه وسلم والنبيون من قبله عشية عرفة: التوحيد والتمجيد لله وحده.',
+        },
+        {
+          'title': 'Sincere Repentance Prayer',
+          'arabic': 'اللَّهُمَّ إِنِّي ظَلَمْتُ نَفْسِي ظُلْمًا كَثِيرًا وَلا يَغْفِرُ الذُّنُوبَ إِلاَّ أَنْتَ فَاغْفِرْ لِي مَغْفِرَةً مِنْ عِنْدِكَ',
+          'translit': 'Allahumma inni dhalamtu nafsi dhulman katheeraw-wa la yaghfiru-dh-dhunuba illa anta faghfir li maghfiratam-min \'indik',
+          'meaningEn': 'O Allah, I have wronged myself greatly, and none forgives sins except You, so grant me forgiveness from You.',
+          'meaningAr': 'دعاء بالاستغفار وطلب التوبة والرحمة.',
+        }
+      ]
     },
 
     'muzdalifah': {
@@ -641,64 +900,90 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'المزدلفة (ليلة العاشر من ذي الحجة)',
       'day': 'Night following Arafah (9th-10th Dhul Hijjah)',
       'dayAr': 'ليلة ١٠ ذو الحجة - المبيت بالمزدلفة',
-      'overviewEn':
-          'Immediately after sunset on 9th Dhul Hijjah, pilgrims travel from Arafat to Muzdalifah without praying Maghrib at Arafat. Upon arrival in Muzdalifah, Maghrib and Isha are prayed together combined and shortened (Jam\' al-Ta\'khir). Pilgrims spend the night under the open sky, resting, performing Fajr at twilight, and collecting pebbles for Rami.',
-      'overviewAr':
-          'بعد غروب شمس يوم عرفة مباشرة، ينطلق الحجاج إلى المزدلفة بهدوء وسكينة، ولا يصلون المغرب بعرفة. عند الوصول للمزدلفة يصلون المغرب ثلاث ركعات والعشاء ركعتين جمع تأخير بأذان وإقامتين. ويبيتون الليل تحت السماء، ثم يصلون الفجر بالمشعر الحرام ويجمعون الجمار.',
-      'keyActionsEn': [
-        'Depart Arafat calmly after sunset without praying Maghrib at Arafat.',
-        'Pray Maghrib (3 rakah) and Isha (2 rakah) combined at Muzdalifah (Jam\' al-Ta\'khir).',
-        'Collect 7, 21, or 49+ small pebbles (size of a chickpea/bean) for Rami.',
-        'Spend the night sleeping/resting at Muzdalifah until Fajr (Wajib).',
-        'Offer Fajr prayer early at twilight, make Dua at Al-Mash\'ar Al-Haram, then depart for Mina before sunrise.',
-      ],
-      'keyActionsAr': [
-        'الانصراف من عرفة بعد الغروب بسكينة ودون استعجال.',
-        'صلاة المغرب ثلاثاً والعشاء قصراً جمع تأخير عند الوصول للمزدلفة.',
-        'التقاط حصى الجمار (حجم حمصة تقريباً) من المزدلفة أو منى.',
-        'المبيت بالمزدلفة حتى صلاة الفجر (وهو واجب عند جمهور العلماء).',
-        'صلاة الفجر في أول وقتها ثم التضرع عند المشعر الحرام والانطلاق إلى منى قبل طلوع الشمس.',
+      'overviewEn': 'Immediately after sunset on 9th Dhul Hijjah, pilgrims travel from Arafat to Muzdalifah without praying Maghrib at Arafat. Upon arrival in Muzdalifah, Maghrib and Isha are prayed together combined and shortened (Jam\' al-Ta\'khir). Pilgrims spend the night under the open sky, resting, performing Fajr at twilight, and collecting pebbles for Rami.',
+      'overviewAr': 'بعد غروب شمس يوم عرفة مباشرة، ينطلق الحجاج إلى المزدلفة بهدوء وسكينة، ولا يصلون المغرب بعرفة. عند الوصول للمزدلفة يصلون المغرب ثلاث ركعات والعشاء ركعتين جمع تأخير بأذان وإقامتين. ويبيتون الليل تحت السماء، ثم يصلون الفجر بالمشعر الحرام ويجمعون الجمار.',
+      'actionDetails': [
+        {
+          'title': 'Depart Arafat calmly after sunset without praying Maghrib.',
+          'details': 'Once the sun sets, leave Arafat in a calm and dignified manner. Do not pray Maghrib until you reach Muzdalifah, even if you are delayed.',
+          'glossary': [
+            {'term': 'Muzdalifah', 'meaning': 'An open area near Makkah where pilgrims spend the night after departing Arafat.'}
+          ]
+        },
+        {
+          'title': 'Pray Maghrib and Isha combined at Muzdalifah.',
+          'details': 'Pray Maghrib (3 Rakat) and Isha (shortened to 2 Rakat) combined (Jam\' al-Ta\'khir) during Isha time with 1 Adhan and 2 separate Iqamahs.',
+          'glossary': [
+            {'term': 'Jam\' al-Ta\'khir', 'meaning': 'Combining two prayers in the later prayer\'s time.'}
+          ]
+        },
+        {
+          'title': 'Collect pebbles for stoning (Rami).',
+          'details': 'Collect small pebbles (around the size of a chickpea/bean) from Muzdalifah. You need 7 pebbles for the 10th, and 21 pebbles for each of the subsequent days.',
+          'glossary': [
+            {'term': 'Rami', 'meaning': 'The ritual of throwing pebbles at the stone pillars in Mina.'}
+          ]
+        },
+        {
+          'title': 'Spend the night sleeping under the open sky.',
+          'details': 'Mabeet (staying the night) at Muzdalifah is an obligatory duty (Wajib). Spend the night resting under the open sky in preparation for the busy day of Eid.',
+          'glossary': [
+            {'term': 'Mabeet', 'meaning': 'Staying overnight in a designated location as a part of Hajj.'},
+            {'term': 'Wajib', 'meaning': 'An obligatory ritual in Hajj, omission requires animal sacrifice but Hajj remains valid.'}
+          ]
+        },
+        {
+          'title': 'Offer Fajr early at twilight, make Dua, and depart for Mina before sunrise.',
+          'details': 'Offer Fajr prayer at its earliest time. Stand at the sacred monument (Al-Mash\'ar al-Haram) making intense Duas until the sky becomes bright, then depart for Mina before the sun rises.',
+          'glossary': [
+            {'term': 'Al-Mash\'ar al-Haram', 'meaning': 'The sacred site/monument in Muzdalifah where pilgrims stand to make Dua.'}
+          ]
+        }
       ],
       'quran': {
-        'textAr':
-            'فَإِذَا أَفَضْتُم مِّنْ عَرَفَاتٍ فَاذْكُرُوا اللَّهَ عِندَ الْمَشْعَرِ الْحَرَامِ ۖ وَاذْكُرُوهُ كَمَا هَدَاكُمْ وَإِن كُنتُم مِّن قَبْلِهِ لَمَِنَ الضَّالِّينَ',
+        'textAr': 'فَإِذَا أَفَضْتُم مِّنْ عَرَفَاتٍ فَاذْكُرُوا اللَّهَ عِندَ الْمَشْعَرِ الْحَرَامِ ۖ وَاذْكُرُوهُ كَمَا هَدَاكُمْ وَإِن كُنتُم مِّن قَبْلِهِ لَمِنَ الضَّالِّينَ',
         'referenceAr': 'سورة البقرة - الآية ١٩٨',
-        'textEn':
-            'Then when you depart from Arafat, remember Allah at al-Mash\'ar al-Haram. And remember Him as He has guided you, for indeed, you were before that among those astray.',
+        'textEn': 'Then when you depart from Arafat, remember Allah at al-Mash\'ar al-Haram. And remember Him as He has guided you, for indeed, you were before that among those astray.',
         'referenceEn': 'Surah Al-Baqarah (2:198)',
-        'explanationEn':
-            'Allah explicitly orders pilgrims departing from Arafat to stop and engage in His Remembrance at Al-Mash\'ar Al-Haram in Muzdalifah.',
-        'explanationAr':
-            'تأمر الآية الكريمة بذكر الله عند المشعر الحرام بالمزدلفة فور الإفاضة من عرفات.',
+        'explanationEn': 'Allah explicitly orders pilgrims departing from Arafat to stop and engage in His Remembrance at Al-Mash\'ar Al-Haram in Muzdalifah.',
+        'explanationAr': 'تأمر الآية الكريمة بذكر الله عند المشعر الحرام بالمزدلفة فور الإفاضة من عرفات.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ عَبْدِ اللَّهِ بْنِ مَسْعُودٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: مَا رَأَيْتُ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ صَلَّى صَلاَةً إِلاَّ لِوَقْتِهَا إِلاَّ صَلاَتَيْنِ: جَمَعَ بَيْنَ الْمَغْرِبِ وَالْعِشَاءِ بِجَمْعٍ (الْمُزْدَلِفَةِ)، وَصَلَّى الْفَجْرَ يَوْمَئِذٍ قَبْلَ وَقْتِهَا الْمُعْتَادِ',
-        'referenceAr': 'صحيح البخاري (١٦٧٥) وصحيح مسلم (١٢٨٠)',
-        'textEn':
-            'Ibn Mas\'ud reported: "I never saw the Messenger of Allah (ﷺ) offer any prayer out of its time except two: He combined Maghrib and Isha at Muzdalifah, and he offered Fajr prayer on that day earlier than its usual time (at twilight)."',
-        'referenceEn': 'Sahih al-Bukhari 1675, Sahih Muslim 1280',
-        'explanationEn':
-            'Highlights the mandatory sunnah of delaying Maghrib until arriving at Muzdalifah and offering Fajr early at twilight.',
-        'explanationAr':
-            'يبين الحديث استثناء النبي صلى الله عليه وسلم لصلاتي المغرب والعشاء بجمعهما بالمزدلفة وصلاة الفجر بغلس.',
-      },
-      'originStory': {
-        'title': 'A Night of Remembrance',
-        'source': 'Surah Al-Baqarah 2:198 · Sahih al-Bukhari 1675',
-        'textEn': 'Muzdalifah is named in the Quran through its landmark, Al-Mash\'ar al-Haram: "When you depart from Arafat, remember Allah at Al-Mash\'ar al-Haram" (2:198). Ibn Mas\'ud reported that the Prophet (ﷺ) combined Maghrib and Isha there and prayed Fajr earlier than usual — the only two occasions Ibn Mas\'ud ever saw him pray outside a prayer\'s normal time (Sahih al-Bukhari 1675, Sahih Muslim 1280), fixing the practice pilgrims follow today.',
-      },
-      'dua': {
-        'title': 'Dua at Al-Mash\'ar Al-Haram (دعاء المشعر الحرام)',
-        'arabic':
-            'اللَّهُمَّ كَمَا وَقَفْتَنَا فِيهِ وَأَرَيْتَنَا إِيَّاهُ فَوَفِّقْنَا لِذِكْرِكَ كَمَا هَدَيْتَنَا، وَاغْفِرْ لَنَا وَارْحَمْنَا كَمَا وَعَدْتَنَا',
-        'translit':
-            'Allahumma kama waqaftana fihi wa araytana iyyahu fawaffiqna lidhikrika kama hadaytana, waghfir lana warhamna kama wa’adtana.',
-        'meaningEn':
-            'O Allah, just as You enabled us to stand here and showed it to us, grant us success in remembering You as You guided us, and forgive us and have mercy on us as You promised us.',
-        'meaningAr':
-            'دعاء الثناء والاستغفار عند المشعر الحرام بالمزدلفة قبل طلوع الشمس.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ عَبْدِ اللَّهِ بْنِ مَسْعُودٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: مَا رَأَيْتُ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ صَلَّى صَلاَةً إِلاَّ لِوَقْتِهَا إِلاَّ صَلاَتَيْنِ: جَمَعَ بَيْنَ الْمَغْرِبِ وَالْعِشَاءِ بِجَمْعٍ (الْمُزْدَلِفَةِ)...',
+          'translitEn': 'An Abdillahi-bni Mas\'udin radiya-allahu anhu qala: Ma ra\'aytu rasula-llahi salla-allahu alayhi wa sallama salla salatan illa liwaqtiha illa salatayni: jama\'a bayna-l-maghribi wal-isha\'i bi-Jam\'in...',
+          'referenceEn': 'Sahih al-Bukhari 1675, Sahih Muslim 1280',
+          'textEn': 'Ibn Mas\'ud reported: "I never saw the Messenger of Allah (ﷺ) offer any prayer out of its time except two: He combined Maghrib and Isha at Muzdalifah, and he offered Fajr prayer on that day earlier than its usual time (at twilight)."',
+          'explanationEn': 'Highlights the mandatory sunnah of delaying Maghrib until arriving at Muzdalifah and offering Fajr early at twilight.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'Authentic compilations forming the dual basis of Sunni legal consensus.'
+        },
+        {
+          'textAr': 'عَنْ أُسَامَةَ بْنِ زَيْدٍ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ سَارَ حِينَ دَفَعَ مِنْ عَرَفَةَ بِالْعَنَقِ فَإِذَا وَجَدَ فَجْوَةً نَصَّ',
+          'translitEn': 'An Usamata-bni Zaydin radiya-allahu anhuma anna-nabiyya salla-allahu alayhi wa sallama sara heena dafa\'a min Arafata bil-anaqi fa-idha wajada fajwatan nassa.',
+          'referenceEn': 'Sahih al-Bukhari 1666',
+          'textEn': 'Usama ibn Zayd narrated that the Prophet (ﷺ) walked at a moderate pace while departing from Arafat, but when he found space, he went fast.',
+          'explanationEn': 'Underlines the Sunnah of traveling calmly with composure, avoiding running or pushing others in crowds.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'Compiled by Imam Bukhari, the most trusted authority on Prophetic narrations.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua at Al-Mash\'ar Al-Haram',
+          'arabic': 'اللَّهُمَّ كَمَا وَقَفْتَنَا فِيهِ وَأَرَيْتَنَا إِيَّاهُ فَوَفِّقْنَا لِذِكْرِكَ كَمَا هَدَيْتَنَا، وَاغْفِرْ لَنَا وَارْحَمْنَا كَمَا وَعَدْتَنَا',
+          'translit': 'Allahumma kama waqaftana fihi wa araytana iyyahu fawaffiqna lidhikrika kama hadaytana, waghfir lana warhamna kama wa’adtana.',
+          'meaningEn': 'O Allah, just as You enabled us to stand here and showed it to us, grant us success in remembering You as You guided us, and forgive us and have mercy on us as You promised us.',
+          'meaningAr': 'دعاء الثناء والاستغفار عند المشعر الحرام بالمزدلفة قبل طلوع الشمس.',
+        },
+        {
+          'title': 'Dua of Forgiveness and Ease',
+          'arabic': 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
+          'translit': 'Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
+          'meaningEn': 'Our Lord, grant us good in this world and good in the Hereafter and protect us from the punishment of the Fire.',
+          'meaningAr': 'دعاء شامل بالخير والسلامة من العذاب.'
+        }
+      ]
     },
 
     'rami1': {
@@ -706,64 +991,82 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'رمي جمرة العقبة (١٠ ذو الحجة - يوم النحر)',
       'day': '10th Dhul Hijjah (Eid al-Adha)',
       'dayAr': '١٠ ذو الحجة (يوم عيد الأضحى المبارك)',
-      'overviewEn':
-          'On the morning of 10th Dhul Hijjah (Yawm an-Nahr), pilgrims return from Muzdalifah to Mina to pelt only the largest pillar, Jamarat al-Aqabah (Al-Jamrah Al-Kubra). Pilgrims throw 7 pebbles individually while saying "Allahu Akbar" with each throw. This symbolizes rejecting Shaytan and remaining steadfast in faith.',
-      'overviewAr':
-          'صباح يوم العاشر من ذي الحجة (يوم النحر)، يتجه الحجاج إلى منى لرمي جمرة العقبة الكبرى فقط بسبع حصيات متعاقبة، يكبر الحاج مع كل حصاة قائلًا: "الله أكبر"، مقطعاً التلبية مع أول حصاة، اقتداءً بإبراهيم عليه السلام في دحر الشيطان.',
-      'keyActionsEn': [
-        'Arrive in Mina from Muzdalifah in the morning (Dhuha time).',
-        'Pelt ONLY the Big Pillar (Jamarat al-Aqabah) with 7 pebbles.',
-        'Say "Allahu Akbar" with every single thrown pebble.',
-        'Stop reciting Talbiyah upon throwing the first pebble of Jamarat al-Aqabah.',
-        'Ensure pebbles land inside the basin (Marma).',
-      ],
-      'keyActionsAr': [
-        'الوصول إلى منى من المزدلفة ضحى يوم النحر.',
-        'رمي الجمرة الكبرى (جمرة العقبة) فقط بـ ٧ حصيات متعاقبة.',
-        'التكبير مع كل حصاة: "الله أكبر".',
-        'قطع التلبية مع بداية رمي أول حصاة من جمرة العقبة.',
-        'التأكد من وقوع الحصى داخل حوض الجمرة.',
+      'overviewEn': 'On the morning of 10th Dhul Hijjah (Yawm an-Nahr), pilgrims return from Muzdalifah to Mina to pelt only the largest pillar, Jamarat al-Aqabah (Al-Jamrah Al-Kubra). Pilgrims throw 7 pebbles individually while saying "Allahu Akbar" with each throw. This symbolizes rejecting Shaytan and remaining steadfast in faith.',
+      'overviewAr': 'صباح يوم العاشر من ذي الحجة (يوم النحر)، يتجه الحجاج إلى منى لرمي جمرة العقبة الكبرى فقط بسبع حصيات متعاقبة، يكبر الحاج مع كل حصاة قائلًا: "الله أكبر"، مقطعاً التلبية مع أول حصاة، اقتداءً بإبراهيم عليه السلام في دحر الشيطان.',
+      'actionDetails': [
+        {
+          'title': 'Arrive in Mina from Muzdalifah in the morning.',
+          'details': 'Walk or take transport to Mina during the forenoon (Dhuha) of the 10th of Dhul Hijjah.',
+          'glossary': [
+            {'term': 'Dhuha', 'meaning': 'The forenoon period between sunrise and noon.'}
+          ]
+        },
+        {
+          'title': 'Pelt ONLY the Big Pillar (Jamarat al-Aqabah) with 7 pebbles.',
+          'details': 'Walk to the Jamarat bridge. Stand facing the large pillar and throw 7 pebbles one by one. Do not pelt the other two pillars on this day.',
+          'glossary': [
+            {'term': 'Jamarat al-Aqabah', 'meaning': 'The largest of the three pillars representing the location where Shaytan was resisted by Ibrahim (AS).'}
+          ]
+        },
+        {
+          'title': 'Say "Allahu Akbar" with every single thrown pebble.',
+          'details': 'Raise your right hand for each throw and recite "Allahu Akbar" (Allah is the Greatest) while throwing. Ensure the pebble hits the pillar or lands in the surrounding basin.',
+          'glossary': [
+            {'term': 'Allahu Akbar', 'meaning': 'The declaration that Allah is the Greatest.'}
+          ]
+        },
+        {
+          'title': 'Stop reciting Talbiyah upon throwing the first pebble.',
+          'details': 'The continuous recitation of the Talbiyah (which started when entering Ihram) is officially stopped when the very first pebble is thrown at Jamarat al-Aqabah.',
+          'glossary': [
+            {'term': 'Talbiyah', 'meaning': 'The chant: Labbayk Allahumma Labbayk.'}
+          ]
+        }
       ],
       'quran': {
-        'textAr':
-            'وَمَن يُعَظِّمْ شَعَائِرَ اللَّهِ فَإِنَّهَا مِن تَقْوَى الْقُلُوبِ',
+        'textAr': 'وَمَن يُعَظِّمْ شَعَائِرَ اللَّهِ فَإِنَّهَا مِن تَقْوَى الْقُلُوبِ',
         'referenceAr': 'سورة الحج - الآية ٣٢',
-        'textEn':
-            'And whoever honors the symbols of Allah - indeed, it is from the piety of hearts.',
+        'textEn': 'And whoever honors the symbols of Allah - indeed, it is from the piety of hearts.',
         'referenceEn': 'Surah Al-Hajj (22:32)',
-        'explanationEn':
-            'The Quran does not name Rami or the Jamarat directly — the act itself is preserved through the Sunnah, re-enacting Ibrahim\'s (AS) rejection of Shaytan (see the Origin Story tab). This verse establishes the broader principle that honouring the symbols and rites Allah has appointed for Hajj is an act of piety.',
-        'explanationAr':
-            'رمي الجمار وتعظيم مناسك الحج من دلالات تقوى القلوب وإجلال أمر الله.',
+        'explanationEn': 'The act of stoning is preserved through the Sunnah. This verse establishes the broader principle that honouring the symbols and rites Allah has appointed for Hajj is an act of piety.',
+        'explanationAr': 'رمي الجمار وتعظيم مناسك الحج من دلالات تقوى القلوب وإجلال أمر الله.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: «رَأَيْتُ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ يَرْمِي الْجَمْرَةَ ضُحًى يَوْمَ النَّحْرِ، وَوَهْوَ عَلَى نَاقَتِهِ يَقُولُ: لِتَأْخُذُوا مَنَاسِكَكُمْ، فَإِنِّي لاَ أَدْرِي لَعَلِّي لاَ أَحُجُّ بَعْدَ حَجَّتِي هَذِهِ»',
-        'referenceAr': 'صحيح مسلم (١٢٩٧)',
-        'textEn':
-            'Jabir reported: "I saw the Prophet (ﷺ) throwing pebbles at Jamarat al-Aqabah in the forenoon on the Day of Sacrifice, saying: Take your rituals from me, for I do not know whether I will perform Hajj after this Hajj of mine."',
-        'referenceEn': 'Sahih Muslim 1297',
-        'explanationEn':
-            'This establishes the timing (Dhuha) and fundamental rule that all Hajj rituals must mirror the Prophet’s demonstration.',
-        'explanationAr':
-            'أمر النبي صلى الله عليه وسلم الأمة بالأخذ عنه في أفعال الحج ومناسك الرمي.',
-      },
-      'originStory': {
-        'title': 'Ibrahim\'s Rejection of Shaytan',
-        'source': 'A well-known tradition (not in Bukhari/Muslim) · recorded in Sunan Ibn Majah 3029 & Musnad Ahmad; the ritual itself is fixed by the Sunnah in Sahih Muslim 1297',
-        'textEn': 'The reason widely taught for this rite is that when Ibrahim (AS) set out to fulfil Allah\'s command to sacrifice his son Ismail (AS) (Surah As-Saffat 37:102), Shaytan appeared to him three times at three separate spots to dissuade him, and each time Ibrahim drove him off by pelting him with seven stones. This account is popular and appears in early sources such as Sunan Ibn Majah and Musnad Ahmad, but scholars note its chain of narration is not as strong as Sahih al-Bukhari or Sahih Muslim, so it is usually taught as the traditional reason behind Rami rather than a fully authenticated hadith. What is firmly established, regardless of that story, is that the Prophet ﷺ himself pelted Jamarat al-Aqabah in this exact manner during his Farewell Pilgrimage (Sahih Muslim 1297), which is why the ritual is obligatory by clear Sunnah and scholarly consensus.',
-      },
-      'dua': {
-        'title': 'Takbeer During Rami (التكبير عند الرمي)',
-        'arabic':
-            'اللَّهُ أَكْبَرُ، اللَّهُمَّ اجْعَلْهُ حَجًّا مَبْرُورًا وَذَنْبًا مَغْفُورًا',
-        'translit':
-            'Allahu Akbar, Allahumma-j’alhu hajjan mabruran wa dhanban maghfura.',
-        'meaningEn':
-            'Allah is the Greatest. O Allah, make it an accepted Hajj and a forgiven sin.',
-        'meaningAr':
-            'التكبير عند رمي كل حصاة والدعاء بالقبول ومغفرة الذنوب.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: «رَأَيْتُ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ يَرْمِي الْجَمْرَةَ ضُحًى يَوْمَ النَّحْرِ، وَهُوَ عَلَى نَاقَتِهِ يَقُولُ: لِتَأْخُذُوا مَنَاسِكَكُمْ...»',
+          'translitEn': 'An Jabir radiya-allahu anhu qala: Ra\'aytu-nabiyya salla-allahu alayhi wa sallama yarmi-l-jamrata duhan yawma-n-nahri wa huwa ala naqatihi yaqul: Lita\'khudhu manasikakum...',
+          'referenceEn': 'Sahih Muslim 1297',
+          'textEn': 'Jabir reported: "I saw the Prophet (ﷺ) throwing pebbles at Jamarat al-Aqabah in the forenoon on the Day of Sacrifice, saying: Take your rituals from me, for I do not know whether I will perform Hajj after this Hajj of mine."',
+          'explanationEn': 'This establishes the timing (Dhuha) and fundamental rule that all Hajj rituals must mirror the Prophet’s demonstration.',
+          'sourceBook': 'Sahih Muslim',
+          'sourceBookDesc': 'Authentic collection of Hadith compiled by Imam Muslim.'
+        },
+        {
+          'textAr': 'عَنِ ابْنِ عَبَّاسٍ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ فِي حَجِّهِ: «عَلَيْكُمْ بِحَصَى الْخَذْفِ...»',
+          'translitEn': 'An ibni Abbas radiya-allahu anhuma anna-nabiyya salla-allahu alayhi wa sallama qala fi hajjihi: Alaykum bihasal-khadhfi...',
+          'referenceEn': 'Sahih Muslim 1298',
+          'textEn': 'Ibn Abbas reported that the Prophet (ﷺ) said: "Pelt with pebbles the size of clay-balls (for stoning) and avoid excess in religion..."',
+          'explanationEn': 'Warns against using overly large stones or showing aggression, defining the proper size of pebbles to be used (size of a bean).',
+          'sourceBook': 'Sahih Muslim',
+          'sourceBookDesc': 'One of the six major books of Hadith compiled by Imam Muslim.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua with each pebble thrown',
+          'arabic': 'اللَّهُ أَكْبَرُ، اللَّهُمَّ اجْعَلْهُ حَجًّا مَبْرُورًا وَذَنْبًا مَغْفُورًا',
+          'translit': 'Allahu Akbar, Allahumma-j’alhu hajjan mabruran wa dhanban maghfura.',
+          'meaningEn': 'Allah is the Greatest. O Allah, make it an accepted Hajj and a forgiven sin.',
+          'meaningAr': 'التكبير عند رمي كل حصاة والدعاء بالقبول ومغفرة الذنوب.',
+        },
+        {
+          'title': 'Short praise upon each throw',
+          'arabic': 'اللَّهُ أَكْبَرُ رَغْمًا لِلشَّيْطَانِ وَرِضًى لِلرَّحْمَنِ',
+          'translit': 'Allahu Akbar, raghman lish-shaytani wa ridan lir-Rahman',
+          'meaningEn': 'Allah is the Greatest, in rejection of Shaytan and in pursuit of the Merciful\'s pleasure.',
+          'meaningAr': 'ذكر الله تكبيراً لدحر الشيطان والتقرب للرحمن.'
+        }
+      ]
     },
 
     'qurbani': {
@@ -771,64 +1074,84 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'الهدي والحلق أو التقصير',
       'day': '10th Dhul Hijjah (Yawm an-Nahr)',
       'dayAr': '١٠ ذو الحجة (يوم النحر)',
-      'overviewEn':
-          'After Rami on the 10th of Dhul Hijjah, pilgrims performing Hajj Tamattu or Qiran offer the Hady (animal sacrifice). Afterwards, male pilgrims shave their heads completely (Halq - preferred) or trim hair evenly (Taqsir). Female pilgrims trim a fingertip length of their hair. At this point, Tahallul al-Asghar (first partial deconsecration) is achieved.',
-      'overviewAr':
-          'بعد رمي جمرة العقبة يوم النحر، يقوم المتمتع والمقرن بذبْح الهدي. ثم يحلق الرجل رأسه (وهو الأفضل) أو يقصره، وتقصر المرأة من أطراف شعرها قدر أنملة (حوالي ٢ سم). وبذلك يتحلل الحاج التحلل الأول (التحلل الأصغر) فيحل له كل شيء حرم عليه بالإحرام إلا النساء.',
-      'keyActionsEn': [
-        'Slaughter the Hady (sheep, goat, or 1/7 of camel/cow) for Tamattu/Qiran pilgrims.',
-        'Men: Shave head completely (Halq) or trim hair evenly all around (Taqsir).',
-        'Women: Trim a fingertip length (approx 1.5 - 2 cm) from the ends of hair.',
-        'Attain Tahallul al-Asghar: Change out of Ihram garments into regular clothes.',
-        'All Ihram prohibitions lifted EXCEPT marital relations until Tawaf al-Ifadah.',
-      ],
-      'keyActionsAr': [
-        'ذبح الهدي للمتمتع والمقرن (شاة أو سبع بدنة/بقرة).',
-        'الحلق للرجال بالموسى (وهو الأفضل) أو التقصير لجميع الرأس.',
-        'تقصير المرأة من كل ضفيرة أو من طرف شعرها قدر أنملة.',
-        'التحلل الأصغر (التحلل الأول): لبس الثياب العادية والتطيب.',
-        'إباحة محظورات الإحرام عدا النساء حتى طواف الإفاضة.',
+      'overviewEn': 'After Rami on the 10th of Dhul Hijjah, pilgrims performing Hajj Tamattu or Qiran offer the Hady (animal sacrifice). Afterwards, male pilgrims shave their heads completely (Halq - preferred) or trim hair evenly (Taqsir). Female pilgrims trim a fingertip length of their hair. At this point, Tahallul al-Asghar (first partial deconsecration) is achieved.',
+      'overviewAr': 'بعد رمي جمرة العقبة يوم النحر، يقوم المتمتع والمقرن بذبْح الهدي. ثم يحلق الرجل رأسه (وهو الأفضل) أو يقصره، وتقصر المرأة من أطراف شعرها قدر أنملة (حوالي ٢ سم). وبذلك يتحلل الحاج التحلل الأول (التحلل الأصغر) فيحل له كل شيء حرم عليه بالإحرام إلا النساء.',
+      'actionDetails': [
+        {
+          'title': 'Slaughter the Hady (sheep, goat, or 1/7 of camel/cow).',
+          'details': 'Offer the animal sacrifice (usually arranged beforehand through electronic vouchers). This is obligatory for Tamattu\' and Qiran pilgrims.',
+          'glossary': [
+            {'term': 'Hady', 'meaning': 'The sacrificial animal offered by pilgrims as gratitude during Hajj.'},
+            {'term': 'Qurbani', 'meaning': 'The act of slaughtering a sacrifice.'}
+          ]
+        },
+        {
+          'title': 'Men: Shave head completely (Halq) or trim hair evenly (Taqsir).',
+          'details': 'Shaving completely is highly recommended. Barbers are available around Mina and Makkah. If you trim, ensure it is cut evenly all around your head.',
+          'glossary': [
+            {'term': 'Halq', 'meaning': 'Shaving the head completely.'},
+            {'term': 'Taqsir', 'meaning': 'Trimming/shortening the hair.'}
+          ]
+        },
+        {
+          'title': 'Women: Trim a fingertip length from the ends of hair.',
+          'details': 'Women gather their hair together and clip about a fingertip\'s length (1.5 to 2 cm) from the ends.',
+          'glossary': [
+            {'term': 'Fingertip length', 'meaning': 'The mandatory measure of trimming hair for women.'}
+          ]
+        },
+        {
+          'title': 'Attain Tahallul al-Asghar and change out of Ihram clothes.',
+          'details': 'Once you pelt the Jamrah and shave/trim your hair, you enter the state of partial deconsecration (Tahallul al-Asghar). You can now wear regular sewn clothes and apply perfume.',
+          'glossary': [
+            {'term': 'Tahallul al-Asghar', 'meaning': 'The first stage of deconsecration where all Ihram prohibitions are lifted except marital relations.'}
+          ]
+        }
       ],
       'quran': {
-        'textAr':
-            'وَفَدَيْنَاهُ بِذِبْحٍ عَظِيمٍ',
+        'textAr': 'وَفَدَيْنَاهُ بِذِبْحٍ عَظِيمٍ',
         'referenceAr': 'سورة الصافات - الآية ١٠٧',
-        'textEn':
-            'And We ransomed him with a great sacrifice.',
+        'textEn': 'And We ransomed him with a great sacrifice.',
         'referenceEn': 'Surah As-Saffat (37:107)',
-        'explanationEn':
-            'This verse is the origin of the Qurbani itself: after Ibrahim (AS) and his son Ismail (AS) submitted fully to Allah\'s command, Allah ransomed Ismail\'s life with an animal sacrifice. Every Hady offered during Hajj Tamattu\' or Qiran re-enacts that ransom in gratitude. (The shaving/trimming that follows the sacrifice is covered separately in Surah Al-Fath 48:27.)',
-        'explanationAr':
-            'هذه الآية هي أصل مشروعية الأضحية والهدي، حيث فدى الله إسماعيل عليه السلام بذبح عظيم بعد امتثاله وأبيه لأمر الله.',
+        'explanationEn': 'This verse is the origin of the Qurbani itself: after Ibrahim (AS) and his son Ismail (AS) submitted fully to Allah\'s command, Allah ransomed Ismail\'s life with an animal sacrifice. Every Hady offered during Hajj Tamattu\' or Qiran re-enacts that ransom in gratitude.',
+        'explanationAr': 'هذه الآية هي أصل مشروعية الأضحية والهدي، حيث فدى الله إسماعيل عليه السلام بذبح عظيم بعد امتثاله وأبيه لأمر الله.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ أَبِي هُرَيْرَةَ رَضِيَ اللَّهُ عَنْهُ قَالَ: قَالَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ: «اللَّهُمَّ اغْفِرْ لِلْمُحَلِّقِينَ»، قَالُوا: وَلِلْمُقَصِّرِينَ يَا رَسُولَ اللَّهِ؟ قَالَ: «اللَّهُمَّ اغْفِرْ لِلْمُحَلِّقِينَ»، قَالُوا: وَلِلْمُقَصِّرِينَ يَا رَسُولَ اللَّهِ؟ قَالَ: «وَلِلْمُقَصِّرِينَ» فِي الثَّالِثَةِ أَوْ الرَّابِعَةِ',
-        'referenceAr': 'صحيح البخاري (١٧٢٧) وصحيح مسلم (١٣٠١)',
-        'textEn':
-            'Abu Hurairah reported: The Messenger of Allah (ﷺ) prayed: "O Allah, forgive those who shave their heads!" They asked: "And those who shorten, O Messenger of Allah?" He repeated: "O Allah, forgive those who shave!" They asked again, and on the third or fourth time he added: "And those who shorten."',
-        'referenceEn': 'Sahih al-Bukhari 1727, Sahih Muslim 1301',
-        'explanationEn':
-            'Demonstrates the superior reward for men who shave their heads completely (Halq) compared to trimming.',
-        'explanationAr':
-            'فضل الحلق ومضاعفة الدعاء للمحلقين ثلاثاً بالرحمة والمغفرة.',
-      },
-      'originStory': {
-        'title': 'The Ransom of Ismail',
-        'source': 'Surah As-Saffat 37:102-107',
-        'textEn': 'This ritual commemorates the climax of Ibrahim\'s trial: after both father and son submitted fully to Allah\'s command to sacrifice Ismail (AS), Allah intervened and ransomed him with a great sacrifice — "and We ransomed him with a great sacrifice" (Surah As-Saffat 37:107). Muslims re-enact that ransom every year at the end of Hajj and on Eid al-Adha, offering an animal in place of a human life as Ibrahim once did, in gratitude for Allah\'s mercy on that day.',
-      },
-      'dua': {
-        'title': 'Dua Upon Shaving/Trimming Hair',
-        'arabic':
-            'الْحَمْدُ لِلَّهِ عَلَى مَا هَدَانَا، اللَّهُمَّ ثَبِّتْنِي عَلَى الْهُدَى وَاغْفِرْ لِي وَلِوَالِدَيَّ وَلِلْمُسْلِمِينَ أَجْمَعِينَ',
-        'translit':
-            'Alhamdu lillahi \'ala ma hadana, Allahumma thabbitni \'alal-huda waghfir li wa li-walidayya wa lil-muslimina ajma\'in.',
-        'meaningEn':
-            'Praise be to Allah for guiding us. O Allah, keep me firm upon guidance and forgive me, my parents, and all Muslims.',
-        'meaningAr':
-            'حمد الله على توفيقه لإتمام النسك والدعاء بالثبات والمغفرة.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ أَبِي هُرَيْرَةَ رَضِيَ اللَّهُ عَنْهُ قَالَ: قَالَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ: «اللَّهُمَّ اغْفِرْ لِلْمُحَلِّقِينَ»، قَالُوا: وَلِلْمُقَصِّرِينَ يَا رَسُولَ اللَّهِ؟...',
+          'translitEn': 'An Abi Hurairah radiya-allahu anhu qala: Qala rasulu-llahi salla-allahu alayhi wa sallama: Allahumma-ghfir lil-muhalliqina. Qalu: Wa lil-muqassirina ya rasula-llahi?...',
+          'referenceEn': 'Sahih al-Bukhari 1727 & Sahih Muslim 1301',
+          'textEn': 'Abu Hurairah reported: The Messenger of Allah (ﷺ) prayed: "O Allah, forgive those who shave their heads!" They asked: "And those who shorten, O Messenger of Allah?" He repeated: "O Allah, forgive those who shave!" They asked again, and on the third or fourth time he added: "And those who shorten."',
+          'explanationEn': 'Demonstrates the superior reward for men who shave their heads completely (Halq) compared to trimming.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'The standard of authentic prophetic statements.'
+        },
+        {
+          'textAr': 'عَنْ أَنَسِ بْنِ مَالِكٍ رَضِيَ اللَّهُ عَنْهُ أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ أَتَى مِنًى فَنَحَرَ ثُمَّ حَلَقَ',
+          'translitEn': 'An Anasib-ni Malik radiya-allahu anhu anna-nabiyya salla-allahu alayhi wa sallama ata Mina fanahara thumma halaqa.',
+          'referenceEn': 'Sahih Muslim 1302',
+          'textEn': 'Anas reported: "The Messenger of Allah (ﷺ) came to Mina, pelted the Jamrah, slaughtered his sacrifice, and then shaved his head."',
+          'explanationEn': 'Establishes the chronological sequence of rituals on the Day of Eid: Pelting, Sacrifice, then Shaving/Trimming.',
+          'sourceBook': 'Sahih Muslim',
+          'sourceBookDesc': 'Authentic collection of Hadith compiled by Imam Muslim.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua Upon Shaving/Trimming Hair',
+          'arabic': 'الْحَمْدُ لِلَّهِ عَلَى مَا هَدَانَا، اللَّهُمَّ ثَبِّتْنِي عَلَى الْهُدَى وَاغْفِرْ لِي وَلِوَالِدَيَّ',
+          'translit': 'Alhamdu lillahi \'ala ma hadana, Allahumma thabbitni \'alal-huda waghfir li wa li-walidayya',
+          'meaningEn': 'Praise be to Allah for guiding us. O Allah, keep me firm upon guidance and forgive me and my parents.',
+          'meaningAr': 'حمد الله على توفيقه لإتمام النسك والدعاء بالثبات والمغفرة.',
+        },
+        {
+          'title': 'Dua upon offering Sacrifice',
+          'arabic': 'بِسْمِ اللَّهِ وَاللَّهُ أَكْبَرُ، اللَّهُمَّ تَقَبَّلْ مِنِّي',
+          'translit': 'Bismillahi wallahu Akbar, Allahumma taqabbal minni',
+          'meaningEn': 'In the name of Allah, Allah is the Greatest. O Allah, accept it from me.',
+          'meaningAr': 'التسمية والتكبير عند تقديم القربان لله تعالى.'
+        }
+      ]
     },
 
     'tawaf_ifadah': {
@@ -836,64 +1159,90 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'طواف الإفاضة والسعي',
       'day': '10th Dhul Hijjah or Days of Tashreeq',
       'dayAr': '١٠ ذو الحجة أو أيام التشريق',
-      'overviewEn':
-          'Tawaf al-Ifadah is a core, mandatory pillar (Rukn) of Hajj without which Hajj remains incomplete. Pilgrims travel from Mina to Makkah to circumambulate the Kaaba 7 times. After Tawaf, pilgrims perform Sa\'i between Safa and Marwah (for Tamattu pilgrims and those who did not perform Sa\'i earlier). Completing this grants Tahallul al-Akbar (complete deconsecration).',
-      'overviewAr':
-          'طواف الإفاضة هو ركن من أركان الحج لا يتم الحج إلا به. يتجه الحاج إلى مكة للطواف حول الكعبة ٧ أشواط، ثم يصلي ركعتين خلف المقام، ويسعى بين الصفا والمروة ٧ أشواط (للمتمتع ولمن لم يسعَ مع طواف القدوم). وبتمام طواف الإفاضة والسعي يتحلل الحاج التحلل الأكبر (الكامل) فيحل له كل شيء حتى النساء.',
-      'keyActionsEn': [
-        'Perform 7 circuits around the Kaaba (Tawaf al-Ifadah).',
-        'Pray 2 Rakah behind Maqam Ibrahim.',
-        'Drink Zamzam water and make Dua.',
-        'Perform Sa\'i between Mount Safa and Mount Marwah (7 laps starting at Safa, ending at Marwah).',
-        'Attain Tahallul al-Akbar (complete deconsecration): All restrictions including marital relations lifted.',
-      ],
-      'keyActionsAr': [
-        'الطواف حول الكعبة المشرفة ٧ أشواط (طواف الإفاضة).',
-        'صلاة ركعتين خلف مقام إبراهيم والشرب من ماء زمزم.',
-        'السعي بين الصفا والمروة ٧ أشواط يبدأ بالصفا وينتهي بالمروة.',
-        'التحلل الأكبر (التحلل الكامل) الذي يبيح كل محظورات الإحرام بما فيها النساء.',
-        'العودة إلى منى للمبيت بها بقية أيام التشريق.',
+      'overviewEn': 'Tawaf al-Ifadah is a core, mandatory pillar (Rukn) of Hajj without which Hajj remains incomplete. Pilgrims travel from Mina to Makkah to circumambulate the Kaaba 7 times. After Tawaf, pilgrims perform Sa\'i between Safa and Marwah (for Tamattu pilgrims and those who did not perform Sa\'i earlier). Completing this grants Tahallul al-Akbar (complete deconsecration).',
+      'overviewAr': 'طواف الإفاضة هو ركن من أركان الحج لا يتم الحج إلا به. يتجه الحاج إلى مكة للطواف حول الكعبة ٧ أشواط، ثم يصلي ركعتين خلف المقام، ويسعى بين الصفا والمروة ٧ أشواط (للمتمتع ولمن لم يسعَ مع طواف القدوم). وبتمام طواف الإفاضة والسعي يتحلل الحاج التحلل الأكبر (الكامل) فيحل له كل شيء حتى النساء.',
+      'actionDetails': [
+        {
+          'title': 'Perform 7 circuits around the Kaaba (Tawaf al-Ifadah).',
+          'details': 'Proceed to the Grand Mosque in Makkah and circumambulate the Kaaba seven times counter-clockwise. Men do not need to uncover their shoulders (Idtiba) or walk briskly (Raml) on this Tawaf.',
+          'glossary': [
+            {'term': 'Tawaf al-Ifadah', 'meaning': 'The mandatory Hajj circumambulation around the Kaaba.'},
+            {'term': 'Kaaba', 'meaning': 'The House of Allah.'}
+          ]
+        },
+        {
+          'title': 'Pray 2 Rakat behind Maqam Ibrahim.',
+          'details': 'After completing 7 circuits, offer 2 units of prayer behind Maqam Ibrahim if possible, otherwise anywhere in Al-Masjid al-Haram.',
+          'glossary': [
+            {'term': 'Maqam Ibrahim', 'meaning': 'The standing place of Prophet Abraham.'}
+          ]
+        },
+        {
+          'title': 'Drink Zamzam water and make Dua.',
+          'details': 'Go to the Zamzam drinking taps. Drink Zamzam water while standing, and make supplication.',
+          'glossary': [
+            {'term': 'Zamzam', 'meaning': 'The blessed well and water source in Makkah.'}
+          ]
+        },
+        {
+          'title': 'Perform Sa\'i between Safa and Marwah.',
+          'details': 'Perform 7 laps of Sa\'i between Mount Safa and Mount Marwah. This is required for Tamattu\' pilgrims and those Qiran/Ifrad pilgrims who did not perform it after Tawaf al-Qudum.',
+          'glossary': [
+            {'term': 'Sa\'i', 'meaning': 'Walking seven times between the two hills.'}
+          ]
+        },
+        {
+          'title': 'Attain Tahallul al-Akbar (complete deconsecration).',
+          'details': 'Once you complete this Tawaf (and Sa\'i where necessary), you achieve the state of complete deconsecration (Tahallul al-Akbar). All Ihram restrictions, including marital relations, are now lifted.',
+          'glossary': [
+            {'term': 'Tahallul al-Akbar', 'meaning': 'The second and complete stage of exiting Ihram.'}
+          ]
+        }
       ],
       'quran': {
-        'textAr':
-            'ثُمَّ لْيَقْضُوا تَفَثَهُمْ وَلْيُوفُوا نُذُورَهُمْ وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
+        'textAr': 'ثُمَّ لْيَقْضُوا تَفَثَهُمْ وَلْيُوفُوا نُذُورَهُمْ وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
         'referenceAr': 'سورة الحج - الآية ٢٩',
-        'textEn':
-            'Then let them end their untidiness and fulfil their vows and perform Tawaf around the Ancient House.',
+        'textEn': 'Then let them end their untidiness and fulfil their vows and perform Tawaf around the Ancient House.',
         'referenceEn': 'Surah Al-Hajj (22:29)',
-        'explanationEn':
-            'This is the direct command to perform Tawaf. Tawaf al-Ifadah is the occasion on which every school of Islamic law agrees this verse is fulfilled as an absolute pillar (Rukn) of Hajj — unlike other Hajj acts, it cannot be substituted with a penalty if missed. (The Sa\'i that follows, mentioned in the overview above, is separately commanded in Surah Al-Baqarah 2:158 — see the Sa\'i of Hajj step.)',
-        'explanationAr':
-            'هذا هو الأمر المباشر بالطواف، وطواف الإفاضة هو الركن الذي يتحقق فيه هذا الأمر، ولا يجزئ عنه دم إن تُرك.',
+        'explanationEn': 'This is the direct command to perform Tawaf. Tawaf al-Ifadah is the occasion on which every school of Islamic law agrees this verse is fulfilled as an absolute pillar (Rukn) of Hajj.',
+        'explanationAr': 'هذا هو الأمر المباشر بالطواف، وطواف الإفاضة هو الركن الذي يتحقق فيه هذا الأمر، ولا يجزئ عنه دم إن تُرك.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ عَائِشَةَ رَضِيَ اللَّهُ عَنْهَا قَالَتْ: «أَفَاضَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ مِنْ آخِرِ يَوْمِهِ حِينَ صَلَّى الظُّهْرَ، ثُمَّ رَجَعَ إِلَى مِنًى»',
-        'referenceAr': 'صحيح البخاري (١٧٣٣) وصحيح مسلم (١٢١٨)',
-        'textEn':
-            'Aisha reported: "The Messenger of Allah (ﷺ) performed Tawaf al-Ifadah on the latter part of the day (10th) after praying Dhuhr, then he returned to Mina."',
-        'referenceEn': 'Sahih al-Bukhari 1733, Sahih Muslim 1218',
-        'explanationEn':
-            'Confirms that Tawaf al-Ifadah is performed on the 10th of Dhul Hijjah before returning to Mina for Tashreeq nights.',
-        'explanationAr':
-            'بيان وقت طواف الإفاضة للنبي صلى الله عليه وسلم يوم النحر ورجوعه للمبيت بمنى.',
-      },
-      'originStory': {
-        'title': 'The Pillar of the Pilgrimage',
-        'source': 'Surah Al-Hajj 22:29 · Sahih al-Bukhari 1733',
-        'textEn': 'Also called Tawaf al-Ziyarah, this circuit around the Kaaba is the one act every school of Islamic law agrees is an absolute pillar (Rukn) of Hajj — a Hajj is not valid without it, even if performed late. The Quran commands pilgrims to conclude their rites with "Tawaf around the Ancient House" (Surah Al-Hajj 22:29). Aisha reported that the Prophet (ﷺ) performed it on the afternoon of the 10th of Dhul Hijjah before returning to Mina (Sahih al-Bukhari 1733), fixing its place in the sequence of Hajj.',
-      },
-      'dua': {
-        'title': 'Dua at Mount Safa (دعاء الصفا والمروة)',
-        'arabic':
-            'أَبْدَأُ بِمَا بَدَأَ اللَّهُ بِهِ، إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ... لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ أَنْجَزَ وَعْدَهُ، وَنَصَرَ عَبْدَهُ، وَهَزَمَ الأَحْزَابَ وَحْدَهُ',
-        'translit':
-            'Abda’u bima bada’allahu bihi. La ilaha illallahu wahdahu anjaza wa’dahu, wa nasara \'abdahu, wa hazamal-ahzaba wahdah.',
-        'meaningEn':
-            'I begin with that which Allah began with. There is no deity except Allah alone, He fulfilled His promise, granted victory to His servant, and defeated the confederates alone.',
-        'meaningAr':
-            'التكبير والتهليل والثناء على الله عند صعود جبل الصفا والمروة والاستقبال للقبلة.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ عَائِشَةَ رَضِيَ اللَّهُ عَنْهَا قَالَتْ: «أَفَاضَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ مِنْ آخِرِ يَوْمِهِ حِينَ صَلَّى الظُّهْرَ، ثُمَّ رَجَعَ إِلَى مِنًى»',
+          'translitEn': 'An Aisha radiya-allahu anha qalat: Afada rasulu-llahi salla-allahu alayhi wa sallama min akhiri yawmihi heena salla-d-Duhra thumma raja\'a ila Mina.',
+          'referenceEn': 'Sahih al-Bukhari 1733, Sahih Muslim 1218',
+          'textEn': 'Aisha reported: "The Messenger of Allah (ﷺ) performed Tawaf al-Ifadah on the latter part of the day (10th) after praying Dhuhr, then he returned to Mina."',
+          'explanationEn': 'Confirms that Tawaf al-Ifadah is performed on the 10th of Dhul Hijjah before returning to Mina for Tashreeq nights.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'Highly authentic books containing verified reports of the Prophet\'s Farewell Pilgrimage.'
+        },
+        {
+          'textAr': 'عَنِ ابْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ طَافَ يَوْمَ النَّحْرِ ثُمَّ رَجَعَ فَصَلَّى الظَّهْرَ بِمِنى',
+          'translitEn': 'An ibni Umar radiya-allahu anhuma anna rasula-llahi salla-allahu alayhi wa sallama tafa yawman-nahri thumma raja\'a fasallad-Duhra bi-Mina.',
+          'referenceEn': 'Sahih al-Bukhari 1734',
+          'textEn': 'Ibn Umar reported: "The Messenger of Allah (ﷺ) performed Tawaf on the Day of Sacrifice (10th) and then returned and offered Dhuhr prayer in Mina."',
+          'explanationEn': 'Demonstrates that the Prophet ﷺ completed the Tawaf al-Ifadah on the 10th of Dhul Hijjah itself, returning to Mina to lead the congregation.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'Compiled by Imam Bukhari, the most trusted authority on Prophetic narrations.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua during Tawaf al-Ifadah',
+          'arabic': 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
+          'translit': 'Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
+          'meaningEn': 'Our Lord, grant us good in this world and good in the Hereafter and protect us from the punishment of the Fire.',
+          'meaningAr': 'ربنا منحنا الخير في الدنيا والآخرة ونجنا من عذاب النار.',
+        },
+        {
+          'title': 'Dua on Safa hill before Sa\'i',
+          'arabic': 'أَبْدَأُ بِمَا بَدَأَ اللَّهُ بِهِ، إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ',
+          'translit': 'Abda\'u bima bada\'allahu bihi. Innas-Safa wal-Marwata min sha\'a\'irillah.',
+          'meaningEn': 'I begin with that which Allah began with. Indeed, Safa and Marwah are among the symbols of Allah.',
+          'meaningAr': 'التكبير والبدء بالسعي اتباعاً للسنة المطهرة.'
+        }
+      ]
     },
 
     'rami_days': {
@@ -901,66 +1250,97 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'رمي الجمار في أيام التشريق (١١، ١٢، ١٣ ذو الحجة)',
       'day': '11th, 12th, and optional 13th Dhul Hijjah',
       'dayAr': '١١ و١٢ و١٣ ذو الحجة - أيام التشريق',
-      'overviewEn':
-          'Pilgrims remain in Mina during the Days of Tashreeq (11th, 12th, and optionally 13th Dhul Hijjah). Each afternoon AFTER Zawal (midday sun turn), pilgrims pelt all three Jamarat in order: Small (Al-Sugra), Medium (Al-Wusta), and Large (Al-Aqabah) with 7 pebbles each (21 total per day). Long supplications are made after the 1st and 2nd Jamarat.',
-      'overviewAr':
-          'يقيم الحجاج بمنى أيام التشريق (١١، ١٢، و١٣ لمن تأخر). ويكون رمي الجمار الثلاث بعد زوال الشمس (بعد صلاة الظهر) كل يوم بترتيب: الجمرة الصغرى (٧ حصيات)، ثم الوسطى (٧ حصيات)، ثم العقبة الكبرى (٧ حصيات) بمجموع ٢١ حصاة يومياً. ويُسن الوقوف والدعاء الطويل بعد الصغرى والوسطى.',
-      'keyActionsEn': [
-        'Stay overnight in Mina during Tashreeq nights (Wajib).',
-        'Wait for Zawal (Dhuhr time) each day before starting Rami.',
-        'Pelt 1st: Small Jamrah (7 pebbles) -> Step aside & make long Dua facing Qiblah.',
-        'Pelt 2nd: Medium Jamrah (7 pebbles) -> Step aside & make long Dua facing Qiblah.',
-        'Pelt 3rd: Large Jamrah al-Aqabah (7 pebbles) -> Depart without stopping for Dua.',
-        'Pilgrims can depart Mina on 12th before Maghrib (Ta\'ajjul) or stay for 13th (Takhar).',
-      ],
-      'keyActionsAr': [
-        'المبيت بمنى ليالي أيام التشريق (واجب).',
-        'بداية الرمي يومياً بعد زوال الشمس (أذان الظهر).',
-        'رمي الجمرة الأولى الصغرى بـ ٧ حصيات ثم التنحي والقيام للدعاء الطويل مستقبل القبلة.',
-        'رمي الجمرة الثانية الوسطى بـ ٧ حصيات ثم التنحي والقيام للدعاء الطويل.',
-        'رمي الجمرة الثالثة الكبرى (العقبة) بـ ٧ حصيات والانصراف دون دعاء.',
-        'جواز التعجل والخروج من منى في اليوم الثاني عشر قبل الغروب، أو التأخر لليوم الثالث عشر وهو الأفضل.',
+      'overviewEn': 'Pilgrims remain in Mina during the Days of Tashreeq (11th, 12th, and optionally 13th Dhul Hijjah). Each afternoon AFTER Zawal (midday sun turn), pilgrims pelt all three Jamarat in order: Small (Al-Sugra), Medium (Al-Wusta), and Large (Al-Aqabah) with 7 pebbles each (21 total per day). Long supplications are made after the 1st and 2nd Jamarat.',
+      'overviewAr': 'يقيم الحجاج بمنى أيام التشريق (١١، ١٢، و١٣ لمن تأخر). ويكون رمي الجمار الثلاث بعد زوال الشمس (بعد صلاة الظهر) كل يوم بترتيب: الجمرة الصغرى (٧ حصيات)، ثم الوسطى (٧ حصيات)، ثم العقبة الكبرى (٧ حصيات) بمجموع ٢١ حصاة يومياً. ويُسن الوقوف والدعاء الطويل بعد الصغرى والوسطى.',
+      'actionDetails': [
+        {
+          'title': 'Stay overnight in Mina during Tashreeq nights.',
+          'details': 'Spend most of the night in your tent in Mina. This is a mandatory duty (Wajib) for all Tashreeq nights.',
+          'glossary': [
+            {'term': 'Days of Tashreeq', 'meaning': 'The 11th, 12th, and 13th of Dhul Hijjah spent in Mina.'},
+            {'term': 'Mabeet', 'meaning': 'Staying the night in Mina.'}
+          ]
+        },
+        {
+          'title': 'Wait for Zawal (Dhuhr time) each day before starting Rami.',
+          'details': 'Rami on the Days of Tashreeq can only be performed after the sun starts its decline (Zawal) at Dhuhr time. Stoning in the morning is invalid.',
+          'glossary': [
+            {'term': 'Zawal', 'meaning': 'Midday when the sun begins to decline from its peak.'}
+          ]
+        },
+        {
+          'title': 'Pelt the Small Jamrah and make a long Dua.',
+          'details': 'Throw 7 pebbles one by one at the first (Small) pillar (Jamrah al-Sugra). Step aside, face the Qiblah, and make a long supplication with raised hands.',
+          'glossary': [
+            {'term': 'Jamrah al-Sugra', 'meaning': 'The first and smallest stoning pillar.'}
+          ]
+        },
+        {
+          'title': 'Pelt the Medium Jamrah and make a long Dua.',
+          'details': 'Throw 7 pebbles one by one at the second (Medium) pillar (Jamrah al-Wusta). Step aside, face the Qiblah, and make another long supplication.',
+          'glossary': [
+            {'term': 'Jamrah al-Wusta', 'meaning': 'The middle stoning pillar.'}
+          ]
+        },
+        {
+          'title': 'Pelt the Large Jamrah and depart without stopping.',
+          'details': 'Throw 7 pebbles one by one at the third (Large) pillar (Jamrah al-Aqabah). Depart immediately without stopping for Dua.',
+          'glossary': [
+            {'term': 'Jamrah al-Aqabah', 'meaning': 'The largest stoning pillar.'}
+          ]
+        },
+        {
+          'title': 'Option to depart Mina on the 12th before sunset (Ta\'ajjul).',
+          'details': 'If you choose to leave early, you must pelt all three pillars on the 12th and depart Mina before sunset. If sunset catches you in Mina, you must stay until the 13th.',
+          'glossary': [
+            {'term': 'Ta\'ajjul', 'meaning': 'Hastening departure from Mina on the 12th of Dhul Hijjah.'}
+          ]
+        }
       ],
       'quran': {
-        'textAr':
-            'فَمَن تَعَجَّلَ فِي يَوْمَيْنِ فَلَا إِثْمَ عَلَيْهِ وَمَن تَأَخَّرَ فَلَا إِثْمَ عَلَيْهِ ۚ لِمَنِ اتَّقَىٰ ۗ وَاتَّقُوا اللَّهَ وَاعْلَمُوا أَنَّكُمْ إِلَيْهِ تُحْشَرُونَ',
+        'textAr': 'فَمَن تَعَجَّلَ فِي يَوْمَيْنِ فَلَا إِثْمَ عَلَيْهِ وَمَن تَأَخَّرَ فَلَا إِثْمَ عَلَيْهِ ۚ لِمَنِ اتَّقَىٰ ۗ وَاتَّقُوا اللَّهَ وَاعْلَمُوا أَنَّكُمْ إِلَيْهِ تُحْشَرُونَ',
         'referenceAr': 'سورة البقرة - الآية ٢٠٣',
-        'textEn':
-            'Whoever hastens [his departure] in two days, there is no sin upon him; and whoever delays, there is no sin upon him - for him who fears Allah. And fear Allah and know that unto Him you will be gathered.',
+        'textEn': 'Whoever hastens [his departure] in two days, there is no sin upon him; and whoever delays, there is no sin upon him - for him who fears Allah. And fear Allah and know that unto Him you will be gathered.',
         'referenceEn': 'Surah Al-Baqarah (2:203)',
-        'explanationEn':
-            'As with the 10th, the Quran does not name the stoning ritual on the Days of Tashreeq directly — the act itself comes from the Sunnah (see the Origin Story tab). This verse instead gives the explicit permission pilgrims rely on to leave Mina after the 12th (Ta\'ajjul) or stay for the 13th (Takhar).',
-        'explanationAr':
-            'تبيح الآية التعجل في اليوم الثاني عشر أو التأخر لليوم الثالث عشر لمن اتقى الله.',
+        'explanationEn': 'This verse gives the explicit permission pilgrims rely on to leave Mina early after the 12th (Ta\'ajjul) or stay for the 13th (Takhar).',
+        'explanationAr': 'تبيح الآية التعجل في اليوم الثاني عشر أو التأخر لليوم الثالث عشر لمن اتقى الله.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّهُ كَانَ يَرْمِي الْجَمْرَةَ الدُّنْيَا بِسَبْعِ حَصَيَاتٍ، ثُمَّ يُكَبِّرُ عَلَى إِثْرِ كُلِّ حَصَاةٍ، ثُمَّ يَتَقَدَّمُ فَيُسْهِلُ فَيَقُومُ مُسْتَقْبِلَ الْقِبْلَةِ، فَيَقُومُ طَوِيلاً وَيَدْعُو وَيَرْفَعُ يَدَيْهِ... وَيَقُولُ: هَكَذَا رَأَيْتُ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ يَفْعَلُهُ',
-        'referenceAr': 'صحيح البخاري (١٧٥١)',
-        'textEn':
-            'Narrated Ibn Umar: He used to stone the nearest Jamrah with 7 pebbles, saying Takbeer with each pebble. Then he would move forward, stand facing the Qiblah for a long time making Dua with raised hands... and say: "This is how I saw the Prophet (ﷺ) doing it."',
-        'referenceEn': 'Sahih al-Bukhari 1751',
-        'explanationEn':
-            'Details the Sunnah method of standing for prolonged Dua after the Small and Medium Jamarat during Tashreeq days.',
-        'explanationAr':
-            'شرح وتطبييق سنة النبي صلى الله عليه وسلم في الوقوف للدعاء الطويل بين الجمار.',
-      },
-      'originStory': {
-        'title': 'Ibrahim\'s Rejection of Shaytan, Renewed Daily',
-        'source': 'Traditional account (see the 10th Dhul Hijjah step for its grading) · ritual sequence fixed by Sahih al-Bukhari 1751',
-        'textEn': 'The same traditional account of Ibrahim (AS) driving off Shaytan at three spots — popular in early sources though not narrated with a Bukhari/Muslim-grade chain — is what pilgrims commemorate across the Days of Tashreeq, staying on in Mina to pelt all three pillars each day. What is firmly documented is the Prophet\'s ﷺ own practice: Ibn Umar described in detail how he paused for long supplication after the first two Jamarat but not the third, "just as I saw the Prophet do it" (Sahih al-Bukhari 1751) — the model pilgrims still follow today.',
-      },
-      'dua': {
-        'title': 'Dua Between Jamarat (الدعاء الطويل بين الجمرتين)',
-        'arabic':
-            'اللَّهُمَّ اغْفِرْ وَارْحَمْ، وَاعْفُ عَمَّا تَعْلَمُ، وَأَنْتَ الأَعَزُّ الأَكْرَمُ، اللَّهُمَّ آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
-        'translit':
-            'Allahummaghfir warham, wa’fu \'amma ta’lam, wa antal-a’azzul-akram. Allahumma atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
-        'meaningEn':
-            'O Allah forgive and have mercy, and pardon what You know, for You are the Most Mighty, Most Generous. O Allah grant us good in this world and the next and save us from the Fire.',
-        'meaningAr':
-            'الدعاء والمناجاة الطويلة مستقبل القبلة بعد رمي الجمرة الصغرى والوسطى.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّهُ كَانَ يَرْمِي الْجَمْرَةَ الدُّنْيَا بِسَبْعِ حَصَيَاتٍ، ثُمَّ يُكَبِّرُ عَلَى إِثْرِ كُلِّ حَصَاةٍ، ثُمَّ يَتَقَدَّمُ فَيُسْهِلُ فَيَقُومُ مُسْتَقْبِلَ الْقِبْلَةِ، فَيَقُومُ طَوِيلاً وَيَدْعُو وَيَرْفَعُ يَدَيْهِ...',
+          'translitEn': 'An Abdillahi-bni Umar radiya-allahu anhuma annahu kana yarmi-l-jamrata-d-dunya bisab\'i hasayatin, thumma yukabbiru ala ithri kulli hasatin, thumma yataqaddamu fayushilu fayaqumu mustaqbila-l-qiblati, fayaqumu taweelan wa yad\'u wa yarfa\'u yadayhi...',
+          'referenceEn': 'Sahih al-Bukhari 1751',
+          'textEn': 'Narrated Ibn Umar: He used to stone the nearest Jamrah with 7 pebbles, saying Takbeer with each pebble. Then he would move forward, stand facing the Qiblah for a long time making Dua with raised hands... and say: "This is how I saw the Prophet (ﷺ) doing it."',
+          'explanationEn': 'Details the Sunnah method of standing for prolonged Dua after the Small and Medium Jamarat during Tashreeq days.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'Authentic collection of Hadith compiled by Imam Al-Bukhari.'
+        },
+        {
+          'textAr': 'عَنْ عَائِشَةَ رَضِيَ اللَّهُ عَنْهَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ أَخَّرَ الرَّمْيَ يَوْمَ النَّحْرِ حَتَّى زَالَتِ الشَّمْسُ',
+          'translitEn': 'An Aisha radiya-allahu anha anna-nabiyya salla-allahu alayhi wa sallama akhara-r-ramya yawma-n-nahri hatta zalati-sh-shamsu.',
+          'referenceEn': 'Sunan Abi Dawud 1949',
+          'textEn': 'Aisha narrated: "The Prophet (ﷺ) delayed the stoning during the Days of Tashreeq until the sun had passed its meridian (Zawal)."',
+          'explanationEn': 'Establishes that the legal time for stoning on the Days of Tashreeq starts at Zawal.',
+          'sourceBook': 'Sunan Abi Dawud',
+          'sourceBookDesc': 'One of the six major collections of Hadith, compiled by Imam Abu Dawud.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua Between Jamarat',
+          'arabic': 'اللَّهُمَّ اغْفِرْ وَارْحَمْ، وَاعْفُ عَمَّا تَعْلَمُ، وَأَنْتَ الأَعَزُّ الأَكْرَمُ، اللَّهُمَّ آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
+          'translit': 'Allahummaghfir warham, wa’fu \'amma ta’lam, wa antal-a’azzul-akram. Allahumma atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
+          'meaningEn': 'O Allah forgive and have mercy, and pardon what You know, for You are the Most Mighty, Most Generous. O Allah grant us good in this world and the next and save us from the Fire.',
+          'meaningAr': 'الدعاء والمناجاة الطويلة مستقبل القبلة بعد رمي الجمرة الصغرى والوسطى.',
+        },
+        {
+          'title': 'Praise with each stoning',
+          'arabic': 'اللَّهُ أَكْبَرُ، اللَّهُمَّ اجْعَلْهُ حَجًّا مَبْرُورًا',
+          'translit': 'Allahu Akbar, Allahumma-j’alhu hajjan mabrura',
+          'meaningEn': 'Allah is the Greatest. O Allah, make it an accepted Hajj.',
+          'meaningAr': 'تكبير ودعاء بالقبول.'
+        }
+      ]
     },
 
     'tawaf_wida': {
@@ -968,120 +1348,170 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'طواف الوداع',
       'day': 'Final action before leaving Makkah',
       'dayAr': 'آخر أعمال الحاج قبل مغادرة مكة',
-      'overviewEn':
-          'Tawaf al-Wida (Farewell Tawaf) is the final compulsory obligation (Wajib) for every pilgrim before leaving the holy city of Makkah. It consists of 7 circuits around the Kaaba without Sa\'i. After completing Tawaf al-Wida, pilgrims pray 2 Rakat, drink Zamzam, and depart Makkah directly without lingering.',
-      'overviewAr':
-          'طواف الوداع هو آخر واجبات الحج على كل آفاقي (من خارج مكة) قبل مغادرتها. يطوف الحاج ٧ أشواط حول البيت الحرام تحيةً ووداعاً للكعبة، ثم يصلي ركعتين، ويشرب من زمزم، وينطلق مسافراً إلى أهله دون إقامة أو مكوث بعده.',
-      'keyActionsEn': [
-        'Perform 7 circuits around the Kaaba as the absolute last activity in Makkah.',
-        'No Raml (brisk walking) or Idtiba (shoulder uncovering) required.',
-        'Pray 2 Rakat behind Maqam Ibrahim.',
-        'Drink Zamzam water and supplicate for accepted Hajj and safe journey home.',
-        'Depart Makkah immediately after completing Tawaf al-Wida.',
-      ],
-      'keyActionsAr': [
-        'الطواف حول الكعبة المشرفة ٧ أشواط كآخر عهد بالحرم.',
-        'لا يُشرع فيه رَمَل ولا اضطباع.',
-        'صلاة ركعتين خلف المقام والشرب من ماء زمزم.',
-        'الدعاء بالقبول والعودة إلى الديار سالماً.',
-        'المغادرة الفورية لمكة المكرمة بعد الطواف مباشرة.',
+      'overviewEn': 'Tawaf al-Wida (Farewell Tawaf) is the final compulsory obligation (Wajib) for every pilgrim before leaving the holy city of Makkah. It consists of 7 circuits around the Kaaba without Sa\'i. After completing Tawaf al-Wida, pilgrims pray 2 Rakat, drink Zamzam, and depart Makkah directly without lingering.',
+      'overviewAr': 'طواف الوداع هو آخر واجبات الحج على كل آفاقي (من خارج مكة) قبل مغادرتها. يطوف الحاج ٧ أشواط حول البيت الحرام تحيةً ووداعاً للكعبة، ثم يصلي ركعتين، ويشرب من زمزم، وينطلق مسافراً إلى أهله دون إقامة أو مكوث بعده.',
+      'actionDetails': [
+        {
+          'title': 'Perform 7 circuits around the Kaaba as the last activity in Makkah.',
+          'details': 'Before leaving Makkah to return home, proceed to the Grand Mosque and perform 7 rounds of Tawaf around the Kaaba. This is the absolute final act of Hajj.',
+          'glossary': [
+            {'term': 'Tawaf al-Wida', 'meaning': 'The Farewell Tawaf, performed just prior to leaving Makkah.'},
+            {'term': 'Wajib', 'meaning': 'An obligatory duty.'}
+          ]
+        },
+        {
+          'title': 'No Raml (brisk walking) or Idtiba (shoulder uncovering) required.',
+          'details': 'Raml and Idtiba are not performed during Tawaf al-Wida. Walk normally at a composed pace.',
+          'glossary': [
+            {'term': 'Idtiba', 'meaning': 'Uncovering the shoulder.'},
+            {'term': 'Raml', 'meaning': 'Brisk walking.'}
+          ]
+        },
+        {
+          'title': 'Pray 2 Rakat behind Maqam Ibrahim.',
+          'details': 'Pray 2 units of prayer after completing the 7 rounds, then drink Zamzam water.',
+          'glossary': [
+            {'term': 'Maqam Ibrahim', 'meaning': 'The standing place of Ibrahim (AS).'},
+            {'term': 'Zamzam', 'meaning': 'The blessed water.'}
+          ]
+        },
+        {
+          'title': 'Depart Makkah immediately after completing Tawaf.',
+          'details': 'Do not spend extra time shopping or staying in Makkah after completing this Tawaf. You should head directly to your transport to leave the city.',
+          'glossary': [
+            {'term': 'Exemption', 'meaning': 'Menstruating women are completely exempt from Tawaf al-Wida and do not need to perform it or pay a penalty.'}
+          ]
+        }
       ],
       'quran': {
-        'textAr':
-            'ثُمَّ لْيَقْضُوا تَفَثَهُمْ وَلْيُوفُوا نُذُورَهُمْ وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
+        'textAr': 'ثُمَّ لْيَقْضُوا تَفَثَهُمْ وَلْيُوفُوا نُذُورَهُمْ وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
         'referenceAr': 'سورة الحج - الآية ٢٩',
-        'textEn':
-            'Then let them end their untidiness and fulfill their vows and perform Tawaf around the Ancient House.',
+        'textEn': 'Then let them end their untidiness and fulfill their vows and perform Tawaf around the Ancient House.',
         'referenceEn': 'Surah Al-Hajj (22:29)',
-        'explanationEn':
-            'General divine directive commanding believers to wrap up their pilgrimage rites with Tawaf around the sacred Kaaba.',
-        'explanationAr':
-            'الأمر الرباني بختام المناسك بالطواف بالبيت العتيق تعظيماً له.',
+        'explanationEn': 'General divine directive commanding believers to wrap up their pilgrimage rites with Tawaf around the sacred Kaaba.',
+        'explanationAr': 'الأمر الرباني بختام المناسك بالطواف بالبيت العتيق تعظيماً له.',
       },
-      'hadith': {
-        'textAr':
-            'عَنِ ابْنِ عَبَّاسٍ رَضِيَ اللَّهُ عَنْهُمَا قَالَ: «أُمِرَ النَّاسُ أَنْ يَكُونَ آخِرُ عَهْدِهِمْ بِالْبَيْتِ، إِلاَّ أَنَّهُ خُفِّفَ عَنِ الْمَرْأَةِ الْحَائِضِ»',
-        'referenceAr': 'صحيح البخاري (١٧٥٥) وصحيح مسلم (١٣٢٧)',
-        'textEn':
-            'Ibn Abbas reported: "The people were ordered that their last action should be at the House (Kaaba), except that an exemption was granted for menstruating women."',
-        'referenceEn': 'Sahih al-Bukhari 1755, Sahih Muslim 1327',
-        'explanationEn':
-            'Establishes Tawaf al-Wida as a binding obligation for all departing pilgrims.',
-        'explanationAr':
-            'وجوب كون طواف الوداع آخر أعمال الحاج بمكة والتخفيف عن الحائض.',
-      },
-      'originStory': {
-        'title': 'The Last Word at the House',
-        'source': 'Sahih al-Bukhari 1755 · Sahih Muslim 1327',
-        'textEn': 'Unlike most Hajj rites, the Farewell Tawaf has no dedicated Quranic verse — it survives purely through the Prophet\'s (ﷺ) instruction. Ibn Abbas reported that "the people were commanded that their last engagement should be with the House," with an exemption granted only to menstruating women (Sahih al-Bukhari 1755, Sahih Muslim 1327). This hadith alone established it as the closing, obligatory act of every pilgrim\'s Hajj.',
-      },
-      'dua': {
-        'title': 'Dua of Departure & Farewell',
-        'arabic':
-            'اللَّهُمَّ لا تَجْعَلْ هَذَا آخِرَ الْعَهْدِ بِبَيْتِكَ الْحَرَامِ، وَإِنْ جَعَلْتَهُ آخِرَ الْعَهْدِ فَاعْوَضْنِي عَنْهُ الْجَنَّةَ بِرَحْمَتِكَ يَا أَرْحَمَ الرَّاحِمِينَ',
-        'translit':
-            'Allahumma la taj’al hadha akhiral-\'ahdi bibaytikal-haram, wa in ja’altahu akhiral-\'ahdi fa’awwidni \'anhul-jannata birahmatika ya arhamar-rahimin.',
-        'meaningEn':
-            'O Allah, do not make this the last visit to Your Sacred House, and if You decree it to be the last, grant me Paradise in exchange by Your Mercy, O Most Merciful!',
-        'meaningAr':
-            'التوسل إلى الله ألا يكون هذا آخر العهد بالبيت الحرام والتضرع بالعودة والقبول.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنِ ابْنِ عَبَّاسٍ رَضِيَ اللَّهُ عَنْهُمَا قَالَ: «أُمِرَ النَّاسُ أَنْ يَكُونَ آخِرُ عَهْدِهِمْ بِالْبَيْتِ، إِلاَّ أَنَّهُ خُفِّفَ عَنِ الْمَرْأَةِ الْحَائِضِ»',
+          'translitEn': 'An ibni Abbas radiya-allahu anhuma qala: Umira-n-nasu an yakuna akhiru ahdihim bil-bayti, illa annahu khuffifa ani-l-mar\'ati-l-ha\'id.',
+          'referenceEn': 'Sahih al-Bukhari 1755, Sahih Muslim 1327',
+          'textEn': 'Ibn Abbas reported: "The people were ordered that their last action should be at the House (Kaaba), except that an exemption was granted for menstruating women."',
+          'explanationEn': 'Establishes Tawaf al-Wida as a binding obligation for all departing pilgrims.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'The dual pillars of authentic Hadith scholarship.'
+        },
+        {
+          'textAr': 'عَنْ عَائِشَةَ رَضِيَ اللَّهُ عَنْهَا أَنَّ صَفِيَّةَ بِنْتَ حُيَيٍّ رَضِيَ اللَّهُ عَنْهَا حَاضَتْ بَعْدَ مَا أَفَاضَتْ... فَقَالَ النَّبِيُّ: «فَلْتَنْفِرْ إِذًا»',
+          'translitEn': 'An Aisha radiya-allahu anha anna Safiyyata binta Huyayyin radiya-allahu anha hadat ba\'da ma afadat... Faqala-nabiyyu: Faltanfir idhan.',
+          'referenceEn': 'Sahih al-Bukhari 1757',
+          'textEn': 'Aisha narrated: "Safiyyah bint Huyayy menstruated after performing Tawaf al-Ifadah... The Prophet (ﷺ) said: She may depart then (without performing the Farewell Tawaf)."',
+          'explanationEn': 'Confirms the legal exemption of menstruating women from performing the Farewell Tawaf.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'Compiled by Imam Bukhari, containing highly verified Prophetic narrations.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua of Departure & Farewell',
+          'arabic': 'اللَّهُمَّ لا تَجْعَلْ هَذَا آخِرَ الْعَهْدِ بِبَيْتِكَ الْحَرَامِ، وَإِنْ جَعَلْتَهُ آخِرَ الْعَهْدِ فَاعْوَضْنِي عَنْهُ الْجَنَّةَ',
+          'translit': 'Allahumma la taj’al hadha akhiral-\'ahdi bibaytikal-haram, wa in ja’altahu akhiral-\'ahdi fa’awwidni \'anhul-jannata',
+          'meaningEn': 'O Allah, do not make this the last visit to Your Sacred House, and if You decree it to be the last, grant me Paradise in exchange.',
+          'meaningAr': 'التوسل إلى الله ألا يكون هذا آخر العهد بالبيت الحرام والتضرع بالعودة والقبول.',
+        },
+        {
+          'title': 'Dua for Safe Journey Home',
+          'arabic': 'اللَّهُمَّ هَوِّنْ عَلَيْنَا سَفَرَنَا هَذَا وَاطْوِ عَنَّا بُعْدَهُ',
+          'translit': 'Allahumma hawwin \'alayna safarana hadha watwi \'anna bu\'dah',
+          'meaningEn': 'O Allah, make this journey easy for us and fold up its distance.',
+          'meaningAr': 'دعاء السفر والعودة للوطن بعد إتمام المناسك.'
+        }
+      ]
     },
 
-    // ===== UMRAH STEPS DETAILS =====
     'ihram_u': {
       'titleEn': 'Enter Ihram for Umrah',
       'titleAr': 'الإحرام للعمرة',
       'day': 'At Miqat',
       'dayAr': 'عند الميقات',
-      'overviewEn':
-          'The first pillar of Umrah is entering Ihram at the designated Miqat with ritual purification, wearing Ihram garments, stating the Niyyah for Umrah ("Labbayk Allahumma Umrah"), and continuously reciting Talbiyah until seeing the Kaaba.',
-      'overviewAr':
-          'أول أركان العمرة وهو الإحرام من الميقات بالطهارة والغسل ولبس ثياب الإحرام والتلفظ بالنية ("لَبَّيْكَ اللَّهُمَّ عُمْرَةً") ورفع الصوت بالتلبية حتى رؤية الكعبة.',
-      'keyActionsEn': [
-        'Ghusl & perfumes on body before Ihram.',
-        'Wear Ihram cloths (men) / modest dress (women).',
-        'Intention: "Labbayk Allahumma Umrah".',
-        'Recite Talbiyah continuously.',
-      ],
-      'keyActionsAr': [
-        'الاغتسال والتطيب قبل الإحرام.',
-        'ارتداء ملابس الإحرام.',
-        'النية: "لَبَّيْكَ اللَّهُمَّ عُمْرَةً".',
-        'رفع الصوت بالتلبية.',
+      'overviewEn': 'The first pillar of Umrah is entering Ihram at the designated Miqat with ritual purification, wearing Ihram garments, stating the Niyyah for Umrah ("Labbayk Allahumma Umrah"), and continuously reciting Talbiyah until seeing the Kaaba.',
+      'overviewAr': 'أول أركان العمرة وهو الإحرام من الميقات بالطهارة والغسل ولبس ثياب الإحرام والتلفظ بالنية ("لَبَّيْكَ اللَّهُمَّ عُمْرَةً") ورفع الصوت بالتلبية حتى رؤية الكعبة.',
+      'actionDetails': [
+        {
+          'title': 'Ghusl & perfumes on body before Ihram.',
+          'details': 'Perform Ghusl (ritual bath) before reaching the Miqat boundary. You may apply perfume to your body (not your Ihram clothes).',
+          'glossary': [
+            {'term': 'Ghusl', 'meaning': 'The full-body ritual bath taken for purification.'},
+            {'term': 'Miqat', 'meaning': 'The boundary points where entering Ihram is required.'}
+          ]
+        },
+        {
+          'title': 'Wear Ihram sheets (men) or modest dress (women).',
+          'details': 'Men wrap the lower Izar and upper Rida. Women wear simple, modest clothing without covering their faces or hands.',
+          'glossary': [
+            {'term': 'Izar', 'meaning': 'The unstitched lower garment wrapped around the waist.'},
+            {'term': 'Rida', 'meaning': 'The unstitched upper garment covering the shoulders.'}
+          ]
+        },
+        {
+          'title': 'State Niyyah for Umrah.',
+          'details': 'Declare intention clearly: "Labbayk Allahumma Umrah" (لَبَّيْكَ اللَّهُمَّ عُمْرَةً) at the Miqat.',
+          'glossary': [
+            {'term': 'Niyyah', 'meaning': 'Sincere internal intention.'}
+          ]
+        },
+        {
+          'title': 'Recite Talbiyah continuously.',
+          'details': 'Chant "Labbayk Allahumma Labbayk..." regularly until you reach the Kaaba.',
+          'glossary': [
+            {'term': 'Talbiyah', 'meaning': 'The sacred pilgrim\'s chant.'}
+          ]
+        }
       ],
       'quran': {
         'textAr': 'وَأَتِمُّوا الْحَجَّ وَالْعُمْرَةَ لِلَّهِ',
         'referenceAr': 'سورة البقرة - الآية ١٩٦',
         'textEn': 'And complete the Hajj and Umrah for Allah.',
         'referenceEn': 'Surah Al-Baqarah (2:196)',
-        'explanationEn':
-            'Divine mandate commanding the sincere completion of Umrah rituals exclusively for Allah.',
+        'explanationEn': 'Divine mandate commanding the sincere completion of Umrah rituals exclusively for Allah.',
         'explanationAr': 'وجوب إتمام العمرة وإخلاصها لله تعالى.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ أَبِي هُرَيْرَةَ رَضِيَ اللَّهُ عَنْهُ أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «الْعُمْرَةُ إِلَى الْعُمْرَةِ كَفَّارَةٌ لِمَا بَيْنَهُمَا، وَالْحَجُّ الْمَبْرُورُ لَيْسَ لَهُ جَزَاءٌ إِلاَّ الْجَنَّةُ»',
-        'referenceAr': 'صحيح البخاري (١٧٧٣) وصحيح مسلم (١٣٤٩)',
-        'textEn':
-            'Abu Hurairah reported: The Messenger of Allah (ﷺ) said: "An Umrah to another Umrah is an expiation for whatever sins occur between them, and an accepted Hajj receives no reward less than Paradise."',
-        'referenceEn': 'Sahih al-Bukhari 1773, Sahih Muslim 1349',
-        'explanationEn':
-            'Highlights the immense spiritual purification and expiation of sins obtained through Umrah.',
-        'explanationAr': 'فضل العمرة ومحوها للذنوب والخطايا.',
-      },
-      'originStory': {
-        'title': 'Rooted in Ibrahim\'s Call',
-        'source': 'Surah Al-Baqarah 2:196 · Sahih al-Bukhari 1773',
-        'textEn': 'Umrah shares its origin with Hajj in Ibrahim\'s (AS) mission to "proclaim the pilgrimage to mankind" (22:27). The Quran commands believers to "complete the Hajj and Umrah for Allah" (2:196), and the Prophet (ﷺ) himself performed Umrah four times in his life. Abu Hurairah reported his saying that "an Umrah to another Umrah is an expiation for what occurred between them" (Sahih al-Bukhari 1773), which is why so many Muslims repeat this journey throughout their lives.',
-      },
-      'dua': {
-        'title': 'Intention for Umrah',
-        'arabic': 'لَبَّيْكَ اللَّهُمَّ عُمْرَةً، لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ...',
-        'translit': 'Labbayk Allahumma \'Umrah, Labbayk Allahumma Labbayk...',
-        'meaningEn': 'Here I am O Allah, performing Umrah at Your service.',
-        'meaningAr': 'التلبية والنية لأداء مناسك العمرة.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ أَبِي هُرَيْرَةَ رَضِيَ اللَّهُ عَنْهُ أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «الْعُمْرَةُ إِلَى الْعُمْرَةِ كَفَّارَةٌ لِمَا بَيْنَهُمَا...»',
+          'translitEn': 'An Abi Hurairah radiya-allahu anhu anna rasula-llahi salla-allahu alayhi wa sallama qala: Al-Umratu ilal-umrati kaffaratul-lima baynahuma...',
+          'referenceEn': 'Sahih al-Bukhari 1773, Sahih Muslim 1349',
+          'textEn': 'Abu Hurairah reported: The Messenger of Allah (ﷺ) said: "An Umrah to another Umrah is an expiation for whatever sins occur between them, and an accepted Hajj receives no reward less than Paradise."',
+          'explanationEn': 'Highlights the immense spiritual purification and expiation of sins obtained through Umrah.',
+          'sourceBook': 'Sahih al-Bukhari & Sahih Muslim',
+          'sourceBookDesc': 'Authentic collections containing highly verified reports of the Prophet\'s statements.'
+        },
+        {
+          'textAr': 'عَنْ أَنَسٍ رَضِيَ اللَّهُ عَنْهُ أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ اعْتَمَرَ أَرْبَعَ عُمَرٍ',
+          'translitEn': 'An Anas radiya-allahu anhu anna-nabiyya salla-allahu alayhi wa sallama-\'tamara arba\'a umar.',
+          'referenceEn': 'Sahih al-Bukhari 1778',
+          'textEn': 'Anas narrated: "The Prophet (ﷺ) performed Umrah four times in his life, all of them in the month of Dhul Qi\'dah except the one performed with his Hajj."',
+          'explanationEn': 'Establishes the legality and practice of performing multiple Umrahs.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'The primary source of authentic prophetic statements, compiled by Imam Al-Bukhari.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Intention for Umrah',
+          'arabic': 'لَبَّيْكَ اللَّهُمَّ عُمْرَةً',
+          'translit': 'Labbayk Allahumma \'Umrah',
+          'meaningEn': 'Here I am O Allah, performing Umrah at Your service.',
+          'meaningAr': 'التلبية والنية لأداء مناسك العمرة.',
+        },
+        {
+          'title': 'Talbiyah chant',
+          'arabic': 'لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لا شَرِيكَ لَكَ لَبَّيْكَ...',
+          'translit': 'Labbayk Allahumma Labbayk, Labbayka la sharika laka labbayk...',
+          'meaningEn': 'Here I am, O Allah, here I am...',
+          'meaningAr': 'التلبية إعلاناً للتوحيد وإجابةً لنداء الله عز وجل.'
+        }
+      ]
     },
 
     'tawaf_u': {
@@ -1089,21 +1519,39 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'طواف العمرة',
       'day': 'Around the Kaaba',
       'dayAr': 'حول الكعبة المشرفة',
-      'overviewEn':
-          'Circumambulate the Holy Kaaba 7 times counter-clockwise, starting from the Black Stone. Men perform Idtiba and Raml in the first 3 rounds. Conclude with 2 Rakat behind Maqam Ibrahim and drinking Zamzam.',
-      'overviewAr':
-          'الطواف حول الكعبة المشرفة ٧ أشواط يبدأ من الحجر الأسود وينتهي عنده، مع الاضطباع والرمل للرجال في الأشواط الثلاثة الأولى، يعقبه صلاة ركعتين خلف المقام والشرب من زمزم.',
-      'keyActionsEn': [
-        '7 rounds around Kaaba.',
-        'Idtiba & Raml (men in 3 rounds).',
-        '2 Rakat at Maqam Ibrahim.',
-        'Drink Zamzam water.',
-      ],
-      'keyActionsAr': [
-        'الطواف ٧ أشواط حول الكعبة.',
-        'الاضطباع والرمل للرجال في الثلاث الأولى.',
-        'صلاة ركعتين خلف المقام.',
-        'الشرب من ماء زمزم.',
+      'overviewEn': 'Circumambulate the Holy Kaaba 7 times counter-clockwise, starting from the Black Stone. Men perform Idtiba and Raml in the first 3 rounds. Conclude with 2 Rakat behind Maqam Ibrahim and drinking Zamzam.',
+      'overviewAr': 'الطواف حول الكعبة المشرفة ٧ أشواط يبدأ من الحجر الأسود وينتهي عنده، مع الاضطباع والرمل للرجال في الأشواط الثلاثة الأولى، يعقبه صلاة ركعتين خلف المقام والشرب من زمزم.',
+      'actionDetails': [
+        {
+          'title': '7 rounds around Kaaba starting from Black Stone.',
+          'details': 'Align with the Black Stone corner of the Kaaba, raise your hand saying "Bismillahi Allahu Akbar" and complete seven counter-clockwise circuits.',
+          'glossary': [
+            {'term': 'Tawaf', 'meaning': 'The act of circling the Kaaba seven times.'},
+            {'term': 'Hajar al-Aswad', 'meaning': 'The Black Stone.'}
+          ]
+        },
+        {
+          'title': 'Idtiba & Raml (men in first 3 rounds).',
+          'details': 'Men uncover the right shoulder (Idtiba) and walk with quick, short steps (Raml) in the first 3 rounds of Tawaf. Walk normally for the remaining 4 rounds.',
+          'glossary': [
+            {'term': 'Idtiba', 'meaning': 'Uncovering the right shoulder.'},
+            {'term': 'Raml', 'meaning': 'Brisk walking.'}
+          ]
+        },
+        {
+          'title': '2 Rakat at Maqam Ibrahim.',
+          'details': 'Cover your shoulder, go behind the Station of Abraham and offer 2 units of prayer.',
+          'glossary': [
+            {'term': 'Maqam Ibrahim', 'meaning': 'The station of Abraham.'}
+          ]
+        },
+        {
+          'title': 'Drink Zamzam water.',
+          'details': 'Stand and drink Zamzam water, then pour some over your head and make Dua.',
+          'glossary': [
+            {'term': 'Zamzam', 'meaning': 'The sacred well water.'}
+          ]
+        }
       ],
       'quran': {
         'textAr': 'وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
@@ -1113,28 +1561,42 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'Divine order to perform Tawaf around the sacred Kaaba.',
         'explanationAr': 'الأمر بالطواف بالبيت الحرام.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا قَالَ: «مَنْ طَافَ بِهَذَا الْبَيْتِ أُسْبُوعًا فَأَحْصَاهُ كَانَ كَعِتْقِ رَقَبَةٍ»',
-        'referenceAr': 'سنن الترمذي (٩٥٩)',
-        'textEn':
-            'Ibn Umar reported: "Whoever performs Tawaf around this House seven times properly, it is equal to freeing a slave."',
-        'referenceEn': 'Jami\' at-Tirmidhi 959',
-        'explanationEn': 'Virtue and great reward of performing 7 rounds of Tawaf.',
-        'explanationAr': 'عظيم ثواب الطواف بالبيت الحرام.',
-      },
-      'originStory': {
-        'title': 'Raising the House',
-        'source': 'Surah Al-Baqarah 2:127 · Jami\' at-Tirmidhi 959',
-        'textEn': 'As with every Tawaf, this circuit re-enacts the purpose for which Ibrahim (AS) and Ismail (AS) raised the Kaaba\'s foundations — "that it may be purified for those who circumambulate" (2:125). Ibn Umar reported the Prophet\'s (ﷺ) teaching that completing seven full circuits properly carries reward equal to freeing a slave (Jami\' at-Tirmidhi 959), underscoring the weight given to this single rite.',
-      },
-      'dua': {
-        'title': 'Dua Between Corners',
-        'arabic': 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
-        'translit': 'Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
-        'meaningEn': 'Our Lord, grant us good in this world and the next and save us from Hellfire.',
-        'meaningAr': 'الدعاء بين الركن اليماني والحجر الأسود.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا قَالَ: «مَنْ طَافَ بِهَذَا الْبَيْتِ أُسْبُوعًا فَأَحْصَاهُ كَانَ كَعِتْقِ رَقَبَةٍ»',
+          'translitEn': 'An ibni Umar radiya-allahu anhuma qala: Man tafa bihadhal-bayti usboo\'an fa\'ahsahu kana ka\'itqi raqabah.',
+          'referenceEn': 'Jami\' at-Tirmidhi 959',
+          'textEn': 'Ibn Umar reported: "Whoever performs Tawaf around this House seven times properly, it is equal to freeing a slave."',
+          'explanationEn': 'Virtue and great reward of performing 7 rounds of Tawaf.',
+          'sourceBook': 'Jami\' at-Tirmidhi',
+          'sourceBookDesc': 'Hadith collection compiled by Imam Tirmidhi, known for its classification system.'
+        },
+        {
+          'textAr': 'عَنِ ابْنِ عَبَّاسٍ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ النَّبِيَّ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ طَافَ فِي عُمْرَتِهِ عَلَى بَعِيرٍ',
+          'translitEn': 'An ibni Abbas radiya-allahu anhuma anna-nabiyya salla-allahu alayhi wa sallama tafa fi umratihi ala ba\'eer.',
+          'referenceEn': 'Sahih al-Bukhari 1632',
+          'textEn': 'Ibn Abbas narrated that the Prophet (ﷺ) performed Tawaf around the Kaaba on his camel during his Umrah.',
+          'explanationEn': 'Confirms that performing Tawaf on a mount is permissible for those who have a valid health reason or disability.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'Highly authentic and respected collection of Hadith by Imam Al-Bukhari.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua Between Corners',
+          'arabic': 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ',
+          'translit': 'Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina \'adhaban-nar.',
+          'meaningEn': 'Our Lord, grant us good in this world and the next and save us from Hellfire.',
+          'meaningAr': 'الدعاء بين الركن اليماني والحجر الأسود.',
+        },
+        {
+          'title': 'General remembrance during Tawaf',
+          'arabic': 'سُبْحَانَ اللَّهِ وَالْحَمْدُ لِلَّهِ وَلا إِلَهَ إِلاَّ اللَّهُ وَاللَّهُ أَكْبَرُ',
+          'translit': 'Subhanallahi wal-hamdulillahi wa la ilaha illallahu wallahu Akbar',
+          'meaningEn': 'Glory be to Allah, all praise is due to Allah, there is no deity worthy of worship except Allah, Allah is the Greatest.',
+          'meaningAr': 'الذكر بالتسبيح والتحميد والتكبير والتوحيد.'
+        }
+      ]
     },
 
     'sai_u': {
@@ -1142,21 +1604,37 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'سعي العمرة (الصفا والمروة)',
       'day': 'Between Safa and Marwah',
       'dayAr': 'بين الصفا والمروة',
-      'overviewEn':
-          'Walk 7 times between the hills of Safa and Marwah, commencing at Safa and ending at Marwah. Men jog lightly between the green lights. Recite Dhikr and make personal supplications at both hills.',
-      'overviewAr':
-          'السعي بين الصفا والمروة ٧ أشواط يبدأ بالصفا وينتهي بالمروة، يهرول الرجال بين العلمين الأخضرين، مع الإكثار من الذكر والدعاء عند كل جبل.',
-      'keyActionsEn': [
-        'Begin at Safa facing Kaaba.',
-        '7 laps (Safa to Marwah = 1, Marwah to Safa = 2).',
-        'Light jog for men between green marker lights.',
-        'Conclude at Marwah on 7th lap.',
-      ],
-      'keyActionsAr': [
-        'البداية من جبل الصفا واستقبال القبلة.',
-        '٧ أشواط (من الصفا للمروة شوط، والعكس شوط).',
-        'الهرولة للرجال بين الميلين الأخضرين.',
-        'الختام في الشوط السابع عند المروة.',
+      'overviewEn': 'Walk 7 times between the hills of Safa and Marwah, commencing at Safa and ending at Marwah. Men jog lightly between the green lights. Recite Dhikr and make personal supplications at both hills.',
+      'overviewAr': 'السعي بين الصفا والمروة ٧ أشواط يبدأ بالصفا وينتهي بالمروة، يهرول الرجال بين العلمين الأخضرين، مع الإكثار من الذكر والدعاء عند كل جبل.',
+      'actionDetails': [
+        {
+          'title': 'Begin at Safa facing Kaaba.',
+          'details': 'Ascend the slope of Mount Safa, face the direction of the Kaaba, raise your hands, and praise Allah before starting.',
+          'glossary': [
+            {'term': 'Safa', 'meaning': 'The small hill where Sa\'i begins.'}
+          ]
+        },
+        {
+          'title': '7 laps (Safa to Marwah = 1, Marwah to Safa = 2).',
+          'details': 'Walk from Safa to Marwah (lap 1), then from Marwah to Safa (lap 2). Conclude the 7th lap at Mount Marwah.',
+          'glossary': [
+            {'term': 'Lap', 'meaning': 'A single direction walk from one hill to the other.'}
+          ]
+        },
+        {
+          'title': 'Light jog for men between green marker lights.',
+          'details': 'Men should jog briskly (Raml) when passing the green fluorescent lights. Walk normally elsewhere.',
+          'glossary': [
+            {'term': 'Raml', 'meaning': 'Quick, brisk pace.'}
+          ]
+        },
+        {
+          'title': 'Conclude at Marwah on the 7th lap.',
+          'details': 'Upon reaching Mount Marwah on the 7th lap, face the Qiblah, make your final Dua, and complete the Sa\'i.',
+          'glossary': [
+            {'term': 'Marwah', 'meaning': 'The small hill where Sa\'i ends.'}
+          ]
+        }
       ],
       'quran': {
         'textAr': 'إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ',
@@ -1166,28 +1644,42 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'Safa and Marwah are established as sacred symbols for pilgrimage.',
         'explanationAr': 'اعتبار الصفا والمروة من شعائر الله.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: فَبَدَأَ بِالصَّفَا فَرَقِيَ عَلَيْهِ حَتَّى رَأَى الْبَيْتَ فَاسْتَقْبَلَ الْقِبْلَةَ، فَوَحَّدَ اللَّهَ وَكَبَّرَهُ وَقَالَ: «أَبْدَأُ بِمَا بَدَأَ اللَّهُ بِهِ»',
-        'referenceAr': 'صحيح مسلم (١٢١٨)',
-        'textEn':
-            'Jabir reported: Prophet (ﷺ) started at Safa, mounted it until he saw the Kaaba, faced Qiblah, praised Allah, and said: "I begin with that which Allah began with."',
-        'referenceEn': 'Sahih Muslim 1218',
-        'explanationEn': 'The exact Sunnah guidance for initiating Sa\'i at Safa.',
-        'explanationAr': 'سنة النبي صلى الله عليه وسلم في أداء السعي.',
-      },
-      'originStory': {
-        'title': 'Hajar\'s Search for Water',
-        'source': 'Sahih al-Bukhari 3364 (Hadith of Ibn Abbas)',
-        'textEn': 'The same running of Hajar (RA) between Safa and Marwah in search of water for baby Ismail — narrated at length by Ibn Abbas in Sahih al-Bukhari (3364) — is re-enacted in every Umrah. Jabir reported that the Prophet (ﷺ) began at Safa, faced the Kaaba, and said "I begin with what Allah began with," quoting the Quran\'s own wording in Surah Al-Baqarah 2:158 (Sahih Muslim 1218).',
-      },
-      'dua': {
-        'title': 'Dua on Safa & Marwah',
-        'arabic': 'لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ...',
-        'translit': 'La ilaha illallahu wahdahu la sharika lahu...',
-        'meaningEn': 'There is no deity except Allah alone without partner...',
-        'meaningAr': 'التوحيد والثناء عند الجبلين.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ جَابِرٍ رَضِيَ اللَّهُ عَنْهُ قَالَ: فَبَدَأَ بِالصفَا فَرَقِيَ عَلَيْهِ حَتَّى رَأَى الْبَيْتَ فَاسْتَقْبَلَ الْقِبْلَةَ، فَوَحَّدَ اللَّهَ وَكَبَّرَهُ وَقَالَ: «أَبْدَأُ بِمَا بَدَأَ اللَّهُ بِهِ»',
+          'translitEn': 'An Jabir radiya-allahu anhu qala: Fabada\'a bis-Safa faraqiya alayhi hatta ra\'ayal-bayta fastaqbalal-qiblata, fawahhada-llaha wakabbarahu wa qala: Abda\'u bima bada\'a-llahu bihi.',
+          'referenceEn': 'Sahih Muslim 1218',
+          'textEn': 'Jabir reported: Prophet (ﷺ) started at Safa, mounted it until he saw the Kaaba, faced Qiblah, praised Allah, and said: "I begin with that which Allah began with."',
+          'explanationEn': 'The exact Sunnah guidance for initiating Sa\'i at Safa.',
+          'sourceBook': 'Sahih Muslim',
+          'sourceBookDesc': 'Authentic compilation containing the Farewell Pilgrimage details.'
+        },
+        {
+          'textAr': 'عَنْ عَائِشَةَ رَضِيَ اللَّهُ عَنْهَا قَالَتْ: طَافَ رَسُولُ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ وَسَعَى بَيْنَ الصَّفَا وَالْمَرْوَةَ فَكَانَتْ سُنَّةً',
+          'translitEn': 'An Aisha radiya-allahu anha qalat: Tafa rasulu-llahi salla-allahu alayhi wa sallama wa sa\'a baynas-Safa wal-Marwata fakanat sunnah.',
+          'referenceEn': 'Sahih al-Bukhari 1643',
+          'textEn': 'Aisha narrated: "The Messenger of Allah (ﷺ) performed Tawaf and Sa\'i between Safa and Marwah, and it became a Sunnah (obligatory tradition)."',
+          'explanationEn': 'Confirms that the Sa\'i was practiced by the Prophet ﷺ and established as an permanent obligation for Umrah.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'Imam Bukhari Hadith collection, the highest standard of verification.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua on Safa & Marwah',
+          'arabic': 'لا إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ...',
+          'translit': 'La ilaha illallahu wahdahu la sharika lahu...',
+          'meaningEn': 'There is no deity except Allah alone without partner...',
+          'meaningAr': 'التوحيد والثناء عند الجبلين.',
+        },
+        {
+          'title': 'Dua during walking',
+          'arabic': 'رَبِّ اغْفِرْ وَارْحَمْ وَأَنْتَ الأَعَزُّ الأَكْرَمُ',
+          'translit': 'Rabbighfir warham wa antal-a\'azzul-akram',
+          'meaningEn': 'My Lord, forgive and show mercy, for You are the Most Mighty, Most Generous.',
+          'meaningAr': 'الاستغفار وطلب الرحمة أثناء السعي.'
+        }
+      ]
     },
 
     'halq_u': {
@@ -1195,21 +1687,38 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'titleAr': 'الحلق أو التقصير (إتمام العمرة)',
       'day': 'Final step of Umrah',
       'dayAr': 'آخر أعمال العمرة',
-      'overviewEn':
-          'Complete Umrah by shaving the head (men - preferred) or trimming hair all around. Women trim a fingertip length. All Ihram prohibitions are lifted, and Umrah is completed!',
-      'overviewAr':
-          'ختام مناسك العمرة بحلق رأس الرجل (وهو الأفضل) أو تقصيره، وتقصير المرأة قدر أنملة، وبذلك تحل العمرة بالكامل وتكتمل المناسك.',
-      'keyActionsEn': [
-        'Men shave (Halq) or trim (Taqsir).',
-        'Women trim fingertip length.',
-        'Ihram restrictions completely lifted.',
-        'Umrah is officially complete!',
-      ],
-      'keyActionsAr': [
-        'حلق الرجل أو تقصيره.',
-        'تقصير المرأة من أطراف شعرها.',
-        'خلع ملابس الإحرام والتحلل التام.',
-        'اكتمال العمرة بفضل الله.',
+      'overviewEn': 'Complete Umrah by shaving the head (men - preferred) or trimming hair all around. Women trim a fingertip length. All Ihram prohibitions are lifted, and Umrah is completed!',
+      'overviewAr': 'ختام مناسك العمرة بحلق رأس الرجل (وهو الأفضل) أو تقصيره، وتقصير المرأة قدر أنملة، وبذلك تحل العمرة بالكامل وتكتمل المناسك.',
+      'actionDetails': [
+        {
+          'title': 'Men shave (Halq) or trim (Taqsir).',
+          'details': 'Shave your entire head (optimal) or cut your hair evenly all around. This concludes the state of Ihram.',
+          'glossary': [
+            {'term': 'Halq', 'meaning': 'Shaving the head completely.'},
+            {'term': 'Taqsir', 'meaning': 'Trimming the hair.'}
+          ]
+        },
+        {
+          'title': 'Women trim fingertip length.',
+          'details': 'Women gather all their hair and clip about 1.5 to 2 cm (fingertip length) from the ends.',
+          'glossary': [
+            {'term': 'Fingertip length', 'meaning': 'The standard measure of trimming for women.'}
+          ]
+        },
+        {
+          'title': 'Ihram restrictions completely lifted.',
+          'details': 'Once shaved or trimmed, all Ihram restrictions are completely lifted. You are now in the normal state (Halal) and can wear regular clothes.',
+          'glossary': [
+            {'term': 'Halal', 'meaning': 'The normal state of a person, free from the restrictions of Ihram.'}
+          ]
+        },
+        {
+          'title': 'Umrah is officially complete!',
+          'details': 'You have successfully completed all the pillars of Umrah. Thank Allah for the opportunity and make Dua for acceptance.',
+          'glossary': [
+            {'term': 'Acceptance', 'meaning': 'Supplicating to Allah to accept the pilgrimage and forgive all shortcomings.'}
+          ]
+        }
       ],
       'quran': {
         'textAr': 'مُحَلِّقِينَ رُءُوسَكُمْ وَمُقَصِّرِينَ لَا تَخَافُونَ',
@@ -1219,32 +1728,46 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         'explanationEn': 'Divine sanction of shaving and trimming to complete Umrah.',
         'explanationAr': 'مشروعية الحلق والتقصير لإتمام النسك.',
       },
-      'hadith': {
-        'textAr':
-            'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «رَحِمَ اللَّهُ الْمُحَلِّقِينَ»، قَالُوا: وَالْمُقَصِّرِينَ يَا رَسُولَ اللَّهِ؟ قَالَ: «رَحِمَ اللَّهُ الْمُحَلِّقِينَ»، قَالُوا: وَالْمُقَصِّرِينَ؟ قَالَ: «وَالْمُقَصِّرِينَ»',
-        'referenceAr': 'صحيح البخاري (١٧٢٧)',
-        'textEn':
-            'The Prophet (ﷺ) invoked mercy thrice for those who shave their heads and then for those who shorten.',
-        'referenceEn': 'Sahih al-Bukhari 1727',
-        'explanationEn': 'Prophetic mercy for pilgrims upon shaving or trimming.',
-        'explanationAr': 'الدعاء بالرحمة للمحلقين والمقصرين.',
-      },
-      'originStory': {
-        'title': 'A Vision Fulfilled',
-        'source': 'Surah Al-Fath 48:27 · Sahih al-Bukhari 1727',
-        'textEn': 'As with Hajj, shaving or trimming the hair closes the state of Ihram in fulfilment of the Prophet\'s (ﷺ) vision described in Surah Al-Fath (48:27). He prayed for Allah\'s mercy on those who shave three times before including those who merely trim, showing his preference for a full shave (Sahih al-Bukhari 1727) — a preference still followed by pilgrims completing Umrah today.',
-      },
-      'dua': {
-        'title': 'Dua of Gratitude upon Completion',
-        'arabic': 'الْحَمْدُ لِلَّهِ الَّذِي بِنِعْمَتِهِ تَتِمُّ الصَّالِحَاتُ',
-        'translit': 'Alhamdu lillahil-ladhi bi-ni\'matihi tatimmus-salihat.',
-        'meaningEn': 'Praise be to Allah by Whose grace good deeds are completed.',
-        'meaningAr': 'شكر الله تعالى على التوفيق لإتمام العمرة.',
-      },
+      'hadiths': [
+        {
+          'textAr': 'عَنْ عَبْدِ اللَّهِ بْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ قَالَ: «رَحِمَ اللَّهُ الْمُحَلِّقِينَ»، قَالُوا: وَالْمُقَصِّرِينَ يَا رَسُولَ اللَّهِ؟...',
+          'translitEn': 'An Abdillahi-bni Umar radiya-allahu anhuma anna rasula-llahi salla-allahu alayhi wa sallama qala: Rahimallahu-l-muhalliqeen. Qalu: Wal-muqassireena ya rasula-llahi?...',
+          'referenceEn': 'Sahih al-Bukhari 1727',
+          'textEn': 'The Prophet (ﷺ) invoked mercy thrice for those who shave their heads and then for those who shorten.',
+          'explanationEn': 'Prophetic mercy for pilgrims upon shaving or trimming.',
+          'sourceBook': 'Sahih al-Bukhari',
+          'sourceBookDesc': 'Highly authentic collection by Imam Al-Bukhari.'
+        },
+        {
+          'textAr': 'عَنِ ابْنِ عُمَرَ رَضِيَ اللَّهُ عَنْهُمَا أَنَّ رَسُولَ اللَّهِ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ حَلَقَ رَأْسَهُ فِي عُمْرَةِ الْقَضَاءِ',
+          'translitEn': 'An ibni Umar radiya-allahu anhuma anna rasula-llahi salla-allahu alayhi wa sallama halaqa rasahu fi umrati-l-qada\'.',
+          'referenceEn': 'Sahih Muslim 1303',
+          'textEn': 'Ibn Umar reported that the Prophet ﷺ shaved his head during the compensatory Umrah (Umrah al-Qada).',
+          'explanationEn': 'Confirms that the Prophet ﷺ shaved his head during his Umrah performance, establishing it as the preferred practice.',
+          'sourceBook': 'Sahih Muslim',
+          'sourceBookDesc': 'Authentic collection of Hadith compiled by Imam Muslim.'
+        }
+      ],
+      'duas': [
+        {
+          'title': 'Dua of Gratitude upon Completion',
+          'arabic': 'الْحَمْدُ لِلَّهِ الَّذِي بِنِعْمَتِهِ تَتِمُّ الصَّالِحَاتُ',
+          'translit': 'Alhamdu lillahil-ladhi bi-ni\'matihi tatimmus-salihat.',
+          'meaningEn': 'Praise be to Allah by Whose grace good deeds are completed.',
+          'meaningAr': 'شكر الله تعالى على التوفيق لإتمام العمرة.',
+        },
+        {
+          'title': 'Dua for Acceptance of Umrah',
+          'arabic': 'اللَّهُمَّ تَقَبَّلْ مِنَّا عُمْرَتَنَا وَاغْفِرْ لَنَا ذُنُوبَنَا',
+          'translit': 'Allahumma taqabbal minna umratana waghfir lana dhunubana',
+          'meaningEn': 'O Allah, accept our Umrah from us and forgive our sins.',
+          'meaningAr': 'سؤال القبول والمغفرة.'
+        }
+      ]
     },
   };
 
-  // ===== PACKING & DOCUMENT LISTS =====
+    // ===== PACKING & DOCUMENT LISTS =====
   final List<String> _packingItems = [
     'Ihram cloths (2 sets, for men)',
     'Modest, comfortable clothing (for women)',
@@ -1669,7 +2192,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     final images = _mode == 'Hajj' ? _hajjStepImages : _umrahStepImages;
     
     // Ensure animation controllers exist for the current mode/type
-    if (_segmentAnimations.length != (steps.length > 0 ? steps.length - 1 : 0) ||
+    if (_segmentAnimations.length != (steps.isNotEmpty ? steps.length - 1 : 0) ||
         (steps.length > 1 && !_segmentAnimations.containsKey('${segKeyPrefix}_0'))) {
       _initSegmentControllersForCurrentMode();
     }
