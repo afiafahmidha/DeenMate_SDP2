@@ -60,5 +60,6 @@
     "**/.plugin_symlinks/**": true,
     "**/ephemeral/**": true,
     "**/.gradle/**": true
-  }
+  },
+  "cmake.sourceDirectory": "C:/Users/User/Desktop/pabello/DeenMate_SDP2/linux"
 }
