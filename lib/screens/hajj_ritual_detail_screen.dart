@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../widgets/auth_header.dart'; // AppColors
@@ -61,7 +61,7 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
     _TabItem(icon: Icons.article_rounded,         label: 'Overview'),
     _TabItem(icon: Icons.checklist_rounded,        label: 'Actions'),
     if (d['quran']  != null) _TabItem(icon: Icons.menu_book_rounded,    label: "Qur'an"),
-    if (d['hadith'] != null) _TabItem(icon: Icons.format_quote_rounded, label: 'Hadith'),
+    if (d['hadith'] != null || d['hadiths'] != null) _TabItem(icon: Icons.format_quote_rounded, label: 'Hadith'),
     if (d['dua'] != null || d['duas'] != null) _TabItem(icon: Icons.front_hand_rounded, label: "Du'a"),
   ];
 
@@ -315,7 +315,7 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
   // ── Active section dispatcher ───────────────────────────────────────────────
   Widget _buildActiveSection(Map<String, dynamic> d, List<_TabItem> tabs) {
     final hasQ = d['quran']  != null;
-    final hasH = d['hadith'] != null;
+    final hasH = d['hadith'] != null || d['hadiths'] != null;
     final hasD = d['dua']    != null || d['duas'] != null;
     final qIdx = 2;
     final hIdx = hasQ ? 3 : 2;
@@ -324,7 +324,7 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
     if (_activeTab == 0)                        return _overviewSection(d);
     if (_activeTab == 1)                        return _actionsSection(d);
     if (hasQ && _activeTab == qIdx)             return _quranSection(d['quran']  as Map<String, dynamic>);
-    if (hasH && _activeTab == hIdx)             return _hadithSection(d['hadith'] as Map<String, dynamic>);
+    if (hasH && _activeTab == hIdx)             return _hadithSection(d);
     if (hasD && _activeTab == dIdx)             return _duaSection(d);
     return const SizedBox.shrink();
   }
@@ -401,17 +401,31 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
     );
   }
 
+  int? _expandedActionIndex;
+
   // ── Actions ────────────────────────────────────────────────────────────────
   Widget _actionsSection(Map<String, dynamic> d) {
-    final actions = (d['keyActionsEn'] as List?)?.cast<String>() ?? [];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionLabel(Icons.checklist_rounded, 'Key Ritual Actions'),
-        const SizedBox(height: 10),
-        ...List.generate(actions.length, (i) => _actionTile(i + 1, actions[i])),
-      ],
-    );
+    if (d['actionDetails'] is List) {
+      final actions = (d['actionDetails'] as List).cast<Map<String, dynamic>>();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel(Icons.checklist_rounded, 'Key Ritual Actions'),
+          const SizedBox(height: 10),
+          ...List.generate(actions.length, (i) => _expandableActionTile(i + 1, actions[i])),
+        ],
+      );
+    } else {
+      final actions = (d['keyActionsEn'] as List?)?.cast<String>() ?? [];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel(Icons.checklist_rounded, 'Key Ritual Actions'),
+          const SizedBox(height: 10),
+          ...List.generate(actions.length, (i) => _actionTile(i + 1, actions[i])),
+        ],
+      );
+    }
   }
 
   Widget _actionTile(int num, String text) => Container(
@@ -441,6 +455,167 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
       ],
     ),
   );
+
+  Widget _expandableActionTile(int num, Map<String, dynamic> actionData) {
+    final title = actionData['title'] ?? '';
+    final details = actionData['details'] ?? '';
+    final glossary = actionData['glossary'] as List<dynamic>? ?? [];
+    final isExpanded = _expandedActionIndex == num - 1;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isExpanded ? _accent.withValues(alpha: 0.5) : _accent.withValues(alpha: 0.15),
+          width: isExpanded ? 1.5 : 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: _dark ? 0.18 : 0.04),
+            blurRadius: isExpanded ? 12 : 7,
+            offset: isExpanded ? const Offset(0, 4) : Offset.zero,
+          )
+        ],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: PageStorageKey<String>('action_$num'),
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: (expanded) {
+            setState(() {
+              _expandedActionIndex = expanded ? (num - 1) : null;
+            });
+          },
+          leading: Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isExpanded ? [_accent, _gold] : [_accent, AppColors.navyBlue],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            alignment: Alignment.center,
+            child: Text('$num', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+          ),
+          title: Text(
+            title,
+            style: GoogleFonts.inter(
+              fontSize: 12.5,
+              fontWeight: isExpanded ? FontWeight.bold : FontWeight.w500,
+              color: _textColor,
+            ),
+          ),
+          trailing: Icon(
+            isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+            color: isExpanded ? _accent : _subtext,
+            size: 20,
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.help_outline_rounded, size: 14, color: _accent),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'How to perform:',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: _accent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    details,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      height: 1.5,
+                      color: _textColor.withValues(alpha: 0.88),
+                    ),
+                  ),
+                  if (glossary.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.g_translate_rounded, size: 14, color: _gold),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Key Terms to Know:',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: _gold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _dark ? const Color(0xFF14202C) : const Color(0xFFF0F4F8),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _accent.withValues(alpha: 0.1)),
+                      ),
+                      child: Column(
+                        children: glossary.map<Widget>((termData) {
+                          final term = termData['term'] ?? termData['word'] ?? '';
+                          final meaning = termData['meaning'] ?? termData['definition'] ?? '';
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$term: ',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: _textColor,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    meaning,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: _subtext,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // ── Qur'an ─────────────────────────────────────────────────────────────────
   Widget _quranSection(Map<String, dynamic> q) => Column(
@@ -498,33 +673,133 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
   );
 
   // ── Hadith ─────────────────────────────────────────────────────────────────
-  Widget _hadithSection(Map<String, dynamic> h) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _sectionLabel(Icons.format_quote_rounded, 'Authentic Hadith Reference'),
-      const SizedBox(height: 10),
-      _referenceHeader(
-        refEn: h['referenceEn'] ?? '',
-        color: _amber,
-        icon: Icons.history_edu_rounded,
-      ),
-      const SizedBox(height: 12),
-      _historySourceCard('Hadith', 'Sahih al-Bukhari & Sahih Muslim', 'This hadith is recorded in Sahih al-Bukhari, compiled by Imam Muhammad ibn Ismail al-Bukhari (810-870 CE), and Sahih Muslim, compiled by Imam Muslim ibn al-Hajjaj (815-875 CE). These are the two most authentic collections of hadith in Sunni Islam. Al-Bukhari traveled extensively across the Islamic world, collecting and verifying the chains of narration (isnad) for each hadith, ensuring their authenticity through rigorous scholarly standards.'),
-      const SizedBox(height: 10),
-      Divider(color: _amber.withValues(alpha: 0.3)),
-      const SizedBox(height: 6),
-      Text(h['textEn'] ?? '',
-        style: GoogleFonts.inter(fontSize: 11.5, color: _textColor.withValues(alpha: 0.88), height: 1.5)),
-      if (h['explanationEn'] != null) ...[
-        const SizedBox(height: 12),
-        _glassCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Prophetic Wisdom:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: _amber)),
-          const SizedBox(height: 5),
-          Text(h['explanationEn'] ?? '', style: GoogleFonts.inter(fontSize: 12, color: _textColor.withValues(alpha: 0.88), height: 1.5)),
-        ])),
+  Widget _hadithSection(Map<String, dynamic> d) {
+    List<Map<String, dynamic>> list = [];
+    if (d['hadiths'] is List) {
+      list = (d['hadiths'] as List).cast<Map<String, dynamic>>();
+    } else if (d['hadith'] is Map) {
+      list = [(d['hadith'] as Map<String, dynamic>)];
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionLabel(Icons.format_quote_rounded, 'Authentic Hadith References'),
+        const SizedBox(height: 10),
+        for (int i = 0; i < list.length; i++) ...[
+          _buildSingleHadithCard(list[i], i + 1),
+          if (i < list.length - 1) const SizedBox(height: 14),
+        ],
       ],
-    ],
-  );
+    );
+  }
+
+  Widget _buildSingleHadithCard(Map<String, dynamic> h, int number) {
+    final sourceBook = h['sourceBook'] ?? 'Sahih al-Bukhari & Sahih Muslim';
+    final sourceBookDesc = h['sourceBookDesc'] ?? 'This hadith is recorded in authentic collections of prophetic traditions.';
+    final color = _amber;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.07), blurRadius: 14, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [color, const Color(0xFFC0630D)],
+                  begin: Alignment.centerLeft, end: Alignment.centerRight),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(17)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('#$number', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    h['referenceEn'] ?? 'Hadith Reference',
+                    style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (h['textAr'] != null) ...[
+                  Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: Text(h['textAr'] ?? '', textAlign: TextAlign.center,
+                      style: GoogleFonts.amiri(fontSize: 17, fontWeight: FontWeight.bold, height: 1.8, color: _textColor)),
+                  ),
+                ],
+                if (h['translitEn'] != null || h['translit'] != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    h['translitEn'] ?? h['translit'] ?? '',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(fontSize: 11.5, fontStyle: FontStyle.italic, color: _subtext, height: 1.5),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Divider(color: color.withValues(alpha: 0.18), height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.translate_rounded, size: 14, color: color),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        h['textEn'] ?? '',
+                        style: GoogleFonts.inter(fontSize: 12, color: _textColor, height: 1.55),
+                      ),
+                    ),
+                  ],
+                ),
+                if (h['explanationEn'] != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: color.withValues(alpha: 0.15)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Prophetic Wisdom:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+                        const SizedBox(height: 5),
+                        Text(h['explanationEn'] ?? '', style: GoogleFonts.inter(fontSize: 11.5, color: _textColor, height: 1.5)),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                _historySourceCard('Hadith', sourceBook, sourceBookDesc),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   // ── Du'a (Supports 1, 2, or 3 Du'as!) ──────────────────────────────────────
   Widget _duaSection(Map<String, dynamic> d) {
