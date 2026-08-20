@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/auth_header.dart';
 import '../services/notification_service.dart';
+import 'zakat_manager_screen.dart';
 
 // =============================================================================
 // REUSABLE DEENMATE AVATAR WIDGET
@@ -1432,6 +1433,9 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   bool _isEligible = false;
   double _netAssets = 0.0;
   String _eligibilityReason = '';
+  double _zakatNetWealth = 0.0;
+  double _zakatNisabLimit = 115000.0;
+  bool _hasZakatData = false;
 
   // Calculators
   String _selectedAnimal = 'Cow';
@@ -1442,10 +1446,26 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   int _aqiqahQuantity = 2;
   double _aqiqahEstimatedCost = 0.0;
   final List<Map<String, dynamic>> _aqiqahChecklist = [
-    {'title': "Name baby on 7th day", 'done': false},
-    {'title': "Shave baby's hair & give charity in silver weight equivalent", 'done': false},
-    {'title': "Purchase Aqiqah animals", 'done': false},
-    {'title': "Arrange food/distribution of meat", 'done': false},
+    {
+      'title': "Name baby on 7th day",
+      'rule': "It is Sunnah to give the baby a meaningful Islamic name on the 7th day after birth.",
+      'done': false
+    },
+    {
+      'title': "Shave baby's hair & give charity in silver weight equivalent",
+      'rule': "Shaving the baby's head on the 7th day is a recommended Sunnah. The hair should be weighed and its equivalent value in silver (or cash) should be given as charity (Sadaqah) to the poor.",
+      'done': false
+    },
+    {
+      'title': "Purchase Aqiqah animals",
+      'rule': "Sacrifice 2 goats/sheep for a baby boy and 1 goat/sheep for a baby girl. The animals must be of equal quality and meet standard health conditions (defect-free, 1+ years old).",
+      'done': false
+    },
+    {
+      'title': "Arrange food/distribution of meat",
+      'rule': "Unlike Qurbani, it is recommended to cook the Aqiqah meat and invite relatives, friends, and the needy to a feast. Distributing raw meat is also permissible.",
+      'done': false
+    },
   ];
 
   // Distribution
@@ -1479,6 +1499,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     _calculateAqiqahCosts();
     _loadRepository();
     _getCurrentLocation();
+    _loadZakatWealthData();
   }
 
   Future<void> _getCurrentLocation() async {
@@ -1608,6 +1629,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   }
 
   void _checkEligibility() {
+    if (_hasZakatData) {
+      _loadZakatWealthData();
+      return;
+    }
     double savings = double.tryParse(_savingsCtrl.text) ?? 0.0;
     double metals = double.tryParse(_metalsCtrl.text) ?? 0.0;
     double cash = double.tryParse(_cashCtrl.text) ?? 0.0;
@@ -1621,6 +1646,347 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           ? 'Qurbani is WAJIB (mandatory) for you. Your net assets (৳${NumberFormat('#,##,###').format(_netAssets)}) exceed the Silver Nisab threshold of ৳${NumberFormat('#,##,###').format(nisabLimit)}.'
           : 'Qurbani is not mandatory for you. Your net assets (৳${NumberFormat('#,##,###').format(_netAssets)}) are below the Silver Nisab threshold of ৳${NumberFormat('#,##,###').format(nisabLimit)}. You can still perform it voluntarily.';
     });
+  }
+
+  Future<void> _loadZakatWealthData() async {
+    final p = await SharedPreferences.getInstance();
+    if (p.containsKey('zm_cash') || p.containsKey('zm_gold_24k') || p.containsKey('zm_custom_assets')) {
+      final selectedCurrency = p.getString('zm_currency') ?? 'BDT';
+      double toBDT = 1.0;
+      if (selectedCurrency == 'USD') toBDT = 110.0;
+      else if (selectedCurrency == 'SAR') toBDT = 29.3;
+      else if (selectedCurrency == 'GBP') toBDT = 139.0;
+      else if (selectedCurrency == 'EUR') toBDT = 118.0;
+      else if (selectedCurrency == 'AED') toBDT = 30.0;
+      else if (selectedCurrency == 'MYR') toBDT = 24.0;
+      else if (selectedCurrency == 'PKR') toBDT = 0.39;
+      else if (selectedCurrency == 'INR') toBDT = 1.31;
+
+      final cashText = p.getString('zm_cash') ?? '0';
+      final gold24kText = p.getString('zm_gold_24k') ?? '0';
+      final gold22kText = p.getString('zm_gold_22k') ?? '0';
+      final gold21kText = p.getString('zm_gold_21k') ?? '0';
+      final gold18kText = p.getString('zm_gold_18k') ?? '0';
+      final silverGramsText = p.getString('zm_silver') ?? '0';
+      final stocksText = p.getString('zm_stocks') ?? '0';
+      final businessText = p.getString('zm_business') ?? '0';
+      final receivableText = p.getString('zm_receivable') ?? '0';
+      final liabilitiesText = p.getString('zm_liabilities') ?? '0';
+
+      final double cashVal = (double.tryParse(cashText.replaceAll(',', '')) ?? 0.0) * toBDT;
+      final double stocksVal = (double.tryParse(stocksText.replaceAll(',', '')) ?? 0.0) * toBDT;
+      final double businessVal = (double.tryParse(businessText.replaceAll(',', '')) ?? 0.0) * toBDT;
+      final double receivableVal = (double.tryParse(receivableText.replaceAll(',', '')) ?? 0.0) * toBDT;
+      final double liabilitiesVal = (double.tryParse(liabilitiesText.replaceAll(',', '')) ?? 0.0) * toBDT;
+
+      final double g24k = double.tryParse(gold24kText.replaceAll(',', '')) ?? 0.0;
+      final double g22k = double.tryParse(gold22kText.replaceAll(',', '')) ?? 0.0;
+      final double g21k = double.tryParse(gold21kText.replaceAll(',', '')) ?? 0.0;
+      final double g18k = double.tryParse(gold18kText.replaceAll(',', '')) ?? 0.0;
+      final double pureGoldGrams = (g24k * 1.0) + (g22k * 0.9167) + (g21k * 0.875) + (g18k * 0.75);
+      final double silverGrams = double.tryParse(silverGramsText.replaceAll(',', '')) ?? 0.0;
+
+      final manualGoldPriceText = p.getString('zm_manual_gold_val') ?? '';
+      final manualSilverPriceText = p.getString('zm_manual_silver_val') ?? '';
+      
+      double effectiveGoldPrice = (double.tryParse(manualGoldPriceText) ?? 0.0) * toBDT;
+      if (effectiveGoldPrice == 0.0) {
+        effectiveGoldPrice = (3280.0 / 31.1035) * 110.0;
+      }
+      double effectiveSilverPrice = (double.tryParse(manualSilverPriceText) ?? 0.0) * toBDT;
+      if (effectiveSilverPrice == 0.0) {
+        effectiveSilverPrice = (34.0 / 31.1035) * 110.0;
+      }
+
+      final double goldVal = pureGoldGrams * effectiveGoldPrice;
+      final double silverVal = silverGrams * effectiveSilverPrice;
+
+      double customAssetsTotalBDT = 0.0;
+      double customLiabilitiesTotalBDT = 0.0;
+      final customJson = p.getString('zm_custom_assets');
+      if (customJson != null) {
+        try {
+          final list = json.decode(customJson) as List<dynamic>;
+          for (var item in list) {
+            final isLiability = item['isLiability'] as bool? ?? false;
+            final value = (item['value'] as num?)?.toDouble() ?? 0.0;
+            final currency = item['currency'] as String? ?? 'BDT';
+            double cRate = 1.0;
+            if (currency == 'USD') cRate = 110.0;
+            else if (currency == 'SAR') cRate = 29.3;
+            else if (currency == 'GBP') cRate = 139.0;
+            else if (currency == 'EUR') cRate = 118.0;
+            else if (currency == 'AED') cRate = 30.0;
+            else if (currency == 'MYR') cRate = 24.0;
+            else if (currency == 'PKR') cRate = 0.39;
+            else if (currency == 'INR') cRate = 1.31;
+            
+            if (isLiability) {
+              customLiabilitiesTotalBDT += value * cRate;
+            } else {
+              customAssetsTotalBDT += value * cRate;
+            }
+          }
+        } catch (_) {}
+      }
+
+      final rentalGrossText = p.getString('zm_rental_gross') ?? '0';
+      final double rentalGross = (double.tryParse(rentalGrossText.replaceAll(',', '')) ?? 0.0) * toBDT;
+
+      final double gross = cashVal + goldVal + silverVal + stocksVal + businessVal + receivableVal + rentalGross + customAssetsTotalBDT;
+      final double netWealth = (gross - liabilitiesVal - customLiabilitiesTotalBDT).clamp(0.0, double.infinity);
+
+      final String nisabStandard = p.getString('zm_nisab_std') ?? 'silver';
+      double calculatedNisabLimit = nisabStandard == 'gold'
+          ? 85.0 * effectiveGoldPrice
+          : 595.0 * effectiveSilverPrice;
+
+      setState(() {
+        _zakatNetWealth = netWealth;
+        _zakatNisabLimit = calculatedNisabLimit;
+        _hasZakatData = true;
+        _cashCtrl.text = NumberFormat('####').format(cashVal + stocksVal + businessVal + receivableVal + rentalGross + customAssetsTotalBDT);
+        _metalsCtrl.text = NumberFormat('####').format(goldVal + silverVal);
+        _savingsCtrl.text = '0';
+        _debtsCtrl.text = NumberFormat('####').format(liabilitiesVal + customLiabilitiesTotalBDT);
+        
+        _netAssets = _zakatNetWealth;
+        _hasCheckedEligibility = true;
+        _isEligible = _netAssets >= _zakatNisabLimit;
+        _eligibilityReason = _isEligible
+            ? 'Qurbani is WAJIB (mandatory) for you. Your Zakat net assets (৳${NumberFormat('#,##,###').format(_netAssets)}) exceed the Zakat Manager\'s ${nisabStandard == 'gold' ? 'Gold' : 'Silver'} Nisab threshold of ৳${NumberFormat('#,##,###').format(_zakatNisabLimit)}.'
+            : 'Qurbani is not mandatory for you. Your Zakat net assets (৳${NumberFormat('#,##,###').format(_netAssets)}) are below the Zakat Manager\'s ${nisabStandard == 'gold' ? 'Gold' : 'Silver'} Nisab threshold of ৳${NumberFormat('#,##,###').format(_zakatNisabLimit)}. You can still perform it voluntarily.';
+      });
+    }
+  }
+
+  Widget _buildQurbaniWealthRecommendationCard(NumberFormat fmt) {
+    if (!_hasZakatData) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Text(
+          '💡 Enter your wealth in Zakat Manager to get a customized budget recommendation.',
+          style: GoogleFonts.inter(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+        ),
+      );
+    }
+
+    String recommendationText = '';
+    double minRec = 0.0;
+    double maxRec = 0.0;
+
+    if (_zakatNetWealth < 115000.0) {
+      recommendationText = 'Your wealth is below the Nisab threshold. Qurbani is optional for you. If you wish to perform it voluntarily, we recommend keeping it within a modest range so as to not burden yourself.';
+      minRec = 15000.0;
+      maxRec = 25000.0;
+    } else if (_zakatNetWealth <= 500000.0) {
+      recommendationText = 'Qurbani is wajib. Based on your net wealth, a budget of ৳20,000 - ৳35,000 is recommended. This is sufficient for a single share of a cow or a healthy goat/sheep.';
+      minRec = 20000.0;
+      maxRec = 35000.0;
+    } else if (_zakatNetWealth <= 2000000.0) {
+      recommendationText = 'Based on your ample net wealth, we recommend a budget of ৳35,000 - ৳80,000. You can easily purchase a high-quality goat/sheep or participate in multiple cow/camel shares to share more meat with the needy.';
+      minRec = 35000.0;
+      maxRec = 80000.0;
+    } else {
+      recommendationText = 'Based on your abundant net wealth, we recommend a budget of ৳80,000 - ৳250,000. You can easily purchase a full cow/camel or multiple animals to distribute generous portions of meat to the poor.';
+      minRec = 80000.0;
+      maxRec = 250000.0;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.amber.shade50.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _isDarkMode ? Colors.white24 : Colors.amber.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.lightbulb_outline_rounded, color: Colors.amber.shade700, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                'Personalized Budget Recommendation',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: _isDarkMode ? Colors.amber.shade200 : AppColors.navyBlue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Based on your Zakat Net Wealth: ৳${fmt.format(_zakatNetWealth)}',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: _isDarkMode ? Colors.white70 : Colors.grey[750],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            recommendationText,
+            style: GoogleFonts.inter(
+              fontSize: 11.5,
+              color: _isDarkMode ? Colors.white60 : Colors.grey[800],
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Recommended Range:',
+                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.black87),
+              ),
+              Text(
+                '৳${fmt.format(minRec)} - ৳${fmt.format(maxRec)}',
+                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.coralOrange),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAqiqahWealthRecommendationCard(NumberFormat fmt) {
+    if (!_hasZakatData) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Text(
+          '💡 Enter your wealth in Zakat Manager to get a customized Aqiqah animal recommendation.',
+          style: GoogleFonts.inter(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+        ),
+      );
+    }
+
+    String recText = '';
+    double minPerAnimal = 0.0;
+    double maxPerAnimal = 0.0;
+
+    if (_zakatNetWealth < 115000.0) {
+      recText = 'Your wealth is below Nisab. Performing Aqiqah is a sunnah and is highly encouraged. Since your wealth is modest, we recommend choosing a healthy but standard animal to fit your means.';
+      minPerAnimal = 15000.0;
+      maxPerAnimal = 22000.0;
+    } else if (_zakatNetWealth <= 500000.0) {
+      recText = 'Based on your net wealth, a budget of ৳22,000 - ৳28,000 per animal is recommended. This will buy a healthy and suitable goat/sheep for the Aqiqah.';
+      minPerAnimal = 22000.0;
+      maxPerAnimal = 28000.0;
+    } else if (_zakatNetWealth <= 2000000.0) {
+      recText = 'Based on your ample net wealth, we recommend a budget of ৳28,000 - ৳40,000 per animal. A high-quality goat/sheep is ideal so you can share delicious meat with family and feed the poor.';
+      minPerAnimal = 28000.0;
+      maxPerAnimal = 40000.0;
+    } else {
+      recText = 'Based on your abundant net wealth, we recommend a premium budget of ৳40,000+ per animal. You can purchase the best quality livestock to fully honor this beautiful sunnah and share generously with the community.';
+      minPerAnimal = 40000.0;
+      maxPerAnimal = 75000.0;
+    }
+
+    double totalMin = minPerAnimal * _aqiqahQuantity;
+    double totalMax = maxPerAnimal * _aqiqahQuantity;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.teal.shade50.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _isDarkMode ? Colors.white24 : Colors.teal.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.child_care_rounded, color: AppColors.midTeal, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                'Personalized Aqiqah Recommendation',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: _isDarkMode ? Colors.teal.shade200 : AppColors.navyBlue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Based on your Zakat Net Wealth: ৳${fmt.format(_zakatNetWealth)}',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: _isDarkMode ? Colors.white70 : Colors.grey[750],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            recText,
+            style: GoogleFonts.inter(
+              fontSize: 11.5,
+              color: _isDarkMode ? Colors.white60 : Colors.grey[800],
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Recommended Range (${_aqiqahQuantity} animal${_aqiqahQuantity > 1 ? 's' : ''}):',
+                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.black87),
+              ),
+              Text(
+                '৳${fmt.format(totalMin)} - ৳${fmt.format(totalMax)}',
+                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAqiqahRules() {
+    return Container(
+      margin: const EdgeInsets.only(top: 14, bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _isDarkMode ? Colors.white12 : Colors.grey.shade300),
+      ),
+      child: ExpansionTile(
+        title: Text(
+          '📜 Detailed Aqiqah Rules & Rulings',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+          ),
+        ),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.symmetric(vertical: 8),
+        iconColor: _isDarkMode ? Colors.white70 : AppColors.navyBlue,
+        collapsedIconColor: _isDarkMode ? Colors.white54 : AppColors.navyBlue,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        children: [
+          _labeledRuleBullet('Animal Count:', '2 sheep/goats for a baby boy and 1 sheep/goat for a baby girl. The animals must be of equal standard.'),
+          _labeledRuleBullet('Recommended Days:', 'Performing Aqiqah on the 7th day after birth is a highly recommended Sunnah. If missed, the 14th or 21st days are preferred.'),
+          _labeledRuleBullet('Animal Quality:', 'Animals must meet the same health/age conditions as Qurbani (1+ years old, healthy, no severe defects).'),
+          _labeledRuleBullet('Shaving & Charity:', 'Shave the baby\'s head on the 7th day, weigth the hair, and give its value in silver (or cash equivalent) as charity.'),
+          _labeledRuleBullet('Naming:', 'Give the baby a meaningful Islamic name on the 7th day.'),
+          _labeledRuleBullet('Meat Distribution:', 'Unlike Qurbani, it is recommended to cook the Aqiqah meat and invite guests (relatives, friends, and the poor) to a feast, though distributing raw meat is also valid.'),
+        ],
+      ),
+    );
   }
 
   Future<void> _toggleReminder(String type, String title, String body, DateTime time) async {
@@ -2025,6 +2391,38 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   // ===========================================================================
   // ELIGIBILITY TAB (unchanged logic from previous version)
   // ===========================================================================
+  // ===========================================================================
+  // ELIGIBILITY TAB (unchanged logic from previous version)
+  // ===========================================================================
+  Widget _buildReadOnlyRow({required IconData icon, required String label, required String value}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                color: _isDarkMode ? Colors.white70 : Colors.grey[750],
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: _isDarkMode ? Colors.white : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEligibilityTab(NumberFormat fmt) {
     return ListView(
       controller: widget.scrollController,
@@ -2058,35 +2456,128 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         Text('Check Your Eligibility',
             style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 10),
-        Card(
-          color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: _isDarkMode ? BorderSide(color: Colors.white.withValues(alpha: 0.12)) : BorderSide.none),
-          elevation: 0,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+        if (_hasZakatData) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.midTeal.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.3)),
+            ),
+            child: Row(
               children: [
-                _buildInputRow(icon: Icons.savings_outlined, label: 'Annual Savings', controller: _savingsCtrl),
-                _buildInputRow(icon: Icons.storefront_outlined, label: 'Gold / Silver (value in BDT)', controller: _metalsCtrl),
-                _buildInputRow(icon: Icons.monetization_on_outlined, label: 'Available Cash', controller: _cashCtrl),
-                _buildInputRow(icon: Icons.money_off_csred_outlined, label: 'Debts & Liabilities', controller: _debtsCtrl),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: _checkEligibility,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.navyBlue,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 45),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                Icon(Icons.sync_alt_rounded, color: AppColors.midTeal, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Assets imported from Zakat Manager (Net: ৳${fmt.format(_zakatNetWealth)})',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _isDarkMode ? Colors.white70 : AppColors.navyBlue,
+                    ),
                   ),
-                  child: Text('Evaluate Eligibility', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                ),
+                TextButton(
+                  onPressed: _loadZakatWealthData,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Sync',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.midTeal,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-        ),
+          Card(
+            color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: _isDarkMode ? BorderSide(color: Colors.white.withValues(alpha: 0.12)) : BorderSide.none),
+            elevation: 0,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildReadOnlyRow(icon: Icons.savings_outlined, label: 'Annual Savings', value: '৳${fmt.format(double.tryParse(_savingsCtrl.text) ?? 0)}'),
+                  _buildReadOnlyRow(icon: Icons.storefront_outlined, label: 'Gold / Silver (value in BDT)', value: '৳${fmt.format(double.tryParse(_metalsCtrl.text) ?? 0)}'),
+                  _buildReadOnlyRow(icon: Icons.monetization_on_outlined, label: 'Available Cash & Assets', value: '৳${fmt.format(double.tryParse(_cashCtrl.text) ?? 0)}'),
+                  _buildReadOnlyRow(icon: Icons.money_off_csred_outlined, label: 'Debts & Liabilities', value: '৳${fmt.format(double.tryParse(_debtsCtrl.text) ?? 0)}'),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ZakatManagerScreen()),
+                      ).then((_) => _loadZakatWealthData());
+                    },
+                    icon: const Icon(Icons.account_balance_wallet_outlined),
+                    label: Text('Edit Wealth in Zakat Manager', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.navyBlue,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 45),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ] else ...[
+          Card(
+            color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: _isDarkMode ? BorderSide(color: Colors.white.withValues(alpha: 0.12)) : BorderSide.none),
+            elevation: 0,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Icon(Icons.account_balance_wallet_outlined, size: 48, color: AppColors.midTeal.withValues(alpha: 0.8)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No Zakat Wealth Data Found',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'To calculate Qurbani eligibility, please set up your assets in the Zakat Manager first. Your eligibility will be automatically calculated based on your Zakat records.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[750], fontSize: 13, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ZakatManagerScreen()),
+                      ).then((_) => _loadZakatWealthData());
+                    },
+                    icon: const Icon(Icons.add_rounded),
+                    label: Text('Set Up Wealth in Zakat Manager', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.navyBlue,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 45),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         if (_hasCheckedEligibility) ...[
           const SizedBox(height: 16),
           Container(
@@ -2120,10 +2611,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           ),
         ],
         const SizedBox(height: 24),
-
-        // General Rules & Guidelines -- quick-reference summary. The full
-        // Qur'anic verses + detailed fiqh notes live in Tasks > Rules & Verses;
-        // this is the short version kept right where eligibility is checked.
         Text('General Rules & Guidelines',
             style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 10),
@@ -2260,7 +2747,44 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   // ===========================================================================
   // CALCULATORS TAB (unchanged logic from previous version)
   // ===========================================================================
+  // ===========================================================================
+  // CALCULATORS TAB (unchanged logic from previous version)
+  // ===========================================================================
   Widget _buildCalculatorsTab(NumberFormat fmt) {
+    double minRec = 0.0;
+    double maxRec = 0.0;
+    if (_zakatNetWealth < 115000.0) {
+      minRec = 15000.0;
+      maxRec = 25000.0;
+    } else if (_zakatNetWealth <= 500000.0) {
+      minRec = 20000.0;
+      maxRec = 35000.0;
+    } else if (_zakatNetWealth <= 2000000.0) {
+      minRec = 35000.0;
+      maxRec = 80000.0;
+    } else {
+      minRec = 80000.0;
+      maxRec = 250000.0;
+    }
+
+    double minPerAnimal = 0.0;
+    double maxPerAnimal = 0.0;
+    if (_zakatNetWealth < 115000.0) {
+      minPerAnimal = 15000.0;
+      maxPerAnimal = 22000.0;
+    } else if (_zakatNetWealth <= 500000.0) {
+      minPerAnimal = 22000.0;
+      maxPerAnimal = 28000.0;
+    } else if (_zakatNetWealth <= 2000000.0) {
+      minPerAnimal = 28000.0;
+      maxPerAnimal = 40000.0;
+    } else {
+      minPerAnimal = 40000.0;
+      maxPerAnimal = 75000.0;
+    }
+    double aqiqahTotalMin = minPerAnimal * _aqiqahQuantity;
+    double aqiqahTotalMax = maxPerAnimal * _aqiqahQuantity;
+
     return ListView(
       controller: widget.scrollController,
       padding: const EdgeInsets.all(20),
@@ -2348,15 +2872,70 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 ],
                 Container(
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: AppColors.navyBlue.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  decoration: BoxDecoration(
+                    color: AppColors.navyBlue.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Estimated Cost:', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
-                      Text('৳${fmt.format(_estimatedCost)}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: AppColors.coralOrange, fontSize: 18)),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _hasZakatData ? 'Estimated Cost (Based on Wealth):' : 'Estimated Cost:',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold,
+                              color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              _hasZakatData
+                                  ? '৳${fmt.format(minRec)} - ৳${fmt.format(maxRec)}'
+                                  : '৳${fmt.format(_estimatedCost)}',
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.coralOrange,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_hasZakatData) ...[
+                        const SizedBox(height: 6),
+                        const Divider(height: 1, thickness: 0.5),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Selected Animal Cost:',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: _isDarkMode ? Colors.white70 : Colors.grey[750],
+                              ),
+                            ),
+                            Text(
+                              '৳${fmt.format(_estimatedCost)}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: _isDarkMode ? Colors.white70 : Colors.grey[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
+                _buildQurbaniWealthRecommendationCard(fmt),
               ],
             ),
           ),
@@ -2437,28 +3016,121 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  decoration: BoxDecoration(
+                    color: AppColors.midTeal.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Aqiqah Estimated Cost:', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                      Text('৳${fmt.format(_aqiqahEstimatedCost)}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: AppColors.midTeal, fontSize: 16)),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _hasZakatData ? 'Aqiqah Recommended Cost:' : 'Aqiqah Estimated Cost:',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.midTeal,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              _hasZakatData
+                                  ? '৳${fmt.format(aqiqahTotalMin)} - ৳${fmt.format(aqiqahTotalMax)}'
+                                  : '৳${fmt.format(_aqiqahEstimatedCost)}',
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.midTeal,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_hasZakatData) ...[
+                        const SizedBox(height: 6),
+                        const Divider(height: 1, thickness: 0.5),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Standard Animal Cost:',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: _isDarkMode ? Colors.white70 : Colors.grey[750],
+                              ),
+                            ),
+                            Text(
+                              '৳${fmt.format(_aqiqahEstimatedCost)}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: _isDarkMode ? Colors.white70 : Colors.grey[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                _buildAqiqahWealthRecommendationCard(fmt),
+                _buildAqiqahRules(),
                 Text('Aqiqah Checklist', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontSize: 13)),
                 const SizedBox(height: 8),
                 Column(
                   children: _aqiqahChecklist.map((item) {
-                    return CheckboxListTile(
-                      value: item['done'],
-                      title: Text(item['title'], style: GoogleFonts.inter(fontSize: 13, color: _isDarkMode ? Colors.white : Colors.black87)),
-                      checkColor: _isDarkMode ? Colors.black : Colors.white,
-                      activeColor: AppColors.midTeal,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (val) => setState(() => item['done'] = val),
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: _isDarkMode ? Colors.white.withValues(alpha: 0.03) : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _isDarkMode ? Colors.white10 : Colors.grey.shade200),
+                      ),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          leading: Checkbox(
+                            value: item['done'],
+                            checkColor: _isDarkMode ? Colors.black : Colors.white,
+                            activeColor: AppColors.midTeal,
+                            onChanged: (val) => setState(() => item['done'] = val),
+                          ),
+                          title: Text(
+                            item['title'],
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Click to view rules & guidelines',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                              child: Text(
+                                item['rule'] ?? '',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: _isDarkMode ? Colors.white70 : Colors.grey[750],
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                   }).toList(),
                 ),
