@@ -193,7 +193,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
   @override
   Widget build(BuildContext context) {
     const tealColor = AppColors.midTeal;
-    final bgColor = widget.isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F7F5);
+    final bgColor = widget.isDarkMode ? const Color(0xFF121212) : const Color(0xFFF8F9FA);
 
     return Container(
       color: bgColor,
@@ -205,11 +205,12 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
             backgroundColor: bgColor,
             body: SafeArea(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildHeader(),
+                    _buildIntroBanner(),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -430,36 +431,25 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 14),
       decoration: BoxDecoration(
-        color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: widget.isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border(bottom: BorderSide(color: AppColors.midTeal.withValues(alpha: 0.18))),
       ),
       child: Row(
         children: [
           IconButton(
             onPressed: () => Navigator.pop(context),
             icon: Icon(Icons.arrow_back_ios_new_rounded, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue, size: 20),
-            style: IconButton.styleFrom(
-              backgroundColor: widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.navyBlue.withValues(alpha: 0.08),
-              shape: const CircleBorder(),
-            ),
+            style: IconButton.styleFrom(padding: EdgeInsets.zero),
           ),
           const SizedBox(width: 12),
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.midTeal.withValues(alpha: 0.12),
+              color: AppColors.navyBlue,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.midTeal, size: 20),
+            child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -553,6 +543,53 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
           children: items.map((item) => _buildQuickAccessCard(item)).toList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildIntroBanner() {
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.navyBlue,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navyBlue.withValues(alpha: 0.18),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.midTeal.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.verified_user_outlined, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AppLocalizations.of(context)!.tr('scan_and_learn'),
+                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Check packaged food with barcode or ingredient photo.',
+                  style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.72), fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
