@@ -57,7 +57,7 @@ service cloud.firestore {
     }
 
     function validParticipant(data) {
-      return data.keys().hasOnly(['name', 'phone', 'shares', 'amountDue', 'amountPaid', 'paymentStatus', 'ownerId', 'ownerName'])
+      return data.keys().hasOnly(['name', 'phone', 'shares', 'amountDue', 'amountPaid', 'paymentStatus', 'ownerId', 'ownerName', 'photoUrl', 'avatarBase64', 'isDeenMateUser', 'uid'])
         && data.keys().hasAll(['name', 'shares', 'amountDue', 'amountPaid', 'paymentStatus', 'ownerId', 'ownerName'])
         && validShortText(data.name, 100)
         && (data.phone == null || validShortText(data.phone, 30))
@@ -65,17 +65,23 @@ service cloud.firestore {
         && data.amountDue is number && data.amountDue >= 0 && data.amountDue <= 10000000
         && data.amountPaid is number && data.amountPaid >= 0 && data.amountPaid <= 10000000
         && data.paymentStatus in ['unpaid', 'partial', 'paid']
-        && validShortText(data.ownerId, 128) && validShortText(data.ownerName, 80);
+        && validShortText(data.ownerId, 128) && validShortText(data.ownerName, 80)
+        && (data.photoUrl == null || validShortText(data.photoUrl, 2048))
+        && (!data.keys().hasAll(['avatarBase64']) || data.avatarBase64 == null || validShortText(data.avatarBase64, 200000))
+        && (!data.keys().hasAll(['isDeenMateUser']) || data.isDeenMateUser is bool)
+        && (!data.keys().hasAll(['uid']) || data.uid == null || validShortText(data.uid, 128));
     }
 
     function validExpense(data) {
-      return data.keys().hasOnly(['category', 'amount', 'notes', 'payers', 'ownerId', 'ownerName', 'createdAt'])
+      return data.keys().hasOnly(['category', 'amount', 'notes', 'payers', 'ownerId', 'ownerName', 'photoUrl', 'avatarBase64', 'createdAt'])
         && data.keys().hasAll(['category', 'amount', 'notes', 'payers', 'ownerId', 'ownerName', 'createdAt'])
         && validShortText(data.category, 80)
         && data.amount is number && data.amount > 0 && data.amount <= 10000000
         && validShortText(data.notes, 1000)
         && data.payers is list && data.payers.size() <= 20
         && validShortText(data.ownerId, 128) && validShortText(data.ownerName, 80)
+        && (data.photoUrl == null || validShortText(data.photoUrl, 2048))
+        && (!data.keys().hasAll(['avatarBase64']) || data.avatarBase64 == null || validShortText(data.avatarBase64, 200000))
         && data.createdAt is timestamp;
     }
 
@@ -184,7 +190,8 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if signedIn();
+      allow write: if request.auth != null && request.auth.uid == userId;
 
       // Assumed model: a private Qurbani plan is stored below its owner's
       // user document. memberIds is the access-control list and may be
@@ -204,22 +211,10 @@ service cloud.firestore {
         // signed-in person create only their own membership record.
         match /members/{memberId} {
           allow read: if isPlanMember(userId, planId);
-          allow create: if signedIn()
+          allow create, update: if signedIn()
             && request.auth.uid == memberId
-            && request.resource.data.keys().hasOnly(['name', 'shares', 'joinedAt', 'updatedAt'])
-            && request.resource.data.keys().hasAll(['name', 'shares', 'joinedAt', 'updatedAt'])
             && validShortText(request.resource.data.name, 80)
-            && request.resource.data.shares is int && request.resource.data.shares >= 1 && request.resource.data.shares <= 7
-            && request.resource.data.joinedAt is timestamp
-            && request.resource.data.updatedAt is timestamp;
-          allow update: if signedIn()
-            && request.auth.uid == memberId
-            && request.resource.data.keys().hasOnly(['name', 'shares', 'joinedAt', 'updatedAt'])
-            && request.resource.data.keys().hasAll(['name', 'shares', 'joinedAt', 'updatedAt'])
-            && validShortText(request.resource.data.name, 80)
-            && request.resource.data.shares is int && request.resource.data.shares >= 1 && request.resource.data.shares <= 7
-            && request.resource.data.joinedAt == resource.data.joinedAt
-            && request.resource.data.updatedAt is timestamp;
+            && request.resource.data.shares is int && request.resource.data.shares >= 1 && request.resource.data.shares <= 7;
           allow delete: if signedIn()
             && (request.auth.uid == memberId || request.auth.uid == userId);
         }
@@ -261,16 +256,27 @@ service cloud.firestore {
           allow update, delete: if false;
         }
 
+        match /messages/{messageId} {
+          allow read: if isPlanMember(userId, planId);
+          allow create: if isPlanMember(userId, planId) && request.resource.data.senderId == request.auth.uid;
+          allow update, delete: if false;
+        }
+
         match /editRequests/{requestId} {
           allow read: if isPlanMember(userId, planId);
           allow create: if isPlanMember(userId, planId)
             && validEditRequest(request.resource.data)
             && request.resource.data.requestedById == request.auth.uid
             && request.resource.data.status == 'pending';
-          allow update: if isOwner(userId)
+          allow update: if isPlanMember(userId, planId)
             && validEditRequest(request.resource.data)
             && request.resource.data.requestedById == resource.data.requestedById
-            && request.resource.data.createdAt == resource.data.createdAt;
+            && request.resource.data.createdAt == resource.data.createdAt
+            && (request.auth.uid == userId
+              || (request.resource.data.targetType == 'participant'
+                && get(/databases/$(database)/documents/users/$(userId)/qurbaniPlans/$(planId)/participants/$(request.resource.data.targetId)).data.ownerId == request.auth.uid)
+              || (request.resource.data.targetType == 'expense'
+                && get(/databases/$(database)/documents/users/$(userId)/qurbaniPlans/$(planId)/expenses/$(request.resource.data.targetId)).data.ownerId == request.auth.uid));
           allow delete: if false;
         }
 
@@ -281,6 +287,18 @@ service cloud.firestore {
             && request.resource.data.done is bool;
           allow delete: if isPlanMember(userId, planId);
         }
+      }
+    }
+
+    match /qurbaniSharePosts/{postId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.posterUid == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.posterUid == request.auth.uid;
+
+      match /responses/{responseId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.responderUid == request.auth.uid;
+        allow update, delete: if signedIn() && (resource.data.responderUid == request.auth.uid || get(/databases/$(database)/documents/qurbaniSharePosts/$(postId)).data.posterUid == request.auth.uid);
       }
     }
 
