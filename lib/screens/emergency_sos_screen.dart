@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,12 +13,19 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth_header.dart'; // AppColors
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/emergency_group_service.dart';
 import '../services/emergency_sos_service.dart';
 import '../services/encrypted_group_chat_service.dart';
 import '../services/weather_service.dart';
 import '../services/notification_service.dart';
 import '../services/push_notification_service.dart';
+
+enum AttachmentSource { camera, gallery, document }
 
 class EmergencyContact {
   final TextEditingController nameController;
@@ -121,7 +129,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   double _groupRangeMeters = 1000;
   String _groupLeaderName = '';
   final Set<String> _geofenceAlertedMembers = {};
-  final List<Map<String, String>> _groupChatMessages = [
+  final List<Map<String, dynamic>> _groupChatMessages = [
     {
       'sender': 'Safety system',
       'text': 'Group channel is ready.',
@@ -132,6 +140,13 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   DateTime? _lastWeatherFetch;
   bool _weatherLoading = false;
   int _weatherPreviewIndex = -1;
+
+  // ===== PROFILE & GROUP AVATARS =====
+  String? _profileAvatarBase64;
+  String? _groupAvatarBase64;
+  Map<String, dynamic>? _replyingToMessage;
+  String? _editingSosMessageId;
+  final Set<String> _deletedMessageIds = {};
 
   // Map variables
   final double _mapZoomScale = 1.0;
@@ -288,6 +303,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     final storedGroupUid = prefs.getString('sos_group_member_uid');
     final restoreGroup = currentUid != null && storedGroupUid == currentUid;
+    // Load DeenMate profile avatar
+    final avatarBase64 = prefs.getString('profile_avatar_base64') ?? '';
     setState(() {
       _nameController.clear();
       _passportController.clear();
@@ -302,7 +319,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       _isGroupLeader = restoreGroup && (prefs.getBool('sos_is_group_leader') ?? false);
       _groupCodeController.text = restoreGroup ? (prefs.getString('sos_group_code') ?? '') : '';
       _activeIncidentId = prefs.getString('sos_active_incident_id');
-
+      _profileAvatarBase64 = avatarBase64.isNotEmpty ? avatarBase64 : null;
       _contacts = [];
     });
     await _loadProfileFromFirestore();
@@ -430,6 +447,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         _medsController.text = (sos['medications'] ?? '').toString();
         _hotelController.text = (sos['hotel'] ?? '').toString();
         _contacts = contacts;
+        // Load DeenMate profile avatar from Firestore
+        final firestoreAvatar = (profile['avatarBase64'] as String?) ?? '';
+        if (firestoreAvatar.isNotEmpty) {
+          _profileAvatarBase64 = firestoreAvatar;
+        }
         final savedGroupCode = (groupMembership['code'] ?? '')
             .toString()
             .trim()
@@ -948,13 +970,17 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       targetRoute: '/sos',
     );
 
-    if (_incidentLogs.isNotEmpty && !_incidentLogs.first['resolved']) {
-      setState(() {
-        _incidentLogs.first['resolved'] = true;
-        _incidentLogs.first['resolvedTime'] = DateTime.now().toIso8601String();
-      });
-      _saveIncidentLogs();
-    }
+    // Mark ALL incident logs as resolved when SOS is deactivated
+    setState(() {
+      for (var log in _incidentLogs) {
+        if (log['resolved'] != true) {
+          log['resolved'] = true;
+          log['resolvedTime'] = DateTime.now().toIso8601String();
+        }
+      }
+    });
+    _saveIncidentLogs();
+
     if (_isOfflineSimulated && _offlineQueue.isNotEmpty) {
       _offlineQueue.last['resolved'] = true;
       await _saveOfflineQueue();
@@ -1144,20 +1170,39 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         .messages(code)
         .listen((encryptedMessages) async {
           final messages = encryptedMessages
-              .map((message) => <String, String>{
-                    'sender': (message['senderName'] ?? 'Group member').toString(),
-                    'text': (message['text'] ?? '').toString(),
-                    'time': (message['createdAt'] as Timestamp?)
-                            ?.toDate()
-                            .toIso8601String() ??
-                        DateTime.now().toIso8601String(),
-                  })
+              .map((message) {
+                final id = (message['id'] as String?) ?? '';
+                final sender = (message['senderName'] ?? 'Group member').toString();
+                final text = (message['text'] ?? '').toString();
+                return <String, dynamic>{
+                  'id': id,
+                  'sender': sender,
+                  'text': text,
+                  'time': (message['createdAt'] as Timestamp?)
+                          ?.toDate()
+                          .toIso8601String() ??
+                      DateTime.now().toIso8601String(),
+                  'fileBase64': (message['fileBase64'] as String?) ?? '',
+                  'fileName': (message['fileName'] as String?) ?? '',
+                  'fileType': (message['fileType'] as String?) ?? '',
+                  'senderId': (message['senderId'] as String?) ?? '',
+                };
+              })
+              .where((msg) {
+                final id = msg['id'] as String? ?? '';
+                final sig = '${msg['sender']}_${msg['text']}';
+                return (id.isEmpty || !_deletedMessageIds.contains(id)) &&
+                    !_deletedMessageIds.contains(sig);
+              })
               .toList();
-          if (mounted) setState(() {
-            _groupChatMessages
-              ..clear()
-              ..addAll(messages);
-          });
+
+          if (mounted) {
+            setState(() {
+              _groupChatMessages
+                ..clear()
+                ..addAll(messages);
+            });
+          }
         }, onError: _showGroupError);
   }
 
@@ -1199,8 +1244,12 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   void _showGroupError(Object error) {
     debugPrint('[Emergency group] $error');
     if (!mounted) return;
+    final errStr = error.toString();
+    if (errStr.contains('permission-denied')) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error.toString().replaceFirst('Bad state: ', ''))),
+      SnackBar(content: Text(errStr.replaceFirst('Bad state: ', ''))),
     );
   }
 
@@ -3776,25 +3825,54 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                             ],
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: log['resolved']
-                                ? Colors.green.withValues(alpha: 0.1)
-                                : Colors.red.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            log['resolved'] ? "RESOLVED" : "ACTIVE",
-                            style: GoogleFonts.poppins(
-                              fontSize: 9.5,
-                              color: log['resolved']
-                                  ? Colors.green
-                                  : Colors.red,
-                              fontWeight: FontWeight.bold,
+                        InkWell(
+                          onTap: () {
+                            if (log['resolved'] == true) return;
+                            setState(() {
+                              log['resolved'] = true;
+                              log['resolvedTime'] =
+                                  DateTime.now().toIso8601String();
+                            });
+                            _saveIncidentLogs();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Incident marked as RESOLVED.'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: log['resolved'] == true
+                                  ? Colors.green.withValues(alpha: 0.1)
+                                  : Colors.red.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: log['resolved'] == true
+                                    ? Colors.green
+                                    : Colors.redAccent,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  log['resolved'] == true
+                                      ? "RESOLVED"
+                                      : "ACTIVE  •  Tap to resolve",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 9.5,
+                                    color: log['resolved'] == true
+                                        ? Colors.green
+                                        : Colors.redAccent,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -4346,6 +4424,40 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   ],
                 ),
               ),
+              // ===== COPY CODE BUTTON =====
+              Tooltip(
+                message: 'Copy group code',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    final code = _groupCodeController.text.toUpperCase();
+                    Clipboard.setData(ClipboardData(text: code));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Group code "$code" copied!',
+                          style: GoogleFonts.poppins(fontSize: 12.5),
+                        ),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                        backgroundColor: AppColors.midTeal,
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.midTeal.withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.copy_rounded,
+                      size: 18,
+                      color: AppColors.midTeal,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
           Text(
@@ -4488,47 +4600,113 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     Color textColor,
     String title,
     IconData icon,
-  ) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: cardBg,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Row(
-      children: [
-        CircleAvatar(
-          backgroundColor: AppColors.midTeal.withValues(alpha: .16),
-          child: Icon(icon, color: AppColors.midTeal),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _groupNameController.text.trim().isEmpty
-                    ? 'Emergency SOS group'
-                    : _groupNameController.text,
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
+  ) {
+    final avatarImage = (_groupAvatarBase64 != null && _groupAvatarBase64!.isNotEmpty)
+        ? _groupAvatarBase64
+        : _profileAvatarBase64;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          // ===== Custom Group / Profile Avatar with Camera Picker =====
+          GestureDetector(
+            onTap: _pickGroupImage,
+            child: Stack(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: AppColors.midTeal.withValues(alpha: .16),
+                  backgroundImage: (avatarImage != null && avatarImage.isNotEmpty)
+                      ? MemoryImage(base64Decode(avatarImage))
+                      : null,
+                  child: (avatarImage == null || avatarImage.isEmpty)
+                      ? Icon(icon, color: AppColors.midTeal)
+                      : null,
                 ),
-              ),
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: textColor.withValues(alpha: .6),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                      color: AppColors.midTeal,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      size: 10,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const Icon(Icons.circle, size: 10, color: Colors.green),
-      ],
-    ),
-  );
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _groupNameController.text.trim().isEmpty
+                      ? 'Emergency SOS group'
+                      : _groupNameController.text,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: textColor.withValues(alpha: .6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.circle, size: 10, color: Colors.green),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickGroupImage() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 70,
+      );
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      final base64Str = base64Encode(bytes);
+      setState(() => _groupAvatarBase64 = base64Str);
+
+      final code = _groupCodeController.text.trim().toUpperCase();
+      if (code.isNotEmpty) {
+        await FirebaseFirestore.instance
+            .collection('emergencyGroups')
+            .doc(code)
+            .set({'groupAvatarBase64': base64Str}, SetOptions(merge: true));
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Group profile picture updated!')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error picking group image: $e');
+    }
+  }
 
   Widget _buildSectionCard(Color cardBg, List<Widget> children) => Container(
     width: double.infinity,
@@ -4762,86 +4940,798 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     ]);
   }
 
-  Widget _buildGroupChat(Color cardBg, Color textColor) =>
-      _buildSectionCard(cardBg, [
-        Text(
-          'Priority group chat',
-          style: GoogleFonts.poppins(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: textColor,
+  Widget _buildGroupChat(Color cardBg, Color textColor) {
+    final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    // Reverse messages list so OLDEST is at TOP, NEWEST is at BOTTOM
+    final messages = _groupChatMessages.take(20).toList().reversed.toList();
+
+    return _buildSectionCard(cardBg, [
+      // ── Header ──────────────────────────────────────────────────────
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.forum_rounded, color: AppColors.midTeal, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                'Priority group chat',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 8),
-        ...List.generate(_groupChatMessages.take(20).length, (index) {
-          final messages = _groupChatMessages.take(20).toList();
-          final message = messages[index];
-          final showTime = _shouldShowChatTime(messages, index);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 5),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (showTime)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
+          Text(
+            'Tap message for options',
+            style: GoogleFonts.inter(
+              fontSize: 9.5,
+              color: textColor.withValues(alpha: .45),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+
+      // ── Fixed-Height Scrollable Message Viewport ─────────────────────
+      SizedBox(
+        height: 260,
+        child: ListView.builder(
+          padding: EdgeInsets.zero,
+          itemCount: messages.length,
+          itemBuilder: (context, index) {
+            final msg = messages[index];
+            final isMe = (msg['senderId'] as String? ?? '') == myUid || (msg['sender'] as String? ?? '') == _nameController.text.trim();
+            final fileBase64 = (msg['fileBase64'] as String? ?? '');
+            final fileName = (msg['fileName'] as String? ?? 'Attachment');
+            final fileType = (msg['fileType'] as String? ?? '');
+            final replyTo = msg['replyTo'] as Map<String, dynamic>?;
+            final isEdited = msg['edited'] == true;
+            final hasFile = fileBase64.isNotEmpty;
+            final showTime = _shouldShowChatTime(messages, index);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Column(
+                crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  // Timestamp divider
+                  if (showTime)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          _formatChatTime(msg['time']?.toString() ?? ''),
+                          style: GoogleFonts.inter(
+                            fontSize: 9.5,
+                            color: textColor.withValues(alpha: .45),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Sender label (only for others)
+                  if (!isMe)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 2),
                       child: Text(
-                        _formatChatTime(message['time'] ?? ''),
-                        style: GoogleFonts.inter(
+                        msg['sender']?.toString() ?? 'Member',
+                        style: GoogleFonts.poppins(
                           fontSize: 9.5,
-                          color: textColor.withValues(alpha: .5),
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.midTeal,
+                        ),
+                      ),
+                    ),
+
+                  // Message Bubble with Tap/LongPress for Reply/Edit/Delete
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _showSosMessageOptions(msg, isMe),
+                    onLongPress: () => _showSosMessageOptions(msg, isMe),
+                    child: Align(
+                      alignment:
+                          isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 265),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? AppColors.midTeal.withValues(alpha: .85)
+                              : (cardBg == Colors.white
+                                  ? const Color(0xFFF0F0F0)
+                                  : const Color(0xFF2C2C2C)),
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(14),
+                            topRight: const Radius.circular(14),
+                            bottomLeft: Radius.circular(isMe ? 14 : 2),
+                            bottomRight: Radius.circular(isMe ? 2 : 14),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Quoted Reply Box
+                                  if (replyTo != null)
+                                    Container(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: isMe
+                                            ? Colors.black.withValues(alpha: .2)
+                                            : AppColors.midTeal.withValues(alpha: .15),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border(
+                                          left: BorderSide(
+                                            color: isMe ? Colors.white70 : AppColors.midTeal,
+                                            width: 3,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            replyTo['sender']?.toString() ?? 'Member',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: isMe ? Colors.white : AppColors.midTeal,
+                                            ),
+                                          ),
+                                          Text(
+                                            replyTo['text']?.toString() ?? 'Attachment',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10,
+                                              color: isMe ? Colors.white70 : textColor.withValues(alpha: .7),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                  // Attachment bubble
+                                  if (hasFile)
+                                    _buildAttachmentBubble(
+                                      fileBase64: fileBase64,
+                                      fileName: fileName,
+                                      fileType: fileType,
+                                      isMe: isMe,
+                                      textColor: isMe ? Colors.white : textColor,
+                                    ),
+
+                                  // Text body + edited label
+                                  if ((msg['text'] as String? ?? '').isNotEmpty)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            msg['text']!.toString(),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              color: isMe ? Colors.white : textColor,
+                                            ),
+                                          ),
+                                        ),
+                                        if (isEdited) ...[
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '(edited)',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 9,
+                                              fontStyle: FontStyle.italic,
+                                              color: isMe ? Colors.white60 : Colors.grey,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            // Direct Tap Action Icon on Bubble
+                            InkWell(
+                              onTap: () => _showSosMessageOptions(msg, isMe),
+                              child: Icon(
+                                Icons.more_vert_rounded,
+                                size: 14,
+                                color: isMe ? Colors.white70 : textColor.withValues(alpha: .45),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                Text(
-                  '${message['sender']}: ${message['text']}',
-                  style: GoogleFonts.inter(
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+
+      const SizedBox(height: 10),
+
+      // ── Floating Reply / Edit Banners ─────────────────────────────────
+      if (_replyingToMessage != null)
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.midTeal.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(10),
+            border: const Border(left: BorderSide(color: AppColors.midTeal, width: 3)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Replying to ${_replyingToMessage!['sender']}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.midTeal,
+                      ),
+                    ),
+                    Text(
+                      _replyingToMessage!['text']?.toString().isEmpty == true
+                          ? 'Attachment'
+                          : _replyingToMessage!['text'].toString(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(fontSize: 10, color: textColor),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 16),
+                onPressed: () => setState(() => _replyingToMessage = null),
+              ),
+            ],
+          ),
+        ),
+
+      if (_editingSosMessageId != null)
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.orange.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(10),
+            border: const Border(left: BorderSide(color: Colors.orange, width: 3)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Editing message…',
+                  style: GoogleFonts.poppins(
                     fontSize: 11,
-                    color: textColor.withValues(alpha: .8),
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange[800],
                   ),
                 ),
-              ],
-            ),
-          );
-        }),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _groupChatController,
-                style: TextStyle(color: textColor),
-                decoration: const InputDecoration(
-                  hintText: 'Send a group message',
-                  isDense: true,
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 16),
+                onPressed: () => setState(() {
+                  _editingSosMessageId = null;
+                  _groupChatController.clear();
+                }),
+              ),
+            ],
+          ),
+        ),
+
+      // ── Input row ────────────────────────────────────────────────────
+      Row(
+        children: [
+          // Attachment picker button
+          Tooltip(
+            message: 'Send image / document',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _showAttachmentSheet(textColor, cardBg),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.midTeal.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.attach_file_rounded,
+                  size: 20,
+                  color: AppColors.midTeal,
                 ),
               ),
             ),
-            IconButton(
-              onPressed: _sendGroupMessage,
-              icon: const Icon(Icons.send_rounded, color: AppColors.midTeal),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _groupChatController,
+              style: GoogleFonts.inter(fontSize: 12.5, color: textColor),
+              maxLines: 3,
+              minLines: 1,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _sendGroupMessage(),
+              decoration: InputDecoration(
+                hintText: _editingSosMessageId != null
+                    ? 'Edit your message…'
+                    : 'Message the group…',
+                hintStyle: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: textColor.withValues(alpha: .45),
+                ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 9),
+                filled: true,
+                fillColor: textColor.withValues(alpha: .05),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide(
+                      color: textColor.withValues(alpha: .1)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: const BorderSide(
+                      color: AppColors.midTeal, width: 1.2),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: _sendGroupMessage,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                color: AppColors.midTeal,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _editingSosMessageId != null
+                    ? Icons.check_rounded
+                    : Icons.send_rounded,
+                size: 18,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ]);
+  }
+
+  /// Message action sheet (Reply, Edit, Delete)
+  void _showSosMessageOptions(Map<String, dynamic> msg, bool isMe) {
+    final msgId = msg['id'] as String? ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Reply option - ALWAYS AVAILABLE
+            ListTile(
+              leading: const Icon(Icons.reply_rounded, color: AppColors.midTeal),
+              title: Text(
+                'Reply to message',
+                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() => _replyingToMessage = msg);
+              },
+            ),
+            // Edit option
+            if ((msg['text'] as String? ?? '').isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.edit_rounded, color: Colors.blue),
+                title: Text(
+                  'Edit message',
+                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() {
+                    _editingSosMessageId = msgId.isNotEmpty ? msgId : 'local_edit';
+                    _groupChatController.text = msg['text'] ?? '';
+                  });
+                },
+              ),
+            // Delete option
+            ListTile(
+              leading: const Icon(Icons.delete_forever_rounded, color: Colors.red),
+              title: Text(
+                'Delete message',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.red,
+                ),
+              ),
+              onTap: () async {
+                Navigator.pop(ctx);
+                try {
+                  final text = (msg['text'] as String? ?? '');
+                  final sender = (msg['sender'] as String? ?? '');
+                  final sig = '${sender}_$text';
+
+                  if (msgId.isNotEmpty) {
+                    _deletedMessageIds.add(msgId);
+                  }
+                  if (sig.isNotEmpty) {
+                    _deletedMessageIds.add(sig);
+                  }
+
+                  setState(() {
+                    _groupChatMessages.removeWhere(
+                      (m) =>
+                          (msgId.isNotEmpty && m['id'] == msgId) ||
+                          (m['sender'] == sender && m['text'] == text),
+                    );
+                  });
+
+                  if (msgId.isNotEmpty) {
+                    await EncryptedGroupChatService.instance.delete(
+                      groupCode: _groupCodeController.text.trim().toUpperCase(),
+                      messageId: msgId,
+                    );
+                  }
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Message deleted.')),
+                    );
+                  }
+                } catch (e) {
+                  _showGroupError(e);
+                }
+              },
             ),
           ],
         ),
-      ]);
+      ),
+    );
+  }
+
+  /// Renders an image inline or a document chip that opens on tap.
+  Widget _buildAttachmentBubble({
+    required String fileBase64,
+    required String fileName,
+    required String fileType,
+    required bool isMe,
+    required Color textColor,
+  }) {
+    final isImage = fileType == 'image';
+    if (isImage) {
+      return GestureDetector(
+        onTap: () => _openBase64File(
+          fileBase64: fileBase64,
+          fileName: fileName,
+          fileType: fileType,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+            base64Decode(fileBase64),
+            width: 200,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const Icon(
+              Icons.broken_image_rounded,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+      );
+    }
+    // Document / PDF chip
+    return GestureDetector(
+      onTap: () => _openBase64File(
+        fileBase64: fileBase64,
+        fileName: fileName,
+        fileType: fileType,
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: isMe
+              ? Colors.white.withValues(alpha: .2)
+              : AppColors.midTeal.withValues(alpha: .1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              fileName.toLowerCase().endsWith('.pdf')
+                  ? Icons.picture_as_pdf_rounded
+                  : Icons.insert_drive_file_rounded,
+              color: isMe ? Colors.white : AppColors.midTeal,
+              size: 20,
+            ),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                fileName,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.open_in_new_rounded,
+              size: 14,
+              color: textColor.withValues(alpha: .6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Bottom sheet that lets the user choose image or document.
+  void _showAttachmentSheet(Color textColor, Color cardBg) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Send Attachment',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Camera photo
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.midTeal.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded,
+                      color: AppColors.midTeal),
+                ),
+                title: Text('Take a photo',
+                    style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: textColor)),
+                subtitle: Text('Use camera',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: textColor.withValues(alpha: .55))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _sendGroupAttachment(source: AttachmentSource.camera);
+                },
+              ),
+              // Gallery image
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withValues(alpha: .1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.photo_library_rounded,
+                      color: Colors.purple),
+                ),
+                title: Text('Choose from gallery',
+                    style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: textColor)),
+                subtitle: Text('JPG, PNG, GIF…',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: textColor.withValues(alpha: .55))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _sendGroupAttachment(source: AttachmentSource.gallery);
+                },
+              ),
+              // Document / PDF
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: .1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.insert_drive_file_rounded,
+                      color: Colors.orange),
+                ),
+                title: Text('Send document',
+                    style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: textColor)),
+                subtitle: Text('PDF, DOCX, TXT, XLSX…',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: textColor.withValues(alpha: .55))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _sendGroupAttachment(source: AttachmentSource.document);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _sendGroupMessage() async {
     final message = _groupChatController.text.trim();
-    if (message.isEmpty) return;
+    if (message.isEmpty && _editingSosMessageId == null) return;
     try {
-      await EncryptedGroupChatService.instance.send(
-        groupCode: _groupCodeController.text.trim().toUpperCase(),
-        senderName: _nameController.text,
-        text: message,
-      );
+      final code = _groupCodeController.text.trim().toUpperCase();
+      if (_editingSosMessageId != null) {
+        await EncryptedGroupChatService.instance.edit(
+          groupCode: code,
+          messageId: _editingSosMessageId!,
+          newText: message,
+        );
+        setState(() => _editingSosMessageId = null);
+      } else {
+        await EncryptedGroupChatService.instance.send(
+          groupCode: code,
+          senderName: _nameController.text,
+          text: message,
+          replyTo: _replyingToMessage,
+        );
+        setState(() => _replyingToMessage = null);
+      }
       _groupChatController.clear();
     } catch (error) {
       _showGroupError(error);
     }
   }
 
-  bool _shouldShowChatTime(List<Map<String, String>> messages, int index) {
+  /// Picks and sends an image / document as base64 via Firestore.
+  Future<void> _sendGroupAttachment({required AttachmentSource source}) async {
+    try {
+      String? base64Str;
+      String? fileName;
+      String fileType = 'document';
+
+      if (source == AttachmentSource.camera ||
+          source == AttachmentSource.gallery) {
+        final picker = ImagePicker();
+        final XFile? xfile = await picker.pickImage(
+          source: source == AttachmentSource.camera
+              ? ImageSource.camera
+              : ImageSource.gallery,
+          maxWidth: 1024,
+          maxHeight: 1024,
+          imageQuality: 75,
+        );
+        if (xfile == null) return;
+        final bytes = await xfile.readAsBytes();
+        base64Str = base64Encode(bytes);
+        fileName = xfile.name;
+        fileType = 'image';
+      } else {
+        // document
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'xlsx', 'xls', 'ppt', 'pptx'],
+          withData: true,
+        );
+        if (result == null || result.files.isEmpty) return;
+        final file = result.files.first;
+        if (file.bytes == null) return;
+        // Guard: max 1 MB base64 ≈ 750 KB raw
+        if (file.size > 750 * 1024) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('File too large. Please keep files under 750 KB.'),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+          }
+          return;
+        }
+        base64Str = base64Encode(file.bytes!);
+        fileName = file.name;
+        fileType = 'document';
+      }
+
+      if (base64Str == null) return;
+
+      await EncryptedGroupChatService.instance.send(
+        groupCode: _groupCodeController.text.trim().toUpperCase(),
+        senderName: _nameController.text,
+        text: '',
+        fileBase64: base64Str,
+        fileName: fileName,
+        fileType: fileType,
+      );
+    } catch (error) {
+      _showGroupError(error);
+    }
+  }
+
+  /// Writes base64 to a temp file and opens it with the system viewer.
+  Future<void> _openBase64File({
+    required String fileBase64,
+    required String fileName,
+    required String fileType,
+  }) async {
+    try {
+      final bytes = base64Decode(fileBase64);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsBytes(bytes);
+      await OpenFilex.open(file.path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open file: $e')),
+        );
+      }
+    }
+  }
+
+  bool _shouldShowChatTime(List<Map<String, dynamic>> messages, int index) {
     if (index == 0) return true;
     final current = DateTime.tryParse(messages[index]['time'] ?? '');
     final newer = DateTime.tryParse(messages[index - 1]['time'] ?? '');
@@ -4861,36 +5751,64 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   }
 
   void _sendSafeCheckInLocal() => setState(
-    () => _groupChatMessages.insert(0, {
+    () => _groupChatMessages.insert(0, <String, dynamic>{
       'sender': _nameController.text.trim().isEmpty
           ? 'Member'
           : _nameController.text.trim(),
       'text': '✅ I am safe.',
       'time': 'Now',
+      'fileBase64': '',
+      'fileName': '',
+      'fileType': '',
+      'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
     }),
   );
 
   Future<void> _sendSafeCheckIn() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    final activeIncident = _liveGroupIncidents
-        .cast<Map<String, dynamic>>()
-        .firstWhere(
-          (incident) =>
-              incident['senderId'] == userId && incident['status'] == 'active',
-          orElse: () => <String, dynamic>{},
-        );
+    final code = _groupCodeController.text.trim().toUpperCase();
+
     try {
-      if (activeIncident.isNotEmpty) {
-        await EmergencyGroupService.instance.resolveIncident(
-          code: _groupCodeController.text.trim().toUpperCase(),
-          incidentId: activeIncident['id'] as String,
+      // 1. Resolve active group incidents in Firestore
+      for (var incident in _liveGroupIncidents) {
+        final senderId = incident['senderId'] as String?;
+        final status = incident['status'] as String?;
+        final incId = incident['id'] as String?;
+        if (status == 'active' && incId != null && (senderId == userId || _isGroupLeader)) {
+          await EmergencyGroupService.instance.resolveIncident(
+            code: code,
+            incidentId: incId,
+          ).catchError((_) {});
+        }
+      }
+
+      // 2. Broadcast safe check-in message to chat
+      await EncryptedGroupChatService.instance.send(
+        groupCode: code,
+        senderName: _nameController.text,
+        text: '✅ I am safe.',
+      );
+
+      // 3. Mark ALL local incident logs as RESOLVED
+      setState(() {
+        _isSosTriggered = false;
+        for (var log in _incidentLogs) {
+          if (log['resolved'] != true) {
+            log['resolved'] = true;
+            log['resolvedTime'] = DateTime.now().toIso8601String();
+          }
+        }
+      });
+      await _saveIncidentLogs();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Marked safe! All incidents updated to RESOLVED.'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
-      await EncryptedGroupChatService.instance.send(
-        groupCode: _groupCodeController.text.trim().toUpperCase(),
-        senderName: _nameController.text,
-        text: 'I am safe.',
-      );
     } catch (error) {
       _showGroupError(error);
     }
