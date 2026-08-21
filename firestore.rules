@@ -16,6 +16,7 @@ service cloud.firestore {
     // membership; a member may work only inside a plan that already includes
     // their UID.
     function isPlanMember(ownerUid, planId) {
+      
       return signedIn()
         && (request.auth.uid == ownerUid
           || request.auth.uid in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds
@@ -40,7 +41,7 @@ service cloud.firestore {
         ])
         && data.year is int && data.year >= 2020 && data.year <= 2100
         && data.status in ['planned', 'confirmed', 'completed', 'cancelled']
-        && data.animalType in ['cow', 'goat', 'sheep', 'camel']
+        && data.animalType in ['cow', 'goat', 'sheep', 'camel', 'buffalo']
         && data.totalShares is int && data.totalShares >= 1 && data.totalShares <= 7
         && data.myShares is int && data.myShares >= 1 && data.myShares <= data.totalShares
         && data.estimatedCost is number && data.estimatedCost >= 0 && data.estimatedCost <= 10000000
@@ -95,8 +96,8 @@ service cloud.firestore {
     }
 
     function validEditRequest(data) {
-      return data.keys().hasOnly(['targetType', 'targetId', 'targetLabel', 'requestedById', 'requestedByName', 'reason', 'proposedChanges', 'status', 'createdAt'])
-        && data.keys().hasAll(['targetType', 'targetId', 'targetLabel', 'requestedById', 'requestedByName', 'reason', 'proposedChanges', 'status', 'createdAt'])
+      return data.keys().hasOnly(['targetType', 'targetId', 'targetLabel', 'targetOwnerId', 'requestedById', 'requestedByName', 'reason', 'proposedChanges', 'status', 'createdAt'])
+        && data.keys().hasAll(['targetType', 'targetId', 'targetLabel', 'targetOwnerId', 'requestedById', 'requestedByName', 'reason', 'proposedChanges', 'status', 'createdAt'])
         && data.targetType in ['participant', 'expense']
         && validShortText(data.targetId, 128) && validShortText(data.targetLabel, 160)
         && validShortText(data.requestedById, 128) && validShortText(data.requestedByName, 80)
@@ -201,65 +202,56 @@ service cloud.firestore {
           && validQurbaniPlan(request.resource.data, userId)
           && request.resource.data.memberIds.hasOnly([request.auth.uid]);
         allow read: if isPlanMember(userId, planId);
-        allow update: if isOwner(userId)
+        allow update: if isPlanMember(userId, planId)
           && validQurbaniPlan(request.resource.data, userId)
           && request.resource.data.ownerId == resource.data.ownerId
           && request.resource.data.createdAt == resource.data.createdAt;
         allow delete: if isOwner(userId);
 
-        // Mirrors emergencyGroups/members: knowing a valid share code lets a
-        // signed-in person create only their own membership record.
         match /members/{memberId} {
           allow read: if isPlanMember(userId, planId);
           allow create, update: if signedIn()
-            && request.auth.uid == memberId
+            && (isPlanMember(userId, planId) || request.auth.uid == memberId || request.auth.uid == userId)
             && validShortText(request.resource.data.name, 80)
             && request.resource.data.shares is int && request.resource.data.shares >= 1 && request.resource.data.shares <= 7;
           allow delete: if signedIn()
-            && (request.auth.uid == memberId || request.auth.uid == userId);
+            && (isPlanMember(userId, planId) || request.auth.uid == memberId || request.auth.uid == userId);
         }
 
         match /participants/{participantId} {
           allow read: if isPlanMember(userId, planId);
           allow create: if isPlanMember(userId, planId)
-            && validParticipant(request.resource.data)
-            && request.resource.data.ownerId == request.auth.uid;
+            && validParticipant(request.resource.data);
           allow update: if isPlanMember(userId, planId)
             && validParticipant(request.resource.data)
-            && request.resource.data.ownerId == resource.data.ownerId
-            && (request.auth.uid == userId
-              || request.auth.uid == resource.data.ownerId
-              || request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['amountDue', 'amountPaid', 'paymentStatus']));
-          allow delete: if isPlanMember(userId, planId)
-            && (request.auth.uid == userId || request.auth.uid == resource.data.ownerId);
+            && request.resource.data.ownerId == resource.data.ownerId;
+          allow delete: if isPlanMember(userId, planId);
         }
 
         match /expenses/{expenseId} {
           allow read: if isPlanMember(userId, planId);
           allow create: if isPlanMember(userId, planId)
-            && validExpense(request.resource.data)
-            && request.resource.data.ownerId == request.auth.uid;
+            && validExpense(request.resource.data);
           allow update: if isPlanMember(userId, planId)
             && validExpense(request.resource.data)
             && request.resource.data.ownerId == resource.data.ownerId
-            && request.resource.data.createdAt == resource.data.createdAt
-            && (request.auth.uid == userId || request.auth.uid == resource.data.ownerId);
-          allow delete: if isPlanMember(userId, planId)
-            && (request.auth.uid == userId || request.auth.uid == resource.data.ownerId);
+            && request.resource.data.createdAt == resource.data.createdAt;
+          allow delete: if isPlanMember(userId, planId);
         }
 
         match /settlements/{settlementId} {
           allow read: if isPlanMember(userId, planId);
           allow create: if isPlanMember(userId, planId)
             && validSettlement(request.resource.data);
-          allow update, delete: if false;
+          allow update, delete: if isPlanMember(userId, planId);
         }
 
         match /messages/{messageId} {
           allow read: if isPlanMember(userId, planId);
           allow create: if isPlanMember(userId, planId) && request.resource.data.senderId == request.auth.uid;
-          allow update, delete: if false;
+          // Sender can edit their own text message (e.g. edit/delete)
+          allow update: if isPlanMember(userId, planId) && resource.data.senderId == request.auth.uid;
+          allow delete: if isPlanMember(userId, planId) && resource.data.senderId == request.auth.uid;
         }
 
         match /editRequests/{requestId} {
@@ -271,13 +263,10 @@ service cloud.firestore {
           allow update: if isPlanMember(userId, planId)
             && validEditRequest(request.resource.data)
             && request.resource.data.requestedById == resource.data.requestedById
-            && request.resource.data.createdAt == resource.data.createdAt
-            && (request.auth.uid == userId
-              || (request.resource.data.targetType == 'participant'
-                && get(/databases/$(database)/documents/users/$(userId)/qurbaniPlans/$(planId)/participants/$(request.resource.data.targetId)).data.ownerId == request.auth.uid)
-              || (request.resource.data.targetType == 'expense'
-                && get(/databases/$(database)/documents/users/$(userId)/qurbaniPlans/$(planId)/expenses/$(request.resource.data.targetId)).data.ownerId == request.auth.uid));
-          allow delete: if false;
+            && request.resource.data.createdAt == resource.data.createdAt;
+          // Requester can cancel/delete their own pending request
+          allow delete: if isPlanMember(userId, planId)
+            && resource.data.requestedById == request.auth.uid;
         }
 
         match /checklist/{itemId} {
@@ -286,6 +275,13 @@ service cloud.firestore {
             && request.resource.data.keys().hasOnly(['done'])
             && request.resource.data.done is bool;
           allow delete: if isPlanMember(userId, planId);
+        }
+
+        match /yearlyArchive/{yearId} {
+          allow read: if isPlanMember(userId, planId);
+          // Only the plan owner can archive — members just read the history
+          allow create, update: if isOwner(userId);
+          allow delete: if isOwner(userId);
         }
       }
     }
