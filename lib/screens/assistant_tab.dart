@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../widgets/auth_header.dart'; // AppColors
+import '../services/islamic_ai_service.dart';
 
 /// ===== ASSISTANT TAB =====
 /// Used inline inside DashboardScreen's bottom-nav switch, e.g.:
@@ -17,20 +17,13 @@ class AssistantTab extends StatefulWidget {
 }
 
 class _ChatMessage {
-  final String text;
+  String text;
   final bool isUser;
-  _ChatMessage({required this.text, required this.isUser});
+  bool isLoading;
+  _ChatMessage({required this.text, required this.isUser, this.isLoading = false});
 }
 
-/// A saved past conversation. `messages` holds the full Q&A thread so that
-/// tapping this entry in the side panel can restore it into the chat, the
-/// same way opening a past chat works in Claude's sidebar.
-class _ChatHistoryItem {
-  final String title;
-  final String time;
-  final List<_ChatMessage> messages;
-  _ChatHistoryItem({required this.title, required this.time, required this.messages});
-}
+
 
 class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderStateMixin {
   final TextEditingController _inputCtrl = TextEditingController();
@@ -72,84 +65,9 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     'What breaks the fast?',
   ];
 
-  // ===== DEMO CHAT HISTORY (placeholder — wire up to real storage later) =====
-  // Each entry stores the full past thread (question + answer) so tapping it
-  // can restore that exact conversation into the chat view.
-  late final List<_ChatHistoryItem> _history = [
-    _ChatHistoryItem(
-      title: 'Steps of Wudu',
-      time: 'Today',
-      messages: [
-        _ChatMessage(text: 'How do I perform Wudu?', isUser: true),
-        _ChatMessage(text: _answerFor('wudu'), isUser: false),
-      ],
-    ),
-    _ChatHistoryItem(
-      title: 'Zakat Nisab threshold',
-      time: 'Yesterday',
-      messages: [
-        _ChatMessage(text: 'What is the Nisab for Zakat?', isUser: true),
-        _ChatMessage(text: _answerFor('nisab'), isUser: false),
-      ],
-    ),
-    _ChatHistoryItem(
-      title: 'Rak\'ahs in each prayer',
-      time: '2 days ago',
-      messages: [
-        _ChatMessage(text: 'How many Rak\'ahs in each prayer?', isUser: true),
-        _ChatMessage(text: _answerFor('rakah'), isUser: false),
-      ],
-    ),
-  ];
+  String _currentChatId = DateTime.now().millisecondsSinceEpoch.toString();
 
-  // ===== SIMPLE KEYWORD-BASED FAQ ENGINE =====
-  final List<Map<String, dynamic>> _faq = [
-    {
-      'keywords': ['pillar', 'pillars', 'five pillars', 'arkan'],
-      'answer':
-          'The Five Pillars of Islam are:\n\n1. Shahada — declaration of faith\n2. Salah — five daily prayers\n3. Zakat — obligatory charity\n4. Sawm — fasting in Ramadan\n5. Hajj — pilgrimage to Makkah (once in a lifetime, if able)',
-    },
-    {
-      'keywords': ['wudu', 'ablution', 'wuzu'],
-      'answer':
-          'Steps of Wudu:\n\n1. Intention (Niyyah)\n2. Say "Bismillah"\n3. Wash hands 3 times\n4. Rinse mouth 3 times\n5. Rinse nose 3 times\n6. Wash face 3 times\n7. Wash arms up to elbows (right then left) 3 times\n8. Wipe head once\n9. Wipe ears once\n10. Wash feet up to ankles (right then left) 3 times',
-    },
-    {
-      'keywords': ['nisab', 'zakat threshold', 'zakat minimum'],
-      'answer':
-          'Nisab is the minimum wealth a Muslim must own before Zakat becomes obligatory — equivalent to 85g of gold or 595g of silver. If your zakatable wealth stays above this for one lunar year (Hawl), you owe 2.5% as Zakat. Check the Zakat Calculator on the Home tab for a live calculation.',
-    },
-    {
-      'keywords': ['rakah', 'rakat', 'rakaat', 'raka', 'how many rakah', 'units of prayer'],
-      'answer':
-          'Rak\'ahs per prayer (Fard/obligatory):\n\nFajr — 2\nDhuhr — 4\nAsr — 4\nMaghrib — 3\nIsha — 4\n\n(Sunnah and Nafl rak\'ahs are additional to these.)',
-    },
-    {
-      'keywords': ['fast', 'fasting', 'ramadan', 'sawm', 'break the fast', 'breaks fast'],
-      'answer':
-          'Things that break the fast include: eating or drinking intentionally, smoking, intentional vomiting, and marital relations during fasting hours. Forgetfully eating or drinking does not break the fast — you should simply stop once you remember.',
-    },
-    {
-      'keywords': ['hajj', 'pilgrimage'],
-      'answer':
-          'Hajj is the pilgrimage to Makkah, obligatory once in a lifetime for those who are physically and financially able. Check the Hajj & Umrah Planner on the Home tab for a full step-by-step ritual checklist.',
-    },
-    {
-      'keywords': ['qurbani', 'sacrifice', 'udhiyah', 'eid sacrifice'],
-      'answer':
-          'Qurbani (Udhiyah) is an animal sacrifice performed during Eid al-Adha, commemorating Prophet Ibrahim\'s (AS) willingness to sacrifice his son. Check the Qurbani Planner on the Home tab for cost-splitting and scheduling help.',
-    },
-    {
-      'keywords': ['prayer time', 'salah time', 'when is', 'next prayer'],
-      'answer':
-          'You can see today\'s exact prayer times and the live countdown to the next prayer on the Prayer tab — it updates automatically based on your location.',
-    },
-    {
-      'keywords': ['inheritance', 'faraid', 'wealth distribution', 'estate'],
-      'answer':
-          'Islamic inheritance (Faraid) distributes a deceased person\'s estate according to fixed Quranic shares among the spouse, children, and parents. Check the Inheritance Guide on the Home tab for a simplified calculator covering common family cases.',
-    },
-  ];
+
 
   @override
   void initState() {
@@ -165,17 +83,71 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     super.dispose();
   }
 
-  void _handleSend([String? presetText]) {
+  bool _isGenerating = false;
+
+  void _handleSend([String? presetText]) async {
     final String text = (presetText ?? _inputCtrl.text).trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isGenerating) return;
+
+    final userMsg = _ChatMessage(text: text, isUser: true);
+    final aiMsg = _ChatMessage(text: '', isUser: false, isLoading: true);
 
     setState(() {
-      _messages.add(_ChatMessage(text: text, isUser: true));
-      _messages.add(_ChatMessage(text: _generateAnswer(text), isUser: false));
+      _isGenerating = true;
+      _messages.add(userMsg);
+      _messages.add(aiMsg);
     });
     _inputCtrl.clear();
-
     _scrollToBottom();
+
+    try {
+      final stream = IslamicAIService().sendMessageStream(text);
+      await for (final chunk in stream) {
+        if (!mounted) break;
+        setState(() {
+          aiMsg.isLoading = false;
+          aiMsg.text += chunk;
+        });
+        _scrollToBottom();
+      }
+      _saveCurrentChatToFirestore();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          aiMsg.isLoading = false;
+          if (aiMsg.text.isEmpty) {
+            aiMsg.text = 'No internet connection. Please check your network connection and try again.\n\n*Allahu A\'lam (Allah knows best).*';
+          }
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGenerating = false;
+          aiMsg.isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _saveCurrentChatToFirestore() {
+    final userMsgs = _messages.where((m) => m.isUser).toList();
+    if (userMsgs.isEmpty) return;
+
+    final title = userMsgs.first.text.length > 35
+        ? '${userMsgs.first.text.substring(0, 35)}…'
+        : userMsgs.first.text;
+
+    final msgList = _messages
+        .where((m) => !m.isLoading && m.text.isNotEmpty)
+        .map((m) => {'text': m.text, 'isUser': m.isUser})
+        .toList();
+
+    IslamicAIService().saveChatToFirestore(
+      chatId: _currentChatId,
+      title: title,
+      messages: msgList,
+    );
   }
 
   void _scrollToBottom() {
@@ -190,64 +162,50 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     });
   }
 
-  String _generateAnswer(String question) {
-    final String q = question.toLowerCase();
-    Map<String, dynamic>? bestMatch;
-    int bestScore = 0;
 
-    for (final entry in _faq) {
-      int score = 0;
-      for (final kw in (entry['keywords'] as List<String>)) {
-        if (q.contains(kw)) score++;
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = entry;
-      }
+
+  /// Restores a past chat conversation from Firestore.
+  void _openFirestoreChat(Map<String, dynamic> doc) {
+    final chatId = doc['id'] as String;
+    final rawMsgs = (doc['messages'] as List<dynamic>?) ?? [];
+    final List<_ChatMessage> loaded = [];
+
+    final List<Map<String, dynamic>> parsedMaps = [];
+    for (final item in rawMsgs) {
+      final map = Map<String, dynamic>.from(item as Map);
+      parsedMaps.add(map);
+      loaded.add(_ChatMessage(
+        text: map['text'] as String? ?? '',
+        isUser: map['isUser'] as bool? ?? false,
+      ));
     }
 
-    if (bestMatch != null) {
-      return bestMatch['answer'] as String;
+    if (loaded.isEmpty) {
+      loaded.add(_ChatMessage(text: _greeting, isUser: false));
     }
-    return 'I don\'t have a specific answer for that yet. Try asking about prayer, Wudu, Zakat, fasting, Hajj, Qurbani, or inheritance — or consult a local scholar for detailed guidance.';
-  }
 
-  /// Loads a past conversation back into the chat view, replacing the
-  /// current thread — mirrors "open a past chat" behavior.
-  void _openHistoryItem(_ChatHistoryItem item) {
     setState(() {
+      _currentChatId = chatId;
       _messages
         ..clear()
-        ..addAll(item.messages);
+        ..addAll(loaded);
     });
+
+    IslamicAIService().restoreChat(parsedMaps);
     _closeHistory();
     _scrollToBottom();
   }
 
-  /// Starts a fresh conversation — mirrors the "New chat" button in Claude's
-  /// sidebar. If the current thread has real content (more than just the
-  /// opening greeting), it's saved into history first so it isn't lost.
+  /// Starts a fresh conversation.
   void _startNewChat() {
-    final bool hasRealContent = _messages.any((m) => m.isUser);
-    if (hasRealContent) {
-      final firstUserMsg = _messages.firstWhere((m) => m.isUser, orElse: () => _messages.first);
-      _history.insert(
-        0,
-        _ChatHistoryItem(
-          title: firstUserMsg.text.length > 40
-              ? '${firstUserMsg.text.substring(0, 40)}…'
-              : firstUserMsg.text,
-          time: 'Just now',
-          messages: List<_ChatMessage>.from(_messages),
-        ),
-      );
-    }
-
     setState(() {
+      _currentChatId = DateTime.now().millisecondsSinceEpoch.toString();
       _messages
         ..clear()
         ..add(_ChatMessage(text: _greeting, isUser: false));
     });
+
+    IslamicAIService().resetChat();
     _closeHistory();
     _scrollToBottom();
   }
@@ -300,7 +258,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     return Container(
       key: const ValueKey('AssistantTab'),
       color: _pageBg(context),
@@ -342,9 +300,17 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                     ),
                   ),
                   if (_messages.length <= 1) _buildSuggestedPrompts(),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   _buildInputBar(),
-                  SizedBox(height: 12 + bottomInset),
+                  Builder(
+                    builder: (context) {
+                      final navBarHeightWithInset = 70.0 + MediaQuery.of(context).padding.bottom;
+                      final double extraBottom = keyboardHeight > navBarHeightWithInset
+                          ? (keyboardHeight - navBarHeightWithInset)
+                          : 8.0;
+                      return SizedBox(height: extraBottom);
+                    },
+                  ),
                 ],
               ),
 
@@ -451,41 +417,77 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
             ),
             Divider(height: 1, color: _bubbleBorder(context)),
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                itemCount: _history.length,
-                itemBuilder: (context, index) {
-                  final item = _history[index];
-                  return InkWell(
-                    onTap: () => _openHistoryItem(item),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      child: Row(
-                        children: [
-                          Icon(Icons.chat_bubble_outline_rounded,
-                              color: AppColors.midTeal, size: 16),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(item.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.inter(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w600,
-                                        color: _primaryText(context))),
-                                const SizedBox(height: 2),
-                                Text(item.time,
-                                    style: GoogleFonts.inter(
-                                        fontSize: 10.5, color: _secondaryText(context))),
-                              ],
-                            ),
-                          ),
-                        ],
+              child: StreamBuilder<List<Map<String, dynamic>>>(
+                stream: IslamicAIService().getPastChatsStream(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.midTeal,
                       ),
-                    ),
+                    );
+                  }
+
+                  final chats = snapshot.data ?? [];
+                  if (chats.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        'No past conversations yet.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: _secondaryText(context),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    itemCount: chats.length,
+                    itemBuilder: (context, index) {
+                      final item = chats[index];
+                      final title = item['title'] as String? ?? 'Islamic Question';
+                      final chatId = item['id'] as String;
+
+                      return InkWell(
+                        onTap: () => _openFirestoreChat(item),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Row(
+                            children: [
+                              Icon(Icons.chat_bubble_outline_rounded,
+                                  color: AppColors.midTeal, size: 16),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: _primaryText(context),
+                                  ),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => IslamicAIService().deleteChatFromFirestore(chatId),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 16,
+                                    color: Colors.red.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -589,10 +591,12 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
 
   Widget _buildMessageBubble(_ChatMessage message) {
     final bool isUser = message.isUser;
+    final bool showLoading = message.isLoading && message.text.isEmpty;
+
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 300),
+        constraints: const BoxConstraints(maxWidth: 310),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -614,14 +618,67 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
             ),
           ],
         ),
-        child: Text(
-          message.text,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            height: 1.5,
-            color: isUser ? Colors.white : _primaryText(context).withValues(alpha: 0.9),
-          ),
-        ),
+        child: showLoading
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.midTeal,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Verifying authentic sources...',
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                      fontStyle: FontStyle.italic,
+                      color: _secondaryText(context),
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SelectableText(
+                    message.text,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: isUser ? Colors.white : _primaryText(context).withValues(alpha: 0.9),
+                    ),
+                  ),
+                  if (!isUser && message.isLoading) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 8,
+                          height: 8,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: AppColors.midTeal,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Streaming response...',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontStyle: FontStyle.italic,
+                            color: _secondaryText(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
       ),
     );
   }
@@ -806,18 +863,4 @@ class _AssistantStarPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
-/// Pulls a canned answer straight from the FAQ text so the demo history
-/// entries above show the same wording the assistant would actually give.
-String _answerFor(String key) {
-  switch (key) {
-    case 'wudu':
-      return 'Steps of Wudu:\n\n1. Intention (Niyyah)\n2. Say "Bismillah"\n3. Wash hands 3 times\n4. Rinse mouth 3 times\n5. Rinse nose 3 times\n6. Wash face 3 times\n7. Wash arms up to elbows (right then left) 3 times\n8. Wipe head once\n9. Wipe ears once\n10. Wash feet up to ankles (right then left) 3 times';
-    case 'nisab':
-      return 'Nisab is the minimum wealth a Muslim must own before Zakat becomes obligatory — equivalent to 85g of gold or 595g of silver. If your zakatable wealth stays above this for one lunar year (Hawl), you owe 2.5% as Zakat. Check the Zakat Calculator on the Home tab for a live calculation.';
-    case 'rakah':
-      return 'Rak\'ahs per prayer (Fard/obligatory):\n\nFajr — 2\nDhuhr — 4\nAsr — 4\nMaghrib — 3\nIsha — 4\n\n(Sunnah and Nafl rak\'ahs are additional to these.)';
-    default:
-      return '';
-  }
-}
+
