@@ -230,6 +230,8 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                   children: [
                     _buildHeader(),
                     const SizedBox(height: 16),
+                    _buildQuickAccessSection(),
+                    const SizedBox(height: 18),
                     Row(
                       children: [
                         Expanded(
@@ -267,11 +269,11 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: tealColor,
+                          color: AppColors.navyBlue,
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: tealColor.withValues(alpha: 0.22),
+                              color: AppColors.navyBlue.withValues(alpha: 0.22),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -282,7 +284,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
+                                color: Colors.white.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
@@ -331,7 +333,10 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-                          border: Border.all(color: tealColor.withValues(alpha: 0.25), width: 1.4),
+                          border: Border.all(
+                            color: widget.isDarkMode ? Colors.white.withValues(alpha: 0.15) : AppColors.navyBlue.withValues(alpha: 0.2),
+                            width: 1.4,
+                          ),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
@@ -346,12 +351,12 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: tealColor.withValues(alpha: 0.1),
+                                color: AppColors.navyBlue.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.document_scanner_outlined,
-                                color: tealColor,
+                                color: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
                                 size: 32,
                               ),
                             ),
@@ -363,7 +368,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                                    Text(
                                   AppLocalizations.of(context)!.tr('scan_ingredients'),
                                     style: TextStyle(
-                                      color: widget.isDarkMode ? Colors.white : tealColor,
+                                      color: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -381,15 +386,13 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                             ),
                             Icon(
                               Icons.chevron_right_rounded,
-                              color: tealColor,
+                              color: widget.isDarkMode ? Colors.white : AppColors.navyBlue,
                               size: 28,
                             ),
                           ],
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    _buildQuickAccessSection(),
                     const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -475,7 +478,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.midTeal.withValues(alpha: 0.12),
+              color: widget.isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue,
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 20),
@@ -549,6 +552,7 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
     ];
 
     final primaryTextColor = widget.isDarkMode ? Colors.white : AppColors.navyBlue;
+    final cardBg = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -562,62 +566,51 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.1,
-          children: items.map((item) => _buildQuickAccessCard(item)).toList(),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: items.map((item) => Expanded(child: _buildQuickAccessTab(item))).toList(),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildQuickAccessCard(_QuickAccessItem item) {
-    final surfaceColor = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-    final primaryTextColor = widget.isDarkMode ? Colors.white : AppColors.navyBlue;
-    final borderColor = widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.1);
-    final shadowColor = widget.isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.04);
+  Widget _buildQuickAccessTab(_QuickAccessItem item) {
+    final iconColor = widget.isDarkMode ? Colors.white70 : AppColors.navyBlue;
+    final inactiveColor = widget.isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: item.onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: surfaceColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: borderColor),
-            boxShadow: [
-              BoxShadow(
-                color: shadowColor,
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: item.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(item.icon, color: item.color, size: 22),
-              ),
-              const Spacer(),
+              Icon(item.icon, size: 16, color: iconColor),
+              const SizedBox(height: 2),
               Text(
                 item.title,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: primaryTextColor,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: inactiveColor,
                 ),
               ),
             ],
