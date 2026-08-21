@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -881,6 +881,7 @@ Future<void> _onPositionUpdate(Position position) async {
         }
       },
       child: Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: _isDarkMode ? const Color(0xFF121212) : Colors.white,
       body: Center(
         child: Container(
