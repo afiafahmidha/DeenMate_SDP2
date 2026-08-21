@@ -9,9 +9,12 @@
 // Backend services (OpenFoodFactsService, HalalAnalyzerService, GeminiHalalService,
 // IngredientOcrCleaner) are kept as separate files per your request.
 
+
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;   // <-- add this line
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -1137,10 +1140,10 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
 // Shared colors (matches the app's teal / green / red / orange palette)
 // ---------------------------------------------------------------------------
 
-const Color kTeal = AppColors.midTeal;          
-const Color kHalalGreen = Color(0xFFC8E6C9);     // light green
-const Color kHaramRed = Color(0xFFD4B896);       // balanced almond
-const Color kMushboohOrange = Color(0xFFA9B7C6); // light slate grey
+const Color kTeal = AppColors.midTeal;
+const Color kHalalGreen = Color(0xFF2E7D32);     // strong, readable dark green
+const Color kHaramRed = Color(0xFFD32F2F);       // true red
+const Color kMushboohOrange = Color(0xFFF57C00); // true orange
 const Color kBg = Color(0xFFF6F7F8);
 Color statusColorOf(String status) {
   switch (status) {
@@ -1360,6 +1363,19 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
       certifications: ['VEGAN'],
     ),
     Additive(
+      code: 'E110',
+      name: 'Sunset Yellow FCF',
+      category: 'Colour',
+      status: 'HALAL',
+      riskText: 'Toxic',
+      riskScore: 0.55,
+      origin: 'chemical',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Sunset Yellow FCF is a synthetic orange azo dye used in soft drinks, sweets, sauces and desserts. It is fully synthetic and carries no animal-origin concerns, though it has been linked to hyperactivity in children.',
+      certifications: ['VEGAN', 'JECFA'],
+    ),
+    Additive(
       code: 'E111',
       name: 'Orange GGN',
       category: 'Colour',
@@ -1383,6 +1399,46 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
       flags: ['EU', 'US', 'AU'],
       description:
           'Cochineal (Carmine) is a red dye extracted by crushing dried female cochineal insects. Because it is derived from insects, its ruling is disputed among scholars and treated here as Haram.',
+    ),
+    Additive(
+      code: 'E122',
+      name: 'Azorubine (Carmoisine)',
+      category: 'Colour',
+      status: 'HALAL',
+      riskText: 'Toxic',
+      riskScore: 0.55,
+      origin: 'chemical',
+      flags: ['EU', 'AU'],
+      bannedFlags: ['US'],
+      description:
+          'Azorubine is a synthetic red azo dye used in jams, sweets and marzipan. It is fully synthetic and vegan, but banned in the US and linked to hyperactivity in sensitive children.',
+      certifications: ['VEGAN'],
+    ),
+    Additive(
+      code: 'E150A',
+      name: 'Plain Caramel',
+      category: 'Colour',
+      status: 'HALAL',
+      riskText: 'Safe',
+      riskScore: 0.15,
+      origin: 'plant',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Plain caramel colour is made by heating sugars (caramelisation) without ammonia or sulphite compounds. It is plant derived and considered safe at normal intake levels.',
+      certifications: ['VEGAN', 'JECFA'],
+    ),
+    Additive(
+      code: 'E160A',
+      name: 'Carotenes',
+      category: 'Colour',
+      status: 'HALAL',
+      riskText: 'Safe',
+      riskScore: 0.1,
+      origin: 'plant',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Carotenes are natural orange-yellow pigments found in carrots, pumpkins and other plants, used to colour margarine, juices and cheese.',
+      certifications: ['VEGAN', 'JECFA'],
     ),
     Additive(
       code: 'E161I',
@@ -1409,6 +1465,133 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
       bannedFlags: ['EU', 'US', 'AU'],
       description:
           'Astaxanthin is a reddish-pink carotenoid pigment, often produced from algae or synthetically, but also sometimes from crustacean shells.',
+    ),
+    Additive(
+      code: 'E200',
+      name: 'Sorbic Acid',
+      category: 'Preservative',
+      status: 'HALAL',
+      riskText: 'Safe',
+      riskScore: 0.1,
+      origin: 'plant',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Sorbic acid is a naturally occurring preservative found in berries, and is also produced synthetically. It is used to prevent mould and yeast growth in cheese, wine and baked goods.',
+      certifications: ['VEGAN', 'JECFA'],
+    ),
+    Additive(
+      code: 'E202',
+      name: 'Potassium Sorbate',
+      category: 'Preservative',
+      status: 'HALAL',
+      riskText: 'Safe',
+      riskScore: 0.1,
+      origin: 'chemical',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Potassium sorbate is the potassium salt of sorbic acid, widely used as a preservative in cheese, yogurt, wine and baked goods. It is fully synthetic/plant derived.',
+      certifications: ['VEGAN', 'JECFA'],
+    ),
+    Additive(
+      code: 'E211',
+      name: 'Sodium Benzoate',
+      category: 'Preservative',
+      status: 'HALAL',
+      riskText: 'Do not abuse',
+      riskScore: 0.3,
+      origin: 'chemical',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Sodium benzoate is a widely used preservative in soft drinks, pickles and sauces. It is synthetic and vegan, though it can form benzene when combined with vitamin C in some drinks.',
+      certifications: ['VEGAN', 'JECFA'],
+    ),
+    Additive(
+      code: 'E220',
+      name: 'Sulphur Dioxide',
+      category: 'Preservative',
+      status: 'MUSHBOOH',
+      riskText: 'Toxic',
+      riskScore: 0.5,
+      origin: 'chemical',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Sulphur dioxide is used to preserve dried fruits, wine and juices. It is chemically produced, but some traditional production routes have raised concerns among certifying bodies.',
+      mushboohNote:
+          'This additive is Mushbooh in some rulings because of trace-processing concerns and its strong link to alcoholic fermentation control in wine-making, even though the compound itself is not alcohol.',
+      certifications: ['VEGAN'],
+    ),
+    Additive(
+      code: 'E249',
+      name: 'Potassium Nitrite',
+      category: 'Preservative',
+      status: 'MUSHBOOH',
+      riskText: 'Toxic',
+      riskScore: 0.6,
+      origin: 'chemical',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Potassium nitrite is used to cure meats such as sausages, ham and bacon, giving them their pink colour and preventing botulism.',
+      mushboohNote:
+          'This additive itself is chemical and not animal derived, but because it is almost always used specifically in meat curing, its status depends entirely on whether the meat it is used on is Halal-slaughtered.',
+    ),
+    Additive(
+      code: 'E250',
+      name: 'Sodium Nitrite',
+      category: 'Preservative',
+      status: 'MUSHBOOH',
+      riskText: 'Toxic',
+      riskScore: 0.6,
+      origin: 'chemical',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Sodium nitrite is a common curing agent for processed meats, used to inhibit bacterial growth and preserve colour.',
+      mushboohNote:
+          'This additive is chemical in origin, but since it is used almost exclusively in meat products, its ruling depends on the Halal status of the meat it is added to.',
+    ),
+    Additive(
+      code: 'E322',
+      name: 'Lecithin',
+      category: 'Emulsifier',
+      status: 'MUSHBOOH',
+      riskText: 'Safe',
+      riskScore: 0.15,
+      origin: 'plant',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Lecithin is an emulsifier commonly extracted from soybeans or sunflowers, used in chocolate, margarine and baked goods, though it can occasionally be sourced from egg yolk.',
+      mushboohNote:
+          'This additive is usually plant based (soy or sunflower) and Halal, but it can occasionally be derived from egg yolk or, more rarely, animal sources, so the exact origin should be checked.',
+      certifications: ['JECFA'],
+    ),
+    Additive(
+      code: 'E325',
+      name: 'Sodium Lactate',
+      category: 'Preservative',
+      status: 'MUSHBOOH',
+      riskText: 'Safe',
+      riskScore: 0.15,
+      origin: 'animal',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Sodium lactate is a salt of lactic acid, used as a preservative and flavour enhancer in processed meats, bread and dairy alternatives.',
+      mushboohNote:
+          'The lactic acid used to make sodium lactate can be produced by plant/microbial fermentation (Halal) or, less commonly, from animal-derived sources, so verification is recommended.',
+      certifications: ['JECFA'],
+    ),
+    Additive(
+      code: 'E422',
+      name: 'Glycerol (Glycerin)',
+      category: 'Humectant',
+      status: 'MUSHBOOH',
+      riskText: 'Safe',
+      riskScore: 0.15,
+      origin: 'animal',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Glycerol is used to retain moisture in baked goods, sweets and cosmetics. It can be derived from plant oils, animal fat, or produced synthetically from petroleum.',
+      mushboohNote:
+          'This additive is Mushbooh because glycerin can come from plant oils (Halal), animal fat (depends on the animal and slaughter method), or petrochemical synthesis (Halal), and the source is not always disclosed.',
+      certifications: ['JECFA'],
     ),
     Additive(
       code: 'E428',
@@ -1448,6 +1631,75 @@ class _AdditivesListScreenState extends State<AdditivesListScreen> {
       mushboohNote:
           'This additive is Mushbooh. The fatty acids can come from vegetable oil (Halal) or animal fat (Haram depending on the animal and slaughter method), so the source cannot always be confirmed.',
       certifications: ['JECFA'],
+    ),
+    Additive(
+      code: 'E542',
+      name: 'Bone Phosphate',
+      category: 'Anti-caking agent',
+      status: 'HARAM',
+      riskText: 'Do not abuse',
+      riskScore: 0.3,
+      origin: 'animal',
+      flags: [],
+      bannedFlags: ['EU', 'US', 'AU'],
+      description:
+          'Bone phosphate is derived by processing animal bones, typically from cattle. Unless the source animal is confirmed Halal-slaughtered, it is treated as Haram.',
+    ),
+    Additive(
+      code: 'E631',
+      name: 'Disodium Inosinate',
+      category: 'Flavour enhancer',
+      status: 'MUSHBOOH',
+      riskText: 'Do not abuse',
+      riskScore: 0.35,
+      origin: 'animal',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'A flavour enhancer often used alongside MSG in savoury snacks, instant noodles and soups. It is commonly produced from fish or meat, though microbial/plant fermentation sources also exist.',
+      mushboohNote:
+          'This additive is Mushbooh because it can be derived from fish or meat by-products (which may or may not be Halal) or from plant/microbial fermentation, and manufacturers rarely disclose the exact source.',
+    ),
+    Additive(
+      code: 'E904',
+      name: 'Shellac',
+      category: 'Glazing agent',
+      status: 'HARAM',
+      riskText: 'Do not abuse',
+      riskScore: 0.3,
+      origin: 'insect',
+      flags: ['EU', 'US', 'AU'],
+      description:
+          'Shellac is a resin secreted by the female lac insect, used to give a shiny coating to sweets, fruit and pills. Because it is an insect secretion, most scholars classify it as Haram.',
+    ),
+    Additive(
+      code: 'E920',
+      name: 'L-Cysteine',
+      category: 'Flour treatment agent',
+      status: 'MUSHBOOH',
+      riskText: 'Do not abuse',
+      riskScore: 0.4,
+      origin: 'animal',
+      flags: ['EU', 'US'],
+      bannedFlags: ['AU'],
+      description:
+          'L-Cysteine is used as a dough conditioner in bread and bakery products. It has historically been produced from human hair, duck feathers or pig bristles, though synthetic/fermentation-derived versions now also exist.',
+      mushboohNote:
+          'This additive is Mushbooh because L-cysteine can be produced from animal-derived sources (feathers, bristles, hair) or by microbial fermentation (Halal), and the source is rarely stated on packaging.',
+    ),
+    Additive(
+      code: 'E1105',
+      name: 'Lysozyme',
+      category: 'Preservative',
+      status: 'MUSHBOOH',
+      riskText: 'Safe',
+      riskScore: 0.2,
+      origin: 'animal',
+      flags: ['EU'],
+      bannedFlags: ['US', 'AU'],
+      description:
+          'Lysozyme is an enzyme extracted from egg white, used as a natural preservative in cheese and wine to inhibit bacterial growth.',
+      mushboohNote:
+          'This additive is derived from egg white, which is generally Halal, but some scholars flag it as Mushbooh depending on the certification of the eggs and extraction process used.',
     ),
   ];
 
@@ -2559,7 +2811,7 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
                   _GuideGridItem(label: 'Toxic'),
                   _GuideGridItem(label: 'Very toxic'),
                 ],
-                iconBuilder: (item) => const _GaugeIcon(),
+                iconBuilder: (item, index, total) => _GaugeIcon(level: index, totalLevels: total),
               ),
               const SizedBox(height: 24),
 
@@ -2581,7 +2833,7 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
                   _GuideGridItem(label: 'Alcohol', emoji: '\ud83c\udf77'),
                   _GuideGridItem(label: 'Synthetic', emoji: '\ud83e\uddea'),
                 ],
-                iconBuilder: (item) => Text(item.emoji!, style: const TextStyle(fontSize: 30)),
+                iconBuilder: (item, index, total) => Text(item.emoji!, style: const TextStyle(fontSize: 30)),
               ),
             ],
           ),
@@ -2649,7 +2901,7 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
 
   Widget _buildIconGridBox({
     required List<_GuideGridItem> items,
-    required Widget Function(_GuideGridItem item) iconBuilder,
+    required Widget Function(_GuideGridItem item, int index, int total) iconBuilder,
   }) {
     return Container(
       width: double.infinity,
@@ -2662,12 +2914,14 @@ class _GuidesAndWalkthroughScreenState extends State<GuidesAndWalkthroughScreen>
       child: Wrap(
         alignment: WrapAlignment.start,
         runSpacing: 24,
-        children: items.map((item) {
+        children: items.asMap().entries.map((entry) {
+          final index = entry.key;
+          final item = entry.value;
           return SizedBox(
             width: MediaQuery.of(context).size.width / 2 - 30,
             child: Row(
               children: [
-                SizedBox(width: 44, height: 44, child: Center(child: iconBuilder(item))),
+                SizedBox(width: 44, height: 44, child: Center(child: iconBuilder(item, index, items.length))),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -2691,33 +2945,42 @@ class _GuideGridItem {
 }
 
 // Small flat gauge/speedometer icon used in the "Level of toxicity" grid.
-// Deliberately the SAME icon for every level (matching the reference design,
-// which reuses one generic rainbow gauge glyph for every row).
+// Each toxicity level (0 = safest ... totalLevels-1 = most toxic) now gets
+// its own needle position AND its own dominant color, so the five rows are
+// visually distinguishable instead of all reusing one identical glyph.
 class _GaugeIcon extends StatelessWidget {
-  const _GaugeIcon();
+  final int level;
+  final int totalLevels;
+  const _GaugeIcon({required this.level, required this.totalLevels});
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
       size: const Size(36, 24),
-      painter: _GaugePainter(),
+      painter: _GaugePainter(level: level, totalLevels: totalLevels),
     );
   }
 }
 
 class _GaugePainter extends CustomPainter {
+  final int level;
+  final int totalLevels;
+  _GaugePainter({required this.level, required this.totalLevels});
+
+  static const gradientColors = [
+    Color(0xFF4CAF50), // safe / no-little toxic
+    Color(0xFF9FCB3C), // do not abuse
+    Color(0xFFF4C430), // doubtful
+    Color(0xFFEF8C1F), // toxic
+    Color(0xFFE84A3D), // very toxic
+  ];
+
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height * 2);
-    const gradientColors = [
-      Color(0xFFE84A3D),
-      Color(0xFFEF8C1F),
-      Color(0xFFF4C430),
-      Color(0xFF9FCB3C),
-      Color(0xFF4CAF50),
-    ];
+
     final arcPaint = Paint()
-      ..shader = SweepGradient(
+      ..shader = const SweepGradient(
         colors: gradientColors,
         startAngle: 3.1416,
         endAngle: 3.1416 * 2,
@@ -2729,17 +2992,33 @@ class _GaugePainter extends CustomPainter {
 
     canvas.drawArc(rect, 3.1416, 3.1416, false, arcPaint);
 
+    // Needle angle sweeps from the far-left (safe) to the far-right (very
+    // toxic) depending on this row's level, so every level looks different.
+    final t = totalLevels > 1 ? level / (totalLevels - 1) : 0.0;
+    final angle = 3.1416 + (3.1416 * t); // 180deg .. 360deg
+    final center = Offset(size.width / 2, size.height);
+    final needleLength = size.height * 0.85;
+    final needleEnd = Offset(
+      center.dx + needleLength * math.cos(angle),
+      center.dy + needleLength * math.sin(angle),
+    );
+
+    // Needle colored to match this level's position on the gradient.
+    final needleColor = gradientColors[level.clamp(0, gradientColors.length - 1)];
     final needlePaint = Paint()
       ..color = Colors.grey[800]!
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
-    final center = Offset(size.width / 2, size.height);
-    canvas.drawLine(center, Offset(size.width * 0.72, size.height * 0.35), needlePaint);
+    canvas.drawLine(center, needleEnd, needlePaint);
     canvas.drawCircle(center, 2.5, Paint()..color = Colors.grey[800]!);
+
+    // Small colored dot at the needle tip to reinforce which level this is.
+    canvas.drawCircle(needleEnd, 3, Paint()..color = needleColor);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _GaugePainter oldDelegate) =>
+      oldDelegate.level != level || oldDelegate.totalLevels != totalLevels;
 }
 
 // ============================================================
