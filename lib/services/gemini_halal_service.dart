@@ -6,7 +6,11 @@ import 'halal_analyzer_service.dart';
 
 class GeminiHalalService {
   
-  static String apiKey = 'AQ.Ab8RN6JA5Vdi1MD1q5RczYdgs2SDNCq1NQQiGg2pwF8pk49Qiw';
+  // SECURITY: never hardcode a real key here. Provide it at runtime via
+  // --dart-define=GEMINI_API_KEY=xxx (build/run flag) or by calling
+  // GeminiHalalService.setApiKey() after loading it from a secure source
+  // (e.g. your own backend / secrets manager) — never bundle it in source.
+  static String apiKey = const String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
   static const String _geminiEndpoint =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
