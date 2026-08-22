@@ -26,6 +26,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/gemini_halal_service.dart';
 import '../../services/halal_analyzer_service.dart';
+import '../../services/halal_scanner_service.dart';
 import '../../services/ingredient_ocr_cleaner.dart';
 import '../../services/open_food_facts_service.dart';
 import '../../widgets/auth_header.dart';
@@ -65,8 +66,9 @@ class HalalScannerState {
   static int mushboohCount = 0;
   static int remainingScans = 7;
   static List<ScannedProduct> history = [];
+  static bool isLoaded = false;
 
-  static void addProduct(ScannedProduct product) {
+  static Future<void> addProduct(ScannedProduct product) async {
     // Remove existing duplicate if present
     final existingIndex = history.indexWhere((h) {
       if (product.barcode.isNotEmpty && h.barcode.isNotEmpty) {
@@ -77,32 +79,69 @@ class HalalScannerState {
 
     if (existingIndex != -1) {
       final oldProduct = history.removeAt(existingIndex);
-      if (oldProduct.status == 'HALAL' && halalCount > 0) {
-        halalCount--;
-      } else if (oldProduct.status == 'HARAM' && haramCount > 0) {
-        haramCount--;
-      } else if (mushboohCount > 0) {
-        mushboohCount--;
-      }
+      _decrementCount(oldProduct.status);
     }
 
     history.insert(0, product);
-    if (product.status == 'HALAL') {
+    _incrementCount(product.status);
+
+    if (remainingScans > 0) remainingScans--;
+
+    // Save to Firestore
+    await HalalScannerService.instance.saveScan(product);
+  }
+
+  static void _incrementCount(String status) {
+    if (status == 'HALAL') {
       halalCount++;
-    } else if (product.status == 'HARAM') {
+    } else if (status == 'HARAM') {
       haramCount++;
     } else {
       mushboohCount++;
     }
-    if (remainingScans > 0) remainingScans--;
   }
 
-  static void clearHistory() {
+  static void _decrementCount(String status) {
+    if (status == 'HALAL' && halalCount > 0) {
+      halalCount--;
+    } else if (status == 'HARAM' && haramCount > 0) {
+      haramCount--;
+    } else if (mushboohCount > 0) {
+      mushboohCount--;
+    }
+  }
+
+  static Future<void> loadHistory() async {
+    final remoteHistory = await HalalScannerService.instance.getScanHistory();
+    history = remoteHistory;
+
+    halalCount = 0;
+    haramCount = 0;
+    mushboohCount = 0;
+
+    for (var product in history) {
+      _incrementCount(product.status);
+    }
+
+    isLoaded = true;
+  }
+
+  static Future<void> clearHistory() async {
     history.clear();
     halalCount = 0;
     haramCount = 0;
     mushboohCount = 0;
     remainingScans = 7;
+    await HalalScannerService.instance.clearHistory();
+  }
+
+  static void reset() {
+    history = [];
+    halalCount = 0;
+    haramCount = 0;
+    mushboohCount = 0;
+    remainingScans = 7;
+    isLoaded = false;
   }
 }
 
@@ -116,6 +155,21 @@ class HalalScannerHomeScreen extends StatefulWidget {
 
 class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _isLoadingHistory = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    if (HalalScannerState.isLoaded) return;
+    setState(() => _isLoadingHistory = true);
+    await HalalScannerState.loadHistory();
+    await HalalScannerService.instance.getAdditiveOverrides();
+    if (mounted) setState(() => _isLoadingHistory = false);
+  }
 
   void _showScanIngredientsSheet() {
     showModalBottomSheet(
@@ -188,10 +242,9 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => RealBarcodeScannerScreen(
-          onScanComplete: (product) {
-            setState(() {
-              HalalScannerState.addProduct(product);
-            });
+          onScanComplete: (product) async {
+            await HalalScannerState.addProduct(product);
+            if (mounted) setState(() {});
           },
           isDarkMode: widget.isDarkMode,
         ),
@@ -429,7 +482,23 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    if (HalalScannerState.history.isEmpty)
+                    if (_isLoadingHistory)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Column(
+                            children: [
+                              const CircularProgressIndicator(color: AppColors.midTeal),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Loading history...',
+                                style: TextStyle(color: widget.isDarkMode ? Colors.white70 : Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (HalalScannerState.history.isEmpty)
                       _buildEmptyState()
                     else
                       ListView.builder(
@@ -817,6 +886,20 @@ class ScannedHistoryScreen extends StatefulWidget {
 class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
   String _searchQuery = '';
   String _selectedFilter = 'ALL';
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkHistory();
+  }
+
+  Future<void> _checkHistory() async {
+    if (HalalScannerState.isLoaded) return;
+    setState(() => _isLoading = true);
+    await HalalScannerState.loadHistory();
+    if (mounted) setState(() => _isLoading = false);
+  }
 
   List<ScannedProduct> get _filteredHistory {
     return HalalScannerState.history.where((product) {
@@ -853,14 +936,15 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
               backgroundColor: Colors.redAccent,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: () {
-              setState(() {
-                HalalScannerState.clearHistory();
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('History successfully cleared!')),
-              );
+            onPressed: () async {
+              await HalalScannerState.clearHistory();
+              if (mounted) {
+                setState(() {});
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('History successfully cleared!')),
+                );
+              }
             },
             child: Text('Clear All', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -952,16 +1036,18 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
           ],
 
           Expanded(
-            child: historyList.isEmpty
-                ? _buildEmptyState(cardColor, primaryTextColor)
-                : ListView.builder(
-                    padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
-                    itemCount: historyList.length,
-                    itemBuilder: (context, index) {
-                      final product = historyList[index];
-                      return _buildProductCard(product, cardColor, primaryTextColor);
-                    },
-                  ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: AppColors.midTeal))
+                : historyList.isEmpty
+                    ? _buildEmptyState(cardColor, primaryTextColor)
+                    : ListView.builder(
+                        padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
+                        itemCount: historyList.length,
+                        itemBuilder: (context, index) {
+                          final product = historyList[index];
+                          return _buildProductCard(product, cardColor, primaryTextColor);
+                        },
+                      ),
           ),
         ],
       ),
@@ -2110,14 +2196,17 @@ class _AdditiveDetailScreenState extends State<AdditiveDetailScreen> {
                     backgroundColor: AppColors.navyBlue,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                     setState(() {
                       _additive = _additive.copyWith(status: currentStatus);
                     });
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Status of ${_additive.code} updated to $currentStatus!')),
-                    );
+                    await HalalScannerService.instance.saveAdditiveOverride(_additive.code, currentStatus);
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Status of ${_additive.code} updated to $currentStatus!')),
+                      );
+                    }
                   },
                   child: const Text('Save Override', style: TextStyle(color: Colors.white)),
                 ),
@@ -4252,9 +4341,10 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       );
 
       if (aiResult != null && mounted) {
+        final finalAiResult = aiResult.copyWithOverrides(HalalScannerService.instance.additiveOverrides);
         setState(() {
-          _analysisResult = aiResult;
-          _cleanIngredientsList = aiResult.ingredients;
+          _analysisResult = finalAiResult;
+          _cleanIngredientsList = finalAiResult.ingredients;
           _isAnalyzing = false;
         });
         return;
@@ -4302,8 +4392,9 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       );
 
       if (textAiResult != null && mounted) {
+        final finalAiResult = textAiResult.copyWithOverrides(HalalScannerService.instance.additiveOverrides);
         setState(() {
-          _analysisResult = textAiResult;
+          _analysisResult = finalAiResult;
           _isAnalyzing = false;
         });
         return;
@@ -4316,6 +4407,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         productName: 'Scanned Ingredients',
         barcode: barcode,
         imageUrl: imagePath,
+        overrides: HalalScannerService.instance.additiveOverrides,
       );
 
       if (!mounted) return;
@@ -4367,7 +4459,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       },
     );
 
-    Future.delayed(const Duration(seconds: 1), () {
+    Future.delayed(const Duration(seconds: 1), () async {
       if (!mounted) return;
       Navigator.pop(context);
 
@@ -4402,7 +4494,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       );
 
       if (_analysisResult != null) {
-        HalalScannerState.addProduct(_analysisResult!.toScannedProduct());
+        await HalalScannerState.addProduct(_analysisResult!.toScannedProduct());
       }
     });
   }
@@ -4969,6 +5061,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       productName: widget.product.name,
       barcode: widget.product.barcode,
       imageUrl: widget.product.imageUrl,
+      overrides: HalalScannerService.instance.additiveOverrides,
     );
 
     return analysis.results.map((result) {
@@ -5640,6 +5733,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
       productName: productData.name,
       barcode: barcode,
       imageUrl: productData.imageUrl,
+      overrides: HalalScannerService.instance.additiveOverrides,
     );
   }
 
