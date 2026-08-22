@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import '../services/islamic_ai_service.dart';
@@ -23,20 +24,16 @@ class _ChatMessage {
   _ChatMessage({required this.text, required this.isUser, this.isLoading = false});
 }
 
-
-
 class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderStateMixin {
   final TextEditingController _inputCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   final List<_ChatMessage> _messages = [];
 
-  static const String _greeting =
-      'Assalamu Alaikum! Ask me about prayer, fasting, Zakat, Hajj, or other Islamic topics — I\'ll do my best to help.';
+  // Future-based history fetch — simple, fast, no stream issues
+  late Future<List<Map<String, dynamic>>> _chatsFuture;
+  int _historyRefreshKey = 0; // increment to force a reload
 
   // ===== SIDE PANEL ANIMATION =====
-  // Using an explicit AnimationController (rather than AnimatedPositioned)
-  // guarantees the slide-in/out animation always plays, regardless of how
-  // this widget is constrained by its parent (IndexedStack / tab switcher).
   late final AnimationController _panelCtrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 260),
@@ -48,8 +45,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
 
   bool _historyOpen = false;
 
-  // A few sparkling stars, same look as the dashboard background — kept
-  // sparse here so they read as a subtle touch rather than a busy sky.
+  // Sparkling background stars
   final List<_AssistantStarConfig> _stars = [
     _AssistantStarConfig(topFraction: 0.04, leftFraction: 0.85, size: 5, delayMs: 200),
     _AssistantStarConfig(topFraction: 0.10, leftFraction: 0.12, size: 4, delayMs: 600),
@@ -57,22 +53,52 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     _AssistantStarConfig(topFraction: 0.55, leftFraction: 0.06, size: 5, delayMs: 350),
   ];
 
-  final List<String> _suggestedPrompts = [
-    'What are the 5 pillars of Islam?',
-    'How do I perform Wudu?',
-    'What is the Nisab for Zakat?',
-    'How many Rak\'ahs in each prayer?',
-    'What breaks the fast?',
+  // DeepSeek-Style Prompt Cards Configuration
+  final List<Map<String, dynamic>> _deepSeekPromptCards = [
+    {
+      'title': 'Prayer Guidance',
+      'prompt': 'How do I perform Wudu step by step according to Sunnah?',
+      'subtitle': 'Perform ablution correctly before Salat',
+      'icon': Icons.water_drop_rounded,
+      'accent': const Color(0xFF0D9488),
+    },
+    {
+      'title': 'Fasting Rules',
+      'prompt': 'What actions invalidate the fast during Ramadan?',
+      'subtitle': 'Essential rules for Sawm & Ramadan',
+      'icon': Icons.nightlight_round,
+      'accent': const Color(0xFFF59E0B), // Night Sky Amber Gold (Not red)
+    },
+    {
+      'title': 'Zakat & Nisab',
+      'prompt': 'What is the Nisab threshold and rate for calculating Zakat?',
+      'subtitle': 'Calculate obligatory Islamic charity',
+      'icon': Icons.account_balance_wallet_rounded,
+      'accent': const Color(0xFF2563EB),
+    },
+    {
+      'title': '5 Pillars of Islam',
+      'prompt': 'What are the 5 pillars of Islam and their significance?',
+      'subtitle': 'Core foundation of Muslim faith',
+      'icon': Icons.menu_book_rounded,
+      'accent': const Color(0xFF7C3AED),
+    },
   ];
 
   String _currentChatId = DateTime.now().millisecondsSinceEpoch.toString();
-
-
+  bool _isGenerating = false;
 
   @override
   void initState() {
     super.initState();
-    _messages.add(_ChatMessage(text: _greeting, isUser: false));
+    _chatsFuture = IslamicAIService().fetchPastChats();
+  }
+
+  void _refreshHistory() {
+    setState(() {
+      _historyRefreshKey++;
+      _chatsFuture = IslamicAIService().fetchPastChats();
+    });
   }
 
   @override
@@ -82,8 +108,6 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     _panelCtrl.dispose();
     super.dispose();
   }
-
-  bool _isGenerating = false;
 
   void _handleSend([String? presetText]) async {
     final String text = (presetText ?? _inputCtrl.text).trim();
@@ -98,25 +122,40 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
       _messages.add(aiMsg);
     });
     _inputCtrl.clear();
-    _scrollToBottom();
+    _scrollToBottom(immediate: true);
 
     try {
       final stream = IslamicAIService().sendMessageStream(text);
+      int lastUpdateMs = DateTime.now().millisecondsSinceEpoch;
+
       await for (final chunk in stream) {
         if (!mounted) break;
+        aiMsg.text += chunk;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        // Throttle UI rebuilds to ~60ms intervals for smooth 60fps streaming text without jitter
+        if (now - lastUpdateMs > 60 || aiMsg.isLoading) {
+          lastUpdateMs = now;
+          setState(() {
+            aiMsg.isLoading = false;
+          });
+          _scrollToBottom(immediate: true);
+        }
+      }
+      if (mounted) {
         setState(() {
           aiMsg.isLoading = false;
-          aiMsg.text += chunk;
         });
-        _scrollToBottom();
+        _scrollToBottom(immediate: true);
       }
       _saveCurrentChatToFirestore();
+      _refreshHistory();
     } catch (e) {
       if (mounted) {
         setState(() {
           aiMsg.isLoading = false;
           if (aiMsg.text.isEmpty) {
-            aiMsg.text = 'No internet connection. Please check your network connection and try again.\n\n*Allahu A\'lam (Allah knows best).*';
+            aiMsg.text =
+                'No internet connection. Please check your network connection and try again.\n\n*Allahu A\'lam (Allah knows best).*';
           }
         });
       }
@@ -126,6 +165,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
           _isGenerating = false;
           aiMsg.isLoading = false;
         });
+        _scrollToBottom(immediate: false);
       }
     }
   }
@@ -150,19 +190,22 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     );
   }
 
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
+  void _scrollToBottom({bool immediate = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        final maxExtent = _scrollCtrl.position.maxScrollExtent;
+        if (immediate) {
+          _scrollCtrl.jumpTo(maxExtent);
+        } else {
+          _scrollCtrl.animateTo(
+            maxExtent,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+          );
+        }
       }
     });
   }
-
-
 
   /// Restores a past chat conversation from Firestore.
   void _openFirestoreChat(Map<String, dynamic> doc) {
@@ -180,10 +223,6 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
       ));
     }
 
-    if (loaded.isEmpty) {
-      loaded.add(_ChatMessage(text: _greeting, isUser: false));
-    }
-
     setState(() {
       _currentChatId = chatId;
       _messages
@@ -193,24 +232,22 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
 
     IslamicAIService().restoreChat(parsedMaps);
     _closeHistory();
-    _scrollToBottom();
+    _scrollToBottom(immediate: true);
   }
 
   /// Starts a fresh conversation.
   void _startNewChat() {
     setState(() {
       _currentChatId = DateTime.now().millisecondsSinceEpoch.toString();
-      _messages
-        ..clear()
-        ..add(_ChatMessage(text: _greeting, isUser: false));
+      _messages.clear();
     });
 
     IslamicAIService().resetChat();
     _closeHistory();
-    _scrollToBottom();
   }
 
   void _openHistory() {
+    _refreshHistory(); // always fetch fresh data when opening
     setState(() => _historyOpen = true);
     _panelCtrl.forward();
   }
@@ -229,6 +266,123 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     }
   }
 
+  /// Confirms before deleting a chat conversation from history
+  void _confirmDeleteChat(BuildContext context, String chatId, String title) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final isDark = _dark;
+        final dialogBg = isDark ? Colors.black : Colors.white;
+        final primaryText = isDark ? Colors.white : AppColors.navyBlue;
+        final secondaryText =
+            isDark ? Colors.white.withValues(alpha: 0.7) : AppColors.navyBlue.withValues(alpha: 0.65);
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          backgroundColor: dialogBg,
+          elevation: 16,
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: isDark ? 0.2 : 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.redAccent,
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Delete Conversation?',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: primaryText,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Are you sure you want to delete "$title"? This action cannot be undone.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    height: 1.45,
+                    color: secondaryText,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: BorderSide(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.2)
+                                : AppColors.navyBlue.withValues(alpha: 0.2),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: primaryText,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          Navigator.of(ctx).pop();
+                          await IslamicAIService().deleteChatFromFirestore(chatId);
+                          if (_currentChatId == chatId) _startNewChat();
+                          _refreshHistory();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          'Delete',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // ===== THEME HELPERS =====
   bool get _dark =>
       widget.isDarkMode || Theme.of(context).brightness == Brightness.dark;
@@ -237,10 +391,10 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
       _dark ? Colors.black : const Color(0xFFF3F6F6);
 
   Color _bubbleBg(BuildContext context) =>
-      _dark ? const Color(0xFF1A2330) : Colors.white;
+      _dark ? Colors.black : Colors.white;
 
   Color _bubbleBorder(BuildContext context) => _dark
-      ? Colors.white.withValues(alpha: 0.14)
+      ? Colors.white.withValues(alpha: 0.16)
       : AppColors.navyBlue.withValues(alpha: 0.15);
 
   Color _primaryText(BuildContext context) =>
@@ -251,10 +405,10 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
       : AppColors.navyBlue.withValues(alpha: 0.55);
 
   Color _inputBarBg(BuildContext context) =>
-      _dark ? const Color(0xFF1A2330) : Colors.white;
+      _dark ? Colors.black : Colors.white;
 
   Color _panelBg(BuildContext context) =>
-      _dark ? const Color(0xFF10161F) : Colors.white;
+      _dark ? Colors.black : Colors.white;
 
   @override
   Widget build(BuildContext context) {
@@ -262,23 +416,14 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     return Container(
       key: const ValueKey('AssistantTab'),
       color: _pageBg(context),
-      // LayoutBuilder gives us the ACTUAL bounded width/height this tab has
-      // to work with, so the panel width and the Stack below are never
-      // guessing at unbounded constraints — this is what makes the slide
-      // animation and sizing reliable no matter where this tab is hosted.
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Panel is 78% of the available width, capped at 260 logical px —
-          // matches Claude's sidebar proportions instead of a fixed value
-          // that could be too wide/narrow depending on the device.
           final panelWidth = (constraints.maxWidth * 0.78).clamp(200.0, 260.0);
 
           return Stack(
             clipBehavior: Clip.hardEdge,
             children: [
-              // A few sparkling twinkling stars in the background, matching
-              // the dashboard's night-sky touch — shows through wherever the
-              // content below doesn't fully cover the page background.
+              // Background sparkling stars
               ..._stars.map((star) {
                 return _AssistantTwinklingStar(
                   topFraction: star.topFraction,
@@ -292,19 +437,22 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                 children: [
                   _buildHeader(),
                   Expanded(
-                    child: ListView.builder(
-                      controller: _scrollCtrl,
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                      itemCount: _messages.length,
-                      itemBuilder: (context, index) => _buildMessageBubble(_messages[index]),
-                    ),
+                    child: _messages.isEmpty
+                        ? _buildDeepSeekEmptyState()
+                        : ListView.builder(
+                            controller: _scrollCtrl,
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                            itemCount: _messages.length,
+                            itemBuilder: (context, index) =>
+                                _buildMessageBubble(_messages[index]),
+                          ),
                   ),
-                  if (_messages.length <= 1) _buildSuggestedPrompts(),
                   const SizedBox(height: 8),
                   _buildInputBar(),
                   Builder(
                     builder: (context) {
-                      final navBarHeightWithInset = 70.0 + MediaQuery.of(context).padding.bottom;
+                      final navBarHeightWithInset =
+                          70.0 + MediaQuery.of(context).padding.bottom;
                       final double extraBottom = keyboardHeight > navBarHeightWithInset
                           ? (keyboardHeight - navBarHeightWithInset)
                           : 8.0;
@@ -314,7 +462,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                 ],
               ),
 
-              // ===== BACKDROP (tap outside the panel to close it) =====
+              // ===== BACKDROP =====
               if (_historyOpen || _panelCtrl.isAnimating)
                 Positioned.fill(
                   child: GestureDetector(
@@ -346,9 +494,182 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     );
   }
 
+  /// Professional & Standard AI Empty State for New Conversations
+  Widget _buildDeepSeekEmptyState() {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Professional AI Emblem Header
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _dark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : AppColors.navyBlue.withValues(alpha: 0.05),
+                border: Border.all(
+                  color: AppColors.midTeal.withValues(alpha: _dark ? 0.3 : 0.2),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.midTeal.withValues(alpha: 0.1),
+                    blurRadius: 16,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: const AppLogo(size: 48),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Assalamu Alaikum!',
+              style: GoogleFonts.poppins(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: _primaryText(context),
+                letterSpacing: 0.2,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'How can I help you with your Islamic learning today?',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: _secondaryText(context),
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Trust Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: _dark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : AppColors.navyBlue.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: _dark
+                      ? Colors.white.withValues(alpha: 0.1)
+                      : AppColors.navyBlue.withValues(alpha: 0.1),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.auto_awesome_rounded, size: 12, color: AppColors.midTeal),
+                  const SizedBox(width: 6),
+                  Text(
+                    'DeenMate AI • Authentic Quran & Sunnah Guidance',
+                    style: GoogleFonts.inter(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: _primaryText(context).withValues(alpha: 0.75),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Standard Professional Suggestion List Cards
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                children: _deepSeekPromptCards.map((card) {
+                  final Color accentColor = card['accent'] as Color;
+                  final IconData iconData = card['icon'] as IconData;
+                  final String title = card['title'] as String;
+                  final String prompt = card['prompt'] as String;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: InkWell(
+                      onTap: () => _handleSend(prompt),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _bubbleBg(context),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: _bubbleBorder(context), width: 1.0),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _dark
+                                  ? Colors.black.withValues(alpha: 0.25)
+                                  : AppColors.navyBlue.withValues(alpha: 0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(9),
+                              decoration: BoxDecoration(
+                                color: accentColor.withValues(alpha: _dark ? 0.2 : 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(iconData, color: accentColor, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: _primaryText(context),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    prompt,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: _secondaryText(context),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.north_east_rounded,
+                              size: 16,
+                              color: _secondaryText(context).withValues(alpha: 0.45),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHistoryPanel() {
     return Material(
       color: _panelBg(context),
+      surfaceTintColor: Colors.transparent,
       elevation: 12,
       child: SafeArea(
         child: Column(
@@ -359,13 +680,15 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
               child: Row(
                 children: [
                   Expanded(
-                    child: Text('Chat History',
-                        style: GoogleFonts.poppins(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: _primaryText(context))),
+                    child: Text(
+                      'Chat History',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: _primaryText(context),
+                      ),
+                    ),
                   ),
-                  // Collapse button — same idea as Claude's sidebar-collapse arrow.
                   GestureDetector(
                     onTap: _closeHistory,
                     child: Container(
@@ -393,23 +716,29 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: AppColors.midTeal.withValues(alpha: _dark ? 0.18 : 0.1),
+                    color: _dark ? Colors.black : AppColors.midTeal.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: AppColors.midTeal.withValues(alpha: _dark ? 0.5 : 0.3),
+                      color: _dark
+                          ? Colors.white.withValues(alpha: 0.16)
+                          : AppColors.midTeal.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.edit_note_rounded, size: 18, color: AppColors.midTeal),
+                      const Icon(Icons.edit_note_rounded,
+                          size: 18, color: AppColors.midTeal),
                       const SizedBox(width: 8),
-                      Text('New chat',
-                          style: GoogleFonts.inter(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: _dark
-                                  ? AppColors.midTeal.withValues(alpha: 0.95)
-                                  : AppColors.midTeal)),
+                      Text(
+                        'New chat',
+                        style: GoogleFonts.inter(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: _dark
+                              ? AppColors.midTeal.withValues(alpha: 0.95)
+                              : AppColors.midTeal,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -417,11 +746,12 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
             ),
             Divider(height: 1, color: _bubbleBorder(context)),
             Expanded(
-              child: StreamBuilder<List<Map<String, dynamic>>>(
-                stream: IslamicAIService().getPastChatsStream(),
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                key: ValueKey(_historyRefreshKey),
+                future: _chatsFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(
+                    return const Center(
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         color: AppColors.midTeal,
@@ -429,7 +759,34 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                     );
                   }
 
-                  final chats = snapshot.data ?? [];
+                  if (snapshot.hasError || !snapshot.hasData) {
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.wifi_off_rounded,
+                              size: 28,
+                              color: _secondaryText(context).withValues(alpha: 0.5)),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Could not load history.',
+                            style: GoogleFonts.inter(
+                                fontSize: 12, color: _secondaryText(context)),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _refreshHistory,
+                            child: Text('Retry',
+                                style: GoogleFonts.inter(
+                                    fontSize: 12, color: AppColors.midTeal)),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  final chats = snapshot.data!;
                   if (chats.isEmpty) {
                     return Padding(
                       padding: const EdgeInsets.all(16),
@@ -457,7 +814,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           child: Row(
                             children: [
-                              Icon(Icons.chat_bubble_outline_rounded,
+                              const Icon(Icons.chat_bubble_outline_rounded,
                                   color: AppColors.midTeal, size: 16),
                               const SizedBox(width: 10),
                               Expanded(
@@ -473,7 +830,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                                 ),
                               ),
                               GestureDetector(
-                                onTap: () => IslamicAIService().deleteChatFromFirestore(chatId),
+                                onTap: () => _confirmDeleteChat(context, chatId, title),
                                 child: Padding(
                                   padding: const EdgeInsets.all(4),
                                   child: Icon(
@@ -519,11 +876,21 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Islamic Assistant',
-                    style: GoogleFonts.poppins(
-                        fontSize: 18, fontWeight: FontWeight.bold, color: _primaryText(context))),
-                Text('Ask about prayer, fasting, Zakat & more',
-                    style: GoogleFonts.inter(fontSize: 11.5, color: _secondaryText(context))),
+                Text(
+                  'Islamic Assistant',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _primaryText(context),
+                  ),
+                ),
+                Text(
+                  'Ask about prayer, fasting, Zakat & more',
+                  style: GoogleFonts.inter(
+                    fontSize: 11.5,
+                    color: _secondaryText(context),
+                  ),
+                ),
               ],
             ),
           ),
@@ -552,43 +919,6 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildSuggestedPrompts() {
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _suggestedPrompts.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final prompt = _suggestedPrompts[index];
-          return GestureDetector(
-            onTap: () => _handleSend(prompt),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: _dark
-                    ? AppColors.midTeal.withValues(alpha: 0.18)
-                    : AppColors.midTeal.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.midTeal.withValues(alpha: _dark ? 0.5 : 0.3)),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                prompt,
-                style: GoogleFonts.inter(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: _dark ? AppColors.midTeal.withValues(alpha: 0.95) : AppColors.midTeal,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildMessageBubble(_ChatMessage message) {
     final bool isUser = message.isUser;
     final bool showLoading = message.isLoading && message.text.isEmpty;
@@ -596,7 +926,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 310),
+        constraints: BoxConstraints(maxWidth: isUser ? 290 : double.infinity),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -622,7 +952,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
             ? Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
+                  const SizedBox(
                     width: 14,
                     height: 14,
                     child: CircularProgressIndicator(
@@ -644,12 +974,75 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SelectableText(
-                    message.text,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      height: 1.5,
-                      color: isUser ? Colors.white : _primaryText(context).withValues(alpha: 0.9),
+                  MarkdownBody(
+                    data: message.text,
+                    selectable: true,
+                    styleSheet: MarkdownStyleSheet(
+                      p: GoogleFonts.inter(
+                        fontSize: 13,
+                        height: 1.5,
+                        color: isUser
+                            ? Colors.white
+                            : _primaryText(context).withValues(alpha: 0.95),
+                      ),
+                      h1: GoogleFonts.poppins(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.bold,
+                        color: isUser ? Colors.white : _primaryText(context),
+                      ),
+                      h2: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: isUser ? Colors.white : _primaryText(context),
+                      ),
+                      h3: GoogleFonts.poppins(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.bold,
+                        color: isUser ? Colors.white : _primaryText(context),
+                      ),
+                      h4: GoogleFonts.poppins(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: isUser ? Colors.white : _primaryText(context),
+                      ),
+                      strong: GoogleFonts.inter(
+                        fontWeight: FontWeight.bold,
+                        color: isUser ? Colors.white : _primaryText(context),
+                      ),
+                      em: GoogleFonts.inter(
+                        fontStyle: FontStyle.italic,
+                        color: isUser ? Colors.white : _primaryText(context),
+                      ),
+                      listBullet: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: isUser ? Colors.white : _primaryText(context),
+                      ),
+                      horizontalRuleDecoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(
+                            color: isUser
+                                ? Colors.white.withValues(alpha: 0.3)
+                                : _bubbleBorder(context),
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      blockquote: GoogleFonts.amiri(
+                        fontSize: 15,
+                        height: 1.6,
+                        color: isUser
+                            ? Colors.white.withValues(alpha: 0.95)
+                            : AppColors.midTeal,
+                      ),
+                      blockquoteDecoration: BoxDecoration(
+                        color: isUser
+                            ? Colors.white.withValues(alpha: 0.1)
+                            : AppColors.midTeal.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: const Border(
+                          left: BorderSide(color: AppColors.midTeal, width: 3),
+                        ),
+                      ),
                     ),
                   ),
                   if (!isUser && message.isLoading) ...[
@@ -657,7 +1050,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
+                        const SizedBox(
                           width: 8,
                           height: 8,
                           child: CircularProgressIndicator(
@@ -691,8 +1084,6 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
         decoration: BoxDecoration(
           color: _inputBarBg(context),
           borderRadius: BorderRadius.circular(28),
-          // Border applies in BOTH themes so the input bar is always visible
-          // against the page background, light or dark.
           border: Border.all(
             color: _dark
                 ? Colors.white.withValues(alpha: 0.14)
@@ -722,7 +1113,8 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                     color: _dark ? Colors.white.withValues(alpha: 0.4) : AppColors.placeholder,
                   ),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
                 onSubmitted: (_) => _handleSend(),
               ),
@@ -735,9 +1127,12 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                 decoration: BoxDecoration(
                   color: _dark ? Colors.white.withValues(alpha: 0.15) : AppColors.navyBlue,
                   shape: BoxShape.circle,
-                  border: _dark ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) : null,
+                  border: _dark
+                      ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1)
+                      : null,
                 ),
-                child: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
+                child: const Icon(Icons.arrow_upward_rounded,
+                    color: Colors.white, size: 20),
               ),
             ),
           ],
@@ -747,7 +1142,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
   }
 }
 
-// ===== SPARKLING STAR BACKGROUND (same idea as the dashboard's night sky) =====
+// ===== SPARKLING STAR BACKGROUND =====
 
 class _AssistantStarConfig {
   final double topFraction;
@@ -813,8 +1208,6 @@ class _AssistantTwinklingStarState extends State<_AssistantTwinklingStar>
 
   @override
   Widget build(BuildContext context) {
-    // Align + FractionalOffset (rather than Positioned inside a
-    // LayoutBuilder) since a non-Positioned child is what a Stack expects.
     return Align(
       alignment: FractionalOffset(widget.leftFraction, widget.topFraction),
       child: AnimatedBuilder(
@@ -863,4 +1256,3 @@ class _AssistantStarPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
