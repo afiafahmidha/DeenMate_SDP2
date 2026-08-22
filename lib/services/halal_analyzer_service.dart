@@ -91,6 +91,57 @@ class ProductAnalysisResult {
   bool get hasMushbooh => mushboohIngredients.isNotEmpty;
   bool get isHalal => overallStatus == 'HALAL';
 
+  ProductAnalysisResult copyWithOverrides(Map<String, String> overrides) {
+    if (overrides.isEmpty) return this;
+
+    List<IngredientAnalysisResult> newResults = [];
+    List<String> newHaram = [];
+    List<String> newMushbooh = [];
+    List<String> newHalal = [];
+
+    for (var res in results) {
+      final eCode = HalalAnalyzerService.extractCode(res.ingredient);
+      if (eCode != 'ING' && overrides.containsKey(eCode)) {
+        final newStatus = overrides[eCode]!;
+        final updatedRes = IngredientAnalysisResult(
+          ingredient: res.ingredient,
+          status: newStatus,
+          reason: 'Custom User Override (was ${res.status})',
+          isAdditive: res.isAdditive,
+          source: 'User Preference',
+        );
+        newResults.add(updatedRes);
+        if (newStatus == 'HARAM') newHaram.add(res.ingredient);
+        else if (newStatus == 'MUSHBOOH') newMushbooh.add(res.ingredient);
+        else newHalal.add(res.ingredient);
+      } else {
+        newResults.add(res);
+        if (res.status == 'HARAM') newHaram.add(res.ingredient);
+        else if (res.status == 'MUSHBOOH') newMushbooh.add(res.ingredient);
+        else newHalal.add(res.ingredient);
+      }
+    }
+
+    String newOverallStatus = 'HALAL';
+    if (newHaram.isNotEmpty) newOverallStatus = 'HARAM';
+    else if (newMushbooh.isNotEmpty) newOverallStatus = 'MUSHBOOH';
+
+    return ProductAnalysisResult(
+      overallStatus: newOverallStatus,
+      riskLevel: newHaram.isNotEmpty ? 'Contains ${newHaram.length} Haram ingredient(s)' : (newMushbooh.isNotEmpty ? 'Contains ${newMushbooh.length} Mushbooh ingredient(s)' : 'All ingredients verified Halal'),
+      results: newResults,
+      haramIngredients: newHaram,
+      mushboohIngredients: newMushbooh,
+      halalIngredients: newHalal,
+      apiResponse: apiResponse,
+      productName: productName,
+      barcode: barcode,
+      imageUrl: imageUrl,
+      ingredients: ingredients,
+      additives: additives,
+    );
+  }
+
   ScannedProduct toScannedProduct() {
     return ScannedProduct(
       name: productName,
@@ -565,11 +616,14 @@ class HalalAnalyzerService {
     required String productName,
     required String barcode,
     required String imageUrl,
+    Map<String, String>? overrides,
   }) {
     List<IngredientAnalysisResult> results = [];
     List<String> haramIngredients = [];
     List<String> mushboohIngredients = [];
     List<String> halalIngredients = [];
+
+    // ... inside loop ...
 
     String nameLower = productName.toLowerCase().trim();
 
@@ -621,6 +675,18 @@ class HalalAnalyzerService {
       if (original.trim().isEmpty) continue;
 
       IngredientAnalysisResult result = _analyzeSingleIngredient(original);
+
+      // Apply User Overrides if any
+      final eCode = extractCode(original);
+      if (eCode != 'ING' && overrides != null && overrides.containsKey(eCode)) {
+        result = IngredientAnalysisResult(
+          ingredient: original,
+          status: overrides[eCode]!,
+          reason: 'Custom User Override',
+          source: 'User Preference',
+        );
+      }
+
       results.add(result);
 
       if (result.status == 'HARAM') {
@@ -692,6 +758,19 @@ class HalalAnalyzerService {
       }
 
       IngredientAnalysisResult result = _analyzeSingleAdditive(original);
+
+      // Apply User Overrides if any
+      final eCode = extractCode(original);
+      if (eCode != 'ING' && overrides != null && overrides.containsKey(eCode)) {
+        result = IngredientAnalysisResult(
+          ingredient: original,
+          status: overrides[eCode]!,
+          reason: 'Custom User Override',
+          isAdditive: true,
+          source: 'User Preference',
+        );
+      }
+
       results.add(result);
 
       if (result.status == 'HARAM') {

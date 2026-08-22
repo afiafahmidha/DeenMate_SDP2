@@ -1,0 +1,8 @@
+- [x] Implement `HalalScannerService` in `lib/services/halal_scanner_service.dart`
+- [x] Update `ScannedProduct` model in `lib/screens/halal_scanner/halal_scanner_home.dart`
+- [x] Refactor `HalalScannerState` to use `HalalScannerService`
+- [x] Update `HalalScannerHomeScreen` to load history from Firestore
+- [x] Update `ScannedHistoryScreen` to use Firestore
+- [x] Update `AnalyzeProductScreen` and `RealBarcodeScannerScreen` to save scans to Firestore
+- [x] Implement Additive Override persistence in `AdditiveDetailScreen`
+- [x] Verify persistence and data structure in Firestore
