@@ -456,6 +456,81 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     return null;
   }
 
+  // ===== SMART AUTHENTIC ISLAMIC KNOWLEDGE FALLBACK ENGINE =====
+  String? _getSmartKnowledgeAnswer(String prompt, {required bool includeGreeting, String? userName}) {
+    final q = prompt.toLowerCase().trim();
+    final greeting = includeGreeting
+        ? (userName != null ? 'Assalamu Alaikum, $userName! ' : 'Assalamu Alaikum! ')
+        : '';
+
+    // Greetings check
+    if (q == 'hello' || q == 'hi' || q == 'hello deenmate' || q == 'hi deenmate' || q == 'assalamu alaikum' || q == 'hey') {
+      final nameStr = userName != null ? ', $userName' : '';
+      return 'Wa Alaikum Assalam$nameStr! How can I assist you with authentic Islamic knowledge today? Feel free to ask about Prayer, Fasting, Zakat, Quran, or Hadith.';
+    }
+
+    // 1. Missed Fajr / Fazr / Qada / Missed Salat
+    if ((q.contains('fazr') || q.contains('fajr') || q.contains('salat') || q.contains('prayer') || q.contains('pray') || q.contains('namaz')) &&
+        (q.contains('miss') || q.contains('qada') || q.contains('qaza') || q.contains('make up') || q.contains('oversleep') || q.contains('sleep') || q.contains('forgot') || q.contains('forget'))) {
+      return '${greeting}Here is the authentic Islamic guidance on making up missed Fajr or obligatory prayers:\n\n'
+          '**Key Rulings & Steps:**\n'
+          '- **Perform Qada Immediately**: Pray the missed prayer as soon as you wake up or remember. The Prophet (pbuh) said: *"Whoever forgets a prayer or sleeps through it, its expiation is to pray it as soon as he remembers it."* (Sahih al-Bukhari & Sahih Muslim).\n'
+          '- **Order of Prayer**: Pray the **2 Rakahs of Sunnah** first, followed by the **2 Rakahs of Fard**.\n'
+          '- **Sin & Precautions**: If you set an alarm and overslept unintentionally, there is no sin. However, perform it promptly upon waking.\n'
+          '- **Sunrise Caution**: If you wake up during exact sunrise, wait ~15 minutes until the sun rises fully before praying.\n\n'
+          '**Authentic Sources**: Sahih al-Bukhari (Hadith 597) & Sahih Muslim (Hadith 684). Allah knows best.';
+    }
+
+    // 2. 5 Pillars of Islam
+    if (q.contains('5 pillars') || q.contains('five pillars') || q.contains('pillars of islam')) {
+      return '${greeting}The **5 Pillars of Islam** form the foundation of a Muslim\'s faith and practice:\n\n'
+          '1. **Shahada (Faith)**: Testifying that there is no god but Allah, and Muhammad (pbuh) is His Messenger.\n'
+          '2. **Salah (Prayer)**: Performing 5 daily obligatory prayers (Fajr, Dhuhr, Asr, Maghrib, Isha).\n'
+          '3. **Zakat (Charity)**: Giving 2.5% of qualifying annual wealth to those in need.\n'
+          '4. **Sawm (Fasting)**: Fasting from dawn to sunset during the month of Ramadan.\n'
+          '5. **Hajj (Pilgrimage)**: Performing pilgrimage to Makkah once in a lifetime if physically and financially able.\n\n'
+          '**Authentic Source**: Sahih al-Bukhari (Hadith 8) & Sahih Muslim (Hadith 16). Allah knows best.';
+    }
+
+    // 3. Wudu & Ablution
+    if (q.contains('wudu') || q.contains('ablution')) {
+      return '${greeting}Here are the steps for performing **Wudu (Ablution)** step by step:\n\n'
+          '1. **Niyyah & Bismillah**: Make intention in heart and say *"Bismillah"*.\n'
+          '2. **Hands**: Wash both hands up to wrists 3 times.\n'
+          '3. **Mouth & Nose**: Rinse mouth 3 times and gently sniff water into nose and expel 3 times.\n'
+          '4. **Face**: Wash entire face 3 times (hairline to chin, ear to ear).\n'
+          '5. **Arms**: Wash right arm then left arm up to and including elbows 3 times.\n'
+          '6. **Head & Ears**: Wipe wet hands over head once (Masah) and wipe inside/outside of ears.\n'
+          '7. **Feet**: Wash right foot then left foot up to ankles 3 times, washing between toes.\n\n'
+          '**Authentic Source**: Surah Al-Ma\'idah (5:6) & Sahih al-Bukhari (Hadith 159). Allah knows best.';
+    }
+
+    // 4. Zakat & Nisab
+    if (q.contains('nisab') || (q.contains('zakat') && (q.contains('how much') || q.contains('calculate') || q.contains('rate') || q.contains('pay')))) {
+      return '${greeting}Here is how **Zakat & Nisab** are calculated:\n\n'
+          '- **Zakat Rate**: **2.5%** (1/40th) of total qualifying wealth held for one lunar year (Hawl).\n'
+          '- **Nisab Threshold**:\n'
+          '  - **Gold Nisab**: 85 grams of pure gold (~7.5 tolas).\n'
+          '  - **Silver Nisab**: 595 grams of pure silver (~52.5 tolas).\n'
+          '- **Eligible Assets**: Cash, bank savings, gold, silver, and commercial trade assets (minus short-term debts).\n\n'
+          '**Authentic Source**: Sahih al-Bukhari (Hadith 1447) & Sunan Abi Dawud (Hadith 1572). Allah knows best.';
+    }
+
+    // 5. Fasting & Ramadan
+    if (q.contains('fasting') || q.contains('sawm') || q.contains('ramadan') || q.contains('break fast')) {
+      return '${greeting}Key rulings on **Sawm (Fasting)** during Ramadan:\n\n'
+          '**Things That Invalidate the Fast:**\n'
+          '- Eating or drinking intentionally between Fajr and Maghrib.\n'
+          '- Smoking or marital relations during fasting hours.\n'
+          '- Intentionally inducing vomiting.\n\n'
+          '**Unintentional Eating/Drinking:**\n'
+          '- If you eat or drink by genuine mistake/forgetfulness, your fast remains **100% valid**. The Prophet (pbuh) said: *"Whoever forgets while fasting and eats or drinks, let him complete his fast, for Allah fed him and gave him drink."*\n\n'
+          '**Authentic Source**: Surah Al-Baqarah (2:187) & Sahih al-Bukhari (Hadith 1933). Allah knows best.';
+    }
+
+    return null;
+  }
+
   /// 100% Dynamic AI Generation Pipeline
   Stream<String> sendMessageStream(String prompt) async* {
     // TEMP DEBUG — remove once Groq fallback is confirmed working.
