@@ -10,7 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Multi-Provider Islamic AI & Knowledge Ensemble Service.
 ///
-/// Integrates Google Gemini Flash models, live Quran/Hadith search, and authentic Islamic knowledge engine.
+/// Integrates Google Gemini Flash models, Groq fallback, live Quran/Hadith
+/// search, and an authentic Islamic knowledge engine.
 class IslamicAIService {
   static final IslamicAIService _instance = IslamicAIService._internal();
   factory IslamicAIService() => _instance;
@@ -19,13 +20,18 @@ class IslamicAIService {
   /// Optional Custom Gemini API key (set via setCustomApiKey or environment).
   static String customApiKey = const String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
+  /// Groq API key — used as a fallback when Gemini is rate-limited or fails.
+  /// Genuinely free, no credit card or top-up required. Get one at https://console.groq.com/keys
+  static String groqApiKey = const String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
+
   GenerativeModel? _model;
   ChatSession? _chatSession;
 
+  // gemini-2.0-flash was shut down by Google on June 1, 2026 — removed.
+  // gemini-3.6-flash confirmed working by the developer as of Aug 2026.
   static const List<String> _supportedModels = [
     'gemini-3.6-flash',
     'gemini-2.5-flash',
-    'gemini-2.0-flash',
   ];
 
   static const String _greetingPrefsKey = 'islamic_ai_last_greeted_date';
@@ -308,6 +314,73 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     }
   }
 
+  // ===== GROQ FALLBACK (OpenAI-compatible SSE streaming, genuinely free) =====
+  // Used when Gemini/Firebase AI is rate-limited or fails outright.
+  // Get a free key at https://console.groq.com/keys — no card, no top-up needed.
+  Stream<String> _streamFromGroqApi(String enrichedPrompt, String key) async* {
+    if (key.isEmpty) return;
+
+    final uri = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
+    final request = http.Request('POST', uri)
+      ..headers.addAll({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $key',
+      })
+      ..body = jsonEncode({
+        'model': 'openai/gpt-oss-120b',
+        'messages': [
+          {'role': 'system', 'content': _systemInstructionText},
+          {'role': 'user', 'content': enrichedPrompt},
+        ],
+        'temperature': 0.3,
+        'max_tokens': 2048,
+        'stream': true,
+      });
+
+    debugPrint('[DEENMATE_DEBUG] Sending request to Groq API...');
+    try {
+      final streamedResponse = await http.Client()
+          .send(request)
+          .timeout(const Duration(seconds: 15));
+
+      debugPrint('[DEENMATE_DEBUG] Groq HTTP status: ${streamedResponse.statusCode}');
+
+      if (streamedResponse.statusCode != 200) {
+        final body = await streamedResponse.stream.bytesToString();
+        debugPrint('[DEENMATE_DEBUG] Groq API HTTP error ${streamedResponse.statusCode}: $body');
+        return;
+      }
+
+      final lines = streamedResponse.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter());
+
+      bool receivedAnyChunk = false;
+      await for (final line in lines) {
+        if (!line.startsWith('data: ')) continue;
+        final payload = line.substring(6).trim();
+        if (payload == '[DONE]') {
+          debugPrint('[DEENMATE_DEBUG] Groq stream completed. Received any chunk = $receivedAnyChunk');
+          return;
+        }
+        if (payload.isEmpty) continue;
+
+        try {
+          final data = jsonDecode(payload);
+          final delta = data['choices']?[0]?['delta']?['content'] as String?;
+          if (delta != null && delta.isNotEmpty) {
+            receivedAnyChunk = true;
+            yield delta;
+          }
+        } catch (e) {
+          debugPrint('[DEENMATE_DEBUG] Groq chunk parse error: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('[DEENMATE_DEBUG] Groq API Exception (network/timeout/etc): $e');
+    }
+  }
+
   // ===== SMART AUTHENTIC ISLAMIC KNOWLEDGE FALLBACK ENGINE =====
   String? _getSmartKnowledgeAnswer(String prompt, {required bool includeGreeting, String? userName}) {
     final q = prompt.toLowerCase().trim();
@@ -385,6 +458,9 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
 
   /// 100% Dynamic AI Generation Pipeline
   Stream<String> sendMessageStream(String prompt) async* {
+    // TEMP DEBUG — remove once Groq fallback is confirmed working.
+    debugPrint('Groq key loaded: ${groqApiKey.isNotEmpty} (length: ${groqApiKey.length})');
+
     final greetingInstruction = await _buildGreetingInstruction();
     final shouldGreetForFallback = greetingInstruction.startsWith('Greet the user');
     final userNameForFallback = shouldGreetForFallback ? await _getUserFirstName() : null;
@@ -435,6 +511,27 @@ $prompt
       }
 
       if (primarySucceeded) return;
+
+      // Step 3.5: Groq fallback — used when Gemini is rate-limited or fails
+      debugPrint('[DEENMATE_DEBUG] === Groq fallback check ===');
+      debugPrint('[DEENMATE_DEBUG] groqApiKey.isNotEmpty = ${groqApiKey.isNotEmpty}, length = ${groqApiKey.length}');
+      if (groqApiKey.isNotEmpty) {
+        debugPrint('[DEENMATE_DEBUG] Attempting Groq request now...');
+        bool groqSucceeded = false;
+        try {
+          await for (final chunk in _streamFromGroqApi(enrichedPrompt, groqApiKey)) {
+            groqSucceeded = true;
+            yield chunk;
+          }
+          debugPrint('[DEENMATE_DEBUG] Groq stream finished. Succeeded = $groqSucceeded');
+        } catch (e) {
+          debugPrint('[DEENMATE_DEBUG] Groq fallback threw an error: $e');
+        }
+        if (groqSucceeded) return;
+        debugPrint('[DEENMATE_DEBUG] Groq did NOT succeed — falling through to smart knowledge engine.');
+      } else {
+        debugPrint('[DEENMATE_DEBUG] Skipping Groq — key is empty. Check your .env and rebuild fully.');
+      }
 
       // Step 4: FALLBACK ONLY — smart knowledge engine
       final smartAnswer = _getSmartKnowledgeAnswer(
