@@ -197,6 +197,18 @@ service cloud.firestore {
       // Assumed model: a private Qurbani plan is stored below its owner's
       // user document. memberIds is the access-control list and may be
       // changed only by that owner.
+      // AI Chat history — private to the owning user only.
+      match /aiChats/{chatId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['title', 'messages', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['title', 'messages', 'updatedAt'])
+          && request.resource.data.title is string
+          && request.resource.data.title.size() <= 200
+          && request.resource.data.messages is list
+          && request.resource.data.messages.size() <= 500;
+      }
+
       match /qurbaniPlans/{planId} {
         allow create: if isOwner(userId)
           && validQurbaniPlan(request.resource.data, userId)
