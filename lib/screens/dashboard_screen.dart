@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -30,6 +30,7 @@ import 'prayer_tab.dart'; // Extracted Prayer tab widget
 import 'salat_guide_screen.dart'; // Salat rules, illustrated steps & rakat guide
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/islamic_ai_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -61,6 +62,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     'emergency_sos',
   ];
 
+  // AI-generated Today's Guidance (max 2 lines, cached daily)
+  String _todaysGuidance =
+      'Start your day with Bismillah and keep your tongue moist with the remembrance of Allah. Perform your prayers on time and spread peace to those around you.';
+  bool _isLoadingGuidance = true;
 
   // Animation controllers
   late AnimationController _staggerController;
@@ -474,6 +479,7 @@ Future<void> _loadUserProfile() async {
     _loadSalatCompleted();
     // Load user alarm preferences
     _loadAlarmStates();
+    _loadTodaysGuidance();
 
     // Start location services & prayer time updates
     _initLocationAndTracking();
@@ -1635,10 +1641,8 @@ _buildAnimatedEntry(
         children: [
           Row(
             children: [
-              const Icon(Icons.bolt_rounded, color: AppColors.midTeal, size: 21),
-              const SizedBox(width: 7),
               Text(
-                'Quick Start',
+                ' Quick Start',
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1975,28 +1979,42 @@ _buildAnimatedEntry(
 }
 
   // ===== TODAY'S GUIDANCE =====
- Widget _buildTodaysGuidance() {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 22),
-    child: Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _isDarkMode ? Colors.black : Colors.white,     // was Color(0xFF1E1E1E)
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
+  Future<void> _loadTodaysGuidance() async {
+    try {
+      final text = await IslamicAIService().fetchTodaysGuidance();
+      if (mounted) {
+        setState(() {
+          _todaysGuidance = text;
+          _isLoadingGuidance = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingGuidance = false);
+    }
+  }
+
+  Widget _buildTodaysGuidance() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _isDarkMode ? Colors.black : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: _isDarkMode
+                  ? Colors.black.withValues(alpha: 0.5)
+                  : AppColors.navyBlue.withValues(alpha: 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(
             color: _isDarkMode
-                ? Colors.black.withValues(alpha: 0.5)
-                : AppColors.navyBlue.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(
-          color: _isDarkMode
-              ? Colors.white.withValues(alpha: 0.16)          // was 0.12
-              : AppColors.dustyBlueTeal.withValues(alpha: 0.12),
-          width: 1,
+                ? Colors.white.withValues(alpha: 0.16)
+                : AppColors.dustyBlueTeal.withValues(alpha: 0.12),
+            width: 1,
           ),
         ),
         child: Column(
@@ -2018,18 +2036,53 @@ _buildAnimatedEntry(
                     color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                   ),
                 ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.midTeal.withValues(alpha: _isDarkMode ? 0.2 : 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.auto_awesome_rounded, size: 10, color: AppColors.midTeal),
+                      const SizedBox(width: 4),
+                      Text(
+                        'AI Daily',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.midTeal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
-            Text(
-              'Read Surah Al-Kahf today and reflect on its lessons of patience and trust in Allah.',
-              style: GoogleFonts.inter(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w400,
-                color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.7),
-                height: 1.5,
-              ),
-            ),
+            _isLoadingGuidance
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.midTeal,
+                    ),
+                  )
+                : Text(
+                    _todaysGuidance,
+                    textAlign: TextAlign.justify,
+                    style: GoogleFonts.inter(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w400,
+                      color: _isDarkMode
+                          ? Colors.white70
+                          : AppColors.navyBlue.withValues(alpha: 0.75),
+                      height: 1.5,
+                    ),
+                  ),
           ],
         ),
       ),
