@@ -10,7 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Multi-Provider Islamic AI & Knowledge Ensemble Service.
 ///
-/// Integrates Google Gemini Flash models, live Quran/Hadith search, and authentic Islamic knowledge engine.
+/// Integrates Google Gemini Flash models, Groq fallback, live Quran/Hadith
+/// search, and an authentic Islamic knowledge engine.
 class IslamicAIService {
   static final IslamicAIService _instance = IslamicAIService._internal();
   factory IslamicAIService() => _instance;
@@ -19,13 +20,18 @@ class IslamicAIService {
   /// Optional Custom Gemini API key (set via setCustomApiKey or environment).
   static String customApiKey = const String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
+  /// Groq API key — used as a fallback when Gemini is rate-limited or fails.
+  /// Genuinely free, no credit card or top-up required. Get one at https://console.groq.com/keys
+  static String groqApiKey = const String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
+
   GenerativeModel? _model;
   ChatSession? _chatSession;
 
+  // gemini-2.0-flash was shut down by Google on June 1, 2026 — removed.
+  // gemini-3.6-flash confirmed working by the developer as of Aug 2026.
   static const List<String> _supportedModels = [
     'gemini-3.6-flash',
     'gemini-2.5-flash',
-    'gemini-2.0-flash',
   ];
 
   static const String _greetingPrefsKey = 'islamic_ai_last_greeted_date';
@@ -308,6 +314,148 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     }
   }
 
+  // ===== GROQ FALLBACK (OpenAI-compatible SSE streaming, genuinely free) =====
+  // Used when Gemini/Firebase AI is rate-limited or fails outright.
+  // Get a free key at https://console.groq.com/keys — no card, no top-up needed.
+  Stream<String> _streamFromGroqApi(String enrichedPrompt, String key) async* {
+    if (key.isEmpty) return;
+
+    final uri = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
+    final request = http.Request('POST', uri)
+      ..headers.addAll({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $key',
+      })
+      ..body = jsonEncode({
+        'model': 'openai/gpt-oss-120b',
+        'messages': [
+          {'role': 'system', 'content': _systemInstructionText},
+          {'role': 'user', 'content': enrichedPrompt},
+        ],
+        'temperature': 0.3,
+        'max_tokens': 2048,
+        'stream': true,
+      });
+
+    debugPrint('[DEENMATE_DEBUG] Sending request to Groq API...');
+    try {
+      final streamedResponse = await http.Client()
+          .send(request)
+          .timeout(const Duration(seconds: 15));
+
+      debugPrint('[DEENMATE_DEBUG] Groq HTTP status: ${streamedResponse.statusCode}');
+
+      if (streamedResponse.statusCode != 200) {
+        final body = await streamedResponse.stream.bytesToString();
+        debugPrint('[DEENMATE_DEBUG] Groq API HTTP error ${streamedResponse.statusCode}: $body');
+        return;
+      }
+
+      final lines = streamedResponse.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter());
+
+      bool receivedAnyChunk = false;
+      await for (final line in lines) {
+        if (!line.startsWith('data: ')) continue;
+        final payload = line.substring(6).trim();
+        if (payload == '[DONE]') {
+          debugPrint('[DEENMATE_DEBUG] Groq stream completed. Received any chunk = $receivedAnyChunk');
+          return;
+        }
+        if (payload.isEmpty) continue;
+
+        try {
+          final data = jsonDecode(payload);
+          final delta = data['choices']?[0]?['delta']?['content'] as String?;
+          if (delta != null && delta.isNotEmpty) {
+            receivedAnyChunk = true;
+            yield delta;
+          }
+        } catch (e) {
+          debugPrint('[DEENMATE_DEBUG] Groq chunk parse error: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('[DEENMATE_DEBUG] Groq API Exception (network/timeout/etc): $e');
+    }
+  }
+
+  // ===== SMART AUTHENTIC ISLAMIC KNOWLEDGE FALLBACK ENGINE =====
+  String? _getSmartKnowledgeAnswer(String prompt, {required bool includeGreeting, String? userName}) {
+    final q = prompt.toLowerCase().trim();
+    final greeting = includeGreeting
+        ? (userName != null ? 'Assalamu Alaikum, $userName! ' : 'Assalamu Alaikum! ')
+        : '';
+
+    // Greetings check
+    if (q == 'hello' || q == 'hi' || q == 'hello deenmate' || q == 'hi deenmate' || q == 'assalamu alaikum' || q == 'hey') {
+      final nameStr = userName != null ? ', $userName' : '';
+      return 'Wa Alaikum Assalam$nameStr! How can I assist you with authentic Islamic knowledge today? Feel free to ask about Prayer, Fasting, Zakat, Quran, or Hadith.';
+    }
+
+    // 1. Missed Fajr / Fazr / Qada / Missed Salat
+    if ((q.contains('fazr') || q.contains('fajr') || q.contains('salat') || q.contains('prayer') || q.contains('pray') || q.contains('namaz')) &&
+        (q.contains('miss') || q.contains('qada') || q.contains('qaza') || q.contains('make up') || q.contains('oversleep') || q.contains('sleep') || q.contains('forgot') || q.contains('forget'))) {
+      return '${greeting}Here is the authentic Islamic guidance on making up missed Fajr or obligatory prayers:\n\n'
+          '**Key Rulings & Steps:**\n'
+          '- **Perform Qada Immediately**: Pray the missed prayer as soon as you wake up or remember. The Prophet (pbuh) said: *"Whoever forgets a prayer or sleeps through it, its expiation is to pray it as soon as he remembers it."* (Sahih al-Bukhari & Sahih Muslim).\n'
+          '- **Order of Prayer**: Pray the **2 Rakahs of Sunnah** first, followed by the **2 Rakahs of Fard**.\n'
+          '- **Sin & Precautions**: If you set an alarm and overslept unintentionally, there is no sin. However, perform it promptly upon waking.\n'
+          '- **Sunrise Caution**: If you wake up during exact sunrise, wait ~15 minutes until the sun rises fully before praying.\n\n'
+          '**Authentic Sources**: Sahih al-Bukhari (Hadith 597) & Sahih Muslim (Hadith 684). Allah knows best.';
+    }
+
+    // 2. 5 Pillars of Islam
+    if (q.contains('5 pillars') || q.contains('five pillars') || q.contains('pillars of islam')) {
+      return '${greeting}The **5 Pillars of Islam** form the foundation of a Muslim\'s faith and practice:\n\n'
+          '1. **Shahada (Faith)**: Testifying that there is no god but Allah, and Muhammad (pbuh) is His Messenger.\n'
+          '2. **Salah (Prayer)**: Performing 5 daily obligatory prayers (Fajr, Dhuhr, Asr, Maghrib, Isha).\n'
+          '3. **Zakat (Charity)**: Giving 2.5% of qualifying annual wealth to those in need.\n'
+          '4. **Sawm (Fasting)**: Fasting from dawn to sunset during the month of Ramadan.\n'
+          '5. **Hajj (Pilgrimage)**: Performing pilgrimage to Makkah once in a lifetime if physically and financially able.\n\n'
+          '**Authentic Source**: Sahih al-Bukhari (Hadith 8) & Sahih Muslim (Hadith 16). Allah knows best.';
+    }
+
+    // 3. Wudu & Ablution
+    if (q.contains('wudu') || q.contains('ablution')) {
+      return '${greeting}Here are the steps for performing **Wudu (Ablution)** step by step:\n\n'
+          '1. **Niyyah & Bismillah**: Make intention in heart and say *"Bismillah"*.\n'
+          '2. **Hands**: Wash both hands up to wrists 3 times.\n'
+          '3. **Mouth & Nose**: Rinse mouth 3 times and gently sniff water into nose and expel 3 times.\n'
+          '4. **Face**: Wash entire face 3 times (hairline to chin, ear to ear).\n'
+          '5. **Arms**: Wash right arm then left arm up to and including elbows 3 times.\n'
+          '6. **Head & Ears**: Wipe wet hands over head once (Masah) and wipe inside/outside of ears.\n'
+          '7. **Feet**: Wash right foot then left foot up to ankles 3 times, washing between toes.\n\n'
+          '**Authentic Source**: Surah Al-Ma\'idah (5:6) & Sahih al-Bukhari (Hadith 159). Allah knows best.';
+    }
+
+    // 4. Zakat & Nisab
+    if (q.contains('nisab') || (q.contains('zakat') && (q.contains('how much') || q.contains('calculate') || q.contains('rate') || q.contains('pay')))) {
+      return '${greeting}Here is how **Zakat & Nisab** are calculated:\n\n'
+          '- **Zakat Rate**: **2.5%** (1/40th) of total qualifying wealth held for one lunar year (Hawl).\n'
+          '- **Nisab Threshold**:\n'
+          '  - **Gold Nisab**: 85 grams of pure gold (~7.5 tolas).\n'
+          '  - **Silver Nisab**: 595 grams of pure silver (~52.5 tolas).\n'
+          '- **Eligible Assets**: Cash, bank savings, gold, silver, and commercial trade assets (minus short-term debts).\n\n'
+          '**Authentic Source**: Sahih al-Bukhari (Hadith 1447) & Sunan Abi Dawud (Hadith 1572). Allah knows best.';
+    }
+
+    // 5. Fasting & Ramadan
+    if (q.contains('fasting') || q.contains('sawm') || q.contains('ramadan') || q.contains('break fast')) {
+      return '${greeting}Key rulings on **Sawm (Fasting)** during Ramadan:\n\n'
+          '**Things That Invalidate the Fast:**\n'
+          '- Eating or drinking intentionally between Fajr and Maghrib.\n'
+          '- Smoking or marital relations during fasting hours.\n'
+          '- Intentionally inducing vomiting.\n\n'
+          '**Unintentional Eating/Drinking:**\n'
+          '- If you eat or drink by genuine mistake/forgetfulness, your fast remains **100% valid**. The Prophet (pbuh) said: *"Whoever forgets while fasting and eats or drinks, let him complete his fast, for Allah fed him and gave him drink."*\n\n'
+          '**Authentic Source**: Surah Al-Baqarah (2:187) & Sahih al-Bukhari (Hadith 1933). Allah knows best.';
+    }
+
+    return null;
+  }
+
   // ===== SMART AUTHENTIC ISLAMIC KNOWLEDGE FALLBACK ENGINE =====
   String? _getSmartKnowledgeAnswer(String prompt, {required bool includeGreeting, String? userName}) {
     final q = prompt.toLowerCase().trim();
@@ -385,6 +533,9 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
 
   /// 100% Dynamic AI Generation Pipeline
   Stream<String> sendMessageStream(String prompt) async* {
+    // TEMP DEBUG — remove once Groq fallback is confirmed working.
+    debugPrint('Groq key loaded: ${groqApiKey.isNotEmpty} (length: ${groqApiKey.length})');
+
     final greetingInstruction = await _buildGreetingInstruction();
     final shouldGreetForFallback = greetingInstruction.startsWith('Greet the user');
     final userNameForFallback = shouldGreetForFallback ? await _getUserFirstName() : null;
@@ -435,6 +586,27 @@ $prompt
       }
 
       if (primarySucceeded) return;
+
+      // Step 3.5: Groq fallback — used when Gemini is rate-limited or fails
+      debugPrint('[DEENMATE_DEBUG] === Groq fallback check ===');
+      debugPrint('[DEENMATE_DEBUG] groqApiKey.isNotEmpty = ${groqApiKey.isNotEmpty}, length = ${groqApiKey.length}');
+      if (groqApiKey.isNotEmpty) {
+        debugPrint('[DEENMATE_DEBUG] Attempting Groq request now...');
+        bool groqSucceeded = false;
+        try {
+          await for (final chunk in _streamFromGroqApi(enrichedPrompt, groqApiKey)) {
+            groqSucceeded = true;
+            yield chunk;
+          }
+          debugPrint('[DEENMATE_DEBUG] Groq stream finished. Succeeded = $groqSucceeded');
+        } catch (e) {
+          debugPrint('[DEENMATE_DEBUG] Groq fallback threw an error: $e');
+        }
+        if (groqSucceeded) return;
+        debugPrint('[DEENMATE_DEBUG] Groq did NOT succeed — falling through to smart knowledge engine.');
+      } else {
+        debugPrint('[DEENMATE_DEBUG] Skipping Groq — key is empty. Check your .env and rebuild fully.');
+      }
 
       // Step 4: FALLBACK ONLY — smart knowledge engine
       final smartAnswer = _getSmartKnowledgeAnswer(
