@@ -7,6 +7,7 @@ import 'login_page.dart';
 import 'registration_page.dart';
 import 'email_verification_screen.dart';
 import 'dashboard_screen.dart';
+import 'halal_scanner/halal_scanner_home.dart';
 
 enum AppScreenState {
   loading,
@@ -225,6 +226,8 @@ class _AuthScreenState extends State<AuthScreen> {
         for (final key in keysToRemove) {
           await prefs.remove(key);
         }
+
+        HalalScannerState.reset();
 
         await FirebaseAuth.instance.signOut();
         await GoogleSignIn().signOut();
