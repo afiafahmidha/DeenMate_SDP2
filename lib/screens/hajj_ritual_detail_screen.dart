@@ -651,6 +651,14 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
               style: GoogleFonts.scheherazadeNew(fontSize: 18, fontWeight: FontWeight.bold, height: 1.9,
                 color: _dark ? const Color(0xFFCEF0E4) : const Color(0xFF1A3D30))),
           ),
+          if (q['translitEn'] != null || q['translit'] != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              q['translitEn'] ?? q['translit'] ?? '',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 11.5, fontStyle: FontStyle.italic, color: _subtext, height: 1.5),
+            ),
+          ],
           const SizedBox(height: 10),
           Divider(color: _accent.withValues(alpha: 0.25)),
           const SizedBox(height: 6),
