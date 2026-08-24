@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -16,15 +17,42 @@ class IslamicAIService {
   factory IslamicAIService() => _instance;
   IslamicAIService._internal();
 
-  /// Optional Custom Gemini API key (set via setCustomApiKey or environment).
+  /// Optional Custom Gemini API key (set via setCustomApiKey, .env, or environment).
   static String customApiKey = const String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
   /// Groq API key — used as a fallback when Gemini is rate-limited or fails.
   static String groqApiKey = const String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
 
+  /// OpenRouter API key — Multi-model AI gateway fallback (Llama 3.3, Qwen, Mistral, Gemma, etc.).
+  static String openRouterApiKey = const String.fromEnvironment(
+    'OPENROUTER_API_KEY',
+    defaultValue: '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',
+  );
+
+  /// Cerebras Cloud API key — Ultra fast Llama inference engine fallback.
+  static String cerebrasApiKey = const String.fromEnvironment(
+    'CEREBRAS_API_KEY',
+    defaultValue: 'csk-4nfk8twemf4xy6wmw94h2jn6n282mh4y8emdx88mwjdmk5xe',
+  );
+
+  static String get effectiveGeminiKey => customApiKey.isNotEmpty
+      ? customApiKey
+      : (dotenv.env['GEMINI_API_KEY'] ?? const String.fromEnvironment('GEMINI_API_KEY', defaultValue: ''));
+
+  static String get effectiveGroqKey => groqApiKey.isNotEmpty
+      ? groqApiKey
+      : (dotenv.env['GROQ_API_KEY'] ?? const String.fromEnvironment('GROQ_API_KEY', defaultValue: ''));
+
+  static String get effectiveOpenRouterKey => openRouterApiKey.isNotEmpty
+      ? openRouterApiKey
+      : (dotenv.env['OPENROUTER_API_KEY'] ?? const String.fromEnvironment('OPENROUTER_API_KEY', defaultValue: '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'));
+
+  static String get effectiveCerebrasKey => cerebrasApiKey.isNotEmpty
+      ? cerebrasApiKey
+      : (dotenv.env['CEREBRAS_API_KEY'] ?? const String.fromEnvironment('CEREBRAS_API_KEY', defaultValue: 'csk-4nfk8twemf4xy6wmw94h2jn6n282mh4y8emdx88mwjdmk5xe'));
+
   GenerativeModel? _model;
   ChatSession? _chatSession;
-
 
   static const List<String> _supportedModels = [
     'gemini-3.6-flash',
@@ -118,15 +146,29 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
 
       await _ensureInitialized();
       if (_model != null) {
-        const prompt =
-            'Generate a short, inspirational 1-sentence Islamic guidance for today focused on faith, prayer, patience, good character, charity, punctuality, discipline. Rules: Exactly 1 sentence, maximum 3 lines, no markdown symbols or headers.';
-        final response = await _model!.generateContent([Content.text(prompt)]);
-        final text = response.text?.trim();
-        if (text != null && text.isNotEmpty) {
-          final cleanText = text.replaceAll(RegExp(r'[\*\#\`\-]'), '').trim();
-          await prefs.setString(todayKey, cleanText);
-          return cleanText;
+        try {
+          const prompt =
+              'Generate a short, inspirational 1-sentence Islamic guidance for today focused on faith, prayer, patience, good character, charity, punctuality, discipline. Rules: Exactly 1 sentence, maximum 3 lines, no markdown symbols or headers.';
+          final response = await _model!.generateContent([Content.text(prompt)]);
+          final text = response.text?.trim();
+          if (text != null && text.isNotEmpty) {
+            final cleanText = text.replaceAll(RegExp(r'[\*\#\`\-]'), '').trim();
+            await prefs.setString(todayKey, cleanText);
+            return cleanText;
+          }
+        } catch (modelErr) {
+          debugPrint('Primary Gemini daily guidance failed: $modelErr. Trying fallback AI engines...');
         }
+      }
+
+      // Fallback: Use OpenRouter / Cerebras / Groq engines
+      const fallbackPrompt =
+          'Generate a short, inspirational 1-sentence Islamic guidance for today focused on faith, prayer, patience, good character, charity, punctuality, discipline. Rules: Exactly 1 sentence, maximum 3 lines, no markdown symbols or headers.';
+      final fallbackText = await _generateOneShotFromFallbacks(fallbackPrompt);
+      if (fallbackText != null && fallbackText.isNotEmpty) {
+        final cleanText = fallbackText.replaceAll(RegExp(r'[\*\#\`\-]'), '').trim();
+        await prefs.setString(todayKey, cleanText);
+        return cleanText;
       }
     } catch (e) {
       debugPrint('Error fetching AI daily guidance: $e');
@@ -377,6 +419,250 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     }
   }
 
+  // ===== CEREBRAS CLOUD FALLBACK (Ultra-fast Llama inference) =====
+  Stream<String> _streamFromCerebrasApi(String enrichedPrompt, String key) async* {
+    if (key.isEmpty) return;
+
+    final uri = Uri.parse('https://api.cerebras.ai/v1/chat/completions');
+    final supportedModels = ['llama3.1-8b', 'llama-3.3-70b', 'gpt-oss-120b', 'gemma-4-31b'];
+
+    for (final model in supportedModels) {
+      try {
+        final request = http.Request('POST', uri)
+          ..headers.addAll({
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $key',
+          })
+          ..body = jsonEncode({
+            'model': model,
+            'messages': [
+              {'role': 'system', 'content': _systemInstructionText},
+              {'role': 'user', 'content': enrichedPrompt},
+            ],
+            'temperature': 0.3,
+            'max_tokens': 2048,
+            'stream': true,
+          });
+
+        debugPrint('[DEENMATE_DEBUG] Sending request to Cerebras API (model: $model)...');
+        final streamedResponse = await http.Client()
+            .send(request)
+            .timeout(const Duration(seconds: 12));
+
+        debugPrint('[DEENMATE_DEBUG] Cerebras HTTP status: ${streamedResponse.statusCode} for model $model');
+
+        if (streamedResponse.statusCode != 200) {
+          final body = await streamedResponse.stream.bytesToString();
+          debugPrint('[DEENMATE_DEBUG] Cerebras API HTTP error ${streamedResponse.statusCode} ($model): $body');
+          continue;
+        }
+
+        final lines = streamedResponse.stream
+            .transform(utf8.decoder)
+            .transform(const LineSplitter());
+
+        bool receivedAnyChunk = false;
+        await for (final line in lines) {
+          if (!line.startsWith('data: ')) continue;
+          final payload = line.substring(6).trim();
+          if (payload == '[DONE]') {
+            debugPrint('[DEENMATE_DEBUG] Cerebras stream completed ($model). Any chunk: $receivedAnyChunk');
+            return;
+          }
+          if (payload.isEmpty) continue;
+
+          try {
+            final data = jsonDecode(payload);
+            final delta = data['choices']?[0]?['delta']?['content'] as String?;
+            if (delta != null && delta.isNotEmpty) {
+              receivedAnyChunk = true;
+              yield delta;
+            }
+          } catch (e) {
+            debugPrint('[DEENMATE_DEBUG] Cerebras chunk parse error: $e');
+          }
+        }
+
+        if (receivedAnyChunk) return;
+      } catch (e) {
+        debugPrint('[DEENMATE_DEBUG] Cerebras API Exception ($model): $e');
+      }
+    }
+  }
+
+  // ===== OPENROUTER GATEWAY FALLBACK (Meta Llama 3, Qwen, Gemma, Mistral free tier) =====
+  Stream<String> _streamFromOpenRouterApi(String enrichedPrompt, String key) async* {
+    if (key.isEmpty) return;
+
+    final uri = Uri.parse('https://openrouter.ai/api/v1/chat/completions');
+    final models = [
+      'openrouter/free',
+      'google/gemma-4-31b-it:free',
+      'google/gemma-4-26b-a4b-it:free',
+      'nvidia/nemotron-3.5-lightning:free',
+      'qwen/qwen-2.5-72b-instruct:free',
+      'meta-llama/llama-3.3-70b-instruct:free',
+    ];
+
+    for (final model in models) {
+      try {
+        final request = http.Request('POST', uri)
+          ..headers.addAll({
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $key',
+            'HTTP-Referer': 'https://deenmate.app',
+            'X-Title': 'DeenMate Islamic AI',
+          })
+          ..body = jsonEncode({
+            'model': model,
+            'messages': [
+              {'role': 'system', 'content': _systemInstructionText},
+              {'role': 'user', 'content': enrichedPrompt},
+            ],
+            'temperature': 0.3,
+            'max_tokens': 2048,
+            'stream': true,
+          });
+
+        debugPrint('[DEENMATE_DEBUG] Sending request to OpenRouter API (model: $model)...');
+        final streamedResponse = await http.Client()
+            .send(request)
+            .timeout(const Duration(seconds: 15));
+
+        debugPrint('[DEENMATE_DEBUG] OpenRouter HTTP status: ${streamedResponse.statusCode} for model $model');
+
+        if (streamedResponse.statusCode != 200) {
+          final body = await streamedResponse.stream.bytesToString();
+          debugPrint('[DEENMATE_DEBUG] OpenRouter API HTTP error ${streamedResponse.statusCode} ($model): $body');
+          continue;
+        }
+
+        final lines = streamedResponse.stream
+            .transform(utf8.decoder)
+            .transform(const LineSplitter());
+
+        bool receivedAnyChunk = false;
+        await for (final line in lines) {
+          if (!line.startsWith('data: ')) continue;
+          final payload = line.substring(6).trim();
+          if (payload == '[DONE]') {
+            debugPrint('[DEENMATE_DEBUG] OpenRouter stream completed ($model). Any chunk: $receivedAnyChunk');
+            return;
+          }
+          if (payload.isEmpty) continue;
+
+          try {
+            final data = jsonDecode(payload);
+            final delta = data['choices']?[0]?['delta']?['content'] as String?;
+            if (delta != null && delta.isNotEmpty) {
+              receivedAnyChunk = true;
+              yield delta;
+            }
+          } catch (e) {
+            debugPrint('[DEENMATE_DEBUG] OpenRouter chunk parse error: $e');
+          }
+        }
+
+        if (receivedAnyChunk) return;
+      } catch (e) {
+        debugPrint('[DEENMATE_DEBUG] OpenRouter API Exception ($model): $e');
+      }
+    }
+  }
+
+  /// Single-shot fallback helper for short one-off prompts (e.g. daily guidance)
+  Future<String?> _generateOneShotFromFallbacks(String prompt) async {
+    final orKey = effectiveOpenRouterKey;
+    final cerKey = effectiveCerebrasKey;
+    final gqKey = effectiveGroqKey;
+
+    // 1. Try OpenRouter
+    if (orKey.isNotEmpty) {
+      for (final model in ['openrouter/free', 'google/gemma-4-31b-it:free']) {
+        try {
+          final res = await http.post(
+            Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $orKey',
+              'HTTP-Referer': 'https://deenmate.app',
+              'X-Title': 'DeenMate Islamic AI',
+            },
+            body: jsonEncode({
+              'model': model,
+              'messages': [
+                {'role': 'user', 'content': prompt}
+              ],
+              'temperature': 0.4,
+              'max_tokens': 256,
+            }),
+          ).timeout(const Duration(seconds: 10));
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            final text = data['choices']?[0]?['message']?['content'] as String?;
+            if (text != null && text.trim().isNotEmpty) return text.trim();
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 2. Try Cerebras
+    if (cerKey.isNotEmpty) {
+      for (final model in ['llama3.1-8b', 'llama-3.3-70b', 'gpt-oss-120b', 'gemma-4-31b']) {
+        try {
+          final res = await http.post(
+            Uri.parse('https://api.cerebras.ai/v1/chat/completions'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $cerKey',
+            },
+            body: jsonEncode({
+              'model': model,
+              'messages': [
+                {'role': 'user', 'content': prompt}
+              ],
+              'temperature': 0.4,
+              'max_tokens': 256,
+            }),
+          ).timeout(const Duration(seconds: 8));
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            final text = data['choices']?[0]?['message']?['content'] as String?;
+            if (text != null && text.trim().isNotEmpty) return text.trim();
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Try Groq
+    if (gqKey.isNotEmpty) {
+      try {
+        final res = await http.post(
+          Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $gqKey',
+          },
+          body: jsonEncode({
+            'model': 'openai/gpt-oss-120b',
+            'messages': [
+              {'role': 'user', 'content': prompt}
+            ],
+            'temperature': 0.4,
+            'max_tokens': 256,
+          }),
+        ).timeout(const Duration(seconds: 8));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final text = data['choices']?[0]?['message']?['content'] as String?;
+          if (text != null && text.trim().isNotEmpty) return text.trim();
+        }
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
   // ===== SMART AUTHENTIC ISLAMIC KNOWLEDGE FALLBACK ENGINE =====
   String? _getSmartKnowledgeAnswer(String prompt, {required bool includeGreeting, String? userName}) {
     final q = prompt.toLowerCase().trim();
@@ -454,8 +740,14 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
 
   /// 100% Dynamic AI Generation Pipeline
   Stream<String> sendMessageStream(String prompt) async* {
-    // TEMP DEBUG — remove once Groq fallback is confirmed working.
-    debugPrint('Groq key loaded: ${groqApiKey.isNotEmpty} (length: ${groqApiKey.length})');
+    final gqKey = effectiveGroqKey;
+    final cerKey = effectiveCerebrasKey;
+    final orKey = effectiveOpenRouterKey;
+    final gmKey = effectiveGeminiKey;
+
+    debugPrint('Groq key loaded: ${gqKey.isNotEmpty} (length: ${gqKey.length})');
+    debugPrint('OpenRouter key loaded: ${orKey.isNotEmpty} (length: ${orKey.length})');
+    debugPrint('Cerebras key loaded: ${cerKey.isNotEmpty} (length: ${cerKey.length})');
 
     final greetingInstruction = await _buildGreetingInstruction();
     final shouldGreetForFallback = greetingInstruction.startsWith('Greet the user');
@@ -478,9 +770,9 @@ $prompt
 ''';
 
       // Step 2: Direct Gemini REST API if custom key is set
-      if (customApiKey.isNotEmpty && customApiKey.startsWith('AIza')) {
+      if (gmKey.isNotEmpty && gmKey.startsWith('AIza')) {
         bool customKeySuccess = false;
-        await for (final chunk in _streamFromDirectGeminiApi(enrichedPrompt, customApiKey)) {
+        await for (final chunk in _streamFromDirectGeminiApi(enrichedPrompt, gmKey)) {
           customKeySuccess = true;
           yield chunk;
         }
@@ -508,14 +800,28 @@ $prompt
 
       if (primarySucceeded) return;
 
-      // Step 3.5: Groq fallback — used when Gemini is rate-limited or fails
-      debugPrint('[DEENMATE_DEBUG] === Groq fallback check ===');
-      debugPrint('[DEENMATE_DEBUG] groqApiKey.isNotEmpty = ${groqApiKey.isNotEmpty}, length = ${groqApiKey.length}');
-      if (groqApiKey.isNotEmpty) {
+      // Step 3.5: Cerebras Cloud fallback (Ultra fast inference)
+      if (cerKey.isNotEmpty) {
+        debugPrint('[DEENMATE_DEBUG] Attempting Cerebras Cloud request...');
+        bool cerebrasSucceeded = false;
+        try {
+          await for (final chunk in _streamFromCerebrasApi(enrichedPrompt, cerKey)) {
+            cerebrasSucceeded = true;
+            yield chunk;
+          }
+          debugPrint('[DEENMATE_DEBUG] Cerebras stream finished. Succeeded = $cerebrasSucceeded');
+        } catch (e) {
+          debugPrint('[DEENMATE_DEBUG] Cerebras fallback threw an error: $e');
+        }
+        if (cerebrasSucceeded) return;
+      }
+
+      // Step 3.6: Groq fallback (Low-latency streaming)
+      if (gqKey.isNotEmpty) {
         debugPrint('[DEENMATE_DEBUG] Attempting Groq request now...');
         bool groqSucceeded = false;
         try {
-          await for (final chunk in _streamFromGroqApi(enrichedPrompt, groqApiKey)) {
+          await for (final chunk in _streamFromGroqApi(enrichedPrompt, gqKey)) {
             groqSucceeded = true;
             yield chunk;
           }
@@ -524,9 +830,22 @@ $prompt
           debugPrint('[DEENMATE_DEBUG] Groq fallback threw an error: $e');
         }
         if (groqSucceeded) return;
-        debugPrint('[DEENMATE_DEBUG] Groq did NOT succeed — falling through to smart knowledge engine.');
-      } else {
-        debugPrint('[DEENMATE_DEBUG] Skipping Groq — key is empty. Check your .env and rebuild fully.');
+      }
+
+      // Step 3.7: OpenRouter Multi-Model Gateway fallback (Llama 3.3, Qwen, Gemma, Mistral)
+      if (orKey.isNotEmpty) {
+        debugPrint('[DEENMATE_DEBUG] Attempting OpenRouter Multi-Model Gateway request...');
+        bool openRouterSucceeded = false;
+        try {
+          await for (final chunk in _streamFromOpenRouterApi(enrichedPrompt, orKey)) {
+            openRouterSucceeded = true;
+            yield chunk;
+          }
+          debugPrint('[DEENMATE_DEBUG] OpenRouter stream finished. Succeeded = $openRouterSucceeded');
+        } catch (e) {
+          debugPrint('[DEENMATE_DEBUG] OpenRouter fallback threw an error: $e');
+        }
+        if (openRouterSucceeded) return;
       }
 
       // Step 4: FALLBACK ONLY — smart knowledge engine
@@ -616,8 +935,6 @@ $prompt
       }
     }
   }
-
-  String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
 
   /// One-shot fetch of past chats — always resolves quickly, no stream issues.
   Future<List<Map<String, dynamic>>> fetchPastChats() async {
