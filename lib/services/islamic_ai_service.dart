@@ -8,8 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Multi-Provider Islamic AI & Knowledge Ensemble Service.
-///
+/// Multi-Provider Islamic AI & Knowledge Ensemble Services
 /// Integrates Google Gemini Flash models, Groq fallback, live Quran/Hadith
 /// search, and an authentic Islamic knowledge engine.
 class IslamicAIService {
@@ -21,14 +20,12 @@ class IslamicAIService {
   static String customApiKey = const String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
   /// Groq API key — used as a fallback when Gemini is rate-limited or fails.
-  /// Genuinely free, no credit card or top-up required. Get one at https://console.groq.com/keys
   static String groqApiKey = const String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
 
   GenerativeModel? _model;
   ChatSession? _chatSession;
 
-  // gemini-2.0-flash was shut down by Google on June 1, 2026 — removed.
-  // gemini-3.6-flash confirmed working by the developer as of Aug 2026.
+
   static const List<String> _supportedModels = [
     'gemini-3.6-flash',
     'gemini-2.5-flash',
@@ -42,10 +39,10 @@ You are "DeenMate Islamic AI", a highly specialized, humble, and strictly authen
 CRITICAL RELIGIOUS & AUTHENTICITY MANDATES:
 1. SINCERITY AND RESPONSIBILITY: You must provide truthful, authentic, and well-verified Islamic knowledge. Never invent, hallucinate, or misquote Quranic verses, Hadith, or rulings of scholars.
 2. QURAN & HADITH ARABIC TEXT + TRANSLATION + CITATIONS (REQUIRED):
-   - Whenever citing a Quranic verse or Hadith, include the authentic Arabic text alongside its clear English translation.
+   - Whenever citing a Quranic verse or Hadith, include the authentic Arabic text alongside its clear English translation if the user's question is in Bangla then bangla translation or any other language whichever user uses.
    - For every Quranic verse, cite the exact Surah name and Ayah number, e.g. Surah Al-Baqarah (2:255).
    - For every Hadith, cite the collection and Hadith number, e.g. Sahih al-Bukhari (Hadith 1) or Sahih Muslim (Hadith 223).
-3. HUMILITY & ZERO HALLUCINATION: If you do not have absolute certainty or precise authentic textual proof for a question, clearly state that Allah knows best and recommend consulting a trusted Islamic scholar.
+3. HUMILITY & ZERO HALLUCINATION: If you do not have absolute certainty or precise authentic textual proof for a question, clearly state that Allah knows best and recommend consulting a trusted Islamic scholar. Please strictly maintain this thing otherwise there will be so much problem.
 4. FATWA DISCLAIMER: For complex legal matters or specific fatwas, advise consulting a local Islamic scholar or Mufti.
 5. STRICT SCOPE RESTRICTION: Answer ONLY questions related to Islam. If asked non-Islamic questions, politely state that as DeenMate AI you are dedicated solely to answering questions about Islam.
 
@@ -122,7 +119,7 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
       await _ensureInitialized();
       if (_model != null) {
         const prompt =
-            'Generate a short, inspirational 2-sentence Islamic guidance for today focused on faith, prayer, patience, or good character. Rules: Exactly 2 sentences, maximum 2 lines, no markdown symbols or headers.';
+            'Generate a short, inspirational 1-sentence Islamic guidance for today focused on faith, prayer, patience, good character, charity, punctuality, discipline. Rules: Exactly 1 sentence, maximum 3 lines, no markdown symbols or headers.';
         final response = await _model!.generateContent([Content.text(prompt)]);
         final text = response.text?.trim();
         if (text != null && text.isNotEmpty) {
@@ -316,7 +313,6 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
 
   // ===== GROQ FALLBACK (OpenAI-compatible SSE streaming, genuinely free) =====
   // Used when Gemini/Firebase AI is rate-limited or fails outright.
-  // Get a free key at https://console.groq.com/keys — no card, no top-up needed.
   Stream<String> _streamFromGroqApi(String enrichedPrompt, String key) async* {
     if (key.isEmpty) return;
 
