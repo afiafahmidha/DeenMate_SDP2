@@ -414,8 +414,9 @@ class QShareResponse {
   final String? avatarBase64;
   final int sharesRequested;
   final String note;
-  final String status; // 'pending', 'accepted', 'rejected', 'filled'
+  final String status; // 'pending', 'accepted', 'rejected', 'filled', 'joined'
   final String? inviteCode; // set when poster accepts — used by responder to join
+  final String? rejectReason; // reason if poster declined
   final DateTime createdAt;
 
   QShareResponse({
@@ -429,6 +430,7 @@ class QShareResponse {
     required this.note,
     required this.status,
     this.inviteCode,
+    this.rejectReason,
     required this.createdAt,
   });
 
@@ -445,6 +447,7 @@ class QShareResponse {
       note: m['note'] ?? '',
       status: m['status'] ?? 'pending',
       inviteCode: m['inviteCode'] as String?,
+      rejectReason: m['rejectReason'] as String?,
       createdAt: (m['createdAt'] is Timestamp)
           ? (m['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -781,35 +784,71 @@ class QurbaniRepository {
   /// Loads the locally remembered group. A group is created only when the
   /// user explicitly chooses "Create a group" in the planner.
   static Future<QurbaniRepository?> load() async {
+    final uid = currentUid();
     final prefs = await SharedPreferences.getInstance();
     final savedOwner = prefs.getString(_prefsOwnerKey());
     final savedPlan = prefs.getString(_prefsPlanKey());
+
     if (savedOwner != null && savedPlan != null) {
       try {
-        final doc = await FirebaseFirestore.instance.collection('users').doc(savedOwner).collection('qurbaniPlans').doc(savedPlan).get();
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(savedOwner)
+            .collection('qurbaniPlans')
+            .doc(savedPlan)
+            .get();
+
         if (doc.exists) {
-          final uid = currentUid();
           final isOwner = savedOwner == uid;
           final data = doc.data() ?? {};
           final memberIds = List<String>.from(data['memberIds'] ?? []);
           final isMemberInArray = memberIds.contains(uid);
           final memberDoc = await doc.reference.collection('members').doc(uid).get();
+
           if (isOwner || isMemberInArray || memberDoc.exists) {
+            // Ensure uid is inside memberIds array for Firestore rules consistency
+            if (!memberIds.contains(uid)) {
+              try {
+                await doc.reference.update({
+                  'memberIds': FieldValue.arrayUnion([uid]),
+                });
+              } catch (_) {}
+            }
             return QurbaniRepository._(savedOwner, savedPlan);
           }
+        } else {
+          // Document was permanently deleted
+          await _clearPersistedPlan();
         }
       } catch (e) {
         debugPrint("Error validating saved group: $e");
+        // Don't wipe cached plan on transient offline or network error
       }
-      await _clearPersistedPlan();
     }
 
+    // Fallback 1: Check direct owned plan under users/{uid}/qurbaniPlans
     try {
-      final uid = currentUid();
+      final ownedSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('qurbaniPlans')
+          .limit(1)
+          .get();
+      if (ownedSnap.docs.isNotEmpty) {
+        final planDoc = ownedSnap.docs.first;
+        final planId = planDoc.id;
+        await _persist(uid, planId);
+        return QurbaniRepository._(uid, planId);
+      }
+    } catch (e) {
+      debugPrint("Error checking owned plans: $e");
+    }
+
+    // Fallback 2: Check member plans where memberIds contains uid (no orderBy to avoid index requirement)
+    try {
       final memberSnap = await FirebaseFirestore.instance
           .collectionGroup('qurbaniPlans')
           .where('memberIds', arrayContains: uid)
-          .orderBy('createdAt', descending: true)
           .limit(1)
           .get();
       if (memberSnap.docs.isNotEmpty) {
@@ -820,7 +859,7 @@ class QurbaniRepository {
         return QurbaniRepository._(ownerUid, planId);
       }
     } catch (e) {
-      debugPrint("Error discovering plan: $e");
+      debugPrint("Error discovering member plan: $e");
     }
     return null;
   }
@@ -1016,6 +1055,15 @@ class QurbaniRepository {
     final uid = currentUid();
     final name = currentDisplayName();
     final avatarBase64 = await currentAvatarBase64();
+
+    // Check cap
+    final pSnap = await participantsRef.get();
+    final otherTotal = pSnap.docs.fold<int>(0, (sum, d) {
+      if (d.id == uid) return sum;
+      return sum + ((d.data()['shares'] as num?)?.toInt() ?? 0);
+    });
+    await _validateShareCap(otherTotal + shares);
+
     await planRef.collection('members').doc(uid).set({
       'name': name,
       'shares': shares,
@@ -1024,6 +1072,7 @@ class QurbaniRepository {
       'joinedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
     await participantsRef.doc(uid).set({
       'name': name,
       'phone': null,
@@ -1038,6 +1087,34 @@ class QurbaniRepository {
       'isDeenMateUser': true,
       'uid': uid,
     }, SetOptions(merge: true));
+
+    // Ensure memberIds array has uid
+    try {
+      await planRef.update({
+        'memberIds': FieldValue.arrayUnion([uid]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+
+    await recalcAndSyncBalances();
+
+    // If total shares reach cap, close any linked share post
+    try {
+      final updatedSnap = await participantsRef.get();
+      final newTotal = updatedSnap.docs.fold<int>(0, (sum, d) => sum + ((d.data()['shares'] as num?)?.toInt() ?? 0));
+      final planSnap = await planRef.get();
+      final animalType = (planSnap.data()?['animalType'] as String?) ?? 'cow';
+      final cap = _animalShareCaps[animalType] ?? 7;
+      if (newTotal >= cap) {
+        final postSnaps = await FirebaseFirestore.instance
+            .collection('qurbaniSharePosts')
+            .where('planId', isEqualTo: planId)
+            .get();
+        for (final pDoc in postSnaps.docs) {
+          await pDoc.reference.update({'availableShares': 0, 'status': 'closed'});
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> updateOwnShares(int shares) => joinCurrentUserWithShares(shares);
@@ -1057,9 +1134,33 @@ class QurbaniRepository {
     final targetOwner = data['ownerUid'] as String;
     final targetPlan = data['planId'] as String;
 
-    await _persist(targetOwner, targetPlan);
     final repository = QurbaniRepository._(targetOwner, targetPlan);
+
+    // Validate share cap before joining
+    final pSnap = await repository.participantsRef.get();
+    final uid = currentUid();
+    final otherTotal = pSnap.docs.fold<int>(0, (sum, d) {
+      if (d.id == uid) return sum;
+      return sum + ((d.data()['shares'] as num?)?.toInt() ?? 0);
+    });
+
+    final planDoc = await repository.planRef.get();
+    if (!planDoc.exists) {
+      throw Exception('The requested Qurbani group no longer exists.');
+    }
+    final animalType = (planDoc.data()?['animalType'] as String?) ?? 'cow';
+    final cap = _animalShareCaps[animalType] ?? 7;
+    final remaining = cap - otherTotal;
+
+    if (remaining <= 0) {
+      throw Exception('Sorry, shares are already complete in this group (All $cap shares filled).');
+    }
+    if (shares > remaining) {
+      throw Exception('Cannot join with $shares shares. Only $remaining share${remaining > 1 ? "s" : ""} available for this $animalType (Maximum $cap shares).');
+    }
+
     await repository.joinCurrentUserWithShares(shares);
+    await _persist(targetOwner, targetPlan);
     return repository;
   }
 
@@ -1464,6 +1565,22 @@ class QShareBoardRepository {
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'local_device';
 
+    // Verify post is active and has enough available shares
+    final postDoc = await postsRef.doc(postId).get();
+    if (!postDoc.exists) {
+      throw Exception('This post no longer exists.');
+    }
+    final postData = postDoc.data() ?? {};
+    final status = postData['status'] as String? ?? 'active';
+    final available = (postData['availableShares'] as num?)?.toInt() ?? 0;
+
+    if (status == 'closed' || status == 'matched' || available <= 0) {
+      throw Exception('Sorry, share is complete in this group.');
+    }
+    if (sharesRequested > available) {
+      throw Exception('Only $available share${available > 1 ? "s" : ""} available in this group.');
+    }
+
     // Server-side duplicate guard: check if user already responded to this post
     final existing = await postsRef
         .doc(postId)
@@ -1489,6 +1606,19 @@ class QShareBoardRepository {
       'note': note,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Rejects a response with a specific reason provided by the poster.
+  static Future<void> rejectResponse({
+    required String postId,
+    required String responseId,
+    required String reason,
+  }) async {
+    await postsRef.doc(postId).collection('responses').doc(responseId).update({
+      'status': 'rejected',
+      'rejectReason': reason,
+      'rejectedAt': FieldValue.serverTimestamp(),
     });
   }
 
@@ -2855,6 +2985,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       child: Row(
         children: List.generate(_tabLabels.length, (i) {
           final active = i == _tab;
+          final activeBg = _isDarkMode ? AppColors.midTeal : AppColors.navyBlue;
+          final inactiveColor = _isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.5);
           return Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _tab = i),
@@ -2862,7 +2994,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                  color: active ? AppColors.navyBlue : Colors.transparent,
+                  color: active ? activeBg : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -2870,7 +3002,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   children: [
                     Icon(_tabIcons[i],
                         size: 16,
-                        color: active ? Colors.white : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4))),
+                        color: active ? Colors.white : inactiveColor),
                     const SizedBox(height: 2),
                     Text(compactLabels[i],
                         maxLines: 1,
@@ -2878,7 +3010,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         style: GoogleFonts.inter(
                             fontSize: 9,
                             fontWeight: FontWeight.w600,
-                            color: active ? Colors.white : (_isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.4)))),
+                            color: active ? Colors.white : inactiveColor)),
                   ],
                 ),
               ),
@@ -3976,19 +4108,30 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   }
 
   void _confirmGroupAction({required bool isOwner}) {
-    final action = isOwner ? 'Delete group' : 'Leave group';
+    final title = isOwner ? 'Delete Qurbani Group?' : 'Leave Qurbani Group?';
     final message = isOwner
-        ? 'This removes the shared plan and stops the group code from being used. This cannot be undone.'
-        : 'You will lose access to this shared plan, its members, expenses, and settlements.';
+        ? 'Are you sure you want to delete this group? This removes the shared plan and invalidates the group invite code for all participants. This action cannot be undone.'
+        : 'Are you sure you want to leave the group? You will lose access to this shared plan, members, expenses, and settlements.';
+    final dialogBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(action),
-        content: Text(message),
+        backgroundColor: dialogBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
+        content: Text(message, style: GoogleFonts.inter(fontSize: 13, height: 1.45, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('Cancel', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
             onPressed: () async {
               Navigator.pop(dialogContext);
               try {
@@ -3999,13 +4142,15 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 }
                 if (mounted) {
                   setState(() => _repo = null);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isOwner ? 'Group deleted.' : 'You left the group.')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(isOwner ? 'Group deleted.' : 'You have left the group.')),
+                  );
                 }
               } catch (error) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not ${action.toLowerCase()}: $error')));
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not complete action: $error')));
               }
             },
-            child: Text(action),
+            child: Text(isOwner ? 'Delete Group' : 'Leave Group', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -5605,10 +5750,14 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
 
         final myUidForFilter = QurbaniRepository.currentUid();
         final filteredPosts = posts.where((post) {
-          // Poster can always see their own post (to manage responses) even when filled.
           final isOwnerOfPost = post.posterUid == myUidForFilter;
 
-          // 1. For non-poster viewers: hide posts that are closed/matched/filled
+          // 1. Hide post for user if they have already joined this post's group
+          if (!isOwnerOfPost && _repo != null && post.planId != null && _repo!.planId == post.planId) {
+            return false;
+          }
+
+          // 2. For non-poster viewers: hide posts that are closed/matched/filled
           if (!isOwnerOfPost) {
             if (post.status == 'closed' ||
                 post.status == 'matched' ||
@@ -5617,8 +5766,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             }
           }
 
-          // 2. Real-Time Proximity Filter (Nearby Discovery)
-          // Owner always sees their own post regardless of distance filter
+          // 3. Real-Time Proximity Filter (Nearby Discovery)
           if (isOwnerOfPost) return true;
           if (_selectedMaxDistanceKm >= 9990) return true;
           if (_currentUserPosition == null) return true;
@@ -5649,7 +5797,82 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: _showCreatePostSheet,
+                  onPressed: () async {
+                    if (_repo == null) {
+                      final shouldCreate = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          title: Row(
+                            children: [
+                              const Icon(Icons.group_add_rounded, color: AppColors.midTeal, size: 22),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Qurbani Group Required',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          content: Text(
+                            'You need an active Qurbani planning group before posting a share offer. This allows interested users to receive your group code and join your group once you accept them.\n\nWould you like to create your Qurbani group now?',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              height: 1.45,
+                              color: _isDarkMode ? Colors.white70 : Colors.grey[700],
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: Text(
+                                'Cancel',
+                                style: GoogleFonts.inter(
+                                  color: _isDarkMode ? Colors.white60 : Colors.grey[600],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.midTeal,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              child: const Text('Create Group Now'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (shouldCreate == true) {
+                        try {
+                          final newRepo = await QurbaniRepository.createGroup();
+                          if (mounted) {
+                            setState(() => _repo = newRepo);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('🎉 Qurbani group created! Now you can publish your share post.')),
+                            );
+                            _showCreatePostSheet();
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Could not create group: $e')),
+                            );
+                          }
+                        }
+                      }
+                    } else {
+                      _showCreatePostSheet();
+                    }
+                  },
                   icon: const Icon(Icons.add_rounded, size: 14),
                   label: Text('Post', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
@@ -5750,7 +5973,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: post.status == 'matched' ? Colors.grey : AppColors.midTeal.withValues(alpha: 0.3)),
+        border: Border.all(color: post.status == 'matched' || post.status == 'closed' ? Colors.grey : AppColors.midTeal.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5787,12 +6010,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: post.status == 'matched' ? Colors.grey.withValues(alpha: 0.2) : AppColors.midTeal.withValues(alpha: 0.15),
+                  color: post.status == 'matched' || post.status == 'closed' ? Colors.grey.withValues(alpha: 0.2) : AppColors.midTeal.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   post.animalType.toUpperCase(),
-                  style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: post.status == 'matched' ? Colors.grey : AppColors.midTeal),
+                  style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: post.status == 'matched' || post.status == 'closed' ? Colors.grey : AppColors.midTeal),
                 ),
               ),
               if (isMyPost) ...[
@@ -5802,19 +6025,24 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     final confirmed = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        title: const Text('Delete Post?'),
-                        content: const Text(
-                          'This will permanently remove your share post and all responses to it. This cannot be undone.'),
+                        backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: Text('Delete Post?', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: textColor)),
+                        content: Text(
+                          'This will permanently remove your share post and all responses to it. This cannot be undone.',
+                          style: GoogleFonts.inter(fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
+                        ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancel'),
+                            child: Text('Cancel', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
                           ),
                           ElevatedButton(
                             onPressed: () => Navigator.pop(ctx, true),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.red,
                               foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             child: const Text('Delete'),
                           ),
@@ -5881,136 +6109,320 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       Text('No responses yet.', style: GoogleFonts.inter(fontSize: 11, color: Colors.grey))
                     else
                       ...responses.map((resp) => Container(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100], borderRadius: BorderRadius.circular(10)),
-                        child: Row(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _isDarkMode ? Colors.white12 : Colors.grey[300]!),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            DeenMateAvatar(name: resp.responderName, photoUrl: resp.photoUrl, avatarBase64: resp.avatarBase64, radius: 12),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${resp.responderName} (${resp.sharesRequested} share${resp.sharesRequested > 1 ? "s" : ""})',
-                                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 11.5, color: textColor),
-                                  ),
-                                  if (resp.note.isNotEmpty)
-                                    Text(resp.note, style: GoogleFonts.inter(fontSize: 10.5, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
-                                ],
-                              ),
-                            ),
-                            if (resp.status == 'accepted')
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
-                                child: Text('Accepted', style: GoogleFonts.inter(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
-                              )
-                            else if (resp.status == 'joined')
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                                child: Text('Joined', style: GoogleFonts.inter(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.bold)),
-                              )
-                            else if (resp.status == 'filled' || post.availableShares <= 0)
-                              // No shares left — inform the responder politely
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.block_rounded, color: Colors.orange, size: 11),
-                                    const SizedBox(width: 3),
-                                    Text('Group Full', style: GoogleFonts.inter(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              )
-                            else
-                              ElevatedButton(
-                                onPressed: () async {
-                                  // Pre-fill with active group's code if available
-                                  String existingCode = '';
-                                  if (_repo != null) {
-                                    existingCode = await _repo!.getInviteCode() ?? '';
-                                  }
-                                  final codeController = TextEditingController(text: existingCode);
-
-                                  if (!mounted) return;
-
-                                  showDialog(
-                                    context: context,
-                                    builder: (ctx) => AlertDialog(
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                                      title: Text('Accept & Send Group Code', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15)),
-                                      content: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Accept ${resp.responderName} and send your Qurbani Group Invite Code so they can join your existing group:',
-                                            style: GoogleFonts.inter(fontSize: 13, height: 1.4),
-                                          ),
-                                          const SizedBox(height: 14),
-                                          TextField(
-                                            controller: codeController,
-                                            textCapitalization: TextCapitalization.characters,
-                                            decoration: InputDecoration(
-                                              labelText: 'Group Invite Code',
-                                              hintText: 'Enter code (e.g. QRB-AB12CD)',
-                                              prefixIcon: const Icon(Icons.qr_code_rounded, color: AppColors.midTeal),
-                                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Text(
-                                            '${resp.responderName} will see this exact code in their Share Board tab and tap "Join Group Now" to enter your existing group.',
-                                            style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[600], height: 1.3),
-                                          ),
-                                        ],
+                            Row(
+                              children: [
+                                DeenMateAvatar(name: resp.responderName, photoUrl: resp.photoUrl, avatarBase64: resp.avatarBase64, radius: 14),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${resp.responderName} (${resp.sharesRequested} share${resp.sharesRequested > 1 ? "s" : ""})',
+                                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: textColor),
                                       ),
-                                      actions: [
-                                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                                        ElevatedButton(
-                                          onPressed: () async {
-                                            final inputCode = codeController.text.trim().toUpperCase();
-                                            if (inputCode.isEmpty) {
-                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter or select a group invite code.')));
-                                              return;
-                                            }
-                                            Navigator.pop(ctx);
-                                            try {
-                                              await QShareBoardRepository.acceptAndSendCode(
-                                                post: post,
-                                                response: resp,
-                                                inviteCode: inputCode,
-                                              );
-                                              if (mounted) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(content: Text('Accepted! Group code $inputCode sent to ${resp.responderName}.')),
-                                                );
-                                              }
-                                            } catch (err) {
-                                              if (mounted) {
-                                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not accept: $err')));
-                                              }
-                                            }
-                                          },
-                                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white),
-                                          child: const Text('Confirm & Send'),
-                                        ),
+                                      if (resp.note.isNotEmpty)
+                                        Text(resp.note, style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                                    ],
+                                  ),
+                                ),
+                                if (resp.status == 'accepted')
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+                                    child: Text('Accepted', style: GoogleFonts.inter(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  )
+                                else if (resp.status == 'joined')
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                                    child: Text('Joined Group', style: GoogleFonts.inter(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  )
+                                else if (resp.status == 'rejected')
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                                    child: Text('Declined', style: GoogleFonts.inter(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  )
+                                else if (resp.status == 'filled' || post.availableShares <= 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.block_rounded, color: Colors.orange, size: 11),
+                                        const SizedBox(width: 3),
+                                        Text('Group Full', style: GoogleFonts.inter(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
                                       ],
                                     ),
-                                  );
-                                },
-                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), minimumSize: const Size(0, 28)),
-                                child: const Text('Accept & Share Code', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  ),
+                              ],
+                            ),
+                            if (resp.status == 'pending' && post.availableShares > 0) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  // Reject Button
+                                  OutlinedButton.icon(
+                                    onPressed: () async {
+                                      String selectedReason = 'Group shares are already filled';
+                                      final customReasonCtrl = TextEditingController();
+
+                                      final confirmed = await showDialog<bool>(
+                                        context: context,
+                                        builder: (dialogCtx) => StatefulBuilder(
+                                          builder: (dialogCtx, setDialogState) => AlertDialog(
+                                            backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                            title: Text(
+                                              'Decline Request?',
+                                              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+                                            ),
+                                            content: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Select a reason for declining ${resp.responderName}\'s request:',
+                                                  style: GoogleFonts.inter(fontSize: 12.5, color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
+                                                ),
+                                                const SizedBox(height: 12),
+                                                DropdownButtonFormField<String>(
+                                                  value: selectedReason,
+                                                  isExpanded: true,
+                                                  dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+                                                  style: GoogleFonts.inter(color: textColor, fontSize: 12),
+                                                  decoration: InputDecoration(
+                                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                  ),
+                                                  items: const [
+                                                    DropdownMenuItem(value: 'Group shares are already filled', child: Text('Shares already filled')),
+                                                    DropdownMenuItem(value: 'Location is too far', child: Text('Location is too far')),
+                                                    DropdownMenuItem(value: 'Requested share count mismatch', child: Text('Requested share count mismatch')),
+                                                    DropdownMenuItem(value: 'Other reason', child: Text('Other reason')),
+                                                  ],
+                                                  onChanged: (val) {
+                                                    if (val != null) {
+                                                      setDialogState(() => selectedReason = val);
+                                                    }
+                                                  },
+                                                ),
+                                                if (selectedReason == 'Other reason') ...[
+                                                  const SizedBox(height: 10),
+                                                  TextField(
+                                                    controller: customReasonCtrl,
+                                                    style: GoogleFonts.inter(color: textColor, fontSize: 12),
+                                                    decoration: InputDecoration(
+                                                      hintText: 'Type reason here...',
+                                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(dialogCtx, false),
+                                                child: Text('Cancel', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () => Navigator.pop(dialogCtx, true),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.red,
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                ),
+                                                child: const Text('Decline'),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+
+                                      if (confirmed == true) {
+                                        final reason = selectedReason == 'Other reason' && customReasonCtrl.text.trim().isNotEmpty
+                                            ? customReasonCtrl.text.trim()
+                                            : selectedReason;
+                                        try {
+                                          await QShareBoardRepository.rejectResponse(
+                                            postId: post.id,
+                                            responseId: resp.id,
+                                            reason: reason,
+                                          );
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Declined request from ${resp.responderName}.')),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Could not decline request: $e')),
+                                            );
+                                          }
+                                        }
+                                      }
+                                    },
+                                    icon: const Icon(Icons.close_rounded, size: 14, color: Colors.red),
+                                    label: const Text('Decline', style: TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      minimumSize: const Size(0, 30),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Accept Button with Explicit Confirmation Dialog
+                                  ElevatedButton.icon(
+                                    onPressed: () async {
+                                      if (_repo == null) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Please create or load your Qurbani group first.')),
+                                        );
+                                        return;
+                                      }
+
+                                      // Confirmation Dialog
+                                      final shouldAccept = await showDialog<bool>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                          title: Text(
+                                            'Add DeenMate User?',
+                                            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+                                          ),
+                                          content: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Are you sure you want to add this DeenMate user in your Qurbani planning group?',
+                                                style: GoogleFonts.inter(fontSize: 13, height: 1.45, color: _isDarkMode ? Colors.white70 : Colors.grey[800]),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Container(
+                                                padding: const EdgeInsets.all(10),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.midTeal.withValues(alpha: 0.08),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.25)),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    DeenMateAvatar(name: resp.responderName, photoUrl: resp.photoUrl, avatarBase64: resp.avatarBase64, radius: 14),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          Text(resp.responderName, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: textColor)),
+                                                          Text('${resp.sharesRequested} share(s) requested', style: GoogleFonts.inter(fontSize: 11, color: AppColors.midTeal)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(ctx, false),
+                                              child: Text('Cancel', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                                            ),
+                                            ElevatedButton(
+                                              onPressed: () => Navigator.pop(ctx, true),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: AppColors.midTeal,
+                                                foregroundColor: Colors.white,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                              child: const Text('Yes, Add & Share Code'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+
+                                      if (shouldAccept == true) {
+                                        try {
+                                          // Validate group capacity
+                                          final pSnap = await _repo!.participantsRef.get();
+                                          final currentAssigned = pSnap.docs.fold<int>(0, (total, d) => total + ((d.data()['shares'] as num?)?.toInt() ?? 0));
+                                          final planDoc = await _repo!.planRef.get();
+                                          final animalType = (planDoc.data()?['animalType'] as String?) ?? 'cow';
+                                          final cap = QurbaniRepository._animalShareCaps[animalType] ?? 7;
+
+                                          if (currentAssigned + resp.sharesRequested > cap) {
+                                            final remaining = math.max(0, cap - currentAssigned);
+                                            throw Exception('Cannot accept: Only $remaining share(s) remaining in your group (Maximum $cap shares for $animalType).');
+                                          }
+
+                                          // Get or generate invite code
+                                          final code = await _repo!.getInviteCode() ?? await _repo!.createInviteCode();
+
+                                          // Automatically add responder as a participant in the owner's group
+                                          await _repo!.addParticipantUser(
+                                            name: resp.responderName,
+                                            shares: resp.sharesRequested,
+                                            isDeenMateUser: true,
+                                            uid: resp.responderUid,
+                                            photoUrl: resp.photoUrl,
+                                            avatarBase64: resp.avatarBase64,
+                                          );
+
+                                          // Send code to responder and update post remaining shares
+                                          await QShareBoardRepository.acceptAndSendCode(
+                                            post: post,
+                                            response: resp,
+                                            inviteCode: code,
+                                          );
+
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('🎉 Accepted! ${resp.responderName} added to your group and invite code shared.')),
+                                            );
+                                          }
+                                        } catch (err) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Could not accept: $err')),
+                                            );
+                                          }
+                                        }
+                                      }
+                                    },
+                                    icon: const Icon(Icons.check_circle_rounded, size: 14),
+                                    label: const Text('Accept & Add', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.midTeal,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      minimumSize: const Size(0, 30),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                ],
                               ),
+                            ],
                           ],
                         ),
                       )),
@@ -6065,14 +6477,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           : (isRejected ? Colors.red : AppColors.midTeal));
 
                   final statusMessage = isAccepted
-                      ? '🎉 Accepted! Use the code below to join the group.'
+                      ? '🎉 Accepted for ${myResponse?.sharesRequested} share(s)! Tap below to join the group.'
                       : (isFilled
-                          ? 'Group Shares Filled — The poster selected another member for the remaining shares.'
+                          ? 'Group Shares Filled — The poster allocated the remaining shares.'
                           : (isRejected
-                              ? 'Response Declined — Poster declined your request.'
-                              : 'Response sent — waiting for poster to accept.'));
+                              ? 'Request Declined: ${myResponse?.rejectReason ?? "Poster declined your request."}'
+                              : 'Request sent (${myResponse?.sharesRequested} share${myResponse?.sharesRequested != 1 ? "s" : ""}) — waiting for poster to accept.'));
 
-                  // Retrieve invite code stored on the response (only present when accepted)
                   final inviteCode = myResponse?.inviteCode;
 
                   return Column(
@@ -6095,12 +6506,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                 statusMessage,
                                 style: GoogleFonts.inter(
                                   fontSize: 11.5,
+                                  fontWeight: isAccepted ? FontWeight.w600 : FontWeight.normal,
                                   color: isAccepted
-                                      ? Colors.green[700]
+                                      ? (_isDarkMode ? Colors.green[300] : Colors.green[800])
                                       : (isFilled
-                                          ? Colors.orange[900]
+                                          ? (_isDarkMode ? Colors.orange[300] : Colors.orange[900])
                                           : (isRejected
-                                              ? Colors.red[700]
+                                              ? (_isDarkMode ? Colors.red[300] : Colors.red[800])
                                               : (_isDarkMode ? Colors.white70 : Colors.grey[700]))),
                                 ),
                               ),
@@ -6108,7 +6520,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           ],
                         ),
                       ),
-                      // Show invite code + Join button when accepted
                       if (isAccepted && inviteCode != null && inviteCode.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Container(
@@ -6149,7 +6560,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                 width: double.infinity,
                                 child: ElevatedButton.icon(
                                   onPressed: () async {
-                                    // Join the group using the invite code
                                     try {
                                       final repo = await QurbaniRepository.joinByCode(inviteCode, myResponse!.sharesRequested);
                                       if (mounted) setState(() => _repo = repo);
@@ -6158,7 +6568,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(content: Text('🎉 Joined the Qurbani group!')),
                                         );
-                                        setState(() => _tab = 2); // Switch to Shares tab
+                                        setState(() => _tab = 2);
                                       }
                                     } catch (e) {
                                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not join: $e')));
@@ -6184,9 +6594,9 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 return SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: post.status == 'matched' || post.availableShares <= 0 ? null : () => _showRespondSheet(post),
+                    onPressed: post.status == 'matched' || post.status == 'closed' || post.availableShares <= 0 ? null : () => _showRespondSheet(post),
                     icon: const Icon(Icons.handshake_rounded, size: 16),
-                    label: Text(post.status == 'matched' ? 'Share Completed' : 'Respond / Request Share'),
+                    label: Text(post.status == 'matched' || post.status == 'closed' || post.availableShares <= 0 ? 'Share Completed' : 'Respond / Request Share'),
                     style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(38)),
                   ),
                 );
@@ -6229,9 +6639,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Text('Animal Type: ', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text('Animal Type: ', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.black87)),
+                  const SizedBox(width: 8),
                   DropdownButton<String>(
                     value: animal,
+                    dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+                    style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87, fontSize: 13),
                     items: const [
                       DropdownMenuItem(value: 'cow', child: Text('Cow (7 shares max)')),
                       DropdownMenuItem(value: 'camel', child: Text('Camel (7 shares max)')),
@@ -6254,11 +6667,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Available Shares to Fill:', style: GoogleFonts.inter(fontSize: 12)),
+                  Text('Available Shares to Fill:', style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white70 : Colors.black87)),
                   Row(
                     children: [
                       IconButton(onPressed: availShares > 1 ? () => setD(() => availShares--) : null, icon: const Icon(Icons.remove)),
-                      Text('$availShares', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                      Text('$availShares', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : Colors.black87)),
                       IconButton(onPressed: availShares < totalShares ? () => setD(() => availShares++) : null, icon: const Icon(Icons.add)),
                     ],
                   ),
@@ -6268,17 +6681,20 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               TextField(
                 controller: costCtrl,
                 keyboardType: TextInputType.number,
+                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87),
                 decoration: const InputDecoration(labelText: 'Estimated Cost Per Share (BDT)'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: locCtrl,
+                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87),
                 decoration: const InputDecoration(labelText: 'Location / Area Name (e.g. Dhanmondi, Dhaka)'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: descCtrl,
                 maxLines: 2,
+                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87),
                 decoration: const InputDecoration(labelText: 'Description / Notes'),
               ),
               const SizedBox(height: 14),
@@ -6323,7 +6739,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   void _showRespondSheet(QurbaniSharePost post) {
     int requestedShares = 1;
     final noteCtrl = TextEditingController();
-    bool _submitting = false; // UI guard: prevent double-tap
+    bool isSubmitting = false; // UI guard: prevent double-tap
 
     showModalBottomSheet(
       context: context,
@@ -6342,12 +6758,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Shares Requested:', style: GoogleFonts.inter(fontSize: 12)),
+                  Text('Shares Requested:', style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white70 : Colors.black87)),
                   Row(
                     children: [
-                      IconButton(onPressed: (!_submitting && requestedShares > 1) ? () => setD(() => requestedShares--) : null, icon: const Icon(Icons.remove)),
-                      Text('$requestedShares', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-                      IconButton(onPressed: (!_submitting && requestedShares < post.availableShares) ? () => setD(() => requestedShares++) : null, icon: const Icon(Icons.add)),
+                      IconButton(onPressed: (!isSubmitting && requestedShares > 1) ? () => setD(() => requestedShares--) : null, icon: const Icon(Icons.remove)),
+                      Text('$requestedShares', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : Colors.black87)),
+                      IconButton(onPressed: (!isSubmitting && requestedShares < post.availableShares) ? () => setD(() => requestedShares++) : null, icon: const Icon(Icons.add)),
                     ],
                   ),
                 ],
@@ -6356,15 +6772,16 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               TextField(
                 controller: noteCtrl,
                 maxLines: 2,
-                enabled: !_submitting,
+                enabled: !isSubmitting,
+                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87),
                 decoration: const InputDecoration(labelText: 'Message to poster (optional)'),
               ),
               const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _submitting ? null : () async {
-                    setD(() => _submitting = true); // Disable button immediately
+                  onPressed: isSubmitting ? null : () async {
+                    setD(() => isSubmitting = true); // Disable button immediately
                     try {
                       await QShareBoardRepository.respondToPost(
                         postId: post.id,
@@ -6376,7 +6793,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     } catch (e) {
                       // Re-enable on error so user can correct and retry
                       if (ctx.mounted) {
-                        setD(() => _submitting = false);
+                        setD(() => isSubmitting = false);
                         ScaffoldMessenger.of(ctx).showSnackBar(
                           SnackBar(content: Text(e.toString().contains('already responded')
                             ? 'You have already responded to this post.'
@@ -6386,7 +6803,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white),
-                  child: _submitting
+                  child: isSubmitting
                     ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Text('Send Response'),
                 ),

@@ -1014,6 +1014,7 @@ class _InheritanceScreenState extends State<InheritanceScreen>
             .toList();
         setState(() {
           _familyRelatives = loaded;
+          _ensureMeNodeExists();
           _recalculateFamilyShares();
         });
       } catch (_) {
@@ -1075,6 +1076,7 @@ class _InheritanceScreenState extends State<InheritanceScreen>
                   _familyRelatives = remoteFamilyTree
                       .map((e) => RelativeNode.fromJson(Map<String, dynamic>.from(e as Map)))
                       .toList();
+                  _ensureMeNodeExists();
                   _recalculateFamilyShares();
                 } catch (_) {}
               }
@@ -1131,6 +1133,48 @@ class _InheritanceScreenState extends State<InheritanceScreen>
       } catch (e) {
         debugPrint("Error loading inheritance from Firestore: $e");
       }
+    }
+  }
+
+  void _ensureMeNodeExists() {
+    final idx = _familyRelatives.indexWhere((r) => r.id == 'me');
+    if (idx == -1) {
+      _familyRelatives.insert(
+        0,
+        RelativeNode(id: 'me', label: 'Me', gender: _myGender, level: 0, relationKey: 'me'),
+      );
+    } else {
+      final meNode = _familyRelatives[idx];
+      if (meNode.gender != _myGender) {
+        _familyRelatives[idx] = RelativeNode(
+          id: 'me',
+          label: meNode.label,
+          customName: meNode.customName,
+          gender: _myGender,
+          level: 0,
+          relationKey: 'me',
+        );
+      }
+    }
+  }
+
+  void _resetTreeLayout() async {
+    setState(() {
+      _nodeOffsets.clear();
+      _ensureMeNodeExists();
+      _treeTransformController.value = Matrix4.identity();
+      _editLayoutMode = false;
+      _boardLocked = false;
+      _lineAnimationController.forward(from: 0);
+      _recalculateFamilyShares();
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('inheritance_node_offsets');
+    await prefs.remove('inheritance_locked_matrix');
+    await prefs.setBool('inheritance_board_locked', false);
+    await _saveFamilyTree();
+    if (mounted) {
+      _snack('Family Tree & "Me" box reset to center!');
     }
   }
 
@@ -1763,6 +1807,46 @@ class _InheritanceScreenState extends State<InheritanceScreen>
                   ),
 
 
+                  // Reset Layout & Center Me button
+                  Positioned(
+                    top: 84,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: _resetTreeLayout,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _isDarkMode ? Colors.black38 : Colors.white38,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _isDarkMode ? Colors.white24 : Colors.black12,
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.restart_alt_rounded,
+                              size: 13,
+                              color: _isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.6),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Reset',
+                              style: GoogleFonts.inter(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: _isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
                   // Edit Layout toggle — lets user freely drag cards anywhere
                   Positioned(
                     top: 46,
@@ -1996,6 +2080,9 @@ class _InheritanceScreenState extends State<InheritanceScreen>
           if (idx != -1) {
             _familyRelatives[idx] = RelativeNode(
                 id: 'me', label: 'Me', gender: g, level: 0, relationKey: 'me');
+          } else {
+            _familyRelatives.insert(0, RelativeNode(
+                id: 'me', label: 'Me', gender: g, level: 0, relationKey: 'me'));
           }
           _familyRelatives.removeWhere(
               (r) => r.relationKey == (g == Gender.male ? 'husband' : 'wife'));

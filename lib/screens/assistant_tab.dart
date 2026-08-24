@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io' show InternetAddress;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -109,9 +111,87 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     super.dispose();
   }
 
+  Future<bool> _checkIsOnline() async {
+    if (kIsWeb) {
+      // On Flutter Web, dart:io InternetAddress is not supported by browsers.
+      return true;
+    }
+    try {
+      final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _showOfflineDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final isDark = widget.isDarkMode;
+        final textColor = isDark ? Colors.white : AppColors.navyBlue;
+        final subColor = isDark ? Colors.white70 : Colors.grey[700];
+
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.wifi_off_rounded, color: Colors.red, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'You Are Offline',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: textColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'You are currently offline. Please check your internet connection (Wi-Fi or Mobile Data) to chat with DeenMate Islamic AI.',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              height: 1.45,
+              color: subColor,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.midTeal,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _handleSend([String? presetText]) async {
     final String text = (presetText ?? _inputCtrl.text).trim();
     if (text.isEmpty || _isGenerating) return;
+
+    // Fast Offline Check
+    final isOnline = await _checkIsOnline();
+    if (!isOnline) {
+      if (mounted) _showOfflineDialog();
+      return;
+    }
 
     final userMsg = _ChatMessage(text: text, isUser: true);
     final aiMsg = _ChatMessage(text: '', isUser: false, isLoading: true);
@@ -156,6 +236,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
           if (aiMsg.text.isEmpty) {
             aiMsg.text =
                 'No internet connection. Please check your network connection and try again.\n\n*Allahu A\'lam (Allah knows best).*';
+            _showOfflineDialog();
           }
         });
       }
