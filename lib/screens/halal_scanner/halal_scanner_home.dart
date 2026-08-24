@@ -5619,7 +5619,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 // ============================================================
 
 class RealBarcodeScannerScreen extends StatefulWidget {
-  final Function(ScannedProduct) onScanComplete;
+  final Future<void> Function(ScannedProduct) onScanComplete;
   final bool isDarkMode;
 
   const RealBarcodeScannerScreen({
@@ -5684,7 +5684,7 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
       if (productData != null) {
         final analysisResult = await _analyzeProduct(productData, code);
         final product = analysisResult.toScannedProduct();
-        widget.onScanComplete(product);
+        await widget.onScanComplete(product);
 
         if (!mounted) return;
         // Navigate directly to ProductDetailScreen — skip the intermediate results page

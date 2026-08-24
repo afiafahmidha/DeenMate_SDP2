@@ -209,6 +209,23 @@ service cloud.firestore {
           && request.resource.data.messages.size() <= 500;
       }
 
+      match /halalScans/{scanId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasOnly([
+            'barcode', 'productName', 'ingredients', 'additives',
+            'halalStatus', 'resultDetails', 'imageUrl', 'scannedAt',
+            'analysisResults'
+          ])
+          && request.resource.data.keys().hasAll([
+            'productName', 'halalStatus', 'scannedAt'
+          ])
+          && request.resource.data.productName is string
+          && request.resource.data.productName.size() <= 300
+          && request.resource.data.halalStatus in ['halal', 'haram', 'mushbooh', 'unknown']
+          && request.resource.data.scannedAt is timestamp;
+      }
+
       match /qurbaniPlans/{planId} {
         allow create: if isOwner(userId)
           && validQurbaniPlan(request.resource.data, userId)
