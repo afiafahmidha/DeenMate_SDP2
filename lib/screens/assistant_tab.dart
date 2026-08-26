@@ -55,35 +55,33 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     _AssistantStarConfig(topFraction: 0.55, leftFraction: 0.06, size: 5, delayMs: 350),
   ];
 
-  // DeepSeek-Style Prompt Cards Configuration
-  final List<Map<String, dynamic>> _deepSeekPromptCards = [
+  // Minimal suggestion prompts shown on the empty state — same quiet
+  // styling for every tile (no rainbow of accent colors), just a clean
+  // icon + label the user can tap to start a chat.
+  final List<Map<String, dynamic>> _suggestionPrompts = [
     {
       'title': 'Prayer Guidance',
-      'prompt': 'How do I perform Wudu step by step according to Sunnah?',
       'subtitle': 'Perform ablution correctly before Salat',
-      'icon': Icons.water_drop_rounded,
-      'accent': const Color(0xFF0D9488),
+      'prompt': 'How do I perform Wudu step by step according to Sunnah?',
+      'icon': Icons.water_drop_outlined,
     },
     {
       'title': 'Fasting Rules',
-      'prompt': 'What actions invalidate the fast during Ramadan?',
       'subtitle': 'Essential rules for Sawm & Ramadan',
-      'icon': Icons.nightlight_round,
-      'accent': const Color(0xFFF59E0B), // Night Sky Amber Gold (Not red)
+      'prompt': 'What actions invalidate the fast during Ramadan?',
+      'icon': Icons.nightlight_outlined,
     },
     {
       'title': 'Zakat & Nisab',
-      'prompt': 'What is the Nisab threshold and rate for calculating Zakat?',
       'subtitle': 'Calculate obligatory Islamic charity',
-      'icon': Icons.account_balance_wallet_rounded,
-      'accent': const Color(0xFF2563EB),
+      'prompt': 'What is the Nisab threshold and rate for calculating Zakat?',
+      'icon': Icons.account_balance_wallet_outlined,
     },
     {
       'title': '5 Pillars of Islam',
-      'prompt': 'What are the 5 pillars of Islam and their significance?',
       'subtitle': 'Core foundation of Muslim faith',
-      'icon': Icons.menu_book_rounded,
-      'accent': const Color(0xFF7C3AED),
+      'prompt': 'What are the 5 pillars of Islam and their significance?',
+      'icon': Icons.menu_book_outlined,
     },
   ];
 
@@ -519,7 +517,7 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                   _buildHeader(),
                   Expanded(
                     child: _messages.isEmpty
-                        ? _buildDeepSeekEmptyState()
+                        ? _buildEmptyState()
                         : ListView.builder(
                             controller: _scrollCtrl,
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -575,170 +573,94 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
     );
   }
 
-  /// Professional & Standard AI Empty State for New Conversations
-  Widget _buildDeepSeekEmptyState() {
+  /// Minimal, aesthetic empty state — a modest mark, a warm greeting, and a
+  /// quiet grid of starter prompts. Every tile shares the same restrained
+  /// styling (one muted accent, thin border) instead of a rainbow of
+  /// per-card colors, so the screen reads as one composed whole.
+  ///
+  /// Layout notes:
+  /// - Outer horizontal padding reduced (28 -> 16) so the prompt grid uses
+  ///   more of the available screen width instead of leaving dead space on
+  ///   either side.
+  /// - Grid max width increased (380 -> 460) for the same reason.
+  /// - Grid uses a fixed `mainAxisExtent` instead of `childAspectRatio` so
+  ///   every card is guaranteed the exact same height regardless of how
+  ///   much text it holds — no more mismatched box sizes.
+  Widget _buildEmptyState() {
     return Center(
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Professional AI Emblem Header
+            // ===== Modest, borderless mark =====
             Container(
-              padding: const EdgeInsets.all(14),
+              width: 88,
+              height: 88,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: _dark
-                    ? Colors.white.withValues(alpha: 0.06)
-                    : AppColors.navyBlue.withValues(alpha: 0.05),
-                border: Border.all(
-                  color: AppColors.midTeal.withValues(alpha: _dark ? 0.3 : 0.2),
-                  width: 1.2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.midTeal.withValues(alpha: 0.1),
-                    blurRadius: 16,
-                    spreadRadius: 1,
-                  ),
-                ],
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : AppColors.midTeal.withValues(alpha: 0.07),
               ),
-              child: const AppLogo(size: 48),
+              child: const AppLogo(size: 50),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+
+            // ===== Name =====
             Text(
-              'Assalamu Alaikum!',
+              'DeenMate AI Assistant',
+              textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
                 color: _primaryText(context),
-                letterSpacing: 0.2,
+                letterSpacing: 0.1,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
+
+            // ===== Subtitle =====
             Text(
-              'How can I help you with your Islamic learning today?',
+              'Ask about prayer, fasting, Zakat & more',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 13,
                 color: _secondaryText(context),
-                height: 1.35,
+                height: 1.45,
               ),
             ),
-            const SizedBox(height: 12),
-            // Trust Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: _dark
-                    ? Colors.white.withValues(alpha: 0.06)
-                    : AppColors.navyBlue.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: _dark
-                      ? Colors.white.withValues(alpha: 0.1)
-                      : AppColors.navyBlue.withValues(alpha: 0.1),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.auto_awesome_rounded, size: 12, color: AppColors.midTeal),
-                  const SizedBox(width: 6),
-                  Text(
-                    'DeenMate AI • Authentic Quran & Sunnah Guidance',
-                    style: GoogleFonts.inter(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                      color: _primaryText(context).withValues(alpha: 0.75),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 30),
 
-            // Standard Professional Suggestion List Cards
+            // ===== Minimal prompt grid =====
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                children: _deepSeekPromptCards.map((card) {
-                  final Color accentColor = card['accent'] as Color;
-                  final IconData iconData = card['icon'] as IconData;
-                  final String title = card['title'] as String;
-                  final String prompt = card['prompt'] as String;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: InkWell(
-                      onTap: () => _handleSend(prompt),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: _bubbleBg(context),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: _bubbleBorder(context), width: 1.0),
-                          boxShadow: [
-                            BoxShadow(
-                              color: _dark
-                                  ? Colors.black.withValues(alpha: 0.25)
-                                  : AppColors.navyBlue.withValues(alpha: 0.04),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(9),
-                              decoration: BoxDecoration(
-                                color: accentColor.withValues(alpha: _dark ? 0.2 : 0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(iconData, color: accentColor, size: 20),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    title,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.bold,
-                                      color: _primaryText(context),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    prompt,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: _secondaryText(context),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.north_east_rounded,
-                              size: 16,
-                              color: _secondaryText(context).withValues(alpha: 0.45),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _suggestionPrompts.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  // Fixed card height (instead of childAspectRatio) so every
+                  // tile is identically sized no matter how long its text is.
+                  // Bump this (e.g. 116-120) if the longest subtitle ever
+                  // needs a touch more breathing room.
+                  mainAxisExtent: 108,
+                ),
+                itemBuilder: (context, index) {
+                  final item = _suggestionPrompts[index];
+                  return _SuggestionTile(
+                    icon: item['icon'] as IconData,
+                    title: item['title'] as String,
+                    subtitle: item['subtitle'] as String,
+                    dark: _dark,
+                    onTap: () => _handleSend(item['prompt'] as String),
                   );
-                }).toList(),
+                },
               ),
             ),
           ],
@@ -1217,6 +1139,123 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ===== MINIMAL SUGGESTION TILE (empty-state prompt grid) =====
+// Deliberately uses one muted accent for every tile instead of a
+// different color per card — keeps the empty state calm and cohesive.
+//
+// Sizing: the parent grid fixes every tile's outer footprint via
+// `mainAxisExtent`, so all four cards are always identical in size no
+// matter how long their title/subtitle text is. Inside the tile, title
+// wraps up to 2 lines and subtitle wraps up to 3 lines (falling back to
+// ellipsis only if genuinely too long), instead of being cut off at 1-2
+// lines like before.
+class _SuggestionTile extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool dark;
+  final VoidCallback onTap;
+
+  const _SuggestionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.dark,
+    required this.onTap,
+  });
+
+  @override
+  State<_SuggestionTile> createState() => _SuggestionTileState();
+}
+
+class _SuggestionTileState extends State<_SuggestionTile> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Container(
+          // Slightly more vertical padding than before so wrapped text
+          // (up to 3 lines on the subtitle) doesn't feel cramped against
+          // the card edges.
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: widget.dark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: widget.dark
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : AppColors.navyBlue.withValues(alpha: 0.12),
+              width: 1,
+            ),
+          ),
+          // Every card has the exact same footprint (fixed by the grid's
+          // mainAxisExtent) — the icon and text share that fixed space,
+          // and text now wraps instead of being clipped with an ellipsis.
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.midTeal.withValues(alpha: widget.dark ? 0.18 : 0.1),
+                ),
+                child: Icon(widget.icon, size: 13, color: AppColors.midTeal),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        height: 1.15,
+                        color: widget.dark
+                            ? Colors.white.withValues(alpha: 0.92)
+                            : AppColors.navyBlue,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.subtitle,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 9.5,
+                        height: 1.2,
+                        color: widget.dark
+                            ? Colors.white.withValues(alpha: 0.5)
+                            : AppColors.navyBlue.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
