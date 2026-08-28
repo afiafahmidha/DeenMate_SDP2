@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -58,12 +59,27 @@ class _ProfileTabState extends State<ProfileTab> {
   bool _notificationsEnabled = true;
 
   // ===== EDITABLE FIELDS ===== (email is intentionally NOT included — it's locked)
-  final _fullNameController = TextEditingController(text: "Rahim Uddin");
-  final _phoneController = TextEditingController(text: "+8801987654321");
-  final _addressController = TextEditingController(text: "Dhaka, Bangladesh");
+  // NOTE: these must start EMPTY. Never hardcode a real person's data here —
+  // it was leftover test data ("Rahim Uddin") that flashed on screen for
+  // every user before their real profile finished loading.
+  final _fullNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _addressController = TextEditingController();
 
   // Locked — shown as plain text everywhere, never becomes a TextField.
-  String _email = "rahimuddin@gmail.com";
+  String _email = "";
+
+  // True once we've loaded the CURRENT user's real data, so the UI doesn't
+  // flash placeholder/stale text while loading.
+  bool _profileLoaded = false;
+
+  // Which uid the fields currently on screen belong to. Used to detect a
+  // login/logout so we can reload — this tab widget can stay alive (e.g.
+  // inside an IndexedStack) across an account switch, and without this,
+  // initState() would only ever run once and the old account's fields
+  // would just sit there after a different user logs in.
+  String? _loadedForUid;
+  StreamSubscription<User?>? _authSub;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -74,93 +90,130 @@ class _ProfileTabState extends State<ProfileTab> {
     appLanguageNotifier.addListener(() {
       if (mounted) setState(() {});
     });
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (!mounted) return;
+      if (user?.uid != _loadedForUid) {
+        setState(() => _profileLoaded = false); // show spinner, not stale data
+        _loadSettings();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    _fullNameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedImagePath = prefs.getString('profile_avatar_path');
-    String savedImageBase64 = prefs.getString('profile_avatar_base64') ?? "";
+        final user = FirebaseAuth.instance.currentUser;
 
-    // Default values from SharedPreferences/constants
-    String name = prefs.getString('profile_name') ?? "";
-    String phone = prefs.getString('profile_phone') ?? "";
-    String address = prefs.getString('profile_address') ?? "";
-    String email = prefs.getString('profile_email') ?? "";
+    if (user == null) {
+      // No one is signed in — nothing to load, just stop "loading".
+      setState(() {
+        _profileLoaded = true;
+        _loadedForUid = null;
+      });
+      return;
+    }
+    final uid = user.uid;   
 
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      if (email.isEmpty) {
-        email = user.email ?? "";
-      }
-      try {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        if (doc.exists) {
-          final data = doc.data();
-          if (data != null && data['profile'] != null) {
-            final profile = data['profile'] as Map<String, dynamic>;
-            if (name.isEmpty || (profile['fullName'] as String?)?.isNotEmpty == true) {
-              name = profile['fullName'] ?? name;
-            }
-            if (phone.isEmpty || (profile['phone'] as String?)?.isNotEmpty == true) {
-              phone = profile['phone'] ?? phone;
-            }
-            if (address.isEmpty || (profile['address'] as String?)?.isNotEmpty == true) {
-              address = profile['address'] ?? address;
-            }
-            if (profile['email'] != null) {
-              email = profile['email'];
-            }
-            if (profile['avatarBase64'] != null) {
-              savedImageBase64 = profile['avatarBase64'];
-            }
-            
-            // Save to SharedPreferences so they stay cached
-            await prefs.setString('profile_name', name);
-            await prefs.setString('profile_phone', phone);
-            await prefs.setString('profile_address', address);
-            await prefs.setString('profile_email', email);
-            await prefs.setString('profile_avatar_base64', savedImageBase64);
-          }
-        } else {
-          // If no document exists yet, create one for this user
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .set({
-            'profile': {
-              'fullName': user.displayName ?? name,
-              'email': user.email ?? email,
-              'phone': phone.isNotEmpty ? phone : null,
-              'address': address.isNotEmpty ? address : null,
-              'avatarPath': user.photoURL,
-              'avatarBase64': savedImageBase64.isNotEmpty ? savedImageBase64 : null,
-              'language': 'en',
-              'darkMode': false,
-              'createdAt': FieldValue.serverTimestamp(),
-              'updatedAt': FieldValue.serverTimestamp(),
-            }
-          });
-          name = user.displayName ?? name;
-          email = user.email ?? email;
-        }
-      } catch (e) {
-        debugPrint("Error loading profile from Firestore: $e");
-      }
+    // ---- FIX: SharedPreferences keys used to be global (e.g. "profile_name"),
+    // shared by every account that ever logged in on this device. That's why a
+    // different user's old data ("Rahim Uddin") could show up for someone else.
+    // We now namespace every cached key by the current Firebase UID, and we
+    // wipe any old un-namespaced keys left over from before this fix.
+
+    String k(String base) => '${base}_$uid';
+
+    // One-time cleanup of the old global keys so they can never leak again.
+    for (final oldKey in [
+      'profile_name', 'profile_phone', 'profile_address', 'profile_email',
+      'profile_avatar_path', 'profile_avatar_base64',
+    ]) {
+      if (prefs.containsKey(oldKey)) await prefs.remove(oldKey);
     }
 
-    if (name.isEmpty) name = "User";
-    if (phone.isEmpty) phone = "+8801987654321";
-    if (address.isEmpty) address = "Dhaka, Bangladesh";
-    if (email.isEmpty) email = "user@deenmate.com";
+    final savedImagePath = prefs.getString(k('profile_avatar_path'));
+    String savedImageBase64 = prefs.getString(k('profile_avatar_base64')) ?? "";
+
+    // Cached values scoped to THIS user only.
+    String name = prefs.getString(k('profile_name')) ?? "";
+    String phone = prefs.getString(k('profile_phone')) ?? "";
+    String address = prefs.getString(k('profile_address')) ?? "";
+    String email = prefs.getString(k('profile_email')) ?? user.email ?? "";
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data['profile'] != null) {
+          final profile = data['profile'] as Map<String, dynamic>;
+          // Firestore is the source of truth — always prefer it when present.
+          name = (profile['fullName'] as String?)?.isNotEmpty == true ? profile['fullName'] : name;
+          phone = (profile['phone'] as String?)?.isNotEmpty == true ? profile['phone'] : phone;
+          address = (profile['address'] as String?)?.isNotEmpty == true ? profile['address'] : address;
+          if (profile['email'] != null && (profile['email'] as String).isNotEmpty) {
+            email = profile['email'];
+          }
+          if (profile['avatarBase64'] != null) {
+            savedImageBase64 = profile['avatarBase64'];
+          }
+
+          // Cache under this user's namespaced keys only.
+          await prefs.setString(k('profile_name'), name);
+          await prefs.setString(k('profile_phone'), phone);
+          await prefs.setString(k('profile_address'), address);
+          await prefs.setString(k('profile_email'), email);
+          await prefs.setString(k('profile_avatar_base64'), savedImageBase64);
+        }
+      } else {
+        // Brand-new profile doc. Seed it ONLY from this user's own Firebase
+        // Auth account — never from local cache, which could belong to a
+        // previous account on this device.
+        name = user.displayName ?? "";
+        email = user.email ?? "";
+        phone = "";
+        address = "";
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'profile': {
+            'fullName': name,
+            'email': email,
+            'phone': null,
+            'address': null,
+            'avatarPath': user.photoURL,
+            'avatarBase64': null,
+            'language': 'en',
+            'darkMode': false,
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading profile from Firestore: $e");
+    }
+
+    if (name.isEmpty) name = user.displayName ?? "";
+    if (email.isEmpty) email = user.email ?? "";
 
     setState(() {
       _fullNameController.text = name;
       _phoneController.text = phone;
       _addressController.text = address;
       _email = email;
+      _profileLoaded = true;
+      _loadedForUid = uid;
 
       _arabicFontSize = prefs.getDouble('quran_font_size') ?? 24;
       _banglaTranslation = prefs.getBool('quran_bangla_translation') ?? true;
@@ -177,14 +230,18 @@ class _ProfileTabState extends State<ProfileTab> {
 
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final user = FirebaseAuth.instance.currentUser;
+    // Keep saves namespaced per-user too, same fix as _loadSettings, so one
+    // account's edits can never bleed into another account's cache.
+    String k(String base) => user != null ? '${base}_${user.uid}' : base;
 
     final fullName = _fullNameController.text.trim();
     final phone = _phoneController.text.trim();
     final address = _addressController.text.trim();
 
-    await prefs.setString('profile_name', fullName);
-    await prefs.setString('profile_phone', phone);
-    await prefs.setString('profile_address', address);
+    await prefs.setString(k('profile_name'), fullName);
+    await prefs.setString(k('profile_phone'), phone);
+    await prefs.setString(k('profile_address'), address);
     // Email is deliberately never written from a user-editable field.
 
     await prefs.setDouble('quran_font_size', _arabicFontSize);
@@ -194,12 +251,11 @@ class _ProfileTabState extends State<ProfileTab> {
     await prefs.setBool('notifications_enabled', _notificationsEnabled);
 
     if (_avatarImage != null) {
-      await prefs.setString('profile_avatar_path', _avatarImage!.path);
+      await prefs.setString(k('profile_avatar_path'), _avatarImage!.path);
     }
     
-    final avatarBase64 = prefs.getString('profile_avatar_base64');
+    final avatarBase64 = prefs.getString(k('profile_avatar_base64'));
 
-    final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
         await FirebaseFirestore.instance
@@ -295,6 +351,15 @@ class _ProfileTabState extends State<ProfileTab> {
     final cardBg = _getCardColor();
     final textColor = _getTextColor();
     final subtextColor = _getSubtextColor();
+
+    if (!_profileLoaded) {
+      return Container(
+        color: bgColor,
+        child: const Center(
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        ),
+      );
+    }
 
     return Container(
       color: bgColor,
@@ -630,21 +695,11 @@ class _ProfileTabState extends State<ProfileTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(_t('language'), style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
-              DropdownButton<bool>(
-                value: _isBengali,
-                underline: const SizedBox(),
-                dropdownColor: cardBg,
-                style: GoogleFonts.poppins(fontSize: 12, color: textColor, fontWeight: FontWeight.bold),
-                items: const [
-                  DropdownMenuItem(value: false, child: Text("English")),
-                  DropdownMenuItem(value: true, child: Text("বাংলা")),
-                ],
-                onChanged: (val) async {
-                  if (val != null) {
-                    await LanguageService.setLanguage(val ? 'bn' : 'en');
-                  }
-                },
-              ),
+              // Locked to English — no picker, since there's nothing else to
+              // switch to right now. (The old dropdown's onChanged also had a
+              // broken ternary — `val ? 'en'` with no `:` branch — which was
+              // invalid Dart. Removed rather than patched.)
+              Text("English", style: GoogleFonts.poppins(fontSize: 12, color: textColor, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 10),
