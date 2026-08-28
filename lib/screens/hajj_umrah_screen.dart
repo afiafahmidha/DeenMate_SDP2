@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart' hide TextDirection;
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +7,123 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import 'hajj_ritual_detail_screen.dart';
+
+class HajjSeasonInfo {
+  final int year;
+  final String hijriYear;
+  final DateTime coreStartDate; // 8th Dhul Hijjah
+  final DateTime coreEndDate;   // 13th Dhul Hijjah
+  final DateTime seasonEarliestFlight;
+  final DateTime seasonLatestReturn;
+
+  const HajjSeasonInfo({
+    required this.year,
+    required this.hijriYear,
+    required this.coreStartDate,
+    required this.coreEndDate,
+    required this.seasonEarliestFlight,
+    required this.seasonLatestReturn,
+  });
+}
+
+final List<HajjSeasonInfo> _hajjSeasons = [
+  HajjSeasonInfo(
+    year: 2024,
+    hijriYear: '1445 AH',
+    coreStartDate: DateTime(2024, 6, 14),
+    coreEndDate: DateTime(2024, 6, 19),
+    seasonEarliestFlight: DateTime(2024, 5, 9),
+    seasonLatestReturn: DateTime(2024, 7, 7),
+  ),
+  HajjSeasonInfo(
+    year: 2025,
+    hijriYear: '1446 AH',
+    coreStartDate: DateTime(2025, 6, 4),
+    coreEndDate: DateTime(2025, 6, 9),
+    seasonEarliestFlight: DateTime(2025, 4, 29),
+    seasonLatestReturn: DateTime(2025, 6, 25),
+  ),
+  HajjSeasonInfo(
+    year: 2026,
+    hijriYear: '1447 AH',
+    coreStartDate: DateTime(2026, 5, 24),
+    coreEndDate: DateTime(2026, 5, 29),
+    seasonEarliestFlight: DateTime(2026, 4, 18),
+    seasonLatestReturn: DateTime(2026, 6, 15),
+  ),
+  HajjSeasonInfo(
+    year: 2027,
+    hijriYear: '1448 AH',
+    coreStartDate: DateTime(2027, 5, 13),
+    coreEndDate: DateTime(2027, 5, 18),
+    seasonEarliestFlight: DateTime(2027, 4, 7),
+    seasonLatestReturn: DateTime(2027, 6, 4),
+  ),
+  HajjSeasonInfo(
+    year: 2028,
+    hijriYear: '1449 AH',
+    coreStartDate: DateTime(2028, 5, 2),
+    coreEndDate: DateTime(2028, 5, 7),
+    seasonEarliestFlight: DateTime(2028, 3, 27),
+    seasonLatestReturn: DateTime(2028, 5, 24),
+  ),
+  HajjSeasonInfo(
+    year: 2029,
+    hijriYear: '1450 AH',
+    coreStartDate: DateTime(2029, 4, 21),
+    coreEndDate: DateTime(2029, 4, 26),
+    seasonEarliestFlight: DateTime(2029, 3, 16),
+    seasonLatestReturn: DateTime(2029, 5, 13),
+  ),
+];
+
+class CompletedPilgrimage {
+  final String id;
+  final String mode; // 'Hajj' or 'Umrah'
+  final String hajjType; // 'Tamattu', 'Qiran', 'Ifrad' or '-'
+  final DateTime completionDate;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final String note;
+  final int completedRituals;
+  final int totalRituals;
+
+  CompletedPilgrimage({
+    required this.id,
+    required this.mode,
+    required this.hajjType,
+    required this.completionDate,
+    this.startDate,
+    this.endDate,
+    this.note = '',
+    required this.completedRituals,
+    required this.totalRituals,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'mode': mode,
+    'hajjType': hajjType,
+    'completionDate': completionDate.toIso8601String(),
+    'startDate': startDate?.toIso8601String(),
+    'endDate': endDate?.toIso8601String(),
+    'note': note,
+    'completedRituals': completedRituals,
+    'totalRituals': totalRituals,
+  };
+
+  factory CompletedPilgrimage.fromJson(Map<String, dynamic> json) => CompletedPilgrimage(
+    id: json['id'] as String? ?? UniqueKey().toString(),
+    mode: json['mode'] as String? ?? 'Hajj',
+    hajjType: json['hajjType'] as String? ?? 'Tamattu',
+    completionDate: DateTime.tryParse(json['completionDate'] as String? ?? '') ?? DateTime.now(),
+    startDate: json['startDate'] != null ? DateTime.tryParse(json['startDate'] as String) : null,
+    endDate: json['endDate'] != null ? DateTime.tryParse(json['endDate'] as String) : null,
+    note: json['note'] as String? ?? '',
+    completedRituals: json['completedRituals'] as int? ?? 0,
+    totalRituals: json['totalRituals'] as int? ?? 0,
+  );
+}
 
 class HajjUmrahPlannerScreen extends StatefulWidget {
   const HajjUmrahPlannerScreen({super.key});
@@ -16,16 +135,21 @@ class HajjUmrahPlannerScreen extends StatefulWidget {
 class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     with TickerProviderStateMixin {
   int _tab = 0;
-  static const _tabLabels = ['Rituals', 'Packing', 'Documents', 'Duas'];
+  static const _tabLabels = ['Rituals', 'Packing', 'Documents', 'Duas', 'History'];
   static const _tabIcons = [
     Icons.auto_awesome_rounded,
     Icons.local_offer_rounded,
     Icons.folder_open_rounded,
     Icons.chat_bubble_rounded,
+    Icons.history_edu_rounded,
   ];
   String _mode = 'Hajj'; // 'Hajj' or 'Umrah'
   String _hajjType = 'Tamattu'; // 'Tamattu', 'Qiran', or 'Ifrad'
   bool _isDarkMode = false;
+  int _selectedHajjYear = 2026;
+  DateTime? _tripStartDate;
+  DateTime? _tripEndDate;
+  List<CompletedPilgrimage> _history = [];
 
   final Map<String, bool> _hajjRitualDone = {};
   final Map<String, bool> _umrahRitualDone = {};
@@ -1919,6 +2043,19 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     setState(() {
       _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
       _hajjType = prefs.getString('hajj_type') ?? 'Tamattu';
+      _selectedHajjYear = prefs.getInt('hajj_selected_year') ?? 2026;
+      final tripStartStr = prefs.getString('hajj_trip_start');
+      final tripEndStr = prefs.getString('hajj_trip_end');
+      _tripStartDate = tripStartStr != null ? DateTime.tryParse(tripStartStr) : null;
+      _tripEndDate = tripEndStr != null ? DateTime.tryParse(tripEndStr) : null;
+
+      final historyJson = prefs.getString('hajj_history');
+      if (historyJson != null) {
+        try {
+          final List list = jsonDecode(historyJson);
+          _history = list.map((e) => CompletedPilgrimage.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+        } catch (_) {}
+      }
 
       // Load all Hajj steps
       final allHajjStepsList = [
@@ -1959,6 +2096,29 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             final remoteUmrahRitual = hajjUmrah['umrahRitualDone'] as Map<String, dynamic>?;
             final remotePacking = hajjUmrah['packingDone'] as Map<String, dynamic>?;
             final remoteDocuments = hajjUmrah['documentsDone'] as Map<String, dynamic>?;
+            final remoteHajjYear = hajjUmrah['selectedHajjYear'] as int?;
+            if (remoteHajjYear != null) {
+              _selectedHajjYear = remoteHajjYear;
+              prefs.setInt('hajj_selected_year', remoteHajjYear);
+            }
+            final remoteTripStart = hajjUmrah['tripStartDate'] as String?;
+            final remoteTripEnd = hajjUmrah['tripEndDate'] as String?;
+            final remoteHistory = hajjUmrah['history'] as List<dynamic>?;
+
+            if (remoteTripStart != null) {
+              _tripStartDate = DateTime.tryParse(remoteTripStart);
+              prefs.setString('hajj_trip_start', remoteTripStart);
+            }
+            if (remoteTripEnd != null) {
+              _tripEndDate = DateTime.tryParse(remoteTripEnd);
+              prefs.setString('hajj_trip_end', remoteTripEnd);
+            }
+            if (remoteHistory != null) {
+              try {
+                _history = remoteHistory.map((e) => CompletedPilgrimage.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+                prefs.setString('hajj_history', jsonEncode(_history.map((e) => e.toJson()).toList()));
+              } catch (_) {}
+            }
 
             setState(() {
               if (remoteHajjType != null) {
@@ -2051,6 +2211,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
           'umrahRitualDone': _umrahRitualDone,
           'packingDone': _packingDone,
           'documentsDone': _documentsDone,
+          'selectedHajjYear': _selectedHajjYear,
         }
       }, SetOptions(merge: true));
     } catch (e) {
@@ -2224,6 +2385,797 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     );
   }
 
+  HajjSeasonInfo get _activeHajjSeason {
+    return _hajjSeasons.firstWhere(
+      (s) => s.year == _selectedHajjYear,
+      orElse: () => _hajjSeasons[2], // Default 2026
+    );
+  }
+
+  Future<void> _pickTripDates() async {
+    if (_mode == 'Hajj') {
+      _showHajjSeasonSchedulerDialog();
+    } else {
+      _showUmrahDateRangePicker();
+    }
+  }
+
+  void _showHajjSeasonSchedulerDialog() {
+    int tempYear = _selectedHajjYear;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (modalCtx, setModalState) {
+          final isDark = _isDarkMode;
+          final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+          final textC = isDark ? Colors.white : AppColors.navyBlue;
+          final subC = isDark ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65);
+
+          final season = _hajjSeasons.firstWhere((s) => s.year == tempYear, orElse: () => _hajjSeasons[2]);
+
+          return AlertDialog(
+            backgroundColor: cardBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD4AF37).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.mosque_rounded, color: Color(0xFFD4AF37), size: 30),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Select Hajj Season & Schedule',
+                  style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: textC),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Hajj occurs strictly on 8th–13th Dhul Hijjah',
+                  style: GoogleFonts.inter(fontSize: 11.5, color: const Color(0xFFB8860B), fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Select Hajj Year (Islamic Season):',
+                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: textC)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _hajjSeasons.map((s) {
+                        final isSel = s.year == tempYear;
+                        return ChoiceChip(
+                          label: Text('${s.year} (${s.hijriYear})',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                                color: isSel ? Colors.white : textC,
+                              )),
+                          selected: isSel,
+                          selectedColor: AppColors.navyBlue,
+                          backgroundColor: isDark ? Colors.white10 : const Color(0xFFEDF2F7),
+                          onSelected: (selected) {
+                            if (selected) {
+                              setModalState(() => tempYear = s.year);
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.35)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.verified_rounded, size: 15, color: Color(0xFFB8860B)),
+                              const SizedBox(width: 6),
+                              Text('Official Core Hajj Days (8–13 Dhul Hijjah):',
+                                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: textC)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${DateFormat('dd MMM, yyyy').format(season.coreStartDate)} – ${DateFormat('dd MMM, yyyy').format(season.coreEndDate)}',
+                            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFFB8860B)),
+                          ),
+                          const SizedBox(height: 4),
+                          Text('• 8th Dhul Hijjah: Mina (Tarwiyah)\n• 9th Dhul Hijjah: Arafah & Muzdalifah\n• 10th–13th Dhul Hijjah: Jamarat, Qurbani, Tawaf',
+                              style: GoogleFonts.inter(fontSize: 10.5, color: subC, height: 1.4)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Hajj Type note based on currently selected _hajjType
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _hajjType == 'Tamattu'
+                            ? AppColors.midTeal.withValues(alpha: 0.08)
+                            : AppColors.navyBlue.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _hajjType == 'Tamattu'
+                              ? AppColors.midTeal.withValues(alpha: 0.3)
+                              : AppColors.navyBlue.withValues(alpha: 0.15),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            _hajjType == 'Tamattu' ? Icons.alt_route_rounded : Icons.route_rounded,
+                            size: 14,
+                            color: _hajjType == 'Tamattu' ? AppColors.midTeal : AppColors.navyBlue,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _hajjType == 'Tamattu'
+                                  ? 'Tamattu\' (selected): Perform Umrah first, exit Ihram, then re-enter Ihram for Hajj on 8th Dhul Hijjah. Most common for overseas pilgrims.'
+                                  : _hajjType == 'Qiran'
+                                      ? 'Qiran (selected): Combine Hajj & Umrah in one Ihram — no exit between them. Requires a Hady (animal sacrifice).'
+                                      : 'Ifrad (selected): Hajj only — no Umrah combined. Pilgrims from Makkah commonly perform this type.',
+                              style: GoogleFonts.inter(
+                                fontSize: 10.5,
+                                color: _hajjType == 'Tamattu' ? AppColors.midTeal : textC,
+                                fontWeight: FontWeight.w500,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.date_range_rounded, size: 14),
+                            label: Text('Set Travel / Package Period (Optional)', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: textC,
+                              side: BorderSide(color: isDark ? Colors.white24 : Colors.black26),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () async {
+                              final range = await _pickConstrainedHajjDateRange(season);
+                              if (range != null) {
+                                setModalState(() {
+                                  _tripStartDate = range.start;
+                                  _tripEndDate = range.end;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey))),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  setState(() {
+                    _selectedHajjYear = tempYear;
+                    _tripStartDate ??= season.coreStartDate;
+                    _tripEndDate ??= season.coreEndDate;
+                  });
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setInt('hajj_selected_year', _selectedHajjYear);
+                  await prefs.setString('hajj_trip_start', _tripStartDate!.toIso8601String());
+                  await prefs.setString('hajj_trip_end', _tripEndDate!.toIso8601String());
+                  await _updateFirestoreHajjUmrah();
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '🕋 Hajj $_selectedHajjYear (${season.hijriYear}) schedule confirmed!',
+                        style: GoogleFonts.inter(fontSize: 12.5),
+                      ),
+                      backgroundColor: const Color(0xFFB8860B),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.navyBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text('Confirm Schedule', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5, color: Colors.white)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<DateTimeRange?> _pickConstrainedHajjDateRange(HajjSeasonInfo season) async {
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      firstDate: season.seasonEarliestFlight,
+      lastDate: season.seasonLatestReturn,
+      initialDateRange: DateTimeRange(
+        start: season.coreStartDate.subtract(const Duration(days: 7)),
+        end: season.coreEndDate.add(const Duration(days: 7)),
+      ),
+      helpText: 'Select Flights within ${season.year} Hajj Season',
+      confirmText: 'Confirm Range',
+      builder: (context, child) {
+        final outerBg = _isDarkMode ? const Color(0xFF000000) : const Color(0xFFE8E8E8);
+        return Theme(
+          data: Theme.of(context).copyWith(
+            scaffoldBackgroundColor: _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F7F5),
+            colorScheme: ColorScheme.light(
+              primary: AppColors.navyBlue,
+              onPrimary: Colors.white,
+              surface: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+              onSurface: _isDarkMode ? Colors.white : AppColors.navyBlue,
+            ),
+          ),
+          child: Container(
+            color: outerBg,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: child!,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    return picked;
+  }
+
+  Future<void> _showUmrahDateRangePicker() async {
+    final now = DateTime.now();
+    final initialRange = DateTimeRange(
+      start: _tripStartDate ?? now,
+      end: _tripEndDate ?? now.add(const Duration(days: 14)),
+    );
+
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365 * 5)),
+      initialDateRange: initialRange,
+      helpText: 'Select Umrah Departure and Return Dates',
+      confirmText: 'Save Schedule',
+      builder: (context, child) {
+        final outerBg = _isDarkMode ? const Color(0xFF000000) : const Color(0xFFE8E8E8);
+        return Theme(
+          data: Theme.of(context).copyWith(
+            scaffoldBackgroundColor: _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F7F5),
+            colorScheme: ColorScheme.light(
+              primary: AppColors.midTeal,
+              onPrimary: Colors.white,
+              surface: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+              onSurface: _isDarkMode ? Colors.white : AppColors.navyBlue,
+            ),
+          ),
+          child: Container(
+            color: outerBg,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: child!,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _tripStartDate = picked.start;
+        _tripEndDate = picked.end;
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('hajj_trip_start', picked.start.toIso8601String());
+      await prefs.setString('hajj_trip_end', picked.end.toIso8601String());
+      await _updateFirestoreHajjUmrah();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Umrah schedule saved: ${DateFormat('dd MMM, yyyy').format(picked.start)} – ${DateFormat('dd MMM, yyyy').format(picked.end)}',
+              style: GoogleFonts.inter(fontSize: 12.5),
+            ),
+            backgroundColor: AppColors.midTeal,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showCompleteJourneyDialog(int completedCount, int totalCount) {
+    final noteController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final isDark = _isDarkMode;
+          final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+          final textC = isDark ? Colors.white : AppColors.navyBlue;
+          final subC = isDark ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65);
+
+          return AlertDialog(
+            backgroundColor: cardBg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.midTeal.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.workspace_premium_rounded, color: AppColors.midTeal, size: 36),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'حَجّاً مَبْرُوراً وَسَعْياً مَشْكُوراً',
+                  style: GoogleFonts.amiri(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.midTeal,
+                  ),
+                  textAlign: TextAlign.center,
+                  textDirection: TextDirection.rtl,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Complete & Archive Journey',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: textC,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'May Allah accept your $_mode! This will save your completed pilgrimage with dates into your Journey History and refresh all checklists for future trips.',
+                    style: GoogleFonts.inter(fontSize: 12.5, color: subC, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Pilgrimage:', style: GoogleFonts.inter(fontSize: 12, color: subC)),
+                            Text('$_mode ${_mode == 'Hajj' ? '($_hajjType - $_selectedHajjYear)' : ''}',
+                                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: textC)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Rituals Completed:', style: GoogleFonts.inter(fontSize: 12, color: subC)),
+                            Text('$completedCount / $totalCount',
+                                style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                          ],
+                        ),
+                        if (_tripStartDate != null && _tripEndDate != null) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Trip Dates:', style: GoogleFonts.inter(fontSize: 12, color: subC)),
+                              Text(
+                                '${DateFormat('dd MMM').format(_tripStartDate!)} – ${DateFormat('dd MMM, yyyy').format(_tripEndDate!)}',
+                                style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: textC),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Add a Personal Memory / Note (Optional):',
+                    style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.w600, color: textC),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 2,
+                    style: GoogleFonts.inter(fontSize: 12.5, color: textC),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Performed with family, Al-Haram tour agency',
+                      hintStyle: GoogleFonts.inter(fontSize: 12, color: subC),
+                      filled: true,
+                      fillColor: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.w600)),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _archiveJourney(
+                    note: noteController.text.trim(),
+                    completedRituals: completedCount,
+                    totalRituals: totalCount,
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.midTeal,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                ),
+                child: Text(
+                  'Confirm & Archive',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _archiveJourney({
+    required String note,
+    required int completedRituals,
+    required int totalRituals,
+  }) async {
+    final newEntry = CompletedPilgrimage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      mode: _mode,
+      hajjType: _mode == 'Hajj' ? '$_hajjType ($_selectedHajjYear)' : '-',
+      completionDate: DateTime.now(),
+      startDate: _tripStartDate,
+      endDate: _tripEndDate,
+      note: note,
+      completedRituals: completedRituals,
+      totalRituals: totalRituals,
+    );
+
+    setState(() {
+      _history.insert(0, newEntry);
+      _hajjRitualDone.clear();
+      _umrahRitualDone.clear();
+      _packingDone.clear();
+      _documentsDone.clear();
+      _tripStartDate = null;
+      _tripEndDate = null;
+      _initSegmentControllersForCurrentMode();
+      _tab = 4; // Switch to History tab to see result!
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('hajj_history', jsonEncode(_history.map((e) => e.toJson()).toList()));
+    await prefs.remove('hajj_trip_start');
+    await prefs.remove('hajj_trip_end');
+
+    final allHajjStepsList = [..._hajjStepsTamattu, ..._hajjStepsQiran, ..._hajjStepsIfrad];
+    for (final s in allHajjStepsList) {
+      await prefs.remove('hajj_${s['id']}');
+    }
+    for (final s in _umrahSteps) {
+      await prefs.remove('umrah_${s['id']}');
+    }
+    for (final item in _packingItems) {
+      await prefs.remove('pack_${item.hashCode}');
+    }
+    for (final item in _documentItems) {
+      await prefs.remove('doc_${item.hashCode}');
+    }
+
+    await _updateFirestoreHajjUmrah();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '🌟 ${newEntry.mode} successfully archived in History! Checklists are now fresh for your next journey.',
+            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+          backgroundColor: const Color(0xFF2E7D32),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _showResetConfirmDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.restart_alt_rounded, color: AppColors.coralOrange, size: 24),
+            const SizedBox(width: 8),
+            Text('Reset Checklists?',
+                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to uncheck all rituals, packing items, and documents for this $_mode without saving to history?',
+          style: GoogleFonts.inter(fontSize: 13, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.7)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey))),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              setState(() {
+                _hajjRitualDone.clear();
+                _umrahRitualDone.clear();
+                _packingDone.clear();
+                _documentsDone.clear();
+                _initSegmentControllersForCurrentMode();
+              });
+              final prefs = await SharedPreferences.getInstance();
+              final allHajjStepsList = [..._hajjStepsTamattu, ..._hajjStepsQiran, ..._hajjStepsIfrad];
+              for (final s in allHajjStepsList) {
+                await prefs.remove('hajj_${s['id']}');
+              }
+              for (final s in _umrahSteps) {
+                await prefs.remove('umrah_${s['id']}');
+              }
+              for (final item in _packingItems) {
+                await prefs.remove('pack_${item.hashCode}');
+              }
+              for (final item in _documentItems) {
+                await prefs.remove('doc_${item.hashCode}');
+              }
+              await _updateFirestoreHajjUmrah();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('All checklists have been reset.', style: GoogleFonts.inter(fontSize: 12.5)),
+                    backgroundColor: AppColors.coralOrange,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.coralOrange,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text('Reset', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTripScheduleCard() {
+    final isDark = _isDarkMode;
+    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textC = isDark ? Colors.white : AppColors.navyBlue;
+    final subC = isDark ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65);
+    final isHajj = _mode == 'Hajj';
+
+    String statusText = isHajj ? 'Hajj $_selectedHajjYear (${_activeHajjSeason.hijriYear})' : 'Umrah schedule not set';
+    IconData statusIcon = isHajj ? Icons.mosque_rounded : Icons.flight_takeoff_rounded;
+    Color statusColor = isHajj ? const Color(0xFFD4AF37) : AppColors.midTeal;
+
+    final targetStart = isHajj ? (_tripStartDate ?? _activeHajjSeason.coreStartDate) : _tripStartDate;
+    final targetEnd = isHajj ? (_tripEndDate ?? _activeHajjSeason.coreEndDate) : _tripEndDate;
+
+    if (targetStart != null && targetEnd != null) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final start = DateTime(targetStart.year, targetStart.month, targetStart.day);
+      final end = DateTime(targetEnd.year, targetEnd.month, targetEnd.day);
+
+      if (today.isBefore(start)) {
+        final days = start.difference(today).inDays;
+        statusText = isHajj
+            ? 'Hajj $_selectedHajjYear: In $days day${days == 1 ? '' : 's'}'
+            : 'Departure in $days day${days == 1 ? '' : 's'}';
+        statusColor = const Color(0xFF2E7D32);
+      } else if (today.isAfter(end)) {
+        statusText = isHajj ? 'Hajj $_selectedHajjYear completed' : 'Umrah dates completed';
+        statusColor = isHajj ? const Color(0xFFD4AF37) : AppColors.midTeal;
+      } else {
+        final currentDay = today.difference(start).inDays + 1;
+        final totalDays = end.difference(start).inDays + 1;
+        statusText = isHajj ? 'Hajj In Progress (Day $currentDay of $totalDays)' : 'Umrah in Progress';
+        statusIcon = Icons.location_on_rounded;
+        statusColor = AppColors.coralOrange;
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(
+          color: isHajj ? const Color(0xFFD4AF37).withValues(alpha: 0.35) : AppColors.midTeal.withValues(alpha: 0.2),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(statusIcon, color: statusColor, size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    statusText,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
+              GestureDetector(
+                onTap: _pickTripDates,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white12 : const Color(0xFFEDF2F7),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_calendar_rounded, size: 13, color: textC),
+                      const SizedBox(width: 4),
+                      Text(
+                        isHajj ? 'Hajj Season' : (_tripStartDate != null ? 'Change' : 'Set Dates'),
+                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: textC),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (isHajj)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Tamattu-specific two-phase banner
+                if (_hajjType == 'Tamattu') ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.midTeal.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.alt_route_rounded, size: 14, color: AppColors.midTeal),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Tamattu\' = 2 Phases: Umrah first (exit Ihram), then re-enter Ihram for Hajj on 8th Dhul Hijjah',
+                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.midTeal, fontWeight: FontWeight.w600, height: 1.35),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Row(
+                  children: [
+                    const Icon(Icons.auto_awesome_rounded, size: 13, color: Color(0xFFD4AF37)),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        'Core Hajj Days (8–13 Dhul Hijjah): ${DateFormat('dd MMM').format(_activeHajjSeason.coreStartDate)} – ${DateFormat('dd MMM, yyyy').format(_activeHajjSeason.coreEndDate)}',
+                        style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.w600, color: textC),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_tripStartDate != null && _tripEndDate != null && !_tripStartDate!.isAtSameMomentAs(_activeHajjSeason.coreStartDate))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      'Travel Period: ${DateFormat('dd MMM').format(_tripStartDate!)} – ${DateFormat('dd MMM, yyyy').format(_tripEndDate!)}',
+                      style: GoogleFonts.inter(fontSize: 11, color: subC),
+                    ),
+                  ),
+              ],
+            )
+          else if (_tripStartDate != null && _tripEndDate != null)
+            Text(
+              '${DateFormat('dd MMMM, yyyy').format(_tripStartDate!)} – ${DateFormat('dd MMMM, yyyy').format(_tripEndDate!)}',
+              style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.w600, color: textC),
+            )
+          else
+            Text(
+              'Select any travel dates throughout the year for your Umrah journey.',
+              style: GoogleFonts.inter(fontSize: 11.5, color: subC, height: 1.35),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTabContent() {
     switch (_tab) {
       case 0:
@@ -2234,6 +3186,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         return _buildDocumentsTab();
       case 3:
         return _buildDuasTab();
+      case 4:
+        return _buildHistoryTab();
       default:
         return _buildRitualsTab();
     }
@@ -2266,7 +3220,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.6);
     final pathColor = _isDarkMode ? Colors.white24 : AppColors.navyBlue.withValues(alpha: 0.28);
 
-    const double rowHeight = 225;
+    const double rowHeight = 210;
     const double nodeSize = 64;
     const double sidePad = 16;
     const double topOffset = 36;
@@ -2275,16 +3229,19 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       key: ValueKey('rituals_${_mode}_$_hajjType'),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
+        _buildTripScheduleCard(),
         _buildProgressCard(completedCount, steps.length, '$_mode Progress'),
         if (_mode == 'Hajj') ...[
           const SizedBox(height: 16),
           _buildHajjTypeSelector(),
         ],
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
-            final totalHeight = rowHeight * steps.length + nodeSize + topOffset;
+            final totalHeight = steps.isEmpty
+                ? 0.0
+                : (topOffset + nodeSize / 2 + rowHeight * (steps.length - 1) + 80);
 
             final centers = List.generate(steps.length, (i) {
               final isLeft = i.isEven;
@@ -2406,6 +3363,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             );
           },
         ),
+        const SizedBox(height: 12),
+        _buildCompletionActionBanner(completedCount, steps.length),
       ],
     );
   }
@@ -2948,6 +3907,436 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCompletionActionBanner(int completedCount, int totalCount) {
+    final isDoneAll = completedCount == totalCount && totalCount > 0;
+    final isDark = _isDarkMode;
+
+    // Hajj season validation: archive only allowed if within valid season window
+    bool isHajjSeasonActive = true;
+    String hajjSeasonWarning = '';
+    if (_mode == 'Hajj') {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final season = _activeHajjSeason;
+      // Allow archiving if today is within season (earliest flight → latest return)
+      isHajjSeasonActive = !today.isBefore(season.seasonEarliestFlight) &&
+          !today.isAfter(season.seasonLatestReturn);
+      if (!isHajjSeasonActive) {
+        final coreStart = season.coreStartDate;
+        final coreEnd = season.coreEndDate;
+        hajjSeasonWarning =
+            'Hajj ${season.year} season: ${DateFormat('dd MMM').format(season.seasonEarliestFlight)} – ${DateFormat('dd MMM, yyyy').format(season.seasonLatestReturn)}\n'
+            'Core days: ${DateFormat('dd MMM').format(coreStart)} – ${DateFormat('dd MMM, yyyy').format(coreEnd)}\n'
+            'You can use the checklist to prepare, but archiving is only allowed within the Hajj season.';
+      }
+    }
+
+    final canArchive = _mode == 'Umrah' || isHajjSeasonActive;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDoneAll
+              ? [const Color(0xFFB8860B), const Color(0xFFD4AF37)]
+              : (isDark
+                  ? [const Color(0xFF1E1E1E), const Color(0xFF282828)]
+                  : [Colors.white, const Color(0xFFF7F9FC)]),
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: isDoneAll ? Colors.amberAccent : (isDark ? Colors.white12 : Colors.black12),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDoneAll ? Colors.white.withValues(alpha: 0.25) : AppColors.midTeal.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isDoneAll ? Icons.celebration_rounded : Icons.task_alt_rounded,
+                  color: isDoneAll ? Colors.white : AppColors.midTeal,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isDoneAll ? 'All Rituals Completed! 🎉' : 'Finish or Restart Journey',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                        color: isDoneAll ? Colors.white : (_isDarkMode ? Colors.white : AppColors.navyBlue),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isDoneAll
+                          ? 'Save to your Journey History and prepare fresh for next time.'
+                          : 'Archive your journey when finished or reset progress anytime.',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: isDoneAll ? Colors.white.withValues(alpha: 0.88) : (_isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.6)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Show warning banner if Hajj season validation fails
+          if (!canArchive && hajjSeasonWarning.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: AppColors.coralOrange.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.coralOrange.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.coralOrange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      hajjSeasonWarning,
+                      style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        color: isDark ? Colors.orange.shade200 : AppColors.coralOrange,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: canArchive
+                      ? () => _showCompleteJourneyDialog(completedCount, totalCount)
+                      : null,
+                  icon: Icon(
+                    canArchive ? Icons.bookmark_added_rounded : Icons.lock_clock_rounded,
+                    size: 16,
+                  ),
+                  label: Text(
+                    canArchive ? 'Complete & Archive' : 'Archive — Outside Hajj Season',
+                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: canArchive
+                        ? (isDoneAll ? Colors.white : AppColors.midTeal)
+                        : (isDark ? Colors.white12 : Colors.grey.shade200),
+                    foregroundColor: canArchive
+                        ? (isDoneAll ? const Color(0xFF8B6508) : Colors.white)
+                        : Colors.grey,
+                    disabledBackgroundColor: isDark ? Colors.white12 : Colors.grey.shade200,
+                    disabledForegroundColor: Colors.grey,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton(
+                onPressed: _showResetConfirmDialog,
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: isDoneAll ? Colors.white70 : (_isDarkMode ? Colors.white24 : Colors.black26)),
+                  foregroundColor: isDoneAll ? Colors.white : (_isDarkMode ? Colors.white70 : AppColors.navyBlue),
+                  padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text('Reset', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===== HISTORY TAB =====
+  Widget _buildHistoryTab() {
+    final isDark = _isDarkMode;
+    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = isDark ? Colors.white : AppColors.navyBlue;
+    final subtextColor = isDark ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65);
+
+    if (_history.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
+        children: [
+          Center(
+            child: Column(
+              children: [
+                Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white10 : AppColors.navyBlue.withValues(alpha: 0.06),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.history_edu_rounded,
+                    size: 46,
+                    color: isDark ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.45),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'No Past Journeys Yet',
+                  style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.bold, color: textColor),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'When you complete your Hajj or Umrah, click "Complete & Archive" to save your sacred memories and pilgrimage dates here.',
+                  style: GoogleFonts.inter(fontSize: 12.5, color: subtextColor, height: 1.5),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => setState(() => _tab = 0),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                  label: Text('Go to Current Planner', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.navyBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    final hajjCount = _history.where((p) => p.mode == 'Hajj').length;
+    final umrahCount = _history.where((p) => p.mode == 'Umrah').length;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      children: [
+        // Summary Header Card
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [const Color(0xFF1E3A3A), const Color(0xFF0F2626)]
+                  : [AppColors.navyBlue, const Color(0xFF1F3A52)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.10),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              Column(
+                children: [
+                  Text('$hajjCount', style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                  Text('Hajj Completed', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+                ],
+              ),
+              Container(width: 1, height: 36, color: Colors.white24),
+              Column(
+                children: [
+                  Text('$umrahCount', style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text('Umrah Completed', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+                ],
+              ),
+              Container(width: 1, height: 36, color: Colors.white24),
+              Column(
+                children: [
+                  Text('${_history.length}', style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                  Text('Total Journeys', style: GoogleFonts.inter(fontSize: 11, color: Colors.white70)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text('Completed Pilgrimages',
+              style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor)),
+        ),
+        ..._history.map((item) {
+          final isHajj = item.mode == 'Hajj';
+          final badgeColor = isHajj ? const Color(0xFFD4AF37) : AppColors.midTeal;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: badgeColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(isHajj ? Icons.mosque_rounded : Icons.flight_takeoff_rounded, size: 13, color: badgeColor),
+                              const SizedBox(width: 5),
+                              Text(
+                                '${item.mode} ${isHajj && item.hajjType != '-' ? '(${item.hajjType})' : ''}',
+                                style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: badgeColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.grey),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: cardBg,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                            title: Text('Delete this record?',
+                                style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: textColor)),
+                            content: Text('Are you sure you want to remove this ${item.mode} from history?',
+                                style: GoogleFonts.inter(fontSize: 12.5, color: subtextColor)),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey))),
+                              ElevatedButton(
+                                onPressed: () async {
+                                  Navigator.pop(ctx);
+                                  setState(() => _history.removeWhere((h) => h.id == item.id));
+                                  final prefs = await SharedPreferences.getInstance();
+                                  await prefs.setString('hajj_history', jsonEncode(_history.map((e) => e.toJson()).toList()));
+                                  await _updateFirestoreHajjUmrah();
+                                },
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                child: Text('Delete', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.event_available_rounded, size: 14, color: AppColors.midTeal),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Completed on ${DateFormat('dd MMMM, yyyy').format(item.completionDate)}',
+                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: textColor),
+                    ),
+                  ],
+                ),
+                if (item.startDate != null && item.endDate != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.date_range_rounded, size: 14, color: subtextColor),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Trip Period: ${DateFormat('dd MMM').format(item.startDate!)} – ${DateFormat('dd MMM, yyyy').format(item.endDate!)}',
+                        style: GoogleFonts.inter(fontSize: 11.5, color: subtextColor),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.check_circle_outline_rounded, size: 14, color: subtextColor),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Rituals: ${item.completedRituals} / ${item.totalRituals} Done',
+                      style: GoogleFonts.inter(fontSize: 11.5, color: subtextColor),
+                    ),
+                  ],
+                ),
+                if (item.note.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '"${item.note}"',
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        fontStyle: FontStyle.italic,
+                        color: textColor.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 
