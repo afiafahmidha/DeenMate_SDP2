@@ -42,7 +42,7 @@ class HalalScannerService {
         'imageUrl': product.imageUrl,
         'scannedAt': FieldValue.serverTimestamp(),
         // Store analysis results as a list of maps
-        
+
         'analysisResults': product.analysisResults?.map((e) => e.toJson()).toList(),
       }, SetOptions(merge: true));
       print('Halal scan saved successfully: ${product.name}');
@@ -118,7 +118,17 @@ class HalalScannerService {
       print('Error clearing scan history: $e');
     }
   }
+    final user = FirebaseAuth.instance.currentUser;
 
+    if (user == null) {
+      // No one is signed in — nothing to load, just stop "loading".
+      setState(() {
+        _profileLoaded = true;
+        _loadedForUid = null;
+      });
+      return;
+    }
+    final uid = user.uid;   // এখন user non-null, তাই .uid এ error দেবে না
   /// Saves user's custom preference for an additive
   Future<void> saveAdditiveOverride(String code, String status) async {
     final user = uid;
