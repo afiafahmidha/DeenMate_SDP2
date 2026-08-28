@@ -1246,12 +1246,7 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
   }
 }
 
-// ============================================================
-// From: additives
-// ============================================================
-// ---------------------------------------------------------------------------
-// Shared colors (matches the app's teal / green / red / orange palette)
-// ---------------------------------------------------------------------------
+
 
 const Color kTeal = AppColors.midTeal;
 const Color kHalalGreen = Color(0xFF2E7D32);     // strong, readable dark green
