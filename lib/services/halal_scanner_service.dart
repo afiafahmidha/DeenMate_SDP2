@@ -42,7 +42,7 @@ class HalalScannerService {
         'imageUrl': product.imageUrl,
         'scannedAt': FieldValue.serverTimestamp(),
         // Store analysis results as a list of maps
-
+        
         'analysisResults': product.analysisResults?.map((e) => e.toJson()).toList(),
       }, SetOptions(merge: true));
       print('Halal scan saved successfully: ${product.name}');
