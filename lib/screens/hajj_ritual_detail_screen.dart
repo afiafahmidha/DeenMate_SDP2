@@ -338,11 +338,16 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
       _glassCard(child: Text(d['overviewEn'] ?? '',
           style: GoogleFonts.inter(fontSize: 12.5, height: 1.65, color: _textColor))),
       const SizedBox(height: 14),
-      _arabicBanner(d['overviewAr'] ?? '', d['dayAr'] ?? ''),
+      _arabicBanner(
+        d['overviewAr'] ?? '',
+        d['dayAr'] ?? '',
+        d['overviewArTranslit'] ?? '',
+        d['overviewArMeaning'] ?? '',
+      ),
     ],
   );
 
-  Widget _arabicBanner(String arabic, String dayAr) {
+  Widget _arabicBanner(String arabic, String dayAr, String translit, String meaning) {
     if (arabic.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(14),
@@ -368,6 +373,22 @@ class _HajjRitualDetailScreenState extends State<HajjRitualDetailScreen>
         const SizedBox(height: 5),
         Directionality(textDirection: TextDirection.rtl,
           child: Text(arabic, style: GoogleFonts.amiri(fontSize: 13.5, color: _textColor.withValues(alpha: 0.85), height: 1.7))),
+        if (translit.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Divider(color: _textColor.withValues(alpha: 0.1)),
+          const SizedBox(height: 5),
+          Text('Pronunciation:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: _gold)),
+          const SizedBox(height: 3),
+          Text(translit, style: GoogleFonts.inter(fontSize: 12.5, height: 1.5, color: _textColor.withValues(alpha: 0.85))),
+        ],
+        if (meaning.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Divider(color: _textColor.withValues(alpha: 0.1)),
+          const SizedBox(height: 5),
+          Text('Meaning:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: _accent)),
+          const SizedBox(height: 3),
+          Text(meaning, style: GoogleFonts.inter(fontSize: 12.5, height: 1.5, color: _textColor.withValues(alpha: 0.85))),
+        ],
       ]),
     );
   }
