@@ -1227,17 +1227,13 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
           ),
         ),
         onTap: () {
-         Navigator.push(
-          context,
-          MaterialPageRoute(
-          builder: (context) => ProductDetailScreen(product: product, isDarkMode: widget.isDarkMode),
-          ),
-          
-          ).then((_) {
-            if (mounted) setState(() {});
-         });
-         },
-
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProductDetailScreen(product: product, isDarkMode: widget.isDarkMode),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1253,7 +1249,6 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
 // ---------------------------------------------------------------------------
 // Shared colors (matches the app's teal / green / red / orange palette)
 // ---------------------------------------------------------------------------
-
 
 const Color kTeal = AppColors.midTeal;
 const Color kHalalGreen = Color(0xFF2E7D32);     // strong, readable dark green
@@ -4157,17 +4152,7 @@ class HealthTipDetailScreen extends StatelessWidget {
               fontSize: 20,
             ),
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.share_outlined, color: Colors.white),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Sharing "${article.title}"...')),
-                );
-              },
-            ),
-          ],
-
+          
         ),
         body: SafeArea(
           child: SingleChildScrollView(
@@ -5182,19 +5167,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
         actions: [
           IconButton(
-            IconButton(
-              icon: const Icon(Icons.share_rounded, color: Colors.white),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Sharing ${widget.product.name}...')),
-                );
-              },
-            ),
-            IconButton(
             icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
             tooltip: 'Delete from history',
             onPressed: _confirmDelete,
-
           ),
         ],
       ),
