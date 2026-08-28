@@ -77,6 +77,235 @@ final List<HajjSeasonInfo> _hajjSeasons = [
   ),
 ];
 
+class HajjMistake {
+  final String id;
+  final String title;
+  final String category; // 'Ihram', 'Tawaf & Sa\'i', 'Arafat & Mina', 'Rami & Qurbani', 'General'
+  final String severity; // 'Tark al-Wajib (Dam)', 'Ihram Restriction', 'Condition of Tawaf', etc.
+  final String mistakeDesc;
+  final String remedy;
+  final String kaffarahType;
+  final String arabicAyah;
+  final String englishAyah;
+  final String quranRef;
+  final String arabicHadith;
+  final String englishHadith;
+  final String hadithRef;
+  final String fiqhExplanation;
+
+  const HajjMistake({
+    required this.id,
+    required this.title,
+    required this.category,
+    required this.severity,
+    required this.mistakeDesc,
+    required this.remedy,
+    required this.kaffarahType,
+    required this.arabicAyah,
+    required this.englishAyah,
+    required this.quranRef,
+    required this.arabicHadith,
+    required this.englishHadith,
+    required this.hadithRef,
+    required this.fiqhExplanation,
+  });
+}
+
+final List<HajjMistake> _hajjMistakes = [
+  HajjMistake(
+    id: 'm1',
+    title: 'Passing the Miqat without Ihram',
+    category: 'Ihram',
+    severity: 'Tark al-Wajib (Dam)',
+    mistakeDesc: 'Crossing the designated Miqat boundary (by air, land, or sea) without wearing the Ihram sheets and making the Niyyah (intention) & Talbiyah for Hajj or Umrah.',
+    remedy: 'If possible, the pilgrim MUST return to the Miqat before starting any rites. If unable to return, a Dam (slaughtering 1 sheep in Makkah for the poor) is obligatory.',
+    kaffarahType: 'Dam (Slaughtering 1 Sheep in Haram)',
+    arabicAyah: 'وَأَتِمُّوا الْحَجَّ وَالْعُمْرَةَ لِلَّهِ',
+    englishAyah: 'And complete the Hajj and Umrah for Allah...',
+    quranRef: 'Quran - Surah Al-Baqarah (2:196)',
+    arabicHadith: 'مَنْ نَسِيَ مِنْ نُسُكِهِ شَيْئًا أَوْ تَرَكَهُ فَلْيُهْرِقْ دَمًا',
+    englishHadith: 'Whoever forgets a ritual or omits it, let him slaughter a sacrifice in Makkah.',
+    hadithRef: 'Al-Muwatta (832), Sunan al-Bayhaqi (5/153)',
+    fiqhExplanation: 'Assuming Ihram at or before the Miqat is an established Wajib. Passing it intentionally without Ihram requires Istighfar and either returning to the Miqat or offering a Dam in the Haram boundary.',
+  ),
+  HajjMistake(
+    id: 'm2',
+    title: 'Using Perfume or Scented Products in Ihram',
+    category: 'Ihram',
+    severity: 'Ihram Restriction',
+    mistakeDesc: 'Applying perfume, attar, scented soap, shampoo, or scented body wipes to the body or Ihram cloth after having made the Niyyah.',
+    remedy: 'Wash it off immediately with plain water. If done intentionally with knowledge, one must pay the Fidyah of Choice. If done out of forgetfulness, wash it off and make Istighfar with no penalty.',
+    kaffarahType: 'Fidyah (Choose 1: Fast 3 Days, Feed 6 Poor, OR 1 Sheep)',
+    arabicAyah: 'فَفِدْيَةٌ مِّن صِيَامٍ أَوْ صَدَقَةٍ أَوْ نُسُكٍ',
+    englishAyah: '...a ransom of fasting or charity or sacrifice...',
+    quranRef: 'Quran - Surah Al-Baqarah (2:196)',
+    arabicHadith: 'صُمْ ثَلاَثَةَ أَيَّامٍ، أَوْ أَطْعِمْ سِتَّةَ مَسَاكِينَ، أَوْ انْسُكْ بِشَاةٍ',
+    englishHadith: 'Fast three days, or feed six poor persons (half Sa\' each), or sacrifice a sheep.',
+    hadithRef: 'Sahih al-Bukhari (1814), Sahih Muslim (1201)',
+    fiqhExplanation: 'The scent must be washed away as soon as remembered. Unscented toiletries should be prepared beforehand.',
+  ),
+  HajjMistake(
+    id: 'm3',
+    title: 'Cutting Hair or Clipping Nails in Ihram',
+    category: 'Ihram',
+    severity: 'Ihram Restriction',
+    mistakeDesc: 'Trimming finger or toe nails, or cutting/plucking hair from the head, beard, or body prior to the official Halq/Taqsir ritual.',
+    remedy: 'Pay the Fidyah of Choice: Fasting 3 days, feeding 6 poor persons (half Sa\' of grain each in Haram), OR slaughtering a sheep for the poor of Makkah.',
+    kaffarahType: 'Fidyah (Choose 1: Fast 3 Days, Feed 6 Poor, OR 1 Sheep)',
+    arabicAyah: 'وَلَا تَحْلِقُوا رُءُوسَكُمْ حَتَّىٰ يَبْلُغَ الْهَدْيُ مَحِلَّهُ',
+    englishAyah: 'And do not shave your heads until the sacrificial animal has reached its place of slaughter.',
+    quranRef: 'Quran - Surah Al-Baqarah (2:196)',
+    arabicHadith: 'صُمْ ثَلاَثَةَ أَيَّامٍ، أَوْ أَطْعِمْ سِتَّةَ مَسَاكِينَ، أَوْ انْسُكْ بِشَاةٍ',
+    englishHadith: 'Fast three days, or feed six poor persons, or sacrifice a sheep.',
+    hadithRef: 'Sahih al-Bukhari (1814), Sahih Muslim (1201)',
+    fiqhExplanation: 'If only 1 or 2 hairs fell accidentally while making wudu or scratching, there is no penalty by consensus, but intentional cutting incurs Fidyah.',
+  ),
+  HajjMistake(
+    id: 'm4',
+    title: 'Covering Head or Wearing Stitched Clothes (Men)',
+    category: 'Ihram',
+    severity: 'Ihram Restriction (Men)',
+    mistakeDesc: 'Men wearing tailored garments (shirts, pants, underwear) or covering the head with caps, turbans, or attached hoods while in Ihram.',
+    remedy: 'Remove the garment immediately. If worn for an entire day/night knowingly, Fidyah of Choice is required. Using an unattached umbrella or sitting under a tent roof is 100% permissible.',
+    kaffarahType: 'Fidyah (Choose 1: Fast 3 Days, Feed 6 Poor, OR 1 Sheep)',
+    arabicAyah: 'ثُمَّ لْيَقْضُوا تَفَثَهُمْ وَلْيُوفُوا نُذُورَهُمْ وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
+    englishAyah: 'Then let them end their untidiness and fulfill their vows and circumambulate the Ancient House.',
+    quranRef: 'Quran - Surah Al-Hajj (22:29)',
+    arabicHadith: 'لاَ يَلْبَسُ الْمُحْرِمُ الْقَمِيصَ وَلاَ الْعِمَامَةَ وَلاَ السَّرَاوِيلَ وَلاَ الْبُرْنُسَ',
+    englishHadith: 'A person in Ihram must not wear shirts, turbans, trousers, hooded cloaks, or leather socks...',
+    hadithRef: 'Sahih al-Bukhari (1542), Sahih Muslim (1177)',
+    fiqhExplanation: 'Holding an umbrella over one\'s head or resting under a shelter does not count as covering the head because it is not fixed to the head.',
+  ),
+  HajjMistake(
+    id: 'm5',
+    title: 'Performing Tawaf without Wudu / Taharah',
+    category: 'Tawaf & Sa\'i',
+    severity: 'Condition of Tawaf',
+    mistakeDesc: 'Performing Tawaf around the Kaaba while in a state of minor impurity (without Wudu) or major ritual impurity (Janabah/menses).',
+    remedy: 'Tawaf requires ritual purity. If wudu breaks mid-Tawaf, exit to make wudu and resume. If an obligatory Tawaf (Ifadah/Umrah) was performed without wudu, it MUST be repeated in purity.',
+    kaffarahType: 'Repeat Tawaf in State of Purity (No Sacrifice)',
+    arabicAyah: 'وَطَهِّرْ بَيْتِيَ لِلطَّائِفِينَ وَالْقَائِمِينَ وَالرُّكَّعِ السُّجُودِ',
+    englishAyah: 'And purify My House for those who perform Tawaf and those who stand and those who bow in worship.',
+    quranRef: 'Quran - Surah Al-Hajj (22:26)',
+    arabicHadith: 'الطَّوَافُ حَوْلَ الْبَيْتِ مِثْلُ الصَّلاَةِ، إِلاَّ أَنَّكُمْ تَتَكَلَّمُونَ فِيهِ',
+    englishHadith: 'Tawaf around the House is like prayer, except that speech is permitted during it.',
+    hadithRef: 'Jami` at-Tirmidhi (960), Sunan an-Nasa\'i (2922)',
+    fiqhExplanation: 'Unlike Sa\'i (which is valid without wudu though Sunnah with wudu), Tawaf is invalid without Taharah according to the majority of scholars.',
+  ),
+  HajjMistake(
+    id: 'm6',
+    title: 'Walking Inside the Hateem (Hijr Ismail) in Tawaf',
+    category: 'Tawaf & Sa\'i',
+    severity: 'Tawaf Incomplete',
+    mistakeDesc: 'Passing through the interior of the semi-circular wall (Hateem / Hijr Ismail) instead of circling on the outside of it.',
+    remedy: 'The Hateem is part of the Kaaba\'s interior. Circling inside it means you did not circle the full Kaaba. Any circuit that went inside the Hateem does NOT count and must be repeated outside.',
+    kaffarahType: 'Repeat the Invalid Circuit Outside Hateem',
+    arabicAyah: 'وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
+    englishAyah: '...and let them circumambulate the Ancient House (Al-Bayt al-Ateeq).',
+    quranRef: 'Quran - Surah Al-Hajj (22:29)',
+    arabicHadith: 'صَلِّي فِي الْحِجْرِ إِذَا أَرَدْتِ دُخُولَ الْبَيْتِ، فَإِنَّمَا هُوَ قِطْعَةٌ مِنَ الْبَيْتِ',
+    englishHadith: 'Pray in the Hateem if you wish to enter the Kaaba, for it is a part of the House.',
+    hadithRef: 'Sahih al-Bukhari (1584), Sahih Muslim (1333)',
+    fiqhExplanation: 'All 7 rounds must be performed completely outside the curved Hateem wall.',
+  ),
+  HajjMistake(
+    id: 'm7',
+    title: 'Starting Sa\'i at Marwah instead of Safa',
+    category: 'Tawaf & Sa\'i',
+    severity: 'Order Error',
+    mistakeDesc: 'Starting the 7 laps of Sa\'i from the hill of Marwah instead of Safa, or counting round-trip (Safa to Safa) as 1 lap.',
+    remedy: 'Sa\'i must begin at Safa and conclude at Marwah (Safa→Marwah = 1, Marwah→Safa = 2, ending on 7th at Marwah). If started at Marwah, that first lap is ignored; count 7 laps starting from Safa.',
+    kaffarahType: 'Complete 7 Valid Laps Starting from Safa',
+    arabicAyah: 'إِنَّ الصَّفَا وَالْمَرْوَةَ مِن شَعَائِرِ اللَّهِ',
+    englishAyah: 'Indeed, as-Safa and al-Marwah are among the symbols of Allah...',
+    quranRef: 'Quran - Surah Al-Baqarah (2:158)',
+    arabicHadith: 'نَبْدَأُ بِمَا بَدَأَ اللَّهُ بِهِ',
+    englishHadith: 'We begin with that which Allah began with (Safa).',
+    hadithRef: 'Sahih Muslim (1218)',
+    fiqhExplanation: 'Each single stretch between the two hills counts as one complete lap. The 7th lap will always naturally finish at Marwah.',
+  ),
+  HajjMistake(
+    id: 'm8',
+    title: 'Staying Outside Arafat Boundaries on 9th Dhul Hijjah',
+    category: 'Arafat & Mina',
+    severity: 'Rukn Omitted (Void)',
+    mistakeDesc: 'Staying outside the official yellow boundary markers of Arafat (e.g. remaining in the valley of Namirah or outside tents) throughout the entire day & night of 9th.',
+    remedy: 'Wuquf at Arafat is the core pillar of Hajj. One must be present inside the boundary for any duration between Dhuhr of 9th and Fajr of 10th. If completely missed, Hajj is void and must be repeated in a future year.',
+    kaffarahType: 'Hajj is Void — Convert to Umrah & Repeat Next Year',
+    arabicAyah: 'فَإِذَا أَفَضْتُم مِّنْ عَرَفَاتٍ فَاذْكُرُوا اللَّهَ عِندَ الْمَشْعَرِ الْحَرَامِ',
+    englishAyah: 'Then when you depart from Arafat, remember Allah at the sacred monument (Muzdalifah)...',
+    quranRef: 'Quran - Surah Al-Baqarah (2:198)',
+    arabicHadith: 'الْحَجُّ عَرَفَةُ',
+    englishHadith: 'Hajj is Arafah! Whoever arrives at Arafat before Fajr on the night of Muzdalifah has caught the Hajj.',
+    hadithRef: 'Jami` at-Tirmidhi (889), Sunan Abi Dawud (1949)',
+    fiqhExplanation: 'Large clear signs are posted: "Start of Arafat" and "End of Arafat". Ensure your tent or standing place is strictly within these borders.',
+  ),
+  HajjMistake(
+    id: 'm9',
+    title: 'Departing Arafat Before Sunset on 9th Dhul Hijjah',
+    category: 'Arafat & Mina',
+    severity: 'Tark al-Wajib (Dam)',
+    mistakeDesc: 'Rushing and exiting the boundaries of Arafat towards Muzdalifah before the sun has completely set.',
+    remedy: 'If you leave early, you MUST return to Arafat before sunset. If you do not return before sunset, you have omitted a Wajib and a Dam (sacrificing 1 sheep in Makkah) is obligatory.',
+    kaffarahType: 'Dam (Slaughtering 1 Sheep in Haram)',
+    arabicAyah: 'فَإِذَا أَفَضْتُم مِّنْ عَرَفَاتٍ فَاذْكُرُوا اللَّهَ عِندَ الْمَشْعَرِ الْحَرَامِ',
+    englishAyah: 'Then when you depart from Arafat, remember Allah at the sacred monument...',
+    quranRef: 'Quran - Surah Al-Baqarah (2:198)',
+    arabicHadith: 'فَلَمْ يَزَلْ وَاقِفًا حَتَّى غَرَبَتِ الشَّمْسُ وَذَهَبَتِ الصُّفْرَةُ قَلِيلاً',
+    englishHadith: 'The Prophet (ﷺ) remained standing at Arafat until the sun disc disappeared completely and the yellow dusk departed, then moved to Muzdalifah.',
+    hadithRef: 'Sahih Muslim (1218)',
+    fiqhExplanation: 'Combining part of the day and part of the night at Arafat is Wajib according to the vast majority of scholars.',
+  ),
+  HajjMistake(
+    id: 'm10',
+    title: 'Missing or Neglecting Rami al-Jamarat (Stoning)',
+    category: 'Rami & Qurbani',
+    severity: 'Tark al-Wajib (Dam)',
+    mistakeDesc: 'Failing to stone the Jamarat pillars on 10th (Big Jamarah) or during the days of Tashreeq (11th, 12th, 13th) without appointing a valid proxy for illness/frailty.',
+    remedy: 'If remembered during the days of Tashreeq, perform the missed stoning before sunset of the 13th. If the Tashreeq days passed completely, a Dam (sheep sacrifice in Haram) is required.',
+    kaffarahType: 'Dam (Slaughtering 1 Sheep in Haram)',
+    arabicAyah: 'وَاذْكُرُوا اللَّهَ فِي أَيَّامٍ مَّعْدُودَاتٍ',
+    englishAyah: 'And remember Allah during [specific] numbered days...',
+    quranRef: 'Quran - Surah Al-Baqarah (2:203)',
+    arabicHadith: 'مَنْ نَسِيَ مِنْ نُسُكِهِ شَيْئًا أَوْ تَرَكَهُ فَلْيُهْرِقْ دَمًا',
+    englishHadith: 'Whoever forgets a ritual or omits it must offer a sacrifice.',
+    hadithRef: 'Al-Muwatta (832)',
+    fiqhExplanation: 'Each pebble must hit the basin/pillar. If throwing 7 pebbles all at once in one throw, it only counts as 1 pebble; throw them one by one saying Allahu Akbar.',
+  ),
+  HajjMistake(
+    id: 'm11',
+    title: 'Shaving/Cutting only 2-3 Hairs for Halq/Taqsir',
+    category: 'Rami & Qurbani',
+    severity: 'Incomplete Tahallul',
+    mistakeDesc: 'Snipping just two or three strands from the front and assuming one has exited Ihram, then wearing normal clothes and applying perfume.',
+    remedy: 'Trim at least a fingertip (~1 inch) evenly from all parts of the hair, or shave the entire head (for men). If normal clothes were worn prematurely, trim properly now and make Istighfar.',
+    kaffarahType: 'Properly Complete Halq/Taqsir + Istighfar',
+    arabicAyah: 'مُحَلِّقِينَ رُءُوسَكُمْ وَمُقَصِّرِينَ لَا تَخَافُونَ',
+    englishAyah: '...with shaved heads and shortened hair, not fearing...',
+    quranRef: 'Quran - Surah Al-Fath (48:27)',
+    arabicHadith: 'اللَّهُمَّ اغْفِرْ لِلْمُحَلِّقِينَ... وَلِلْمُقَصِّرِينَ',
+    englishHadith: 'The Prophet (ﷺ) supplicated: "O Allah, forgive those who shave their heads!" They asked: "And those who shorten, O Messenger of Allah?" He repeated it three times, and on the fourth said: "And those who shorten."',
+    hadithRef: 'Sahih al-Bukhari (1727), Sahih Muslim (1301)',
+    fiqhExplanation: 'For women, gather the hair and cut the length of a fingertip from the bottom. For men, trimming must encompass hair across the entire head.',
+  ),
+  HajjMistake(
+    id: 'm12',
+    title: 'Departing Makkah without Tawaf al-Wida',
+    category: 'Tawaf & Sa\'i',
+    severity: 'Tark al-Wajib (Dam)',
+    mistakeDesc: 'Non-resident pilgrims traveling out of Makkah back to their home country without performing the Farewell Tawaf (Tawaf al-Wida).',
+    remedy: 'If still nearby, return to Makkah to perform it. If already departed far away, a Dam (sheep sacrifice in Haram) must be arranged. (Note: Menstruating women are excused from Tawaf al-Wida with no penalty).',
+    kaffarahType: 'Dam (Sheep in Haram) — Excused for Menstruating Women',
+    arabicAyah: 'وَلْيَطَّوَّفُوا بِالْبَيْتِ الْعَتِيقِ',
+    englishAyah: '...and let them circumambulate the Ancient House.',
+    quranRef: 'Quran - Surah Al-Hajj (22:29)',
+    arabicHadith: 'أُمِرَ النَّاسُ أَنْ يَكُونَ آخِرُ عَهْدِهِمْ بِالْبَيْتِ، إِلاَّ أَنَّهُ خُفِّفَ عَنِ الْمَرْأَةِ الْحَائِضِ',
+    englishHadith: 'The people were ordered to make the circumambulation of the Kaaba the last thing they do, but an exception was made for menstruating women.',
+    hadithRef: 'Sahih al-Bukhari (1755), Sahih Muslim (1328)',
+    fiqhExplanation: 'Tawaf al-Wida is the final farewell to the House of Allah. It has no Sa\'i attached to it and should be done just before departure.',
+  ),
+];
+
 class CompletedPilgrimage {
   final String id;
   final String mode; // 'Hajj' or 'Umrah'
@@ -135,12 +364,13 @@ class HajjUmrahPlannerScreen extends StatefulWidget {
 class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     with TickerProviderStateMixin {
   int _tab = 0;
-  static const _tabLabels = ['Rituals', 'Packing', 'Documents', 'Duas', 'History'];
+  static const _tabLabels = ['Rituals', 'Packing', 'Documents', 'Duas', 'Mistakes', 'History'];
   static const _tabIcons = [
     Icons.auto_awesome_rounded,
     Icons.local_offer_rounded,
     Icons.folder_open_rounded,
     Icons.chat_bubble_rounded,
+    Icons.warning_amber_rounded,
     Icons.history_edu_rounded,
   ];
   String _mode = 'Hajj'; // 'Hajj' or 'Umrah'
@@ -150,6 +380,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   DateTime? _tripStartDate;
   DateTime? _tripEndDate;
   List<CompletedPilgrimage> _history = [];
+  String _mistakeCategoryFilter = 'All';
+  String _mistakeSearchQuery = '';
 
   final Map<String, bool> _hajjRitualDone = {};
   final Map<String, bool> _umrahRitualDone = {};
@@ -2071,10 +2303,10 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         _umrahRitualDone[s['id']!] = prefs.getBool('umrah_${s['id']}') ?? false;
       }
       for (final item in _packingItems) {
-        _packingDone[item] = prefs.getBool('pack_${item.hashCode}') ?? false;
+        _packingDone[item] = prefs.getBool(_packKey(item)) ?? false;
       }
       for (final item in _documentItems) {
-        _documentsDone[item] = prefs.getBool('doc_${item.hashCode}') ?? false;
+        _documentsDone[item] = prefs.getBool(_docKey(item)) ?? false;
       }
     });
 
@@ -2209,9 +2441,16 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
           'hajjType': _hajjType,
           'hajjRitualDone': _hajjRitualDone,
           'umrahRitualDone': _umrahRitualDone,
-          'packingDone': _packingDone,
-          'documentsDone': _documentsDone,
+          'packingDone': {
+            for (final e in _packingDone.entries) _packKey(e.key): e.value,
+          },
+          'documentsDone': {
+            for (final e in _documentsDone.entries) _docKey(e.key): e.value,
+          },
           'selectedHajjYear': _selectedHajjYear,
+          'tripStartDate': _tripStartDate?.toIso8601String(),
+          'tripEndDate': _tripEndDate?.toIso8601String(),
+          'history': _history.map((e) => e.toJson()).toList(),
         }
       }, SetOptions(merge: true));
     } catch (e) {
@@ -2222,6 +2461,14 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   Future<void> _saveBool(String key, bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
+  }
+
+  String _packKey(String item) {
+    return 'pack_${item.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').toLowerCase()}';
+  }
+
+  String _docKey(String item) {
+    return 'doc_${item.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').toLowerCase()}';
   }
 
   @override
@@ -2900,7 +3147,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       _tripStartDate = null;
       _tripEndDate = null;
       _initSegmentControllersForCurrentMode();
-      _tab = 4; // Switch to History tab to see result!
+      _tab = 5; // Switch to History tab to see result!
     });
 
     final prefs = await SharedPreferences.getInstance();
@@ -2916,10 +3163,10 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       await prefs.remove('umrah_${s['id']}');
     }
     for (final item in _packingItems) {
-      await prefs.remove('pack_${item.hashCode}');
+      await prefs.remove(_packKey(item));
     }
     for (final item in _documentItems) {
-      await prefs.remove('doc_${item.hashCode}');
+      await prefs.remove(_docKey(item));
     }
 
     await _updateFirestoreHajjUmrah();
@@ -2978,10 +3225,10 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                 await prefs.remove('umrah_${s['id']}');
               }
               for (final item in _packingItems) {
-                await prefs.remove('pack_${item.hashCode}');
+                await prefs.remove(_packKey(item));
               }
               for (final item in _documentItems) {
-                await prefs.remove('doc_${item.hashCode}');
+                await prefs.remove(_docKey(item));
               }
               await _updateFirestoreHajjUmrah();
               if (mounted) {
@@ -3187,6 +3434,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       case 3:
         return _buildDuasTab();
       case 4:
+        return _buildMistakesTab();
+      case 5:
         return _buildHistoryTab();
       default:
         return _buildRitualsTab();
@@ -3770,7 +4019,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               onTap: () {
                 final newVal = !(_packingDone[item] ?? false);
                 setState(() => _packingDone[item] = newVal);
-                _saveBool('pack_${item.hashCode}', newVal);
+                _saveBool(_packKey(item), newVal);
                 _updateFirestoreHajjUmrah();
               },
               icon: Icons.checkroom_rounded,
@@ -3793,7 +4042,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               onTap: () {
                 final newVal = !(_documentsDone[item] ?? false);
                 setState(() => _documentsDone[item] = newVal);
-                _saveBool('doc_${item.hashCode}', newVal);
+                _saveBool(_docKey(item), newVal);
                 _updateFirestoreHajjUmrah();
               },
               icon: Icons.description_rounded,
@@ -4083,6 +4332,1098 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     );
   }
 
+  void _showPenaltyGlossaryModal() {
+    final isDark = _isDarkMode;
+    final bgC = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textC = isDark ? Colors.white : AppColors.navyBlue;
+    final subC = isDark ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          decoration: BoxDecoration(
+            color: bgC,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.dustyBlueTeal.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.menu_book_rounded, color: AppColors.midTeal, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Understanding Hajj Penalties',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: textC,
+                          ),
+                        ),
+                        Text(
+                          'Dam vs. Fidyah vs. Repeat Explained',
+                          style: GoogleFonts.inter(
+                            fontSize: 11.5,
+                            color: AppColors.midTeal,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Scrollable Terms Content
+              Expanded(
+                child: ListView(
+                  children: [
+                    // Term 1: Dam
+                    _buildGlossaryItem(
+                      icon: Icons.priority_high_rounded,
+                      iconColor: AppColors.coralOrange,
+                      title: '1. Dam (دم / Mandatory Sacrifice)',
+                      badge: 'Compulsory Sacrifice (1 Sheep in Makkah)',
+                      badgeColor: AppColors.coralOrange,
+                      desc: 'Slaughtering one sheep or goat within the Haram boundary of Makkah and distributing its meat to the poor.\n\n'
+                          '• When it applies: Required for omitting an obligatory act (Wajib) of Hajj or Umrah (e.g. crossing Miqat without Ihram, leaving Arafat before sunset, omitting Rami al-Jamarat, or leaving without Tawaf al-Wida).\n'
+                          '• Note: Fasting or feeding is NOT an alternative for Dam unless the person is financially completely unable to afford the animal.',
+                      isDark: isDark,
+                      textC: textC,
+                      subC: subC,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Term 2: Fidyah of Choice
+                    _buildGlossaryItem(
+                      icon: Icons.tune_rounded,
+                      iconColor: AppColors.dustyBlueTeal,
+                      title: '2. Fidyah of Choice (فدية التخيير / Pick 1 of 3)',
+                      badge: 'Flexible Choice (Pick ANY 1)',
+                      badgeColor: AppColors.midTeal,
+                      desc: 'Based on Surah Al-Baqarah (2:196) and the Hadith of Ka\'b ibn Ujrah (RA), when an Ihram restriction is breached (e.g. cutting hair/nails, wearing perfume, or men wearing stitched clothes), Allah in His mercy allows the pilgrim to choose ANY ONE of the following three options:\n\n'
+                          '  Option 1: Fast for 3 days (can be done anywhere, even back home).\n'
+                          '  Option 2: Feed 6 poor persons in Makkah (half Sa\' / ~1.5 kg of food each).\n'
+                          '  Option 3: Sacrifice 1 sheep in Makkah for the poor.\n\n'
+                          '• Why it is called "Choice": You are 100% free to choose whichever option is easiest for you.',
+                      isDark: isDark,
+                      textC: textC,
+                      subC: subC,
+                      isHighlighted: true,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Term 3: Repeat / Valid Circuit
+                    _buildGlossaryItem(
+                      icon: Icons.replay_rounded,
+                      iconColor: AppColors.midTeal,
+                      title: '3. Repeat the Rite (إعادة النسك)',
+                      badge: 'Redo in Pure State',
+                      badgeColor: AppColors.midTeal,
+                      desc: 'Re-performing an invalid circuit or lap to make the ritual valid.\n\n'
+                          '• When it applies: If Tawaf was performed without Wudu, or if any round of Tawaf passed inside the Hateem (Hijr Ismail), that circuit does not count and must simply be repeated in a valid manner without slaughtering an animal.',
+                      isDark: isDark,
+                      textC: textC,
+                      subC: subC,
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Term 4: Sincere Istighfar
+                    _buildGlossaryItem(
+                      icon: Icons.spa_outlined,
+                      iconColor: AppColors.dustyBlueTeal,
+                      title: '4. Sincere Istighfar (استغفار / Repentance)',
+                      badge: 'No Penalty',
+                      badgeColor: AppColors.dustyBlueTeal,
+                      desc: 'For inadvertent forgetfulness (e.g. smelling scented soap by mistake and washing it off immediately, or a hair falling accidentally while scratching), there is no penalty or sacrifice required by scholarly consensus; simply make sincere Istighfar.',
+                      isDark: isDark,
+                      textC: textC,
+                      subC: subC,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGlossaryItem({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String badge,
+    required Color badgeColor,
+    required String desc,
+    required bool isDark,
+    required Color textC,
+    required Color subC,
+    bool isHighlighted = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isHighlighted
+            ? AppColors.midTeal.withValues(alpha: isDark ? 0.12 : 0.08)
+            : (isDark ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF7F9FB)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isHighlighted
+              ? AppColors.midTeal.withValues(alpha: 0.4)
+              : (isDark ? Colors.white12 : Colors.black12),
+          width: isHighlighted ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: iconColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold, color: textC),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+            decoration: BoxDecoration(
+              color: badgeColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              badge,
+              style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.bold, color: badgeColor),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            desc,
+            style: GoogleFonts.inter(fontSize: 11, color: subC, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===== MISTAKES & FIDYAH TAB (STYLED LIKE ZAKAT RULES) =====
+  Widget _buildMistakesTab() {
+    final isDark = _isDarkMode;
+    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textC = isDark ? Colors.white : AppColors.navyBlue;
+    final subC = isDark ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65);
+
+    const categories = ['All', 'Ihram', 'Tawaf & Sa\'i', 'Arafat & Mina', 'Rami & Qurbani'];
+
+    final filteredMistakes = _hajjMistakes.where((m) {
+      final matchesCategory = _mistakeCategoryFilter == 'All' || m.category == _mistakeCategoryFilter;
+      final q = _mistakeSearchQuery.toLowerCase();
+      final matchesSearch = q.isEmpty ||
+          m.title.toLowerCase().contains(q) ||
+          m.mistakeDesc.toLowerCase().contains(q) ||
+          m.remedy.toLowerCase().contains(q) ||
+          m.kaffarahType.toLowerCase().contains(q);
+      return matchesCategory && matchesSearch;
+    }).toList();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      children: [
+        // 1. Zakat-style Grand Header Banner
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [const Color(0xFF1A2E40), const Color(0xFF0F1E2B)]
+                  : [AppColors.navyBlue, const Color(0xFF243E54)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navyBlue.withValues(alpha: 0.25),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.shield_outlined, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Hajj Mistakes & Fidyah Guide',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'أَحْكَامُ الْحَجِّ وَالْفِدْيَةِ فِي الشَّرِيعَةِ الإِسْلَامِيَّةِ',
+                          style: GoogleFonts.amiri(
+                            color: AppColors.dustyBlueTeal,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Comprehensive fiqh guide covering common mistakes, required penalties (Dam vs. Fidyah of Choice), and authentic Quranic & Hadith rulings.',
+                style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 11.5,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Mini Status Badges
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  _buildHeroMiniBadge(
+                    label: 'Dam (Sacrifice)',
+                    dotColor: AppColors.coralOrange,
+                  ),
+                  _buildHeroMiniBadge(
+                    label: 'Fidyah (Pick 1 of 3)',
+                    dotColor: AppColors.dustyBlueTeal,
+                  ),
+                  _buildHeroMiniBadge(
+                    label: 'Repeat Rite',
+                    dotColor: AppColors.midTeal,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 2. Interactive Penalty Glossary Banner
+        GestureDetector(
+          onTap: _showPenaltyGlossaryModal,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E2833) : AppColors.dustyBlueTeal.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? Colors.white12 : AppColors.dustyBlueTeal.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppColors.midTeal.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.midTeal),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'What is Dam vs. Fidyah of Choice?',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: textC,
+                        ),
+                      ),
+                      Text(
+                        'Tap to understand how Fidyah (Fast / Feed / Sacrifice) works.',
+                        style: GoogleFonts.inter(fontSize: 10.5, color: subC),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: AppColors.midTeal),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 3. Search Field
+        TextField(
+          onChanged: (val) => setState(() => _mistakeSearchQuery = val),
+          style: GoogleFonts.inter(fontSize: 13, color: textC),
+          decoration: InputDecoration(
+            hintText: 'Search mistakes, rituals, or penalties...',
+            hintStyle: GoogleFonts.inter(fontSize: 12.5, color: subC),
+            prefixIcon: const Icon(Icons.search_rounded, size: 19, color: AppColors.midTeal),
+            suffixIcon: _mistakeSearchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear_rounded, size: 18, color: Colors.grey),
+                    onPressed: () => setState(() => _mistakeSearchQuery = ''),
+                  )
+                : null,
+            filled: true,
+            fillColor: cardBg,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: isDark ? Colors.white12 : AppColors.dustyBlueTeal.withValues(alpha: 0.25),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: isDark ? Colors.white12 : AppColors.dustyBlueTeal.withValues(alpha: 0.25),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: AppColors.midTeal, width: 1.5),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // 4. Category Filter Chips (Themed Pills)
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: categories.map((cat) {
+              final isSel = _mistakeCategoryFilter == cat;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => setState(() => _mistakeCategoryFilter = cat),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSel
+                          ? (isDark ? AppColors.dustyBlueTeal : AppColors.navyBlue)
+                          : (isDark ? const Color(0xFF1E2833) : AppColors.dustyBlueTeal.withValues(alpha: 0.15)),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSel
+                            ? (isDark ? AppColors.dustyBlueTeal : AppColors.navyBlue)
+                            : (isDark ? Colors.white24 : AppColors.dustyBlueTeal.withValues(alpha: 0.35)),
+                        width: isSel ? 1.4 : 1,
+                      ),
+                    ),
+                    child: Text(
+                      cat,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                        color: isSel
+                            ? (isDark ? AppColors.navyBlue : Colors.white)
+                            : (isDark ? Colors.white70 : AppColors.navyBlue),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 5. Mistakes Cards
+        if (filteredMistakes.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(36),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+            ),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.search_off_rounded, size: 40, color: subC),
+                  const SizedBox(height: 10),
+                  Text(
+                    'No matching rulings found',
+                    style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: textC),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Try searching with another keyword or selecting "All".',
+                    style: GoogleFonts.inter(fontSize: 12, color: subC),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...filteredMistakes.map((m) => _buildMistakeCard(m, cardBg, textC, subC)),
+      ],
+    );
+  }
+
+  Widget _buildHeroMiniBadge({required String label, required Color dotColor}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMistakeCard(HajjMistake m, Color cardBg, Color textC, Color subC) {
+    final isDark = _isDarkMode;
+    final isWajib = m.severity.contains('Dam') || m.severity.contains('Wajib');
+    final iconColor = isWajib ? AppColors.coralOrange : AppColors.midTeal;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white12 : AppColors.navyBlue.withValues(alpha: 0.10),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          leading: Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              isWajib ? Icons.priority_high_rounded : Icons.info_outline_rounded,
+              color: iconColor,
+              size: 17,
+            ),
+          ),
+          title: Text(
+            m.title,
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600,
+              fontSize: 12.5,
+              color: isDark ? Colors.white : AppColors.navyBlue,
+            ),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    m.severity,
+                    style: GoogleFonts.inter(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: iconColor,
+                    ),
+                  ),
+                ),
+                Text(
+                  '• ${m.category}',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    color: subC,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          children: [
+            Container(
+              height: 1,
+              color: isDark ? Colors.white10 : AppColors.navyBlue.withValues(alpha: 0.06),
+              margin: const EdgeInsets.only(bottom: 12),
+            ),
+
+            // 1. Mistake Description Section
+            _buildMistakeDetailSection(
+              icon: Icons.help_outline_rounded,
+              iconColor: AppColors.coralOrange,
+              title: 'What is the mistake?',
+              content: m.mistakeDesc,
+              textC: textC,
+              subC: subC,
+            ),
+            const SizedBox(height: 10),
+
+            // 2. Remedy & Required Penalty Box
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.midTeal.withValues(alpha: isDark ? 0.12 : 0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.midTeal.withValues(alpha: isDark ? 0.35 : 0.22),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline_rounded, size: 15, color: AppColors.midTeal),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Remedy & Required Penalty:',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.midTeal,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    m.remedy,
+                    style: GoogleFonts.inter(
+                      fontSize: 10.5,
+                      color: textC,
+                      height: 1.45,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.black38 : Colors.white,
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(
+                        color: AppColors.midTeal.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 1),
+                          child: Icon(Icons.label_important_rounded, size: 13, color: AppColors.midTeal),
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            'Required: ${m.kaffarahType}',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.midTeal,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // 3. Quran Reference Card (Compact & Aesthetic)
+            _buildQuranReferenceCard(
+              arabicText: m.arabicAyah,
+              englishText: m.englishAyah,
+              reference: m.quranRef,
+            ),
+            const SizedBox(height: 6),
+
+            // 4. Hadith Reference Card (Compact & Aesthetic)
+            _buildHadithReferenceCard(
+              arabicText: m.arabicHadith,
+              englishText: m.englishHadith,
+              reference: m.hadithRef,
+            ),
+            const SizedBox(height: 8),
+
+            // 5. Fiqh Guidance Note
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.dustyBlueTeal.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.lightbulb_outline_rounded, size: 14, color: AppColors.midTeal),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      'Fiqh Guidance: ${m.fiqhExplanation}',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: textC.withValues(alpha: 0.85),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuranReferenceCard({
+    required String arabicText,
+    required String englishText,
+    required String reference,
+  }) {
+    final isDark = _isDarkMode;
+    return Container(
+      margin: const EdgeInsets.only(top: 2, bottom: 2),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.midTeal.withValues(alpha: isDark ? 0.20 : 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.midTeal.withValues(alpha: isDark ? 0.35 : 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.midTeal,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.menu_book_rounded, color: Colors.white, size: 10),
+                    const SizedBox(width: 3),
+                    Text(
+                      'QURAN',
+                      style: GoogleFonts.inter(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            reference,
+            style: GoogleFonts.poppins(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: isDark ? const Color(0xFF80CBC4) : AppColors.midTeal,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            arabicText,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.amiri(
+              fontSize: 14.5,
+              fontWeight: FontWeight.bold,
+              color: isDark ? const Color(0xFFA5D6A7) : const Color(0xFF0D3B2E),
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            '"$englishText"',
+            style: GoogleFonts.inter(
+              fontSize: 10.5,
+              fontStyle: FontStyle.italic,
+              color: isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.85),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHadithReferenceCard({
+    required String arabicText,
+    required String englishText,
+    required String reference,
+  }) {
+    final isDark = _isDarkMode;
+    return Container(
+      margin: const EdgeInsets.only(top: 2, bottom: 2),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.navyBlue.withValues(alpha: isDark ? 0.20 : 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.navyBlue.withValues(alpha: isDark ? 0.35 : 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.navyBlue,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.bookmark_rounded, color: Colors.white, size: 10),
+                    const SizedBox(width: 3),
+                    Text(
+                      'HADITH',
+                      style: GoogleFonts.inter(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            reference,
+            style: GoogleFonts.poppins(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: isDark ? const Color(0xFF90CAF9) : AppColors.navyBlue,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            arabicText,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.amiri(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: isDark ? const Color(0xFF90CAF9) : AppColors.navyBlue,
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            '"$englishText"',
+            style: GoogleFonts.inter(
+              fontSize: 10.5,
+              fontStyle: FontStyle.italic,
+              color: isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.navyBlue.withValues(alpha: 0.85),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMistakeDetailSection({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String content,
+    required Color textC,
+    required Color subC,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 13.5, color: iconColor),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: textC),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Padding(
+          padding: const EdgeInsets.only(left: 20),
+          child: Text(
+            content,
+            style: GoogleFonts.inter(fontSize: 10.5, color: subC, height: 1.4),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ===== REWARD OF HAJJ & UMRAH CARD =====
+  Widget _buildRewardOfHajjCard() {
+    return Container(
+      margin: const EdgeInsets.only(top: 20, bottom: 12),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.navyBlue, Color(0xFF132433)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.dustyBlueTeal.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navyBlue.withValues(alpha: 0.25),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: AppColors.dustyBlueTeal.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.stars_rounded, color: AppColors.dustyBlueTeal, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'The Reward of Hajj & Umrah',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      'Immense Virtues & Blessings',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: AppColors.dustyBlueTeal,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Main Quote (Italicized Hadith)
+          Text(
+            '"Whoever performs Hajj for the sake of Allah and does not commit obscenity or evil deeds will return as sinless as the day his mother gave birth to him."',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontStyle: FontStyle.italic,
+              color: Colors.white.withValues(alpha: 0.95),
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '— Prophet Muhammad (ﷺ) [Sahih al-Bukhari 1521, Sahih Muslim 1350]',
+            style: GoogleFonts.inter(
+              fontSize: 10.5,
+              color: AppColors.dustyBlueTeal,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Inner Container with Key Virtues
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Column(
+              children: [
+                _buildVirtueRow(
+                  icon: Icons.stars_rounded,
+                  title: 'No Reward Other than Paradise',
+                  desc: 'The accepted Hajj (Hajj Mabrur) has no reward other than Jannah. (Sahih al-Bukhari 1773)',
+                ),
+                const SizedBox(height: 10),
+                _buildVirtueRow(
+                  icon: Icons.shield_outlined,
+                  title: 'Removes Poverty & Sins',
+                  desc: 'Perform Hajj and Umrah consecutively, for they eradicate poverty and sins as the furnace removes impurity from iron. (Tirmidhi 810)',
+                ),
+                const SizedBox(height: 10),
+                _buildVirtueRow(
+                  icon: Icons.favorite_border_rounded,
+                  title: 'Honored Guests of Allah',
+                  desc: 'Pilgrims are the guests of Allah: if they pray, He responds; if they seek forgiveness, He pardons them. (Ibn Majah 2892)',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVirtueRow({required IconData icon, required String title, required String desc}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: AppColors.dustyBlueTeal.withValues(alpha: 0.18),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 14, color: AppColors.dustyBlueTeal),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                desc,
+                style: GoogleFonts.inter(fontSize: 10.5, color: Colors.white.withValues(alpha: 0.78), height: 1.35),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   // ===== HISTORY TAB =====
   Widget _buildHistoryTab() {
     final isDark = _isDarkMode;
@@ -4133,6 +5474,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                 ),
+                _buildRewardOfHajjCard(),
               ],
             ),
           ),
