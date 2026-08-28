@@ -135,6 +135,30 @@ class HalalScannerState {
     await HalalScannerService.instance.clearHistory();
   }
 
+  /// Removes a single scanned product from history (used by the trash
+  /// button on the Product Details screen).
+  static Future<void> removeProduct(ScannedProduct product) async {
+    final index = history.indexWhere((h) {
+      if (product.barcode.isNotEmpty && h.barcode.isNotEmpty) {
+        return h.barcode == product.barcode;
+      }
+      return h.name.trim().toLowerCase() == product.name.trim().toLowerCase();
+    });
+
+    if (index != -1) {
+      final removed = history.removeAt(index);
+      _decrementCount(removed.status);
+    }
+
+    // NOTE: HalalScannerService needs a matching `deleteScan(barcode)`
+    // method to remove this from Firestore too — otherwise the item will
+    // reappear after the next `loadHistory()` call (e.g. app restart).
+    // Send me services/halal_scanner_service.dart and I'll wire this up,
+    // or add a method like:
+    //   Future<void> deleteScan(String barcode) => _col.doc(barcode).delete();
+    await HalalScannerService.instance.deleteScan(product.barcode);
+  }
+
   static void reset() {
     history = [];
     halalCount = 0;
@@ -1203,13 +1227,16 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
           ),
         ),
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ProductDetailScreen(product: product, isDarkMode: widget.isDarkMode),
-            ),
-          );
-        },
+         Navigator.push(
+          context,
+          MaterialPageRoute(
+          builder: (context) => ProductDetailScreen(product: product, isDarkMode: widget.isDarkMode),
+          ),
+          
+          ).then((_) {
+            if (mounted) setState(() {});
+         });
+         },
       ),
     );
   }
@@ -4128,16 +4155,7 @@ class HealthTipDetailScreen extends StatelessWidget {
               fontSize: 20,
             ),
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.share_outlined, color: Colors.white),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Sharing "${article.title}"...')),
-                );
-              },
-            ),
-          ],
+          
         ),
         body: SafeArea(
           child: SingleChildScrollView(
@@ -5041,6 +5059,42 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   List<ProductIngredient>? _ingredients;
 
+  void _confirmDelete() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Delete this scan?', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        content: Text(
+          'This will remove "${widget.product.name}" from your scanned history. This action cannot be undone.',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: GoogleFonts.poppins(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(context); // close the confirm dialog
+              await HalalScannerState.removeProduct(widget.product);
+              if (!mounted) return;
+              Navigator.pop(context); // go back to Scanned History
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Removed from scanned history.')),
+              );
+            },
+            child: Text('Delete', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   List<ProductIngredient> _buildIngredients() {
     if (widget.analysisResults != null && widget.analysisResults!.isNotEmpty) {
       return widget.analysisResults!.map((result) {
@@ -5116,12 +5170,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_rounded, color: Colors.white),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Sharing ${widget.product.name}...')),
-              );
-            },
+            icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+            tooltip: 'Delete from history',
+            onPressed: _confirmDelete,
           ),
         ],
       ),
