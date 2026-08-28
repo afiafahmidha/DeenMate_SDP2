@@ -59,12 +59,10 @@ class _ProfileTabState extends State<ProfileTab> {
   bool _notificationsEnabled = true;
 
   // ===== EDITABLE FIELDS ===== (email is intentionally NOT included — it's locked)
-  // NOTE: these must start EMPTY. Never hardcode a real person's data here —
-  // it was leftover test data ("Rahim Uddin") that flashed on screen for
-  // every user before their real profile finished loading.
   final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+
 
   // Locked — shown as plain text everywhere, never becomes a TextField.
   String _email = "";
@@ -122,6 +120,7 @@ class _ProfileTabState extends State<ProfileTab> {
     }
     final uid = user.uid;   
 
+
     // ---- FIX: SharedPreferences keys used to be global (e.g. "profile_name"),
     // shared by every account that ever logged in on this device. That's why a
     // different user's old data ("Rahim Uddin") could show up for someone else.
@@ -130,12 +129,74 @@ class _ProfileTabState extends State<ProfileTab> {
 
     String k(String base) => '${base}_$uid';
 
+    String savedImageBase64 = prefs.getString('profile_avatar_base64') ?? "";
+
     // One-time cleanup of the old global keys so they can never leak again.
     for (final oldKey in [
       'profile_name', 'profile_phone', 'profile_address', 'profile_email',
       'profile_avatar_path', 'profile_avatar_base64',
     ]) {
       if (prefs.containsKey(oldKey)) await prefs.remove(oldKey);
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data['profile'] != null) {
+          final profile = data['profile'] as Map<String, dynamic>;
+          if (name.isEmpty || (profile['fullName'] as String?)?.isNotEmpty == true) {
+            name = profile['fullName'] ?? name;
+          }
+          if (phone.isEmpty || (profile['phone'] as String?)?.isNotEmpty == true) {
+            phone = profile['phone'] ?? phone;
+          }
+          if (address.isEmpty || (profile['address'] as String?)?.isNotEmpty == true) {
+            address = profile['address'] ?? address;
+          }
+          if (profile['email'] != null) {
+            email = profile['email'];
+          }
+          if (profile['avatarBase64'] != null) {
+            savedImageBase64 = profile['avatarBase64'];
+          }
+          
+          // Save to SharedPreferences so they stay cached (namespaced per-UID)
+          await prefs.setString(k('profile_name'), name);
+          await prefs.setString(k('profile_phone'), phone);
+          await prefs.setString(k('profile_address'), address);
+          await prefs.setString(k('profile_email'), email);
+          await prefs.setString(k('profile_avatar_base64'), savedImageBase64);
+        }
+      } else {
+        // If no document exists yet, create one for this user
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'profile': {
+            'fullName': user.displayName ?? name,
+            'email': user.email ?? email,
+            'phone': phone.isNotEmpty ? phone : null,
+            'address': address.isNotEmpty ? address : null,
+            'avatarPath': user.photoURL,
+            'avatarBase64': savedImageBase64.isNotEmpty ? savedImageBase64 : null,
+            'language': 'en',
+            'darkMode': false,
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }
+        });
+        name = user.displayName ?? name;
+        email = user.email ?? email;
+      }
+    } catch (e) {
+      debugPrint("Error loading profile from Firestore: $e");
+    }
+
     }
 
     final savedImagePath = prefs.getString(k('profile_avatar_path'));
@@ -215,6 +276,7 @@ class _ProfileTabState extends State<ProfileTab> {
       _profileLoaded = true;
       _loadedForUid = uid;
 
+
       _arabicFontSize = prefs.getDouble('quran_font_size') ?? 24;
       _banglaTranslation = prefs.getBool('quran_bangla_translation') ?? true;
       _englishTranslation = prefs.getBool('quran_english_translation') ?? true;
@@ -242,6 +304,7 @@ class _ProfileTabState extends State<ProfileTab> {
     await prefs.setString(k('profile_name'), fullName);
     await prefs.setString(k('profile_phone'), phone);
     await prefs.setString(k('profile_address'), address);
+
     // Email is deliberately never written from a user-editable field.
 
     await prefs.setDouble('quran_font_size', _arabicFontSize);
@@ -255,6 +318,7 @@ class _ProfileTabState extends State<ProfileTab> {
     }
     
     final avatarBase64 = prefs.getString(k('profile_avatar_base64'));
+
 
     if (user != null) {
       try {

@@ -128,6 +128,7 @@ class HalalScannerService {
       print('Error deleting halal scan: $e');
     }
   }
+
   /// Saves user's custom preference for an additive
   Future<void> saveAdditiveOverride(String code, String status) async {
     final user = uid;
