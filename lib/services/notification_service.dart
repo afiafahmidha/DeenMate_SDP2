@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -127,7 +128,7 @@ class NotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
-    tz.initializeTimeZones();
+    await _configureLocalTimeZone();
 
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -347,6 +348,22 @@ class NotificationService {
     } catch (_) {}
   }
 
+  /// Loads the tz database and points `tz.local` at the device's actual
+  /// timezone (e.g. Asia/Dhaka). Without this, `tz.local` silently
+  /// defaults to UTC and every zonedSchedule() call below fires at the
+  /// wrong wall-clock time (offset by the device's UTC difference — e.g.
+  /// ~6 hours late for Dhaka), which is why prayer alarms were arriving
+  /// late / all bunched up whenever the app was reopened.
+  static Future<void> _configureLocalTimeZone() async {
+    tz.initializeTimeZones();
+    try {
+      final String currentTimeZone = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(currentTimeZone));
+    } catch (e) {
+      debugPrint('[NotificationService] Timezone lookup failed: $e');
+    }
+  }
+
   static tz.TZDateTime _toTzDateTime(DateTime dt) {
     try {
       final local = dt.toLocal();
@@ -452,7 +469,7 @@ class NotificationService {
     if (!next.isBefore(end)) return;
 
     try {
-      tz.initializeTimeZones();
+      await _configureLocalTimeZone();
       final plugin = FlutterLocalNotificationsPlugin();
       await plugin.initialize(const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
