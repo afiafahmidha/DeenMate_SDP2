@@ -391,6 +391,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': '١٠ ذو الحجة (يوم النحر)',
       'overviewEn': 'After stoning Jamarat al-Aqabah on the 10th of Dhul Hijjah, the pilgrim performing Hajj Ifrad shaves or trims their hair to complete the first partial deconsecration (Tahallul al-Asghar). Because this is Hajj Ifrad, Qurbani (sacrifice) is not obligatory, so they proceed directly from stoning to shaving.',
       'overviewAr': 'بعد رمي جمرة العقبة الكبرى يوم النحر، يقوم المفرد بحلق رأسه أو تقصيره مباشرة (حيث لا يجب عليه ذبح هدي) ليتحلل التحلل الأول، فيلبس ثيابه ويتطيب وتزول عنه محظورات الإحرام عدا النساء.',
+      'overviewArTranslit': "Ba'da ramyi Jamratil-Aqabatil-Kubra yawman-nahr, yaqoomul-mufridu bihalqi ra'sihi aw taqseerihi mubasharatan (haythu la yajibu 'alayhi dhabhu hady) liyatahallalat-tahallulal-awwal, fayalbasu thiyabahu wa yatatayyabu wa tazoolu 'anhu mahzooratul-ihrami 'adan-nisa'.",
+      'overviewArMeaning': "After stoning Jamarat al-Aqabah al-Kubra on the Day of Sacrifice, the pilgrim performing Ifrad shaves or cuts his hair directly (as animal sacrifice is not obligatory for him) to achieve the first deconsecration. He can then wear his regular clothes, apply perfume, and all restrictions of Ihram are lifted except marital relations.",
       'actionDetails': [
         {
           'title': 'Proceed directly to shave (Halq) or trim (Taqsir) hair after pelting.',
@@ -476,6 +478,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': '١٠ ذو الحجة أو أيام التشريق',
       'overviewEn': 'Sa’i of Hajj is a mandatory ritual consisting of walking seven times between the hills of Safa and Marwah. For Hajj Tamattu\', this Sa\'i is performed after Tawaf al-Ifadah. For Hajj Qiran and Ifrad, it is typically performed after Tawaf al-Qudum or Tawaf al-Ifadah.',
       'overviewAr': 'سعي الحج هو المشي بين الصفا والمروة سبعة أشواط، وهو ركن من أركان الحج عند جمهور العلماء. يؤديه القارن والمفرد بعد طواف القدوم (أو طواف الإفاضة)، بينما يؤديه المتمتع بعد طواف الإفاضة وجوباً.',
+      'overviewArTranslit': "Sa'yul-hajji huwal-mashyu baynas-Safa wal-Marwata sab'ata ashwaatin, wa huwa ruknum-min arkaanil-hajji 'inda jumhooril-ulama'. Yu'addeehil-qaarinu wal-mufridu ba'da tawafil-qudoomi (aw tawafil-ifadah), baynama yu'addeehil-mutamatti'u ba'da tawafil-ifadah wajooban.",
+      'overviewArMeaning': "Sa'i of Hajj is walking between Safa and Marwah seven times, and it is a pillar among the pillars of Hajj according to the majority of scholars. The pilgrim performing Qiran and Ifrad performs it after Tawaf al-Qudum (or Tawaf al-Ifadah), while the pilgrim performing Tamattu' must perform it after Tawaf al-Ifadah.",
       'actionDetails': [
         {
           'title': 'Perform 7 laps starting from Safa and ending at Marwah.',
@@ -556,6 +560,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': 'الميقات - قبل دخول حدود الحرم',
       'overviewEn': 'Ihram is the sacred state a pilgrim enters to perform Hajj or Umrah. It involves specific physical purifications (Ghusl), wearing designated unstitched white sheets (for men), reciting the Niyyah (intention), and continuously chanting the Talbiyah. Once in Ihram, prohibitions such as cutting hair, applying perfume, clipping nails, and hunting apply until deconsecration.',
       'overviewAr': 'الإحرام هو النية والنية في الدخول في النسك مع التجرُّد من المَخِيط للرجال. ويبدأ بالتطهر والغسل، ثم لبس رداء وإزار أبيضين نظيفين، بينما تلبس المرأة ما شاءت من اللباس الساتر دون تبرج، ثم التلفظ بالنية والالتزام بمحظورات الإحرام كَقَصّ الشعر والطيب والجدال.',
+      'overviewArTranslit': "Al-ihramu huwan-niyyatu fid-dukhooli fin-nusuki ma'at-tajarru-di minal-makheeti lir-rijaal. Wa yabda'u bit-tatah-huri wal-ghusli, thumma lubsi rida'in wa izaarin abyadayni nazeefayni, baynama talbasul-mar'atu ma sha'at minal-libasis-saatiri doona tabarruj, thumma at-talaffuzu bin-niyyati wal-iltizaamu bimahzooratil-ihrami kaqassis-sha'ri wat-teebi wal-jidaal.",
+      'overviewArMeaning': "Ihram is the intention to enter the state of pilgrimage rituals along with stripping away sewn clothes for men. It begins with purification and bathing (Ghusl), then wearing two clean white sheets (a lower garment and a shoulder cover), while a woman wears whatever modest clothing she wishes without displaying adornment, followed by uttering the intention and adhering to the restrictions of Ihram such as cutting hair, applying perfume, and arguing.",
       'actionDetails': [
         {
           'title': 'Perform Ghusl (ritual bath) and trim nails/mustache before Miqat.',
@@ -650,6 +656,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': 'فور الوصول إلى مكة المكرمة',
       'overviewEn': 'Tawaf al-Qudum is the welcome circumambulation performed around the Holy Kaaba upon reaching Makkah. Pilgrims circle the Kaaba seven times counter-clockwise, starting from the Black Stone (Hajar al-Aswad). For men, Idtiba (uncovering the right shoulder) and Raml (brisk walking in the first 3 rounds) are Sunnah.',
       'overviewAr': 'طواف القدوم هو تحية البيت الحرام للمُفْرِد والمقترن فور وصولهما إلى مكة. يطوف الحاج سبعة أشواط يبدأ كل شوط من الحجر الأسود وينتهي عنده، ويُسن للرجال الانطباع (كشف الكتف الأيمن) والرَّمَل (الهرولة الخفيفة في الأشواط الثلاثة الأولى).',
+      'overviewArTranslit': "Tawaful-qudoomi huwa tahiyyatul-baytil-harami lil-mufridi wal-muqtarini fawra wusoolihima ila Makkah. Yatooful-haajju sab'ata ashwaatin yabda'u kullu shawtim-minal-hajaril-aswadi wa yantahi 'indah, wa yusannu lir-rijaalil-idtiba'u (kashful-katifil-ayman) war-ramalu (al-harwalatul-khafeefatu fil-ashwaatith-thalathatil-oola).",
+      'overviewArMeaning': "Tawaf al-Qudum is the greeting of the Sacred House for those performing Ifrad and Qiran immediately upon their arrival in Makkah. The pilgrim circumambulates seven times, starting and ending each round at the Black Stone. It is Sunnah for men to perform Idtiba (uncovering the right shoulder) and Raml (brisk walking in the first three rounds).",
       'actionDetails': [
         {
           'title': 'Uncover the right shoulder (Idtiba) for men during Tawaf.',
@@ -744,6 +752,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': '٨ ذو الحجة - المبيت بمنى',
       'overviewEn': 'The Day of Tarwiyah marks the official start of Hajj. Pilgrims move to the tent city of Mina in the morning. They perform Dhuhr, Asr, Maghrib, Isha, and Fajr of the 9th Dhul Hijjah in Mina, shortening 4-rak’at prayers to 2 rak’at (Qasr) without combining them. Pilgrims spend the night in spiritual preparation and remembrance.',
       'overviewAr': 'يوم التروية هو بداية أعمال الحج الفعلية. يتوجه الحجاج إلى منى في الصباح، ويصلون فيها الظهر والعصر والمغرب والعشاء وفجر يوم عرفة، يقصرون الصلاة الرباعية ركعتين دون جمع، ويبيتون في منى اتباعاً لسنة النبي صلى الله عليه وسلم.',
+      'overviewArTranslit': "Yawmut-tarwiyati huwa bidayatu a'malil-hajji al-fi'liyyah. Yatawajjahul-hujjaju ila Mina fis-sabah, wa yusalloona feeha ad-duhra wal-'asra wal-maghriba wal-'isha'a wa fajra yawmi 'Arafah, yaqsooroonas-salatar-ruba'iyyata rak'atayni doona jam', wa yabeetoona fee Mina ittiba'an lisunnatil-Nabiyyi salla-Allahu 'alayhi wa sallam.",
+      'overviewArMeaning': "The Day of Tarwiyah is the beginning of the actual Hajj rituals. Pilgrims head to Mina in the morning, and perform the Dhuhr, Asr, Maghrib, Isha, and Fajr prayers of the Day of Arafah there, shortening the four-unit prayers to two units without combining them, and staying overnight in Mina following the Sunnah of the Prophet (peace be upon him).",
       'actionDetails': [
         {
           'title': 'Enter Ihram from residence if not already in Ihram.',
@@ -830,6 +840,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': '٩ ذو الحجة - الوقوف بعرفة',
       'overviewEn': 'The Day of Arafah is the pinnacle and supreme ritual of Hajj ("Hajj is Arafah"). Pilgrims move from Mina to the plain of Arafat. Standing at Arafat (Wuquf) takes place from Dhuhr until Maghrib. Dhuhr and Asr are prayed together combined and shortened (Jam\' & Qasr) at Dhuhr time. Pilgrims spend the entire afternoon crying, seeking forgiveness, and making earnest Duas.',
       'overviewAr': 'يوم عرفة هو العيد الأكبر والحج الأعظم ("الحج عرفة"). يتوجه الحجاج من منى إلى عرفات. يبدأ وقت الوقوف من زوال الشمس (الظهر) حتى غروبها. يصلى الظهر والعصر جمع تقديم وقصراً بأذان وإقامتين. ويقضي الحاج ما بعد الظهر إلى الغروب بالتضرع والدعاء والبكاء لله تعالى.',
+      'overviewArTranslit': "Yawmu 'Arafah huwal-'eedul-akbaru wal-hajjul-a'zam ('Al-Hajju 'Arafah'). Yatawajjahul-hujjaju min Mina ila 'Arafat. Yabda'u waqtul-wuqoofi min zawalis-shamsi (ad-duhr) hatta ghuroobiha. Yusallad-duhru wal-'asru jam'a taqdeemin wa qasran bi-adhanin wa iqamatayn. Wa yaqdil-haajju ma ba'dad-duhri ilal-ghuroobi bit-tadarru'i wad-du'a'i wal-buka'i lillahi ta'ala.",
+      'overviewArMeaning': "The Day of Arafah is the greatest day and the core of Hajj ('Hajj is Arafah'). Pilgrims proceed from Mina to Arafat. The time of standing begins from the decline of the sun (Dhuhr) until its sunset. Dhuhr and Asr are prayed combined (at the earlier time) and shortened with one Adhan and two Iqamahs. The pilgrim spends the time after Dhuhr until sunset in supplication, prayer, and crying to Allah the Almighty.",
       'actionDetails': [
         {
           'title': 'Travel to Arafat after sunrise on the 9th of Dhul Hijjah.',
@@ -917,6 +929,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': 'ليلة ١٠ ذو الحجة - المبيت بالمزدلفة',
       'overviewEn': 'Immediately after sunset on 9th Dhul Hijjah, pilgrims travel from Arafat to Muzdalifah without praying Maghrib at Arafat. Upon arrival in Muzdalifah, Maghrib and Isha are prayed together combined and shortened (Jam\' al-Ta\'khir). Pilgrims spend the night under the open sky, resting, performing Fajr at twilight, and collecting pebbles for Rami.',
       'overviewAr': 'بعد غروب شمس يوم عرفة مباشرة، ينطلق الحجاج إلى المزدلفة بهدوء وسكينة، ولا يصلون المغرب بعرفة. عند الوصول للمزدلفة يصلون المغرب ثلاث ركعات والعشاء ركعتين جمع تأخير بأذان وإقامتين. ويبيتون الليل تحت السماء، ثم يصلون الفجر بالمشعر الحرام ويجمعون الجمار.',
+      'overviewArTranslit': "Ba'da ghuroobi shamsi yawmi 'Arafata mubasharatan, yantaliqul-hujjaju ilal-Muzdalifati bi-hudooin wa sakeenah, wa la yusalloonal-maghriba bi-'Arafah. 'Indal-wusooli lil-Muzdalifati yusalloonal-maghriba thalatha rak'aatin wal-'isha'a rak'atayni jam'a ta'kheerin bi-adhanin wa iqamatayn. Wa yabeetoonal-layla tahtas-sama', thumma yusalloonal-fajra bil-mash'aril-harami wa yajma'oonal-jimar.",
+      'overviewArMeaning': "Immediately after the sunset of the Day of Arafah, pilgrims depart for Muzdalifah with calmness and serenity, and they do not pray Maghrib at Arafat. Upon arrival in Muzdalifah, they pray Maghrib (three units) and Isha (two units) combined (at the later time) and shortened with one Adhan and two Iqamahs. They spend the night under the open sky, then pray Fajr at Al-Mash'ar al-Haram and collect stoning pebbles.",
       'actionDetails': [
         {
           'title': 'Depart Arafat calmly after sunset without praying Maghrib.',
@@ -1009,6 +1023,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': '١٠ ذو الحجة (يوم عيد الأضحى المبارك)',
       'overviewEn': 'On the morning of 10th Dhul Hijjah (Yawm an-Nahr), pilgrims return from Muzdalifah to Mina to pelt only the largest pillar, Jamarat al-Aqabah (Al-Jamrah Al-Kubra). Pilgrims throw 7 pebbles individually while saying "Allahu Akbar" with each throw. This symbolizes rejecting Shaytan and remaining steadfast in faith.',
       'overviewAr': 'صباح يوم العاشر من ذي الحجة (يوم النحر)، يتجه الحجاج إلى منى لرمي جمرة العقبة الكبرى فقط بسبع حصيات متعاقبة، يكبر الحاج مع كل حصاة قائلًا: "الله أكبر"، مقطعاً التلبية مع أول حصاة، اقتداءً بإبراهيم عليه السلام في دحر الشيطان.',
+      'overviewArTranslit': "Sabaha yawmil-'ashiri min Dhil-Hijjah (yawman-nahr), yatawajjahul-hujjaju ila Mina liramyi Jamratil-'Aqabatil-Kubra faqat bi-sab'i hasayaatin muta'aqibah, yukabbirul-haajju ma'a kulli hasatin qa'ilan: 'Allahu Akbar', muqti'anit-talbiyata ma'a awwali hasah, iqtida'an bi-Ibraheema 'alayhis-salamu fee dahris-shaytan.",
+      'overviewArMeaning': "On the morning of the tenth of Dhul Hijjah (the Day of Sacrifice), pilgrims head to Mina to stone only the largest pillar (Jamarat al-Aqabah) with seven consecutive pebbles, declaring 'Allahu Akbar' (Allah is the Greatest) with each pebble, stopping the Talbiyah with the first pebble, following the example of Ibrahim (peace be upon him) in rejecting the devil.",
       'actionDetails': [
         {
           'title': 'Arrive in Mina from Muzdalifah in the morning.',
@@ -1093,6 +1109,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': '١٠ ذو الحجة (يوم النحر)',
       'overviewEn': 'After Rami on the 10th of Dhul Hijjah, pilgrims performing Hajj Tamattu or Qiran offer the Hady (animal sacrifice). Afterwards, male pilgrims shave their heads completely (Halq - preferred) or trim hair evenly (Taqsir). Female pilgrims trim a fingertip length of their hair. At this point, Tahallul al-Asghar (first partial deconsecration) is achieved.',
       'overviewAr': 'بعد رمي جمرة العقبة يوم النحر، يقوم المتمتع والمقرن بذبْح الهدي. ثم يحلق الرجل رأسه (وهو الأفضل) أو يقصره، وتقصر المرأة من أطراف شعرها قدر أنملة (حوالي ٢ سم). وبذلك يتحلل الحاج التحلل الأول (التحلل الأصغر) فيحل له كل شيء حرم عليه بالإحرام إلا النساء.',
+      'overviewArTranslit': "Ba'da ramyi Jamratil-'Aqabati yawman-nahr, yaqoomul-mutamatti'u wal-muqrinu bidhabhil-hady. Thumma yahliqur-rajulu ra'sahu (wa huwal-afdal) aw yuqassiruh, wa tuqassirul-mar'atu min atraafi sha'riha qadra anmula (hawalay 2 cm). Wa bidhalika yatahallalul-haajjut-tahallulal-awwal (at-tahallulal-asghar) fayahi-llu lahu kullu shay'in hurrima 'alayhi bil-ihraami illan-nisa'.",
+      'overviewArMeaning': "After stoning Jamarat al-Aqabah on the Day of Sacrifice, pilgrims performing Tamattu' and Qiran offer the animal sacrifice (Hady). Then, the man shaves his head (which is preferred) or trims it, and the woman trims the ends of her hair by a fingertip length (about 2 cm). With this, the pilgrim achieves the first deconsecration (al-Tahallul al-Asghar), making everything permissible that was prohibited during Ihram, except marital relations.",
       'actionDetails': [
         {
           'title': 'Slaughter the Hady (sheep, goat, or 1/7 of camel/cow).',
@@ -1179,6 +1197,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': '١٠ ذو الحجة أو أيام التشريق',
       'overviewEn': 'Tawaf al-Ifadah is a core, mandatory pillar (Rukn) of Hajj without which Hajj remains incomplete. Pilgrims travel from Mina to Makkah to circumambulate the Kaaba 7 times. After Tawaf, pilgrims perform Sa\'i between Safa and Marwah (for Tamattu pilgrims and those who did not perform Sa\'i earlier). Completing this grants Tahallul al-Akbar (complete deconsecration).',
       'overviewAr': 'طواف الإفاضة هو ركن من أركان الحج لا يتم الحج إلا به. يتجه الحاج إلى مكة للطواف حول الكعبة ٧ أشواط، ثم يصلي ركعتين خلف المقام، ويسعى بين الصفا والمروة ٧ أشواط (للمتمتع ولمن لم يسعَ مع طواف القدوم). وبتمام طواف الإفاضة والسعي يتحلل الحاج التحلل الأكبر (الكامل) فيحل له كل شيء حتى النساء.',
+      'overviewArTranslit': "Tawaful-ifadah huwa ruknum-min arkaanil-hajji la yatimmul-hajju illa bih. Yatawajjahul-haajju ila Makkata lit-tawaafi hawlal-Ka'bati sab'ata ashwaat, thumma yusallee rak'atayni khalfal-maqam, wa yas'a baynas-Safa wal-Marwata sab'ata ashwaatin (lil-mutamatti'i wa liman lam yas'a ma'a tawafil-qudoom). Wa bitamami tawafil-ifadah was-sa'yi yatahallalul-haajjut-tahallulal-akbar (al-kaamil) fayahi-llu lahu kullu shay'in hattan-nisa'.",
+      'overviewArMeaning': "Tawaf al-Ifadah is a pillar among the pillars of Hajj, without which Hajj is not complete. The pilgrim heads to Makkah to circumambulate the Kaaba seven times, then performs two units of prayer behind the Station (Maqam Ibrahim), and walks between Safa and Marwah seven times (for those performing Tamattu' and those who did not perform Sa'i with Tawaf al-Qudum). By completing Tawaf al-Ifadah and Sa'i, the pilgrim achieves the major deconsecration (al-Tahallul al-Akbar), making everything permissible, including marital relations.",
       'actionDetails': [
         {
           'title': 'Perform 7 circuits around the Kaaba (Tawaf al-Ifadah).',
@@ -1271,6 +1291,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': '١١ و١٢ و١٣ ذو الحجة - أيام التشريق',
       'overviewEn': 'Pilgrims remain in Mina during the Days of Tashreeq (11th, 12th, and optionally 13th Dhul Hijjah). Each afternoon AFTER Zawal (midday sun turn), pilgrims pelt all three Jamarat in order: Small (Al-Sugra), Medium (Al-Wusta), and Large (Al-Aqabah) with 7 pebbles each (21 total per day). Long supplications are made after the 1st and 2nd Jamarat.',
       'overviewAr': 'يقيم الحجاج بمنى أيام التشريق (١١، ١٢، و١٣ لمن تأخر). ويكون رمي الجمار الثلاث بعد زوال الشمس (بعد صلاة الظهر) كل يوم بترتيب: الجمرة الصغرى (٧ حصيات)، ثم الوسطى (٧ حصيات)، ثم العقبة الكبرى (٧ حصيات) بمجموع ٢١ حصاة يومياً. ويُسن الوقوف والدعاء الطويل بعد الصغرى والوسطى.',
+      'overviewArTranslit': "Yuqeemul-hujjaju bi-Mina ayyamat-tashreeqi (11, 12, wa 13 liman ta'akhkhar). Wa yakoonu ramyu-jimarith-thalathi ba'da zawalis-shamsi (ba'da salatid-duhr) kullu yawmin bitarteeb: al-jamratus-sughra (7 hasayaat), thummal-wusta (7 hasayaat), thumma 'aqabatul-kubra (7 hasayaat) bimajmoo'i 21 hasatan yawmiyya. Wa yusannul-wuqoofu wad-du'a'ul-taweelu ba'das-sughra wal-wusta.",
+      'overviewArMeaning': "Pilgrims stay in Mina during the Days of Tashreeq (11th, 12th, and 13th for those who delay departure). Stoning of the three pillars takes place after the decline of the sun (after Dhuhr prayer) each day in order: the Small Jamrah (seven pebbles), then the Medium Jamrah (seven pebbles), then the Large Jamrah (seven pebbles), totalling 21 pebbles daily. It is Sunnah to stand and make long supplications after the Small and Medium Jamarat.",
       'actionDetails': [
         {
           'title': 'Stay overnight in Mina during Tashreeq nights.',
@@ -1370,6 +1392,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': 'آخر أعمال الحاج قبل مغادرة مكة',
       'overviewEn': 'Tawaf al-Wida (Farewell Tawaf) is the final compulsory obligation (Wajib) for every pilgrim before leaving the holy city of Makkah. It consists of 7 circuits around the Kaaba without Sa\'i. After completing Tawaf al-Wida, pilgrims pray 2 Rakat, drink Zamzam, and depart Makkah directly without lingering.',
       'overviewAr': 'طواف الوداع هو آخر واجبات الحج على كل آفاقي (من خارج مكة) قبل مغادرتها. يطوف الحاج ٧ أشواط حول البيت الحرام تحيةً ووداعاً للكعبة، ثم يصلي ركعتين، ويشرب من زمزم، وينطلق مسافراً إلى أهله دون إقامة أو مكوث بعده.',
+      'overviewArTranslit': "Tawaful-wida'i huwa akhiru waajibaa-til-hajji 'ala kulli aafaaqiyyin (min khaariji Makkah) qabla mughaadaratiha. Yatooful-haajju sab'ata ashwaatin hawlal-baytil-harami tahiyyatan wa widaa'an lil-Ka'bah, thumma yusallee rak'atayni, wa yashrabu min Zamzam, wa yantaliqu musaafiran ila ahlihī doona iqaamatin aw mukoothin ba'dah.",
+      'overviewArMeaning': "Tawaf al-Wida (Farewell Tawaf) is the last obligation of Hajj for every pilgrim from outside Makkah before leaving it. The pilgrim circumambulates seven times around the Sacred House as a greeting and farewell to the Kaaba, then prays two units of prayer, drinks from Zamzam, and departs directly to their family without residing or lingering after it.",
       'actionDetails': [
         {
           'title': 'Perform 7 circuits around the Kaaba as the last activity in Makkah.',
@@ -1457,6 +1481,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': 'عند الميقات',
       'overviewEn': 'The first pillar of Umrah is entering Ihram at the designated Miqat with ritual purification, wearing Ihram garments, stating the Niyyah for Umrah ("Labbayk Allahumma Umrah"), and continuously reciting Talbiyah until seeing the Kaaba.',
       'overviewAr': 'أول أركان العمرة وهو الإحرام من الميقات بالطهارة والغسل ولبس ثياب الإحرام والتلفظ بالنية ("لَبَّيْكَ اللَّهُمَّ عُمْرَةً") ورفع الصوت بالتلبية حتى رؤية الكعبة.',
+      'overviewArTranslit': "Awwalu arkaanil-'umrati wa huwal-ihramu minal-meeqati bit-taharati wal-ghusli wa lubsi thiyabil-ihrami wat-talaffuzu bin-niyyah ('Labbayk Allahumma 'Umrah') wa raf'is-sawti bit-talbiyati hatta ru'yatil-Ka'bah.",
+      'overviewArMeaning': "The first pillar of Umrah is entering Ihram from the Miqat with purification, bathing (Ghusl), wearing the Ihram garments, uttering the intention ('Labbayk Allahumma Umrah'), and raising the voice with Talbiyah until seeing the Kaaba.",
       'actionDetails': [
         {
           'title': 'Ghusl & perfumes on body before Ihram.',
@@ -1543,6 +1569,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': 'حول الكعبة المشرفة',
       'overviewEn': 'Circumambulate the Holy Kaaba 7 times counter-clockwise, starting from the Black Stone. Men perform Idtiba and Raml in the first 3 rounds. Conclude with 2 Rakat behind Maqam Ibrahim and drinking Zamzam.',
       'overviewAr': 'الطواف حول الكعبة المشرفة ٧ أشواط يبدأ من الحجر الأسود وينتهي عنده، مع الاضطباع والرمل للرجال في الأشواط الثلاثة الأولى، يعقبه صلاة ركعتين خلف المقام والشرب من زمزم.',
+      'overviewArTranslit': "At-tawaafu hawlal-Ka'batil-musharrafati sab'ata ashwaatin yabda'u minal-hajaril-aswadi wa yantahi 'indah, ma'al-idtiba'i war-ramali lir-rijaali fil-ashwaatith-thalathatil-oola, ya'qubuhu salatu rak'atayni khalfal-maqaami wash-shurbu min Zamzam.",
+      'overviewArMeaning': "Circumambulating the Holy Kaaba seven times, starting and ending at the Black Stone, with Idtiba (uncovering the right shoulder) and Raml (brisk walking) for men in the first three rounds, followed by praying two units of prayer behind the Station (Maqam Ibrahim) and drinking from Zamzam.",
       'actionDetails': [
         {
           'title': '7 rounds around Kaaba starting from Black Stone.',
@@ -1629,6 +1657,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': 'بين الصفا والمروة',
       'overviewEn': 'Walk 7 times between the hills of Safa and Marwah, commencing at Safa and ending at Marwah. Men jog lightly between the green lights. Recite Dhikr and make personal supplications at both hills.',
       'overviewAr': 'السعي بين الصفا والمروة ٧ أشواط يبدأ بالصفا وينتهي بالمروة، يهرول الرجال بين العلمين الأخضرين، مع الإكثار من الذكر والدعاء عند كل جبل.',
+      'overviewArTranslit': "As-sa'yu baynas-Safa wal-Marwata sab'ata ashwaatin yabda'u bis-Safa wa yantahi bil-Marwah, yuharwilur-rijaalu baynal-'alamaynil-akhdarayn, ma'al-ikthaari minadh-dhikri wad-du'a'i 'inda kulli jabal.",
+      'overviewArMeaning': "Sa'i between Safa and Marwah is seven rounds, beginning at Safa and ending at Marwah, with men jogging between the two green markers, while increasing remembrance (Dhikr) and supplication (Dua) at each hill.",
       'actionDetails': [
         {
           'title': 'Begin at Safa facing Kaaba.',
@@ -1713,6 +1743,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': 'آخر أعمال العمرة',
       'overviewEn': 'Complete Umrah by shaving the head (men - preferred) or trimming hair all around. Women trim a fingertip length. All Ihram prohibitions are lifted, and Umrah is completed!',
       'overviewAr': 'ختام مناسك العمرة بحلق رأس الرجل (وهو الأفضل) أو تقصيره، وتقصير المرأة قدر أنملة، وبذلك تحل العمرة بالكامل وتكتمل المناسك.',
+      'overviewArTranslit': "Khitaamu manaasikil-'umrati bihalqi ra'sir-rajuli (wa huwal-afdal) aw taqseerihi, wa tuqassirul-mar'atu qadra anmula, wa bidhalika tahillul-'umratu bil-kaamili wa taktamilu-l-manaasik.",
+      'overviewArMeaning': "Concluding the rituals of Umrah by shaving the man's head (which is preferred) or trimming it, and the woman trimming her hair by a fingertip length. With this, the restrictions of Umrah are completely lifted and the rituals are completed.",
       'actionDetails': [
         {
           'title': 'Men shave (Halq) or trim (Taqsir).',
