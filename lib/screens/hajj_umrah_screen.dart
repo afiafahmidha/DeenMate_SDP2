@@ -138,6 +138,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': '٨ ذو الحجة - من مكان الإقامة بمكة',
       'overviewEn': 'For Hajj al-Tamattu\', pilgrims re-enter the state of Ihram on the 8th of Dhul Hijjah from their hotel or residence in Makkah. It involves physical purification, putting on the Ihram garments, making the intention for Hajj, and chanting the Talbiyah.',
       'overviewAr': 'بالنسبة لحج التمتع، يحرم الحاج بالحج ضحى يوم التروية (٨ ذو الحجة) من مكان إقامته في مكة المكرمة، حيث يغتسل ويتطيب ويلبس ملابس الإحرام وينوي الحج قائلاً: لَبَّيْكَ اللَّهُمَّ حَجًّا.',
+      'overviewArTranslit': "Binnasbati lihajjit-tamattu', yuhrimul-haajju bil-hajji duha yawmit-tarwiyah (8 Dhul-Hijjah) min makani iqamatihī fī Makkatal-Mukarramah, haythu yagtasilu wa yatatayyabu wa yalbasu malabisal-ihram wa yanwil-hajja qa'ilan: Labbayk Allahumma Hajjah.",
+      'overviewArMeaning': "Regarding Hajj al-Tamattu', the pilgrim enters the state of Ihram for Hajj during the forenoon of the Day of Tarwiyah (8th of Dhul Hijjah) from their place of residence in Makkah, where they perform Ghusl, apply perfume, wear the Ihram garments, and make the intention for Hajj, saying: Labbayk Allahumma Hajjah.",
       'actionDetails': [
         {
           'title': 'Perform Ghusl (ritual bath) at your residence in Makkah.',
@@ -227,6 +229,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': 'الميقات - قبل دخول حدود الحرم',
       'overviewEn': 'In Hajj al-Qiran, the pilgrim enters the state of Ihram at the Miqat with the intention of performing both Umrah and Hajj combined. The pilgrim remains in Ihram without shaving or cutting hair after Umrah, staying in Ihram until the 10th of Dhul Hijjah.',
       'overviewAr': 'حج القران هو أن يحرم الحاج بالعمرة والحج معاً من الميقات، أو يحرم بالعمرة ثم يدخل عليها الحج قبل الطواف. ويلتزم بمحظورات الإحرام ولا يتحلل منه بعد طواف القدوم وسعيه بل يبقى محرماً حتى يوم النحر.',
+      'overviewArTranslit': "Hajjul-qirani huwa an yuhrimal-haajju bil-umrati wal-hajji ma'an minal-meeqat, aw yuhrima bil-umrati thumma yadkhula alaihal-hajju qablat-tawaf. Wa yaltazimu bimahzooratil-ihram wa la yatahallalu minhu ba'da tawafil-qudoomi wa sa'yihi bal yabqa muhriman hatta yawmin-nahr.",
+      'overviewArMeaning': "Hajj al-Qiran is when the pilgrim enters the state of Ihram for both Umrah and Hajj combined at the Miqat, or enters Ihram for Umrah and then joins Hajj with it before the Tawaf. The pilgrim adheres to the restrictions of Ihram and does not exit Ihram after Tawaf al-Qudum and Sa'i, but remains in the state of Ihram until the Day of Sacrifice (10th of Dhul Hijjah).",
       'actionDetails': [
         {
           'title': 'Perform Ghusl and wear Ihram garments at the Miqat.',
@@ -307,6 +311,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
       'dayAr': 'الميقات - قبل دخول حدود الحرم',
       'overviewEn': 'Hajj al-Ifrad is performing Hajj alone, without Umrah. The pilgrim enters Ihram at the Miqat with the intention of Hajj only, performs Tawaf al-Qudum, and remains in the state of Ihram until the 10th of Dhul Hijjah. No sacrificial animal (Hady) is obligatory for Ifrad.',
       'overviewAr': 'حج الإفراد هو أن يحرم الحاج بالحج وحده من الميقات قائلاً: لَبَّيْكَ اللَّهُمَّ حَجًّا. ويطوف للقدوم ويسعى للحج ويبقى على إحرامه حتى يوم النحر. ولا يجب عليه الهدي (ذبح فدية).',
+      'overviewArTranslit': "Hajjul-ifradi huwa an yuhrimal-haajju bil-hajji wahdahu minal-meeqat qa'ilan: Labbayk Allahumma Hajjah. Wa yatoofu lil-qudoomi wa yas'a lil-hajji wa yabqa 'ala ihramihi hatta yawmin-nahr. Wa la yajibu 'alayhil-hady (dhabhu fidyah).",
+      'overviewArMeaning': "Hajj al-Ifrad is performing Hajj alone from the Miqat saying: 'Labbayk Allahumma Hajjah'. The pilgrim performs Tawaf al-Qudum and Sa'i for Hajj and remains in the state of Ihram until the Day of Sacrifice (10th of Dhul Hijjah). An animal sacrifice (Hady) is not obligatory for him.",
       'actionDetails': [
         {
           'title': 'Perform Ghusl and wear Ihram garments at the Miqat.',
