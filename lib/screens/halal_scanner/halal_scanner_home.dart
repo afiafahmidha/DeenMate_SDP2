@@ -1237,6 +1237,7 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
             if (mounted) setState(() {});
          });
          },
+
       ),
     );
   }
@@ -1246,6 +1247,12 @@ class _ScannedHistoryScreenState extends State<ScannedHistoryScreen> {
   }
 }
 
+// ============================================================
+// From: additives
+// ============================================================
+// ---------------------------------------------------------------------------
+// Shared colors (matches the app's teal / green / red / orange palette)
+// ---------------------------------------------------------------------------
 
 
 const Color kTeal = AppColors.midTeal;
@@ -4150,7 +4157,17 @@ class HealthTipDetailScreen extends StatelessWidget {
               fontSize: 20,
             ),
           ),
-          
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.share_outlined, color: Colors.white),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Sharing "${article.title}"...')),
+                );
+              },
+            ),
+          ],
+
         ),
         body: SafeArea(
           child: SingleChildScrollView(
@@ -5165,9 +5182,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
         actions: [
           IconButton(
+            IconButton(
+              icon: const Icon(Icons.share_rounded, color: Colors.white),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Sharing ${widget.product.name}...')),
+                );
+              },
+            ),
+            IconButton(
             icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
             tooltip: 'Delete from history',
             onPressed: _confirmDelete,
+
           ),
         ],
       ),
