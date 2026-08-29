@@ -83,6 +83,11 @@ class _DashboardScreenState extends State<DashboardScreen>
   String _liveCountdownStr = "00:00:00"; // Exact ticking countdown formatted as HH:mm:ss for prayer tab
   Timer? _realTimeTimer;
   StreamSubscription<Position>? _positionStreamSub;
+  // Tracks which calendar day alarms were last scheduled for, so
+  // _syncAlarms() automatically re-runs after midnight even if the app
+  // stays open and location never changes (prayer times are computed
+  // per-day, so "today's" schedule goes stale at midnight otherwise).
+  int? _lastAlarmSyncDay;
 
   // Selected prayer scene for dynamic prayer tab header
   String _selectedPrayerScene = "Asr";
@@ -504,6 +509,15 @@ Future<void> _initLocationAndTracking() async {
   // 1. Initial calculation using default coordinates (Dhaka)
   _updatePrayerTimes();
 
+  // Schedule alarms right away using whatever coordinates we have.
+  // Previously this only happened inside _onPositionUpdate(), so if GPS
+  // was slow, denied, or the location service was off, alarms were
+  // never scheduled for that session at all. This guarantees today's
+  // alarms go out immediately; _onPositionUpdate() will simply
+  // reschedule with more accurate coordinates once GPS resolves.
+  _lastAlarmSyncDay = DateTime.now().day;
+  await _syncAlarms();
+
   // 2. Kick off continuous, real-time GPS tracking (replaces one-shot fetch)
   await _startLocationStream();
 
@@ -511,6 +525,17 @@ Future<void> _initLocationAndTracking() async {
   _realTimeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
     if (mounted) {
       _updatePrayerTimes();
+
+      // Prayer times are computed for "today" only, so once the date
+      // rolls over past midnight, re-sync so tomorrow's alarms actually
+      // get scheduled — without this, a user who keeps the app running
+      // (or just doesn't reopen it / move location the next day) would
+      // silently get zero alarms for the new day.
+      final today = DateTime.now().day;
+      if (_lastAlarmSyncDay != today) {
+        _lastAlarmSyncDay = today;
+        _syncAlarms();
+      }
     }
   });
 }

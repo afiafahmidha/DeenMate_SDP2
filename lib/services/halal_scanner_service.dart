@@ -42,6 +42,7 @@ class HalalScannerService {
         'imageUrl': product.imageUrl,
         'scannedAt': FieldValue.serverTimestamp(),
         // Store analysis results as a list of maps
+        
         'analysisResults': product.analysisResults?.map((e) => e.toJson()).toList(),
       }, SetOptions(merge: true));
       print('Halal scan saved successfully: ${product.name}');
@@ -117,7 +118,17 @@ class HalalScannerService {
       print('Error clearing scan history: $e');
     }
   }
+  /// Deletes a single scan from Firestore by barcode (document id)
+  Future<void> deleteScan(String barcode) async {
+    final col = _scanCollection;
+    if (col == null || barcode.isEmpty) return;
 
+    try {
+      await col.doc(barcode).delete();
+    } catch (e) {
+      print('Error deleting halal scan: $e');
+    }
+  }
   /// Saves user's custom preference for an additive
   Future<void> saveAdditiveOverride(String code, String status) async {
     final user = uid;
