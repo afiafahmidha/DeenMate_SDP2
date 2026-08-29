@@ -694,11 +694,21 @@ class _ProfileTabState extends State<ProfileTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(_t('language'), style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
-              // Locked to English — no picker, since there's nothing else to
-              // switch to right now. (The old dropdown's onChanged also had a
-              // broken ternary — `val ? 'en'` with no `:` branch — which was
-              // invalid Dart. Removed rather than patched.)
-              Text("English", style: GoogleFonts.poppins(fontSize: 12, color: textColor, fontWeight: FontWeight.bold)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'English',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: primaryColor,
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
