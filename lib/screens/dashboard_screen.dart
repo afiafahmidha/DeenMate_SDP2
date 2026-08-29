@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -163,23 +163,36 @@ Future<void> _loadUserProfile() async {
       return;
     }
 
+    final uid = user.uid;
+    String k(String base) => '${base}_$uid';
+
     // 1. Immediately load cached name from SharedPreferences
     final prefs = await SharedPreferences.getInstance();
-    final cachedName = prefs.getString('profile_name');
+    String? cachedName = prefs.getString(k('profile_name')) ?? prefs.getString('profile_name');
+    if (cachedName != null && cachedName.trim().toLowerCase() == 'rahim uddin') {
+      cachedName = null;
+      await prefs.remove(k('profile_name'));
+      await prefs.remove('profile_name');
+    }
+
     if (cachedName != null && cachedName.trim().isNotEmpty) {
       if (mounted) {
         setState(() {
-          _userName = cachedName.trim();
+          _userName = cachedName!.trim();
         });
       }
-    } else {
-      // Fallback to auth display name if available
-      if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _userName = user.displayName!.trim();
-          });
-        }
+    } else if (user.displayName != null && user.displayName!.trim().isNotEmpty && user.displayName!.trim().toLowerCase() != 'rahim uddin') {
+      if (mounted) {
+        setState(() {
+          _userName = user.displayName!.trim();
+        });
+      }
+    } else if (user.email != null && user.email!.isNotEmpty) {
+      final prefix = user.email!.split('@')[0];
+      if (mounted) {
+        setState(() {
+          _userName = prefix;
+        });
       }
     }
 
@@ -195,15 +208,18 @@ Future<void> _loadUserProfile() async {
         // Sync profile details
         if (data['profile'] != null) {
           final profile = data['profile'] as Map<String, dynamic>;
-          final fullName = profile['fullName'] as String?;
+          String? fullName = profile['fullName'] as String?;
+          if (fullName != null && fullName.trim().toLowerCase() == 'rahim uddin') {
+            fullName = null;
+          }
           
           if (fullName != null && fullName.trim().isNotEmpty) {
             if (mounted) {
               setState(() {
-                _userName = fullName.trim();
+                _userName = fullName!.trim();
               });
             }
-            await prefs.setString('profile_name', _userName);
+            await prefs.setString(k('profile_name'), _userName);
           }
         }
 
@@ -1269,6 +1285,13 @@ Widget _buildActiveTabContent() {
           key: const ValueKey('ProfileTab'),
           onLogout: widget.onLogout,
           isDarkMode: _isDarkMode,
+          onUserNameChanged: (newName) {
+            if (mounted && newName.trim().isNotEmpty) {
+              setState(() {
+                _userName = newName.trim();
+              });
+            }
+          },
           onThemeChanged: (isDark) async {
             setState(() {
               _isDarkMode = isDark;
