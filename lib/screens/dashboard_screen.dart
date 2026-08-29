@@ -944,6 +944,20 @@ Future<void> _onPositionUpdate(Position position) async {
                 ),
               ),
 
+              // Pinned Top Status Bar Shield (prevents scrolling content from overlapping system status bar icons)
+              if (_currentIndex == 0)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: MediaQuery.of(context).padding.top,
+                      color: _isDarkMode ? const Color(0xFF121212) : Colors.white,
+                    ),
+                  ),
+                ),
+
               // Bottom Navigation Bar
               Positioned(
                 bottom: 0,
@@ -1249,7 +1263,10 @@ Widget _buildActiveTabContent() {
     return SingleChildScrollView(
       key: const ValueKey('HomeTab'),
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.only(top: 50, bottom: 20),
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 14,
+        bottom: 20,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2073,14 +2090,15 @@ _buildAnimatedEntry(
                   )
                 : Text(
                     _todaysGuidance,
-                    textAlign: TextAlign.justify,
+                    textAlign: TextAlign.start,
                     style: GoogleFonts.inter(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w400,
                       color: _isDarkMode
                           ? Colors.white70
                           : AppColors.navyBlue.withValues(alpha: 0.75),
-                      height: 1.5,
+                      height: 1.55,
+                      letterSpacing: 0.1,
                     ),
                   ),
           ],

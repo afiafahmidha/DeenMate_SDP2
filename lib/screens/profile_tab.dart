@@ -630,20 +630,20 @@ class _ProfileTabState extends State<ProfileTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(_t('language'), style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
-              DropdownButton<bool>(
-                value: _isBengali,
-                underline: const SizedBox(),
-                dropdownColor: cardBg,
-                style: GoogleFonts.poppins(fontSize: 12, color: textColor, fontWeight: FontWeight.bold),
-                items: const [
-                  DropdownMenuItem(value: false, child: Text("English")),
-                  DropdownMenuItem(value: true, child: Text("বাংলা")),
-                ],
-                onChanged: (val) async {
-                  if (val != null) {
-                    await LanguageService.setLanguage(val ? 'bn' : 'en');
-                  }
-                },
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'English',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: primaryColor,
+                  ),
+                ),
               ),
             ],
           ),

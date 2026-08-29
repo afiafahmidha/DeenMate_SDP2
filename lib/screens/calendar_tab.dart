@@ -1034,7 +1034,7 @@ class _CalendarTabState extends State<CalendarTab> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                _isBengali ? 'ইসলামিক ক্যালেন্ডার' : 'Islamic Calendar',
+                                'Islamic Calendar',
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
                                 style: GoogleFonts.poppins(
@@ -1045,64 +1045,12 @@ class _CalendarTabState extends State<CalendarTab> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                _isBengali ? 'ক্যালেন্ডার ও বিশেষ দিন' : 'Hijri calendar & Islamic events',
+                                'Hijri calendar & Islamic events',
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
                                 style: GoogleFonts.poppins(fontSize: 12, color: _secondaryTextColor(context)),
                               ),
                             ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF22313F) : AppColors.dustyBlueTeal.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.all(2),
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => setState(() => _isBengali = false),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: !_isBengali
-                                ? (isDark ? AppColors.dustyBlueTeal : AppColors.navyBlue)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                            child: Text(
-                              'EN',
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: !_isBengali ? Colors.white : _primaryTextColor(context),
-                              ),
-                            ),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => setState(() => _isBengali = true),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: _isBengali
-                                ? (isDark ? AppColors.dustyBlueTeal : AppColors.navyBlue)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                            child: Text(
-                              'বাংলা',
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: _isBengali ? Colors.white : _primaryTextColor(context),
-                              ),
-                            ),
                           ),
                         ),
                       ],
