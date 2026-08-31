@@ -127,14 +127,12 @@ class _CalendarTwinklingStarState extends State<_CalendarTwinklingStar> with Sin
       if (mounted) _controller.repeat(reverse: true);
     });
   }
-
   @override
   void dispose() {
     _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }
-
   @override
   Widget build(BuildContext context) {
     return Align(
@@ -154,7 +152,6 @@ class _CalendarTwinklingStarState extends State<_CalendarTwinklingStar> with Sin
     );
   }
 }
-
 
 class _CalendarStarPainter extends CustomPainter {
   @override
@@ -179,7 +176,6 @@ class _CalendarStarPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
 
 class _CalendarTexturePainter extends CustomPainter {
   @override
@@ -267,7 +263,6 @@ class HijriConverter {
   }
 }
 
-
 class IslamicEvent {
   final String title;
   final String titleBengali;
@@ -299,7 +294,6 @@ class IslamicEvent {
     this.backgroundImagePath,
     this.heroImages = const [],
   });
-
 
   List<String> get carouselImages {
     if (heroImages.isNotEmpty) return heroImages;
