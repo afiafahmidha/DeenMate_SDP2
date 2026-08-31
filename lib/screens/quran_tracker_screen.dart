@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth_header.dart'; // AppColors
@@ -1066,6 +1067,29 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   };
 
   // Settings state
+  // Quran Audio Tilawat Player State
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlayingAudio = false;
+  bool _isLoadingAudio = false;
+  int? _currentlyPlayingSurah;
+  int? _currentlyPlayingAyah;
+  String _selectedReciter = 'Alafasy_128kbps';
+
+  static const List<Map<String, String>> _reciterList = [
+    {'id': 'Alafasy_128kbps', 'name': 'Mishary Rashid Alafasy'},
+    {'id': 'Abdul_Basit_Murattal_192kbps', 'name': 'Abdul Basit (Murattal)'},
+    {'id': 'Husary_128kbps', 'name': 'Mahmoud Khalil Al-Husary'},
+    {'id': 'Abdurrahmaan_As-Sudais_192kbps', 'name': 'Abdur-Rahman As-Sudais'},
+    {'id': 'Ghamadi_40kbps', 'name': 'Saad Al-Ghamdi'},
+    {'id': 'Abu_Bakr_Ash-Shaatree_128kbps', 'name': 'Abu Bakr Al-Shatri'},
+    {'id': 'Ali_Jaber_64kbps', 'name': 'Ali Jaber'},
+  ];
+
+  String _getReciterName(String id) {
+    final match = _reciterList.firstWhere((r) => r['id'] == id, orElse: () => {'name': 'Mishary Alafasy'});
+    return match['name']!;
+  }
+
   double _arabicFontSize = 24.0;
   String _arabicFont = 'Amiri'; // 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', 'Lateef', 'Katibeh'
   bool _showBanglaPronunciation = true;
@@ -1281,7 +1305,75 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   @override
   void initState() {
     super.initState();
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _isPlayingAudio = false;
+          _isLoadingAudio = false;
+          _currentlyPlayingSurah = null;
+          _currentlyPlayingAyah = null;
+        });
+      }
+    });
     _loadState();
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePlayAyahAudio(int surahId, int ayahNum) async {
+    if (_isPlayingAudio && _currentlyPlayingSurah == surahId && _currentlyPlayingAyah == ayahNum) {
+      await _audioPlayer.pause();
+      setState(() => _isPlayingAudio = false);
+      return;
+    }
+
+    setState(() {
+      _isLoadingAudio = true;
+      _currentlyPlayingSurah = surahId;
+      _currentlyPlayingAyah = ayahNum;
+    });
+
+    try {
+      final sStr = surahId.toString().padLeft(3, '0');
+      final aStr = ayahNum.toString().padLeft(3, '0');
+      final url = 'https://everyayah.com/data/$_selectedReciter/$sStr$aStr.mp3';
+
+      await _audioPlayer.stop();
+      await _audioPlayer.play(UrlSource(url));
+      if (mounted) {
+        setState(() {
+          _isPlayingAudio = true;
+          _isLoadingAudio = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Audio playback error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not play audio: $e')),
+        );
+        setState(() {
+          _isPlayingAudio = false;
+          _isLoadingAudio = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _stopAyahAudio() async {
+    await _audioPlayer.stop();
+    if (mounted) {
+      setState(() {
+        _isPlayingAudio = false;
+        _isLoadingAudio = false;
+        _currentlyPlayingSurah = null;
+        _currentlyPlayingAyah = null;
+      });
+    }
   }
 
   void _showWheelPagePickerModal(BuildContext context, Color cardBg, Color themeText) {
@@ -1484,6 +1576,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
 
         _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
         _arabicFont = prefs.getString('quran_arabic_font') ?? 'Amiri';
+        _selectedReciter = prefs.getString('quran_selected_reciter') ?? 'Alafasy_128kbps';
         _showBanglaPronunciation = prefs.getBool('quran_show_bangla_pronunciation') ?? true;
         _showEnglishPronunciation = prefs.getBool('quran_show_english_pronunciation') ?? true;
         _showBanglaTranslation = prefs.getBool('quran_show_bangla_translation') ?? true;
@@ -1630,6 +1723,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     await prefs.setInt('quran_khatm_juz_completed', _khatmTotalJuzCompleted);
     await prefs.setBool('is_dark_mode', _isDarkMode);
     await prefs.setString('quran_arabic_font', _arabicFont);
+    await prefs.setString('quran_selected_reciter', _selectedReciter);
     await prefs.setBool('quran_show_bangla_pronunciation', _showBanglaPronunciation);
     await prefs.setBool('quran_show_english_pronunciation', _showEnglishPronunciation);
     await prefs.setBool('quran_show_bangla_translation', _showBanglaTranslation);
@@ -2555,6 +2649,89 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
             ],
           ),
           const SizedBox(height: 4),
+
+          // Audio Tilawat Recitation Playback Bar
+          Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                  ? AppColors.midTeal.withValues(alpha: 0.14)
+                  : cardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                    ? AppColors.midTeal.withValues(alpha: 0.45)
+                    : Colors.grey.withValues(alpha: 0.15),
+                width: 0.8,
+              ),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: () => _togglePlayAyahAudio(surah.id, currentAyah.number),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                          ? AppColors.midTeal
+                          : AppColors.midTeal.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: (_isLoadingAudio && _currentlyPlayingAyah == currentAyah.number)
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Icon(
+                            (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            color: (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                                ? Colors.white
+                                : AppColors.midTeal,
+                            size: 20,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                            ? 'Playing Tilawat...'
+                            : 'Listen Ayah Tilawat (Audio)',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                              ? AppColors.midTeal
+                              : themeText,
+                        ),
+                      ),
+                      Text(
+                        'Qari: ${_getReciterName(_selectedReciter)} · Ayah ${currentAyah.number}',
+                        style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                  IconButton(
+                    tooltip: 'Stop',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.stop_circle_outlined, color: Colors.redAccent, size: 22),
+                    onPressed: _stopAyahAudio,
+                  ),
+              ],
+            ),
+          ),
 
           // Sleek, ultra-thin Memorization Strip (Zero screen squeeze)
           Container(
@@ -4678,6 +4855,46 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Quran Reciter (Tilawat) Selection
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Quran Reciter',
+                          style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  DropdownButton<String>(
+                    value: _selectedReciter,
+                    dropdownColor: cardBg,
+                    underline: const SizedBox(),
+                    isDense: true,
+                    items: _reciterList.map((r) {
+                      return DropdownMenuItem<String>(
+                        value: r['id']!,
+                        child: Text(
+                          r['name']!,
+                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedReciter = val);
+                        _saveState();
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const Divider(height: 16),
+
               // Arabic Font Selection (Zero pixel overflow)
               Row(
                 children: [
