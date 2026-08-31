@@ -852,9 +852,8 @@ body: SafeArea(
     );
   }
 
-  // ============================================================
-  // TAB 1: COUNTER
-  // ============================================================
+   // TAB 1: COUNTER
+ 
   Widget _buildCounterTab() {
     return ListView(
       key: const ValueKey('CounterTab'),
@@ -1185,9 +1184,9 @@ body: SafeArea(
     );
   }
 
-  // ============================================================
+  
   // TAB 2: ADHKAR COLLECTIONS (Morning & Evening)
-  // ============================================================
+  
   Widget _buildAdhkarTab() {
     final list = _showMorningAdhkar ? _morningAdhkar : _eveningAdhkar;
     return ListView(
@@ -1293,9 +1292,8 @@ body: SafeArea(
     );
   }
 
-  // ============================================================
   // TAB 3: STATS & HISTORY
-  // ============================================================
+
   Widget _buildStatsHistoryTab() {
     return ListView(
       key: const ValueKey('StatsTab'),
@@ -1453,9 +1451,9 @@ body: SafeArea(
     return result.reversed.toList();
   }
 
-  // ============================================================
+  
   // TAB 4: REMINDERS & ACHIEVEMENTS
-  // ============================================================
+  
   Widget _buildRemindersAchievementsTab() {
     return ListView(
       key: const ValueKey('RemindersTab'),
