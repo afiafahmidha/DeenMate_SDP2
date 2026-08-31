@@ -16,10 +16,11 @@ service cloud.firestore {
     // membership; a member may work only inside a plan that already includes
     // their UID.
     function isPlanMember(ownerUid, planId) {
-      
       return signedIn()
         && (request.auth.uid == ownerUid
-          || request.auth.uid in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds
+          || (resource != null && 'memberIds' in resource.data && resource.data.memberIds is list && request.auth.uid in resource.data.memberIds)
+          || (exists(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId))
+              && request.auth.uid in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds)
           || exists(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)/members/$(request.auth.uid)));
     }
 
@@ -194,6 +195,10 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if request.auth != null && request.auth.uid == userId;
 
+      match /joinedQurbaniPlans/{planId} {
+        allow read, write: if signedIn() && request.auth.uid == userId;
+      }
+
       // Assumed model: a private Qurbani plan is stored below its owner's
       // user document. memberIds is the access-control list and may be
       // changed only by that owner.
@@ -313,6 +318,11 @@ service cloud.firestore {
           allow delete: if isOwner(userId);
         }
       }
+    }
+
+    // Collection group read access for Qurbani plans discovery
+    match /{path=**}/qurbaniPlans/{planId} {
+      allow read: if signedIn();
     }
 
     match /qurbaniSharePosts/{postId} {

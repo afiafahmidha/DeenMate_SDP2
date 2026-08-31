@@ -338,8 +338,27 @@ class _ProfileTabState extends State<ProfileTab> {
         final base64Str = base64Encode(bytes);
 
         final prefs = await SharedPreferences.getInstance();
+        final user = FirebaseAuth.instance.currentUser;
+        // Save under BOTH the namespaced key (profile tab reads this)
+        // AND the legacy global key (QurbaniRepository reads this).
+        // This keeps both screens in sync even before a full migration.
         await prefs.setString('profile_avatar_base64', base64Str);
         await prefs.setString('profile_avatar_path', picked.path);
+        if (user != null) {
+          await prefs.setString('profile_avatar_base64_${user.uid}', base64Str);
+          await prefs.setString('profile_avatar_path_${user.uid}', picked.path);
+          // Immediately push the new avatar to Firestore so other devices
+          // (web, second mobile) can also see the updated image.
+          try {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .update({
+              'profile.avatarBase64': base64Str,
+              'profile.updatedAt': FieldValue.serverTimestamp(),
+            });
+          } catch (_) {}
+        }
 
         setState(() {
           _avatarImage = File(picked.path);
