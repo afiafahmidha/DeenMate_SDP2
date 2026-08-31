@@ -4855,76 +4855,101 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Quran Reciter (Tilawat) Selection
+              // Quran Reciter (Tilawat) Selection (Right-aligned)
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Quran Reciter',
-                          style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
+                  Text(
+                    'Quran Reciter',
+                    style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(width: 8),
-                  DropdownButton<String>(
-                    value: _selectedReciter,
-                    dropdownColor: cardBg,
-                    underline: const SizedBox(),
-                    isDense: true,
-                    items: _reciterList.map((r) {
-                      return DropdownMenuItem<String>(
-                        value: r['id']!,
-                        child: Text(
-                          r['name']!,
-                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _selectedReciter = val);
-                        _saveState();
-                      }
-                    },
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedReciter,
+                      dropdownColor: cardBg,
+                      isDense: true,
+                      alignment: AlignmentDirectional.centerEnd,
+                      selectedItemBuilder: (context) {
+                        return _reciterList.map((r) {
+                          return Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              r['name']!,
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                            ),
+                          );
+                        }).toList();
+                      },
+                      items: _reciterList.map((r) {
+                        return DropdownMenuItem<String>(
+                          value: r['id']!,
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: Text(
+                            r['name']!,
+                            textAlign: TextAlign.right,
+                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _selectedReciter = val);
+                          _saveState();
+                        }
+                      },
+                    ),
                   ),
                 ],
               ),
               const Divider(height: 16),
 
-              // Arabic Font Selection (Zero pixel overflow)
+              // Arabic Font Selection (Right-aligned)
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Arabic Quran Font',
-                      style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
-                    ),
+                  Text(
+                    'Arabic Quran Font',
+                    style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(width: 8),
-                  DropdownButton<String>(
-                    value: _arabicFont,
-                    dropdownColor: cardBg,
-                    underline: const SizedBox(),
-                    isDense: true,
-                    items: arabicFonts.map((f) {
-                      return DropdownMenuItem<String>(
-                        value: f['name']!,
-                        child: Text(
-                          f['label']!,
-                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _arabicFont = val);
-                        _saveState();
-                      }
-                    },
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _arabicFont,
+                      dropdownColor: cardBg,
+                      isDense: true,
+                      alignment: AlignmentDirectional.centerEnd,
+                      selectedItemBuilder: (context) {
+                        return arabicFonts.map((f) {
+                          return Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              f['label']!,
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                            ),
+                          );
+                        }).toList();
+                      },
+                      items: arabicFonts.map((f) {
+                        return DropdownMenuItem<String>(
+                          value: f['name']!,
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: Text(
+                            f['label']!,
+                            textAlign: TextAlign.right,
+                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _arabicFont = val);
+                          _saveState();
+                        }
+                      },
+                    ),
                   ),
                 ],
               ),
