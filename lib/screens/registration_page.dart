@@ -484,7 +484,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== HEADER =====
   Widget _buildHeader(BuildContext context) {
     final Size size = MediaQuery.of(context).size;
     final double maxAppWidth = 430.0;
@@ -538,7 +537,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== LABELED FIELD =====
   Widget _buildLabeledField({
     required String label,
     required TextEditingController controller,
@@ -621,7 +619,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== LANGUAGE SELECTOR =====
   Widget _buildLanguageSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -653,7 +650,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
       ],
     );
   }
-
   Widget _buildLanguageOption(String lang) {
     final bool isSelected = selectedLanguage == lang;
     return Padding(
@@ -695,7 +691,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  // ===== TERMS CHECKBOX =====
   Widget _buildTermsCheckbox() {
     return Row(
       children: [
