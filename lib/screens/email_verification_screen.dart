@@ -59,7 +59,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     });
   }
 
-  // ── Core verification check ─────────────────────────────────────
+  // ── Core verification check 
   Future<void> _checkVerification({bool auto = false}) async {
     if (_isChecking) return;
     if (!auto) setState(() => _isChecking = true);
@@ -93,7 +93,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     }
   }
 
-  // ── Resend verification email ────────────────────────────────────
+  // ── Resend verification email 
   Future<void> _resendEmail() async {
     if (_isSending || _cooldownSeconds > 0) return;
     setState(() => _isSending = true);
@@ -124,7 +124,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     }
   }
 
-  // ── Cooldown countdown ──────────────────────────────────────────
+  // ── Cooldown countdown 
   void _startCooldown(int seconds) {
     _cooldownTimer?.cancel();
     setState(() => _cooldownSeconds = seconds);
@@ -167,7 +167,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     );
   }
 
-  // ── Sign out ────────────────────────────────────────────────────
+  // ── Sign out 
   Future<void> _signOut() async {
     _pollTimer?.cancel();
     await FirebaseAuth.instance.signOut();
@@ -291,7 +291,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                   const SizedBox(height: 28),
 
-                  // ── Check Verification Button ──────
+                  // ── Check Verification Button 
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -334,7 +334,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // ── Resend Button ──────────────────
+                  // ── Resend Button
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -415,7 +415,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ── Divider ────────────────────────
+              
                   Divider(
                       color: AppColors.placeholder.withValues(alpha: 0.2),
                       thickness: 1),
@@ -483,7 +483,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         ),
       ],
     );
-
     return Scaffold(
       backgroundColor: isWideScreen ? const Color(0xFFEFEFF4) : AppColors.white,
       body: Center(
@@ -509,7 +508,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       ),
     );
   }
-
   // ===== HEADER =====
   Widget _buildHeader(BuildContext context) {
     final Size size = MediaQuery.of(context).size;

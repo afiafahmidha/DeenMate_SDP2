@@ -1,4 +1,4 @@
-﻿import 'package:intl/intl.dart' hide TextDirection;
+import 'package:intl/intl.dart' hide TextDirection;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -354,6 +354,92 @@ class CompletedPilgrimage {
   );
 }
 
+class LoggedMistake {
+  final String id;
+  final String mistakeId; // 'm1', 'm2', etc. or 'custom'
+  final String title;
+  final String category; // 'Ihram', 'Tawaf & Sa\'i', 'Arafat & Mina', 'Rami & Qurbani', 'General'
+  final String penaltyType; // 'Dam (Slaughter 1 Sheep)', 'Fidyah (Fast/Feed/Sheep)', 'Repeat Rite', 'Istighfar'
+  final DateTime date;
+  final String note;
+  final bool isFulfilled;
+  final DateTime? fulfilledDate;
+  final String mode; // 'Hajj' or 'Umrah'
+  final int hajjYear;
+
+  LoggedMistake({
+    required this.id,
+    this.mistakeId = 'custom',
+    required this.title,
+    required this.category,
+    required this.penaltyType,
+    required this.date,
+    this.note = '',
+    this.isFulfilled = false,
+    this.fulfilledDate,
+    this.mode = 'Hajj',
+    this.hajjYear = 2026,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'mistakeId': mistakeId,
+    'title': title,
+    'category': category,
+    'penaltyType': penaltyType,
+    'date': date.toIso8601String(),
+    'note': note,
+    'isFulfilled': isFulfilled,
+    'fulfilledDate': fulfilledDate?.toIso8601String(),
+    'mode': mode,
+    'hajjYear': hajjYear,
+  };
+
+  factory LoggedMistake.fromJson(Map<String, dynamic> json) => LoggedMistake(
+    id: json['id'] as String? ?? DateTime.now().millisecondsSinceEpoch.toString(),
+    mistakeId: json['mistakeId'] as String? ?? 'custom',
+    title: json['title'] as String? ?? 'Mistake / Violation',
+    category: json['category'] as String? ?? 'General',
+    penaltyType: json['penaltyType'] as String? ?? 'Fidyah of Choice',
+    date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+    note: json['note'] as String? ?? '',
+    isFulfilled: json['isFulfilled'] as bool? ?? false,
+    fulfilledDate: json['fulfilledDate'] != null
+        ? DateTime.tryParse(json['fulfilledDate'] as String)
+        : null,
+    mode: json['mode'] as String? ?? 'Hajj',
+    hajjYear: json['hajjYear'] as int? ?? 2026,
+  );
+
+  LoggedMistake copyWith({
+    String? id,
+    String? mistakeId,
+    String? title,
+    String? category,
+    String? penaltyType,
+    DateTime? date,
+    String? note,
+    bool? isFulfilled,
+    DateTime? fulfilledDate,
+    String? mode,
+    int? hajjYear,
+  }) {
+    return LoggedMistake(
+      id: id ?? this.id,
+      mistakeId: mistakeId ?? this.mistakeId,
+      title: title ?? this.title,
+      category: category ?? this.category,
+      penaltyType: penaltyType ?? this.penaltyType,
+      date: date ?? this.date,
+      note: note ?? this.note,
+      isFulfilled: isFulfilled ?? this.isFulfilled,
+      fulfilledDate: fulfilledDate ?? this.fulfilledDate,
+      mode: mode ?? this.mode,
+      hajjYear: hajjYear ?? this.hajjYear,
+    );
+  }
+}
+
 class HajjUmrahPlannerScreen extends StatefulWidget {
   const HajjUmrahPlannerScreen({super.key});
 
@@ -380,6 +466,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
   DateTime? _tripStartDate;
   DateTime? _tripEndDate;
   List<CompletedPilgrimage> _history = [];
+  List<LoggedMistake> _loggedMistakes = [];
+  Set<String> _bookmarkedMistakeIds = {};
   String _mistakeCategoryFilter = 'All';
   String _mistakeSearchQuery = '';
 
@@ -2289,6 +2377,19 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         } catch (_) {}
       }
 
+      final loggedMistakesJson = prefs.getString('hajj_logged_mistakes');
+      if (loggedMistakesJson != null) {
+        try {
+          final List list = jsonDecode(loggedMistakesJson);
+          _loggedMistakes = list.map((e) => LoggedMistake.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+        } catch (_) {}
+      }
+
+      final bookmarkedList = prefs.getStringList('hajj_bookmarked_mistakes');
+      if (bookmarkedList != null) {
+        _bookmarkedMistakeIds = bookmarkedList.toSet();
+      }
+
       // Load all Hajj steps
       final allHajjStepsList = [
         ..._hajjStepsTamattu,
@@ -2336,6 +2437,8 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
             final remoteTripStart = hajjUmrah['tripStartDate'] as String?;
             final remoteTripEnd = hajjUmrah['tripEndDate'] as String?;
             final remoteHistory = hajjUmrah['history'] as List<dynamic>?;
+            final remoteLoggedMistakes = hajjUmrah['loggedMistakes'] as List<dynamic>?;
+            final remoteBookmarked = hajjUmrah['bookmarkedMistakes'] as List<dynamic>?;
 
             if (remoteTripStart != null) {
               _tripStartDate = DateTime.tryParse(remoteTripStart);
@@ -2349,6 +2452,18 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               try {
                 _history = remoteHistory.map((e) => CompletedPilgrimage.fromJson(Map<String, dynamic>.from(e as Map))).toList();
                 prefs.setString('hajj_history', jsonEncode(_history.map((e) => e.toJson()).toList()));
+              } catch (_) {}
+            }
+            if (remoteLoggedMistakes != null) {
+              try {
+                _loggedMistakes = remoteLoggedMistakes.map((e) => LoggedMistake.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+                prefs.setString('hajj_logged_mistakes', jsonEncode(_loggedMistakes.map((e) => e.toJson()).toList()));
+              } catch (_) {}
+            }
+            if (remoteBookmarked != null) {
+              try {
+                _bookmarkedMistakeIds = remoteBookmarked.map((e) => e.toString()).toSet();
+                prefs.setStringList('hajj_bookmarked_mistakes', _bookmarkedMistakeIds.toList());
               } catch (_) {}
             }
 
@@ -2451,11 +2566,915 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
           'tripStartDate': _tripStartDate?.toIso8601String(),
           'tripEndDate': _tripEndDate?.toIso8601String(),
           'history': _history.map((e) => e.toJson()).toList(),
+          'loggedMistakes': _loggedMistakes.map((e) => e.toJson()).toList(),
+          'bookmarkedMistakes': _bookmarkedMistakeIds.toList(),
+          'lastUpdated': FieldValue.serverTimestamp(),
         }
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint("Error updating Hajj/Umrah state in Firestore: $e");
     }
+  }
+
+  Future<void> _saveLoggedMistake(LoggedMistake mistake) async {
+    setState(() {
+      final index = _loggedMistakes.indexWhere((m) => m.id == mistake.id);
+      if (index >= 0) {
+        _loggedMistakes[index] = mistake;
+      } else {
+        _loggedMistakes.insert(0, mistake);
+      }
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'hajj_logged_mistakes',
+      jsonEncode(_loggedMistakes.map((e) => e.toJson()).toList()),
+    );
+    await _updateFirestoreHajjUmrah();
+  }
+
+  Future<void> _deleteLoggedMistake(String id) async {
+    setState(() {
+      _loggedMistakes.removeWhere((m) => m.id == id);
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'hajj_logged_mistakes',
+      jsonEncode(_loggedMistakes.map((e) => e.toJson()).toList()),
+    );
+    await _updateFirestoreHajjUmrah();
+  }
+
+  Future<void> _toggleMistakeFulfilled(String id) async {
+    final index = _loggedMistakes.indexWhere((m) => m.id == id);
+    if (index < 0) return;
+
+    final current = _loggedMistakes[index];
+    final updated = current.copyWith(
+      isFulfilled: !current.isFulfilled,
+      fulfilledDate: !current.isFulfilled ? DateTime.now() : null,
+    );
+
+    setState(() {
+      _loggedMistakes[index] = updated;
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'hajj_logged_mistakes',
+      jsonEncode(_loggedMistakes.map((e) => e.toJson()).toList()),
+    );
+    await _updateFirestoreHajjUmrah();
+  }
+
+  Future<void> _toggleBookmarkMistake(String mistakeId) async {
+    setState(() {
+      if (_bookmarkedMistakeIds.contains(mistakeId)) {
+        _bookmarkedMistakeIds.remove(mistakeId);
+      } else {
+        _bookmarkedMistakeIds.add(mistakeId);
+      }
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('hajj_bookmarked_mistakes', _bookmarkedMistakeIds.toList());
+    await _updateFirestoreHajjUmrah();
+  }
+
+  Future<void> _saveHistoryItem(CompletedPilgrimage item) async {
+    setState(() {
+      final index = _history.indexWhere((h) => h.id == item.id);
+      if (index >= 0) {
+        _history[index] = item;
+      } else {
+        _history.insert(0, item);
+      }
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'hajj_history',
+      jsonEncode(_history.map((e) => e.toJson()).toList()),
+    );
+    await _updateFirestoreHajjUmrah();
+  }
+
+  void _showLogMistakeDialog({HajjMistake? prefilledMistake, LoggedMistake? existing}) {
+    final isDark = _isDarkMode;
+    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textC = isDark ? Colors.white : AppColors.navyBlue;
+    final subC = isDark ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65);
+
+    String selectedMistakeId = existing?.mistakeId ?? prefilledMistake?.id ?? 'custom';
+    String selectedCategory = existing?.category ?? prefilledMistake?.category ?? 'Ihram';
+    String selectedPenalty = existing?.penaltyType ?? prefilledMistake?.kaffarahType ?? 'Dam (Slaughter 1 Sheep in Haram)';
+    DateTime incidentDate = existing?.date ?? DateTime.now();
+    bool isFulfilled = existing?.isFulfilled ?? false;
+    String mode = existing?.mode ?? _mode;
+    int year = existing?.hajjYear ?? _selectedHajjYear;
+
+    final titleCtrl = TextEditingController(
+      text: existing?.title ?? prefilledMistake?.title ?? '',
+    );
+    final noteCtrl = TextEditingController(text: existing?.note ?? '');
+
+    final penaltyOptions = [
+      'Dam (Slaughter 1 Sheep in Haram)',
+      'Fidyah (Choose: Fast 3d / Feed 6 / 1 Sheep)',
+      'Repeat Rite in State of Purity',
+      'Sincere Istighfar (No Penalty)',
+      'Badanah (Camels/Cattle - Major Violation)',
+      'Other / Inquire with Scholar',
+    ];
+
+    final categories = ['Ihram', 'Tawaf & Sa\'i', 'Arafat & Mina', 'Rami & Qurbani', 'General'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.88,
+              ),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                14,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white24 : Colors.black12,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.coralOrange.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.error_outline_rounded,
+                            color: AppColors.coralOrange,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                existing != null ? 'Edit Logged Mistake / Penalty' : 'Log Mistake / Incident',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: textC,
+                                ),
+                              ),
+                              Text(
+                                'Record penalty requirement & track fulfillment status',
+                                style: GoogleFonts.inter(fontSize: 11, color: subC),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    Text(
+                      'Choose from Fiqh Guide or Custom',
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: textC,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedMistakeId,
+                          isExpanded: true,
+                          dropdownColor: cardBg,
+                          style: GoogleFonts.inter(fontSize: 12.5, color: textC),
+                          items: [
+                            const DropdownMenuItem(
+                              value: 'custom',
+                              child: Text('✏️ Custom Mistake / Incident'),
+                            ),
+                            ..._hajjMistakes.map(
+                              (m) => DropdownMenuItem(
+                                value: m.id,
+                                child: Text('${m.id.toUpperCase()}: ${m.title}', overflow: TextOverflow.ellipsis),
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            if (val == null) return;
+                            setModalState(() {
+                              selectedMistakeId = val;
+                              if (val != 'custom') {
+                                final matched = _hajjMistakes.firstWhere((m) => m.id == val);
+                                titleCtrl.text = matched.title;
+                                selectedCategory = matched.category;
+                                selectedPenalty = matched.kaffarahType;
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    Text(
+                      'Incident / Mistake Title',
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: textC,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: titleCtrl,
+                      style: GoogleFonts.inter(fontSize: 13, color: textC),
+                      decoration: InputDecoration(
+                        hintText: 'e.g. Scented soap used, clipped nails...',
+                        hintStyle: GoogleFonts.inter(fontSize: 12, color: subC),
+                        filled: true,
+                        fillColor: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Category',
+                                style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: textC),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: categories.contains(selectedCategory) ? selectedCategory : categories.first,
+                                    isExpanded: true,
+                                    dropdownColor: cardBg,
+                                    style: GoogleFonts.inter(fontSize: 12, color: textC),
+                                    items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat, overflow: TextOverflow.ellipsis))).toList(),
+                                    onChanged: (val) => setModalState(() => selectedCategory = val ?? selectedCategory),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Date of Incident',
+                                style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: textC),
+                              ),
+                              const SizedBox(height: 6),
+                              GestureDetector(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: incidentDate,
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                                  );
+                                  if (picked != null) {
+                                    setModalState(() => incidentDate = picked);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.midTeal),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          DateFormat('dd MMM, yyyy').format(incidentDate),
+                                          style: GoogleFonts.inter(fontSize: 11.5, color: textC, fontWeight: FontWeight.w500),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    Text(
+                      'Required Penalty / Fidyah',
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: textC,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: penaltyOptions.contains(selectedPenalty) ? selectedPenalty : penaltyOptions.first,
+                          isExpanded: true,
+                          dropdownColor: cardBg,
+                          style: GoogleFonts.inter(fontSize: 12, color: textC),
+                          items: penaltyOptions.map((p) => DropdownMenuItem(value: p, child: Text(p, overflow: TextOverflow.ellipsis))).toList(),
+                          onChanged: (val) => setModalState(() => selectedPenalty = val ?? selectedPenalty),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    Text(
+                      'Notes & Circumstances (Optional)',
+                      style: GoogleFonts.inter(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: textC,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: noteCtrl,
+                      maxLines: 2,
+                      style: GoogleFonts.inter(fontSize: 12.5, color: textC),
+                      decoration: InputDecoration(
+                        hintText: 'Add details (e.g. forgot and applied cream, intention to feed poor in Haram)...',
+                        hintStyle: GoogleFonts.inter(fontSize: 12, color: subC),
+                        filled: true,
+                        fillColor: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
+                        ),
+                        contentPadding: const EdgeInsets.all(12),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isFulfilled
+                            ? const Color(0xFF2E7D32).withValues(alpha: 0.12)
+                            : (isDark ? Colors.white10 : const Color(0xFFF7F8FA)),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isFulfilled
+                              ? const Color(0xFF2E7D32).withValues(alpha: 0.4)
+                              : (isDark ? Colors.white12 : Colors.black12),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Checkbox(
+                            value: isFulfilled,
+                            activeColor: const Color(0xFF2E7D32),
+                            onChanged: (val) => setModalState(() => isFulfilled = val ?? false),
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isFulfilled ? 'Penalty Fulfilled / Paid' : 'Penalty Pending',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isFulfilled ? const Color(0xFF2E7D32) : textC,
+                                  ),
+                                ),
+                                Text(
+                                  isFulfilled
+                                      ? 'Sacrifice/fast/fidyah was completed'
+                                      : 'Mark as completed once fast/feed/sacrifice is done',
+                                  style: GoogleFonts.inter(fontSize: 10.5, color: subC),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final title = titleCtrl.text.trim();
+                              if (title.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Please enter a mistake title.')),
+                                );
+                                return;
+                              }
+
+                              final item = LoggedMistake(
+                                id: existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                                mistakeId: selectedMistakeId,
+                                title: title,
+                                category: selectedCategory,
+                                penaltyType: selectedPenalty,
+                                date: incidentDate,
+                                note: noteCtrl.text.trim(),
+                                isFulfilled: isFulfilled,
+                                fulfilledDate: isFulfilled ? (existing?.fulfilledDate ?? DateTime.now()) : null,
+                                mode: mode,
+                                hajjYear: year,
+                              );
+
+                              Navigator.pop(ctx);
+                              await _saveLoggedMistake(item);
+
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      existing != null ? '✅ Mistake updated!' : '✅ Mistake logged & synced to cloud!',
+                                      style: GoogleFonts.inter(fontSize: 12.5),
+                                    ),
+                                    backgroundColor: AppColors.midTeal,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.navyBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text(
+                              existing != null ? 'Save Changes' : 'Save to Log',
+                              style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAddPastPilgrimageDialog() {
+    final isDark = _isDarkMode;
+    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textC = isDark ? Colors.white : AppColors.navyBlue;
+    final subC = isDark ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65);
+
+    String mode = 'Hajj';
+    String hajjType = 'Tamattu';
+    int year = DateTime.now().year;
+    DateTime completionDate = DateTime.now();
+    DateTime? startDate;
+    DateTime? endDate;
+    final noteCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.88,
+              ),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                14,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white24 : Colors.black12,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.midTeal.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.history_edu_rounded, color: AppColors.midTeal, size: 20),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Record Past Pilgrimage',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: textC,
+                                ),
+                              ),
+                              Text(
+                                'Add previous Hajj or Umrah journeys to your cloud archive',
+                                style: GoogleFonts.inter(fontSize: 11, color: subC),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : const Color(0xFFEAEAEA),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setModalState(() => mode = 'Hajj'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 9),
+                                decoration: BoxDecoration(
+                                  color: mode == 'Hajj' ? (isDark ? const Color(0xFFB8860B) : const Color(0xFFD4AF37)) : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '🕋 Hajj',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: mode == 'Hajj' ? Colors.white : (isDark ? Colors.white70 : AppColors.navyBlue),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setModalState(() => mode = 'Umrah'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 9),
+                                decoration: BoxDecoration(
+                                  color: mode == 'Umrah' ? AppColors.midTeal : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '✈️ Umrah',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: mode == 'Umrah' ? Colors.white : (isDark ? Colors.white70 : AppColors.navyBlue),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    if (mode == 'Hajj') ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Hajj Type', style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: textC)),
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: hajjType,
+                                      isExpanded: true,
+                                      dropdownColor: cardBg,
+                                      style: GoogleFonts.inter(fontSize: 12, color: textC),
+                                      items: ['Tamattu', 'Qiran', 'Ifrad']
+                                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                                          .toList(),
+                                      onChanged: (val) => setModalState(() => hajjType = val ?? hajjType),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Hajj Year', style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: textC)),
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<int>(
+                                      value: year,
+                                      isExpanded: true,
+                                      dropdownColor: cardBg,
+                                      style: GoogleFonts.inter(fontSize: 12, color: textC),
+                                      items: List.generate(20, (i) => DateTime.now().year - i)
+                                          .map((y) => DropdownMenuItem(value: y, child: Text(y.toString())))
+                                          .toList(),
+                                      onChanged: (val) => setModalState(() => year = val ?? year),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+
+                    Text('Completion Date', style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: textC)),
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: completionDate,
+                          firstDate: DateTime(1990),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          setModalState(() => completionDate = picked);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.event_available_rounded, size: 16, color: AppColors.midTeal),
+                            const SizedBox(width: 8),
+                            Text(
+                              DateFormat('dd MMMM, yyyy').format(completionDate),
+                              style: GoogleFonts.inter(fontSize: 12.5, color: textC, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    Text('Sacred Memories & Reflections', style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: textC)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: noteCtrl,
+                      maxLines: 3,
+                      style: GoogleFonts.inter(fontSize: 12.5, color: textC),
+                      decoration: InputDecoration(
+                        hintText: 'Record thoughts, supplications made, people you traveled with...',
+                        hintStyle: GoogleFonts.inter(fontSize: 12, color: subC),
+                        filled: true,
+                        fillColor: isDark ? Colors.white10 : const Color(0xFFF7F8FA),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
+                        ),
+                        contentPadding: const EdgeInsets.all(12),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final total = mode == 'Hajj' ? 12 : 5;
+                              final newRecord = CompletedPilgrimage(
+                                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                mode: mode,
+                                hajjType: mode == 'Hajj' ? '$hajjType ($year)' : '-',
+                                completionDate: completionDate,
+                                startDate: startDate,
+                                endDate: endDate,
+                                note: noteCtrl.text.trim(),
+                                completedRituals: total,
+                                totalRituals: total,
+                              );
+
+                              Navigator.pop(ctx);
+                              await _saveHistoryItem(newRecord);
+
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('🌟 $mode recorded to your journey history & cloud!'),
+                                    backgroundColor: const Color(0xFF2E7D32),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.navyBlue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('Save Pilgrimage', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showEditHistoryNoteDialog(CompletedPilgrimage item) {
+    final isDark = _isDarkMode;
+    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textC = isDark ? Colors.white : AppColors.navyBlue;
+    final noteCtrl = TextEditingController(text: item.note);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text('Edit Pilgrimage Reflections', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: textC)),
+        content: TextField(
+          controller: noteCtrl,
+          maxLines: 4,
+          style: GoogleFonts.inter(fontSize: 13, color: textC),
+          decoration: InputDecoration(
+            hintText: 'Add or update your sacred memories...',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final updated = CompletedPilgrimage(
+                id: item.id,
+                mode: item.mode,
+                hajjType: item.hajjType,
+                completionDate: item.completionDate,
+                startDate: item.startDate,
+                endDate: item.endDate,
+                note: noteCtrl.text.trim(),
+                completedRituals: item.completedRituals,
+                totalRituals: item.totalRituals,
+              );
+              await _saveHistoryItem(updated);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.navyBlue),
+            child: const Text('Save Note', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveBool(String key, bool value) async {
@@ -4260,21 +5279,33 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               margin: const EdgeInsets.only(bottom: 10),
               decoration: BoxDecoration(
-                color: AppColors.coralOrange.withValues(alpha: 0.10),
+                color: isDoneAll
+                    ? Colors.black.withValues(alpha: 0.22)
+                    : AppColors.coralOrange.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.coralOrange.withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: isDoneAll
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : AppColors.coralOrange.withValues(alpha: 0.4),
+                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.coralOrange),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 16,
+                    color: isDoneAll ? Colors.white : AppColors.coralOrange,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       hajjSeasonWarning,
                       style: GoogleFonts.inter(
                         fontSize: 10.5,
-                        color: isDark ? Colors.orange.shade200 : AppColors.coralOrange,
+                        color: isDoneAll
+                            ? Colors.white
+                            : (isDark ? Colors.orange.shade200 : AppColors.coralOrange),
                         height: 1.45,
                         fontWeight: FontWeight.w500,
                       ),
@@ -4558,10 +5589,13 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     final textC = isDark ? Colors.white : AppColors.navyBlue;
     final subC = isDark ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.65);
 
-    const categories = ['All', 'Ihram', 'Tawaf & Sa\'i', 'Arafat & Mina', 'Rami & Qurbani'];
+    const categories = ['All', 'Bookmarked', 'Ihram', 'Tawaf & Sa\'i', 'Arafat & Mina', 'Rami & Qurbani'];
 
     final filteredMistakes = _hajjMistakes.where((m) {
-      final matchesCategory = _mistakeCategoryFilter == 'All' || m.category == _mistakeCategoryFilter;
+      final matchesCategory = _mistakeCategoryFilter == 'All' ||
+          (_mistakeCategoryFilter == 'Bookmarked'
+              ? _bookmarkedMistakeIds.contains(m.id)
+              : m.category == _mistakeCategoryFilter);
       final q = _mistakeSearchQuery.toLowerCase();
       final matchesSearch = q.isEmpty ||
           m.title.toLowerCase().contains(q) ||
@@ -4667,7 +5701,10 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         ),
         const SizedBox(height: 14),
 
-        // 2. Interactive Penalty Glossary Banner
+        // 2. Personal Penalties & Mistakes Tracker
+        _buildMyLoggedMistakesTracker(cardBg, textC, subC, isDark),
+
+        // 3. Interactive Penalty Glossary Banner
         GestureDetector(
           onTap: _showPenaltyGlossaryModal,
           child: Container(
@@ -4716,7 +5753,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         ),
         const SizedBox(height: 14),
 
-        // 3. Search Field
+        // 4. Search Field
         TextField(
           onChanged: (val) => setState(() => _mistakeSearchQuery = val),
           style: GoogleFonts.inter(fontSize: 13, color: textC),
@@ -4753,12 +5790,13 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         ),
         const SizedBox(height: 12),
 
-        // 4. Category Filter Chips (Themed Pills)
+        // 5. Category Filter Chips (Themed Pills)
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: categories.map((cat) {
               final isSel = _mistakeCategoryFilter == cat;
+              final isBookmark = cat == 'Bookmarked';
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: GestureDetector(
@@ -4778,15 +5816,30 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                         width: isSel ? 1.4 : 1,
                       ),
                     ),
-                    child: Text(
-                      cat,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
-                        color: isSel
-                            ? (isDark ? AppColors.navyBlue : Colors.white)
-                            : (isDark ? Colors.white70 : AppColors.navyBlue),
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isBookmark) ...[
+                          Icon(
+                            Icons.bookmark_rounded,
+                            size: 13,
+                            color: isSel ? (isDark ? AppColors.navyBlue : Colors.white) : const Color(0xFFD4AF37),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        Text(
+                          isBookmark && _bookmarkedMistakeIds.isNotEmpty
+                              ? '$cat (${_bookmarkedMistakeIds.length})'
+                              : cat,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                            color: isSel
+                                ? (isDark ? AppColors.navyBlue : Colors.white)
+                                : (isDark ? Colors.white70 : AppColors.navyBlue),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -4796,7 +5849,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         ),
         const SizedBox(height: 16),
 
-        // 5. Mistakes Cards
+        // 6. Mistakes Cards
         if (filteredMistakes.isEmpty)
           Container(
             padding: const EdgeInsets.all(36),
@@ -4811,12 +5864,14 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                   Icon(Icons.search_off_rounded, size: 40, color: subC),
                   const SizedBox(height: 10),
                   Text(
-                    'No matching rulings found',
+                    _mistakeCategoryFilter == 'Bookmarked' ? 'No bookmarked rulings yet' : 'No matching rulings found',
                     style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: textC),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Try searching with another keyword or selecting "All".',
+                    _mistakeCategoryFilter == 'Bookmarked'
+                        ? 'Tap the bookmark icon on any ruling below to pin it here.'
+                        : 'Try searching with another keyword or selecting "All".',
                     style: GoogleFonts.inter(fontSize: 12, color: subC),
                     textAlign: TextAlign.center,
                   ),
@@ -4827,6 +5882,323 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         else
           ...filteredMistakes.map((m) => _buildMistakeCard(m, cardBg, textC, subC)),
       ],
+    );
+  }
+
+  Widget _buildMyLoggedMistakesTracker(Color cardBg, Color textC, Color subC, bool isDark) {
+    final total = _loggedMistakes.length;
+    final pending = _loggedMistakes.where((m) => !m.isFulfilled).length;
+    final fulfilled = _loggedMistakes.where((m) => m.isFulfilled).length;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: pending > 0
+              ? AppColors.coralOrange.withValues(alpha: isDark ? 0.35 : 0.25)
+              : (isDark ? Colors.white12 : AppColors.navyBlue.withValues(alpha: 0.10)),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 14, 10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: (pending > 0 ? AppColors.coralOrange : AppColors.midTeal).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    pending > 0 ? Icons.notification_important_rounded : Icons.task_alt_rounded,
+                    color: pending > 0 ? AppColors.coralOrange : AppColors.midTeal,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'My Penalty & Fidyah Tracker',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: textC,
+                        ),
+                      ),
+                      Text(
+                        'Track accidental violations and fulfillments',
+                        style: GoogleFonts.inter(fontSize: 10.5, color: subC),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _showLogMistakeDialog(),
+                  icon: const Icon(Icons.add_rounded, size: 15),
+                  label: Text('Log', style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.navyBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 3 Metric Pills
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFF7F8FA),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      children: [
+                        Text('$total', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: textC)),
+                        Text('Total Logged', style: GoogleFonts.inter(fontSize: 9.5, color: subC)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: pending > 0
+                          ? AppColors.coralOrange.withValues(alpha: 0.12)
+                          : (isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFF7F8FA)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          '$pending',
+                          style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: pending > 0 ? AppColors.coralOrange : textC,
+                          ),
+                        ),
+                        Text(
+                          'Pending',
+                          style: GoogleFonts.inter(
+                            fontSize: 9.5,
+                            fontWeight: pending > 0 ? FontWeight.bold : FontWeight.normal,
+                            color: pending > 0 ? AppColors.coralOrange : subC,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: fulfilled > 0
+                          ? const Color(0xFF2E7D32).withValues(alpha: 0.12)
+                          : (isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFF7F8FA)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          '$fulfilled',
+                          style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: fulfilled > 0 ? const Color(0xFF2E7D32) : textC,
+                          ),
+                        ),
+                        Text('Fulfilled', style: GoogleFonts.inter(fontSize: 9.5, color: fulfilled > 0 ? const Color(0xFF2E7D32) : subC)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // List of Logged Mistakes
+          if (_loggedMistakes.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 2, 14, 14),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.03) : const Color(0xFFFAFBFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF2E7D32)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'No violations logged. Tap "+ Log" or choose from the guide below if any mistake occurs during your journey.',
+                        style: GoogleFonts.inter(fontSize: 11, color: subC, height: 1.35),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
+              child: Column(
+                children: _loggedMistakes.map((item) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF7F8FA),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: item.isFulfilled
+                            ? const Color(0xFF2E7D32).withValues(alpha: 0.3)
+                            : AppColors.coralOrange.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Transform.scale(
+                          scale: 0.9,
+                          child: Checkbox(
+                            value: item.isFulfilled,
+                            activeColor: const Color(0xFF2E7D32),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            onChanged: (_) => _toggleMistakeFulfilled(item.id),
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item.title,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: textC,
+                                        decoration: item.isFulfilled ? TextDecoration.lineThrough : null,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: (item.isFulfilled ? const Color(0xFF2E7D32) : AppColors.coralOrange).withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(5),
+                                    ),
+                                    child: Text(
+                                      item.isFulfilled ? 'Fulfilled' : 'Pending',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: item.isFulfilled ? const Color(0xFF2E7D32) : AppColors.coralOrange,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Required: ${item.penaltyType}',
+                                style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w500, color: AppColors.midTeal),
+                              ),
+                              if (item.note.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  '"${item.note}"',
+                                  style: GoogleFonts.inter(fontSize: 10, fontStyle: FontStyle.italic, color: subC),
+                                ),
+                              ],
+                              const SizedBox(height: 3),
+                              Text(
+                                'Date: ${DateFormat('dd MMM, yyyy').format(item.date)} • ${item.category}',
+                                style: GoogleFonts.inter(fontSize: 9.5, color: subC),
+                              ),
+                            ],
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          icon: Icon(Icons.more_vert_rounded, size: 16, color: subC),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onSelected: (val) {
+                            if (val == 'edit') {
+                              _showLogMistakeDialog(existing: item);
+                            } else if (val == 'delete') {
+                              _deleteLoggedMistake(item.id);
+                            }
+                          },
+                          itemBuilder: (ctx) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_rounded, size: 15, color: AppColors.midTeal),
+                                  SizedBox(width: 8),
+                                  Text('Edit', style: TextStyle(fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_outline_rounded, size: 15, color: Colors.redAccent),
+                                  SizedBox(width: 8),
+                                  Text('Delete', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -4859,6 +6231,7 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     final isDark = _isDarkMode;
     final isWajib = m.severity.contains('Dam') || m.severity.contains('Wajib');
     final iconColor = isWajib ? AppColors.coralOrange : AppColors.midTeal;
+    final isBookmarked = _bookmarkedMistakeIds.contains(m.id);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -4866,7 +6239,10 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? Colors.white12 : AppColors.navyBlue.withValues(alpha: 0.10),
+          color: isBookmarked
+              ? const Color(0xFFD4AF37).withValues(alpha: 0.5)
+              : (isDark ? Colors.white12 : AppColors.navyBlue.withValues(alpha: 0.10)),
+          width: isBookmarked ? 1.4 : 1,
         ),
         boxShadow: [
           BoxShadow(
@@ -4933,6 +6309,15 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                 ),
               ],
             ),
+          ),
+          trailing: IconButton(
+            icon: Icon(
+              isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+              color: isBookmarked ? const Color(0xFFD4AF37) : subC,
+              size: 20,
+            ),
+            tooltip: isBookmarked ? 'Remove Bookmark' : 'Bookmark Ruling',
+            onPressed: () => _toggleBookmarkMistake(m.id),
           ),
           children: [
             Container(
@@ -5065,6 +6450,23 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // 6. Action Button: Log this Mistake
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showLogMistakeDialog(prefilledMistake: m),
+                icon: const Icon(Icons.add_task_rounded, size: 15),
+                label: Text('Log this Mistake / Penalty', style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.navyBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
           ],
@@ -5458,18 +6860,29 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'When you complete your Hajj or Umrah, click "Complete & Archive" to save your sacred memories and pilgrimage dates here.',
+                  'When you complete your Hajj or Umrah, click "Complete & Archive" to save your sacred memories and pilgrimage dates here, or manually record previous trips.',
                   style: GoogleFonts.inter(fontSize: 12.5, color: subtextColor, height: 1.5),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton.icon(
-                  onPressed: () => setState(() => _tab = 0),
-                  icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                  label: Text('Go to Current Planner', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                  onPressed: _showAddPastPilgrimageDialog,
+                  icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+                  label: Text('Record Past Pilgrimage', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.navyBlue,
                     foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _tab = 0),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                  label: Text('Go to Current Planner', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: textColor,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
@@ -5535,11 +6948,25 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
           ),
         ),
         const SizedBox(height: 18),
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text('Completed Pilgrimages',
-              style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text('Completed Pilgrimages',
+                  style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.bold, color: textColor)),
+            ),
+            TextButton.icon(
+              onPressed: _showAddPastPilgrimageDialog,
+              icon: const Icon(Icons.add_circle_outline_rounded, size: 15, color: AppColors.midTeal),
+              label: Text(
+                'Add Journey',
+                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+              ),
+            ),
+          ],
         ),
+        const SizedBox(height: 6),
         ..._history.map((item) {
           final isHajj = item.mode == 'Hajj';
           final badgeColor = isHajj ? const Color(0xFFD4AF37) : AppColors.midTeal;
@@ -5586,37 +7013,50 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
                         ),
                       ],
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.grey),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: cardBg,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                            title: Text('Delete this record?',
-                                style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: textColor)),
-                            content: Text('Are you sure you want to remove this ${item.mode} from history?',
-                                style: GoogleFonts.inter(fontSize: 12.5, color: subtextColor)),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey))),
-                              ElevatedButton(
-                                onPressed: () async {
-                                  Navigator.pop(ctx);
-                                  setState(() => _history.removeWhere((h) => h.id == item.id));
-                                  final prefs = await SharedPreferences.getInstance();
-                                  await prefs.setString('hajj_history', jsonEncode(_history.map((e) => e.toJson()).toList()));
-                                  await _updateFirestoreHajjUmrah();
-                                },
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                child: Text('Delete', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_note_rounded, size: 20, color: AppColors.midTeal),
+                          tooltip: 'Edit Memories & Note',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => _showEditHistoryNoteDialog(item),
+                        ),
+                        const SizedBox(width: 10),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.grey),
+                          tooltip: 'Delete Record',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                backgroundColor: cardBg,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                title: Text('Delete this record?',
+                                    style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: textColor)),
+                                content: Text('Are you sure you want to remove this ${item.mode} from history?',
+                                    style: GoogleFonts.inter(fontSize: 12.5, color: subtextColor)),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey))),
+                                  ElevatedButton(
+                                    onPressed: () async {
+                                      Navigator.pop(ctx);
+                                      setState(() => _history.removeWhere((h) => h.id == item.id));
+                                      final prefs = await SharedPreferences.getInstance();
+                                      await prefs.setString('hajj_history', jsonEncode(_history.map((e) => e.toJson()).toList()));
+                                      await _updateFirestoreHajjUmrah();
+                                    },
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                    child: Text('Delete', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        );
-                      },
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),

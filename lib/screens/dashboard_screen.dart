@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -133,7 +133,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Cached today's prayer DateTimes for alarm scheduling
   DateTime? _fajrTime, _sunriseTime, _dhuhrTime, _asrTime, _maghribTime, _ishaTime;
 
-
   // Stars configuration for dashboard background
   final List<_DashboardStarConfig> _stars = [
     _DashboardStarConfig(topFraction: 0.02, leftFraction: 0.08, size: 5, delayMs: 200),
@@ -151,7 +150,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _DashboardStarConfig(topFraction: 0.70, leftFraction: 0.65, size: 5, delayMs: 350),
     _DashboardStarConfig(topFraction: 0.78, leftFraction: 0.40, size: 4, delayMs: 550),
   ];
-
 
 Future<void> _loadUserProfile() async {
   debugPrint('🔥🔥🔥 LOAD USER PROFILE CALLED 🔥🔥🔥');
@@ -1218,7 +1216,6 @@ Future<void> _onPositionUpdate(Position position) async {
       ),
     );
   }
-
   // ===== ZAKAT NAVIGATION =====
   void _showZakatCalculatorSheet() {
     Navigator.of(context).push(
@@ -1346,7 +1343,6 @@ _buildAnimatedEntry(
 ),
 const SizedBox(height: 28),
 
-
 // Islamic Wealth Section
 _buildAnimatedEntry(
   delay: 0.3,
@@ -1378,7 +1374,6 @@ _buildAnimatedEntry(
       ),
     );
   }
-
   // ===== ANIMATED ENTRY WRAPPER =====
   Widget _buildAnimatedEntry({required double delay, required Widget child}) {
     final animation = CurvedAnimation(
@@ -1403,7 +1398,6 @@ _buildAnimatedEntry(
       },
     );
   }
-
   // ===== GREETING HEADER =====
   Widget _buildGreetingHeader() {
     return Padding(
@@ -1516,7 +1510,6 @@ _buildAnimatedEntry(
       ),
     );
   }
-
   // ===== NEXT PRAYER CARD (static — no float, but animated decoration) =====
   // Returns the gradient for the Next Prayer Card based on the current prayer time
   LinearGradient _getPrayerCardGradient() {
