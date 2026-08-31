@@ -1,4 +1,4 @@
-﻿import 'package:intl/intl.dart' hide TextDirection;
+import 'package:intl/intl.dart' hide TextDirection;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -4260,21 +4260,33 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               margin: const EdgeInsets.only(bottom: 10),
               decoration: BoxDecoration(
-                color: AppColors.coralOrange.withValues(alpha: 0.10),
+                color: isDoneAll
+                    ? Colors.black.withValues(alpha: 0.22)
+                    : AppColors.coralOrange.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.coralOrange.withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: isDoneAll
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : AppColors.coralOrange.withValues(alpha: 0.4),
+                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.coralOrange),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 16,
+                    color: isDoneAll ? Colors.white : AppColors.coralOrange,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       hajjSeasonWarning,
                       style: GoogleFonts.inter(
                         fontSize: 10.5,
-                        color: isDark ? Colors.orange.shade200 : AppColors.coralOrange,
+                        color: isDoneAll
+                            ? Colors.white
+                            : (isDark ? Colors.orange.shade200 : AppColors.coralOrange),
                         height: 1.45,
                         fontWeight: FontWeight.w500,
                       ),
