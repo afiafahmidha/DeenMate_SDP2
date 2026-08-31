@@ -1189,7 +1189,6 @@ class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectio
       ),
     );
   }
-
   // ── VECTOR CARD: renders the actual animated vector art ──
   Widget _buildVectorCard({
     required bool isSelected,
@@ -1317,7 +1316,6 @@ class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectio
     );
   }
 }
-
 // ── Actual video player preview widget ──
 class _ActualVideoPreview extends StatefulWidget {
   final String videoAsset;
