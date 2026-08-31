@@ -586,7 +586,6 @@ class PrayerTimeEntry {
   final DateTime time;
   PrayerTimeEntry(this.name, this.time);
 }
-
 // ===== INTERACTIVE CALENDAR TAB WIDGET =====
 class CalendarTab extends StatefulWidget {
   final VoidCallback onOpenZakatCalculator;
@@ -664,7 +663,6 @@ class _CalendarTabState extends State<CalendarTab> {
       debugPrint('Error saving calendar activity to Firestore: $e');
     }
   }
-
   // Sparkling star config for background
   final List<_CalendarStarConfig> _stars = [
     _CalendarStarConfig(topFraction: 0.07, leftFraction: 0.12, size: 6, delayMs: 100),
