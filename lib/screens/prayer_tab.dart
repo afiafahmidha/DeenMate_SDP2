@@ -8,7 +8,6 @@ import 'package:video_player/video_player.dart';
 import '../widgets/auth_header.dart'; // AppColors
 import '../services/theme_service.dart';
 
-/// ─────────────────────────────────────────────────────────────────────
 /// Dark-mode aware color helpers for this tab.
 ///
 /// Every card here was originally styled as a fixed light "frosted
@@ -56,12 +55,10 @@ Color _cardBorder(BuildContext context) {
 
 /// The Prayer tab: full-width looping video hero (mosque landscape), salat
 /// tracker, qaza counter and prayer time list.
-///
 /// Salat completion, qaza counts, and alarms are still owned by
 /// DashboardScreen and passed in (its real-time timer needs them too, to
 /// fire the in-app alarm overlay and auto-log qaza regardless of which tab
 /// is active).
-///
 /// Which prayer's *scene* is currently shown (hero video + highlighted
 /// list card), however, is owned locally by this widget. It always starts
 /// on whichever prayer window we're actually in right now, and only
