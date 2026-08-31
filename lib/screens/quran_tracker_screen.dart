@@ -3701,10 +3701,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                                               child: Theme(
                                                 data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                                                 child: ExpansionTile(
-                                                  tilePadding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
-                                                  trailing: const SizedBox.shrink(), // Remove top-right trailing to let Add button be flush at the very right
+                                                  tilePadding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+                                                  trailing: const SizedBox.shrink(),
                                                   title: Row(
-                                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
                                                     children: [
                                                       Expanded(
                                                         child: Column(
@@ -3716,7 +3716,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                                                               overflow: TextOverflow.ellipsis,
                                                               style: GoogleFonts.poppins(
                                                                 fontWeight: FontWeight.w600,
-                                                                fontSize: 11.5, // Slightly smaller font so full names fit beautifully
+                                                                fontSize: 12,
                                                                 color: fieldColor,
                                                                 height: 1.3,
                                                               ),
@@ -3735,90 +3735,91 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                                                                 style: GoogleFonts.inter(fontSize: 9.0, fontWeight: FontWeight.w600, color: AppColors.midTeal),
                                                               ),
                                                             ),
+                                                            const SizedBox(height: 4),
+                                                            Text(
+                                                              dua.benefitEnglish,
+                                                              maxLines: 2,
+                                                              overflow: TextOverflow.ellipsis,
+                                                              style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder, height: 1.35),
+                                                            ),
                                                           ],
                                                         ),
                                                       ),
-                                                      const SizedBox(width: 10),
-                                                      // Add button placed cleanly on the very right edge
-                                                      isAlreadyAdded
-                                                          ? Container(
-                                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                              decoration: BoxDecoration(
-                                                                color: Colors.green.withValues(alpha: 0.15),
-                                                                borderRadius: BorderRadius.circular(8),
-                                                              ),
-                                                              child: Row(
-                                                                mainAxisSize: MainAxisSize.min,
-                                                                children: [
-                                                                  const Icon(Icons.check_circle_rounded, color: Colors.green, size: 13),
-                                                                  const SizedBox(width: 4),
-                                                                  Text(
-                                                                    'Added',
-                                                                    style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w600, color: Colors.green),
+                                                      const SizedBox(width: 8),
+                                                      Column(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                                        children: [
+                                                          isAlreadyAdded
+                                                              ? Container(
+                                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                                                  decoration: BoxDecoration(
+                                                                    color: Colors.green.withValues(alpha: 0.15),
+                                                                    borderRadius: BorderRadius.circular(8),
                                                                   ),
-                                                                ],
-                                                              ),
-                                                            )
-                                                          : SizedBox(
-                                                              height: 32,
-                                                              child: ElevatedButton.icon(
-                                                                onPressed: () {
-                                                                  setState(() {
-                                                                    _wazifaSupplications[category]?.add(dua.toCustomWazifa());
-                                                                    _saveState();
-                                                                  });
-                                                                  Navigator.pop(modalCtx);
-                                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                                    SnackBar(
-                                                                      backgroundColor: AppColors.navyBlue,
-                                                                      behavior: SnackBarBehavior.floating,
-                                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                                      content: Row(
-                                                                        children: [
-                                                                          const Icon(Icons.check_circle_rounded, color: AppColors.midTeal, size: 18),
-                                                                          const SizedBox(width: 8),
-                                                                          Expanded(
-                                                                            child: Text(
-                                                                              '"${dua.title}" added to your $category routine!',
-                                                                              style: GoogleFonts.poppins(fontSize: 11.5, color: Colors.white),
-                                                                            ),
-                                                                          ),
-                                                                        ],
+                                                                  child: Row(
+                                                                    mainAxisSize: MainAxisSize.min,
+                                                                    children: [
+                                                                      const Icon(Icons.check_circle_rounded, color: Colors.green, size: 12),
+                                                                      const SizedBox(width: 3),
+                                                                      Text(
+                                                                        'Added',
+                                                                        style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.green),
                                                                       ),
+                                                                    ],
+                                                                  ),
+                                                                )
+                                                              : SizedBox(
+                                                                  height: 30,
+                                                                  child: ElevatedButton.icon(
+                                                                    onPressed: () {
+                                                                      setState(() {
+                                                                        _wazifaSupplications.putIfAbsent(category, () => []).add(dua.toCustomWazifa());
+                                                                        _saveState();
+                                                                      });
+                                                                      Navigator.pop(modalCtx);
+                                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                                        SnackBar(
+                                                                          backgroundColor: AppColors.navyBlue,
+                                                                          behavior: SnackBarBehavior.floating,
+                                                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                                          content: Row(
+                                                                            children: [
+                                                                              const Icon(Icons.check_circle_rounded, color: AppColors.midTeal, size: 18),
+                                                                              const SizedBox(width: 8),
+                                                                              Expanded(
+                                                                                child: Text(
+                                                                                  '"${dua.title}" added to your $category routine!',
+                                                                                  style: GoogleFonts.poppins(fontSize: 11.5, color: Colors.white),
+                                                                                ),
+                                                                              ),
+                                                                            ],
+                                                                          ),
+                                                                        ),
+                                                                      );
+                                                                    },
+                                                                    style: ElevatedButton.styleFrom(
+                                                                      backgroundColor: AppColors.midTeal,
+                                                                      foregroundColor: Colors.white,
+                                                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                                      elevation: 0,
                                                                     ),
-                                                                  );
-                                                                },
-                                                                style: ElevatedButton.styleFrom(
-                                                                  backgroundColor: AppColors.midTeal,
-                                                                  foregroundColor: Colors.white,
-                                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                                                  elevation: 0,
+                                                                    icon: const Icon(Icons.add_rounded, size: 14, color: Colors.white),
+                                                                    label: Text(
+                                                                      'Add',
+                                                                      style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w600, color: Colors.white),
+                                                                    ),
+                                                                  ),
                                                                 ),
-                                                                icon: const Icon(Icons.add_rounded, size: 14, color: Colors.white),
-                                                                label: Text(
-                                                                  'Add',
-                                                                  style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w600, color: Colors.white),
-                                                                ),
-                                                              ),
-                                                            ),
-                                                    ],
-                                                  ),
-                                                  // Dropdown chevron indicator placed lower down with description
-                                                  subtitle: Padding(
-                                                    padding: const EdgeInsets.only(top: 6),
-                                                    child: Row(
-                                                      children: [
-                                                        Expanded(
-                                                          child: Text(
-                                                            dua.benefitEnglish,
-                                                            style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder, height: 1.35),
+                                                          const SizedBox(height: 6),
+                                                          const Padding(
+                                                            padding: EdgeInsets.only(right: 4),
+                                                            child: Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.placeholder),
                                                           ),
-                                                        ),
-                                                        const SizedBox(width: 6),
-                                                        Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AppColors.placeholder.withValues(alpha: 0.6)),
-                                                      ],
-                                                    ),
+                                                        ],
+                                                      ),
+                                                    ],
                                                   ),
                                                   children: [
                                                    Padding(
@@ -3952,18 +3953,42 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                                   onPressed: () {
                                     final title = titleController.text.trim();
                                     if (title.isNotEmpty) {
+                                      final newWazifa = CustomWazifa(
+                                        title: title,
+                                        benefitEnglish: rulesController.text.trim().isNotEmpty
+                                            ? rulesController.text.trim()
+                                            : (translationController.text.trim().isNotEmpty
+                                                ? translationController.text.trim()
+                                                : 'Custom User Added Supplication'),
+                                        arabicText: arabicController.text.trim().isNotEmpty ? arabicController.text.trim() : null,
+                                        englishPronunciation: pronunciationController.text.trim().isNotEmpty ? pronunciationController.text.trim() : null,
+                                        englishTranslation: translationController.text.trim().isNotEmpty ? translationController.text.trim() : null,
+                                        readingRules: rulesController.text.trim().isNotEmpty ? rulesController.text.trim() : null,
+                                      );
                                       setState(() {
-                                        final newWazifa = CustomWazifa(
-                                          title: title,
-                                          arabicText: arabicController.text.trim().isNotEmpty ? arabicController.text.trim() : null,
-                                          englishPronunciation: pronunciationController.text.trim().isNotEmpty ? pronunciationController.text.trim() : null,
-                                          englishTranslation: translationController.text.trim().isNotEmpty ? translationController.text.trim() : null,
-                                          readingRules: rulesController.text.trim().isNotEmpty ? rulesController.text.trim() : null,
-                                        );
-                                        _wazifaSupplications[category]?.add(newWazifa);
+                                        _wazifaSupplications.putIfAbsent(category, () => []).add(newWazifa);
                                         _saveState();
                                       });
                                       Navigator.pop(modalCtx);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          backgroundColor: AppColors.navyBlue,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          content: Row(
+                                            children: [
+                                              const Icon(Icons.check_circle_rounded, color: AppColors.midTeal, size: 18),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  '"$title" added to your $category routine!',
+                                                  style: GoogleFonts.poppins(fontSize: 11.5, color: Colors.white),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
                                     }
                                   },
                                   style: ElevatedButton.styleFrom(
