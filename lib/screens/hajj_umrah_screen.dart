@@ -1,4 +1,4 @@
-import 'package:intl/intl.dart' hide TextDirection;
+﻿import 'package:intl/intl.dart' hide TextDirection;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -364,7 +364,7 @@ class HajjUmrahPlannerScreen extends StatefulWidget {
 class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     with TickerProviderStateMixin {
   int _tab = 0;
-  static const _tabLabels = ['Rituals', 'Packing', 'Documents', 'Duas', 'Mistakes', 'History'];
+  static const _tabLabels = ['Rituals', 'Packing', 'Document', 'Duas', 'Mistakes', 'History'];
   static const _tabIcons = [
     Icons.auto_awesome_rounded,
     Icons.local_offer_rounded,
