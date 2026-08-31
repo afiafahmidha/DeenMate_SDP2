@@ -242,7 +242,6 @@ class FaraidEngine {
         gfResiduary = true;
       }
     }
-
     // ---------- 3. MOTHER & GRANDMOTHERS ----------
     if (mother) {
       final oneSixth = hasDesc || sibTotal >= 2;
@@ -269,7 +268,6 @@ class FaraidEngine {
             bothGm ? '1/6 shared with paternal grandmother' : 'Fixed 1/6');
       }
     }
-
     // ---------- 4. MATERNAL SIBLINGS ----------
     if (ms > 0) {
       if (hasDesc || father || pgf) {
@@ -287,7 +285,6 @@ class FaraidEngine {
                 : 'Fixed 1/3 shared equally — male & female alike');
       }
     }
-
     // ---------- 5. DAUGHTERS / GRANDCHILDREN ----------
     if (sons == 0 && daughters > 0) {
       add('daughter', plural(daughters, 'Daughter', 'Daughters'),
@@ -357,7 +354,6 @@ class FaraidEngine {
             ps == 1 ? 'Fixed 1/2 (no full siblings)' : 'Fixed 2/3 shared');
       }
     }
-
     // ---------- 7. RESIDUE (ASABA CHAIN) ----------
     double remainder = math.max(0.0, 1.0 - used());
     bool claimed = false;
@@ -572,9 +568,8 @@ class FaraidEngine {
   }
 }
 
-// ============================================================
 // FAMILY TREE LAYOUT ENGINE
-// ============================================================
+
 class TreeLayoutResult {
   final double width;
   final double height;
@@ -898,9 +893,9 @@ class FamilyTreeLayout {
   }
 }
 
-// ============================================================
+
 // MAIN SCREEN
-// ============================================================
+
 class InheritanceScreen extends StatefulWidget {
   const InheritanceScreen({super.key});
 
