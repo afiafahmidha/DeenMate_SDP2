@@ -1343,7 +1343,6 @@ _buildAnimatedEntry(
 ),
 const SizedBox(height: 28),
 
-
 // Islamic Wealth Section
 _buildAnimatedEntry(
   delay: 0.3,
@@ -1375,7 +1374,6 @@ _buildAnimatedEntry(
       ),
     );
   }
-
   // ===== ANIMATED ENTRY WRAPPER =====
   Widget _buildAnimatedEntry({required double delay, required Widget child}) {
     final animation = CurvedAnimation(
@@ -1400,7 +1398,6 @@ _buildAnimatedEntry(
       },
     );
   }
-
   // ===== GREETING HEADER =====
   Widget _buildGreetingHeader() {
     return Padding(
@@ -1513,7 +1510,6 @@ _buildAnimatedEntry(
       ),
     );
   }
-
   // ===== NEXT PRAYER CARD (static — no float, but animated decoration) =====
   // Returns the gradient for the Next Prayer Card based on the current prayer time
   LinearGradient _getPrayerCardGradient() {
