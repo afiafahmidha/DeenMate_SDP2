@@ -1291,7 +1291,6 @@ body: SafeArea(
       ],
     );
   }
-
   // TAB 3: STATS & HISTORY
 
   Widget _buildStatsHistoryTab() {
@@ -1450,8 +1449,6 @@ body: SafeArea(
     }
     return result.reversed.toList();
   }
-
-  
   // TAB 4: REMINDERS & ACHIEVEMENTS
   
   Widget _buildRemindersAchievementsTab() {
@@ -1604,7 +1601,6 @@ body: SafeArea(
     final lifetime = prefs.getInt('dhikr_lifetime_total') ?? 0;
     return {'lifetime': lifetime, 'streak': _currentStreak};
   }
-
   // ===== DETAIL POPUPS (small card, blurred backdrop) =====
   void _showTodayDetails() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1774,7 +1770,6 @@ body: SafeArea(
     );
   }
 }
-
 // ===== ADHKAR DETAIL PAGE =====
 class _AdhkarDetailPage extends StatelessWidget {
   final _AdhkarItem item;
