@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -1067,6 +1068,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   };
 
   // Settings state
+  // Real-time Cloud Sync Subscription
+  StreamSubscription<DocumentSnapshot>? _cloudSyncSubscription;
+  bool _isSyncingWithCloud = false;
+
   // Quran Audio Tilawat Player State
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlayingAudio = false;
@@ -1316,10 +1321,235 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       }
     });
     _loadState();
+    _initCloudSync();
+  }
+
+  void _initCloudSync() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    _cloudSyncSubscription?.cancel();
+    _cloudSyncSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('quranTracker')
+        .doc('state')
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists || snapshot.data() == null) {
+        // Cloud document doesn't exist yet, seed it with current local state
+        _pushStateToCloud();
+        return;
+      }
+
+      if (_isSyncingWithCloud) return; // Prevent loop during local save
+
+      final data = snapshot.data()!;
+      _applyCloudState(data);
+    }, onError: (e) {
+      debugPrint('Quran Tracker Cloud Sync listener error: $e');
+    });
+  }
+
+  void _applyCloudState(Map<String, dynamic> data) async {
+    if (!mounted) return;
+
+    setState(() {
+      _currentStreak = (data['streak'] as num?)?.toInt() ?? _currentStreak;
+      _longestStreak = (data['longestStreak'] as num?)?.toInt() ?? _longestStreak;
+      _completedAyahsToday = (data['completedAyahsToday'] as num?)?.toInt() ?? _completedAyahsToday;
+      _targetDailyAyahs = (data['targetDailyAyahs'] as num?)?.toInt() ?? _targetDailyAyahs;
+      _khatmTotalJuzCompleted = (data['khatmTotalJuzCompleted'] as num?)?.toInt() ?? _khatmTotalJuzCompleted;
+
+      _arabicFont = data['arabicFont']?.toString() ?? _arabicFont;
+      _selectedReciter = data['selectedReciter']?.toString() ?? _selectedReciter;
+      _showBanglaPronunciation = data['showBanglaPronunciation'] as bool? ?? _showBanglaPronunciation;
+      _showEnglishPronunciation = data['showEnglishPronunciation'] as bool? ?? _showEnglishPronunciation;
+      _showBanglaTranslation = data['showBanglaTranslation'] as bool? ?? _showBanglaTranslation;
+      _showEnglishTranslation = data['showEnglishTranslation'] as bool? ?? _showEnglishTranslation;
+      _showBanglaTafsir = data['showBanglaTafsir'] as bool? ?? _showBanglaTafsir;
+      _showEnglishTafsir = data['showEnglishTafsir'] as bool? ?? _showEnglishTafsir;
+
+      if (data['arabicFontSize'] != null) {
+        _arabicFontSize = (data['arabicFontSize'] as num).toDouble();
+      }
+
+      _continueSurahId = (data['continueSurahId'] as num?)?.toInt() ?? _continueSurahId;
+      _continuePage = (data['continuePage'] as num?)?.toInt() ?? _continuePage;
+      _continueAyah = (data['continueAyah'] as num?)?.toInt() ?? _continueAyah;
+
+      if (data['readAyahsToday'] is List) {
+        _readAyahsToday = (data['readAyahsToday'] as List).map((e) => e.toString()).toSet();
+      }
+      if (data['readAyahsAllTime'] is List) {
+        _readAyahsAllTime = (data['readAyahsAllTime'] as List).map((e) => e.toString()).toSet();
+      }
+
+      if (data['wazifaSupplications'] is Map) {
+        final suppMap = data['wazifaSupplications'] as Map;
+        suppMap.forEach((catKey, val) {
+          final cat = catKey.toString();
+          if (val is List) {
+            _wazifaSupplications[cat] = val.map((e) {
+              if (e is Map) {
+                return CustomWazifa.fromJson(Map<String, dynamic>.from(e));
+              } else {
+                return CustomWazifa(title: e.toString());
+              }
+            }).toList();
+          }
+        });
+      }
+
+      if (data['completedWazifas'] is Map) {
+        final cMap = data['completedWazifas'] as Map;
+        cMap.forEach((k, v) {
+          if (v is bool) _completedWazifas[k.toString()] = v;
+        });
+      }
+
+      if (data['completedHadithWazifas'] is Map) {
+        final hMap = data['completedHadithWazifas'] as Map;
+        hMap.forEach((k, v) {
+          if (v is bool) _completedHadithWazifas[k.toString()] = v;
+        });
+      }
+
+      if (data['bookmarks'] is List) {
+        _bookmarks.clear();
+        for (final item in data['bookmarks']) {
+          if (item is Map) {
+            _bookmarks.add(Map<String, String>.from(
+              item.map((k, v) => MapEntry(k.toString(), v.toString())),
+            ));
+          }
+        }
+      }
+
+      if (data['reflections'] is List) {
+        _reflections.clear();
+        for (final item in data['reflections']) {
+          if (item is Map) {
+            _reflections.add(Map<String, String>.from(
+              item.map((k, v) => MapEntry(k.toString(), v.toString())),
+            ));
+          }
+        }
+      }
+
+      if (data['memorizedSurahIds'] is List) {
+        _memorizedSurahIds = (data['memorizedSurahIds'] as List)
+            .map((e) => (e as num).toInt())
+            .toSet();
+      }
+
+      if (data['weeklyAyahsHistory'] is Map) {
+        final wMap = data['weeklyAyahsHistory'] as Map;
+        wMap.forEach((k, v) {
+          if (v is num) _weeklyAyahsHistory[k.toString()] = v.toInt();
+        });
+      }
+    });
+
+    // Also update SharedPreferences so local cache stays fresh
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('quran_tracker_streak', _currentStreak);
+      await prefs.setInt('quran_longest_streak', _longestStreak);
+      await prefs.setInt('quran_completed_ayahs_today', _completedAyahsToday);
+      await prefs.setInt('quran_target_daily_ayahs', _targetDailyAyahs);
+      await prefs.setInt('quran_khatm_juz_completed', _khatmTotalJuzCompleted);
+      await prefs.setBool('is_dark_mode', _isDarkMode);
+      await prefs.setString('quran_arabic_font', _arabicFont);
+      await prefs.setString('quran_selected_reciter', _selectedReciter);
+      await prefs.setBool('quran_show_bangla_pronunciation', _showBanglaPronunciation);
+      await prefs.setBool('quran_show_english_pronunciation', _showEnglishPronunciation);
+      await prefs.setBool('quran_show_bangla_translation', _showBanglaTranslation);
+      await prefs.setBool('quran_show_english_translation', _showEnglishTranslation);
+      await prefs.setBool('quran_show_bangla_tafsir', _showBanglaTafsir);
+      await prefs.setBool('quran_show_english_tafsir', _showEnglishTafsir);
+      await prefs.setDouble('quran_settings_font_size', _arabicFontSize);
+      await prefs.setInt('quran_continue_surah', _continueSurahId);
+      await prefs.setInt('quran_continue_page', _continuePage);
+      await prefs.setInt('quran_continue_ayah', _continueAyah);
+      await prefs.setString('quran_read_ayahs_today', jsonEncode(_readAyahsToday.toList()));
+      await prefs.setString('quran_read_ayahs_all_time', jsonEncode(_readAyahsAllTime.toList()));
+
+      for (final cat in _wazifaSupplications.keys) {
+        await prefs.setString(
+          'quran_wazifa_supps_$cat',
+          jsonEncode(_wazifaSupplications[cat]?.map((e) => e.toJson()).toList()),
+        );
+      }
+      await prefs.setString('quran_wazifa_checks', jsonEncode(_completedWazifas));
+      await prefs.setString('quran_hadith_wazifa_checks', jsonEncode(_completedHadithWazifas));
+      await prefs.setString('quran_bookmarks_json', jsonEncode(_bookmarks));
+      await prefs.setString('quran_reflections_json', jsonEncode(_reflections));
+      await prefs.setString('quran_hifz_memorized_ids', jsonEncode(_memorizedSurahIds.toList()));
+      await prefs.setString('quran_weekly_ayahs_history', jsonEncode(_weeklyAyahsHistory));
+    } catch (e) {
+      debugPrint('Error updating SharedPreferences from cloud: $e');
+    }
+  }
+
+  Future<void> _pushStateToCloud() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    _isSyncingWithCloud = true;
+    try {
+      final Map<String, dynamic> suppMap = {};
+      for (final cat in _wazifaSupplications.keys) {
+        suppMap[cat] = _wazifaSupplications[cat]?.map((e) => e.toJson()).toList() ?? [];
+      }
+
+      final Map<String, dynamic> cloudData = {
+        'streak': _currentStreak,
+        'longestStreak': _longestStreak,
+        'completedAyahsToday': _completedAyahsToday,
+        'targetDailyAyahs': _targetDailyAyahs,
+        'khatmTotalJuzCompleted': _khatmTotalJuzCompleted,
+        'arabicFont': _arabicFont,
+        'selectedReciter': _selectedReciter,
+        'showBanglaPronunciation': _showBanglaPronunciation,
+        'showEnglishPronunciation': _showEnglishPronunciation,
+        'showBanglaTranslation': _showBanglaTranslation,
+        'showEnglishTranslation': _showEnglishTranslation,
+        'showBanglaTafsir': _showBanglaTafsir,
+        'showEnglishTafsir': _showEnglishTafsir,
+        'arabicFontSize': _arabicFontSize,
+        'continueSurahId': _continueSurahId,
+        'continuePage': _continuePage,
+        'continueAyah': _continueAyah,
+        'readAyahsToday': _readAyahsToday.toList(),
+        'readAyahsAllTime': _readAyahsAllTime.toList(),
+        'lastSavedDate': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+        'wazifaSupplications': suppMap,
+        'completedWazifas': _completedWazifas,
+        'completedHadithWazifas': _completedHadithWazifas,
+        'bookmarks': _bookmarks,
+        'reflections': _reflections,
+        'memorizedSurahIds': _memorizedSurahIds.toList(),
+        'weeklyAyahsHistory': _weeklyAyahsHistory,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('quranTracker')
+          .doc('state')
+          .set(cloudData, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error pushing Quran Tracker state to Firestore: $e');
+    } finally {
+      _isSyncingWithCloud = false;
+    }
   }
 
   @override
   void dispose() {
+    _cloudSyncSubscription?.cancel();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -1757,6 +1987,9 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     final todayShort = DateFormat('E').format(DateTime.now());
     _weeklyAyahsHistory[todayShort] = _completedAyahsToday;
     await prefs.setString('quran_weekly_ayahs_history', jsonEncode(_weeklyAyahsHistory));
+
+    // Push full state to Cloud Firestore for cross-device sync
+    _pushStateToCloud();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -4874,131 +5107,140 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Quran Reciter (Tilawat) Selection (Right-aligned)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Quran Reciter',
-                    style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 8),
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedReciter,
-                      dropdownColor: cardBg,
-                      isDense: true,
-                      alignment: AlignmentDirectional.centerEnd,
-                      selectedItemBuilder: (context) {
-                        return _reciterList.map((r) {
-                          return Align(
-                            alignment: Alignment.centerRight,
+              // Quran Reciter (Tilawat) Selection (Uniform 48px height)
+              SizedBox(
+                height: 48,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Quran Reciter',
+                      style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 8),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedReciter,
+                        dropdownColor: cardBg,
+                        isDense: true,
+                        alignment: AlignmentDirectional.centerEnd,
+                        selectedItemBuilder: (context) {
+                          return _reciterList.map((r) {
+                            return Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                r['name']!,
+                                textAlign: TextAlign.right,
+                                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                              ),
+                            );
+                          }).toList();
+                        },
+                        items: _reciterList.map((r) {
+                          return DropdownMenuItem<String>(
+                            value: r['id']!,
+                            alignment: AlignmentDirectional.centerEnd,
                             child: Text(
                               r['name']!,
                               textAlign: TextAlign.right,
                               style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
                             ),
                           );
-                        }).toList();
-                      },
-                      items: _reciterList.map((r) {
-                        return DropdownMenuItem<String>(
-                          value: r['id']!,
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: Text(
-                            r['name']!,
-                            textAlign: TextAlign.right,
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedReciter = val);
-                          _saveState();
-                        }
-                      },
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _selectedReciter = val);
+                            _saveState();
+                          }
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const Divider(height: 16),
 
-              // Arabic Font Selection (Right-aligned)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Arabic Quran Font',
-                    style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 8),
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _arabicFont,
-                      dropdownColor: cardBg,
-                      isDense: true,
-                      alignment: AlignmentDirectional.centerEnd,
-                      selectedItemBuilder: (context) {
-                        return arabicFonts.map((f) {
-                          return Align(
-                            alignment: Alignment.centerRight,
+              // Arabic Font Selection (Uniform 48px height)
+              SizedBox(
+                height: 48,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Arabic Quran Font',
+                      style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 8),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _arabicFont,
+                        dropdownColor: cardBg,
+                        isDense: true,
+                        alignment: AlignmentDirectional.centerEnd,
+                        selectedItemBuilder: (context) {
+                          return arabicFonts.map((f) {
+                            return Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                f['label']!,
+                                textAlign: TextAlign.right,
+                                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                              ),
+                            );
+                          }).toList();
+                        },
+                        items: arabicFonts.map((f) {
+                          return DropdownMenuItem<String>(
+                            value: f['name']!,
+                            alignment: AlignmentDirectional.centerEnd,
                             child: Text(
                               f['label']!,
                               textAlign: TextAlign.right,
                               style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
                             ),
                           );
-                        }).toList();
-                      },
-                      items: arabicFonts.map((f) {
-                        return DropdownMenuItem<String>(
-                          value: f['name']!,
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: Text(
-                            f['label']!,
-                            textAlign: TextAlign.right,
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _arabicFont = val);
-                          _saveState();
-                        }
-                      },
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _arabicFont = val);
+                            _saveState();
+                          }
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const Divider(height: 16),
 
-              // Arabic Font Size
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Arabic Font Size', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: () {
-                          setState(() => _arabicFontSize = (_arabicFontSize - 2).clamp(16.0, 36.0));
-                          _saveState();
-                        },
-                      ),
-                      Text('${_arabicFontSize.toInt()}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        onPressed: () {
-                          setState(() => _arabicFontSize = (_arabicFontSize + 2).clamp(16.0, 36.0));
-                          _saveState();
-                        },
-                      ),
-                    ],
-                  ),
-                ],
+              // Arabic Font Size (Uniform 48px height)
+              SizedBox(
+                height: 48,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Arabic Font Size', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: () {
+                            setState(() => _arabicFontSize = (_arabicFontSize - 2).clamp(16.0, 36.0));
+                            _saveState();
+                          },
+                        ),
+                        Text('${_arabicFontSize.toInt()}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          onPressed: () {
+                            setState(() => _arabicFontSize = (_arabicFontSize + 2).clamp(16.0, 36.0));
+                            _saveState();
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
               const Divider(height: 16),
 
