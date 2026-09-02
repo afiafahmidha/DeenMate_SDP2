@@ -1361,16 +1361,19 @@ class _CalendarTabState extends State<CalendarTab> {
   }
 
   Widget _buildCalendarGrid(int firstDayOfWeek, int daysCount) {
+    final totalCells = firstDayOfWeek + daysCount;
+    final gridItemCount = (totalCells / 7).ceil() * 7;
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 7,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 0.82,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        childAspectRatio: 0.72,
       ),
-      itemCount: 42,
+      itemCount: gridItemCount,
       itemBuilder: (context, index) {
         final int dayNumber = index - firstDayOfWeek + 1;
         if (dayNumber <= 0 || dayNumber > daysCount) {
@@ -1384,33 +1387,51 @@ class _CalendarTabState extends State<CalendarTab> {
         final now = DateTime.now();
         final isToday =
             cellDate.year == now.year && cellDate.month == now.month && cellDate.day == now.day;
-final event = CalendarDatabase.getEvent(cellDate, cellHijri);
-final hasEvent = event != null;
-final isWhiteDay = _isWhiteDay(cellHijri);
-final isSunnahFast = _isMondayOrThursday(cellDate);
-final isFasting = isSunnahFast || isWhiteDay;
+        final event = CalendarDatabase.getEvent(cellDate, cellHijri);
+        final hasEvent = event != null;
+        final isWhiteDay = _isWhiteDay(cellHijri);
+        final isSunnahFast = _isMondayOrThursday(cellDate);
+        final isFasting = isSunnahFast || isWhiteDay;
 
-Color cellBgColor = Colors.transparent;
-Border? cellBorder;
+        Color cellBgColor = Colors.transparent;
+        Border? cellBorder;
 
-if (isSelected) {
-  cellBgColor = widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue;
-} else {
-  if (hasEvent) {
-    cellBgColor = AppColors.coralOrange.withValues(alpha: 0.15);
-    cellBorder = Border.all(color: AppColors.coralOrange.withValues(alpha: 0.4), width: 1);
-  } else if (isWhiteDay) {
-    cellBgColor = _ayyamBeedhColor.withValues(alpha: 0.15);
-    cellBorder = Border.all(color: _ayyamBeedhColor.withValues(alpha: 0.4), width: 1);
-  } else if (isSunnahFast) {
-    cellBgColor = AppColors.midTeal.withValues(alpha: 0.15);
-    cellBorder = Border.all(color: AppColors.midTeal.withValues(alpha: 0.4), width: 1);
-  }
+        if (isSelected) {
+          cellBgColor = widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue;
+          cellBorder = Border.all(
+            color: widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue,
+            width: 1.2,
+          );
+        } else {
+          if (hasEvent) {
+            cellBgColor = AppColors.coralOrange.withValues(alpha: 0.15);
+            cellBorder = Border.all(color: AppColors.coralOrange.withValues(alpha: 0.45), width: 1);
+          } else if (isWhiteDay) {
+            cellBgColor = _ayyamBeedhColor.withValues(alpha: 0.15);
+            cellBorder = Border.all(color: _ayyamBeedhColor.withValues(alpha: 0.45), width: 1);
+          } else if (isSunnahFast) {
+            cellBgColor = AppColors.midTeal.withValues(alpha: 0.15);
+            cellBorder = Border.all(color: AppColors.midTeal.withValues(alpha: 0.45), width: 1);
+          } else {
+            // General days: clean, standard border and subtle background in both light and dark mode
+            cellBgColor = widget.isDarkMode
+                ? const Color(0xFF1E1E1E).withValues(alpha: 0.6)
+                : const Color(0xFFF8FAFC);
+            cellBorder = Border.all(
+              color: widget.isDarkMode
+                  ? const Color(0xFF333333)
+                  : const Color(0xFFE2E8F0),
+              width: 0.9,
+            );
+          }
 
-  if (isToday) {
-    cellBorder = Border.all(color: widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue, width: 1.5);
-  }
-}
+          if (isToday) {
+            cellBorder = Border.all(
+              color: widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue,
+              width: 1.5,
+            );
+          }
+        }
 
         return GestureDetector(
           onTap: () {
@@ -1425,14 +1446,15 @@ if (isSelected) {
               borderRadius: BorderRadius.circular(10),
               border: cellBorder,
             ),
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   '$dayNumber',
                   style: GoogleFonts.poppins(
-                    fontSize: 13,
+                    fontSize: 12.5,
                     fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
                     color: isSelected
                         ? Colors.white
@@ -1442,8 +1464,9 @@ if (isSelected) {
                 Text(
                   '${cellHijri.day}',
                   style: GoogleFonts.poppins(
-                    fontSize: 9.5,
+                    fontSize: 9.0,
                     fontWeight: FontWeight.w600,
+                    height: 1.1,
                     color: isSelected
                         ? Colors.white.withValues(alpha: 0.8)
                         : (hasEvent
@@ -1456,39 +1479,42 @@ if (isSelected) {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (hasEvent)
-                      Container(
-                        width: 4,
-                        height: 4,
-                        decoration: const BoxDecoration(
-                          color: AppColors.coralOrange,
-                          shape: BoxShape.circle,
+                SizedBox(
+                  height: 4,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (hasEvent)
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: const BoxDecoration(
+                            color: AppColors.coralOrange,
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
-                    if (hasEvent && isFasting) const SizedBox(width: 2),
-                    if (isWhiteDay)
-                      Container(
-                        width: 4,
-                        height: 4,
-                        decoration: const BoxDecoration(
-                          color: _ayyamBeedhColor,
-                          shape: BoxShape.circle,
+                      if (hasEvent && isFasting) const SizedBox(width: 2),
+                      if (isWhiteDay)
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: const BoxDecoration(
+                            color: _ayyamBeedhColor,
+                            shape: BoxShape.circle,
+                          ),
+                        )
+                      else if (isSunnahFast)
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: const BoxDecoration(
+                            color: AppColors.midTeal,
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      )
-                    else if (isSunnahFast)
-                      Container(
-                        width: 4,
-                        height: 4,
-                        decoration: const BoxDecoration(
-                          color: AppColors.midTeal,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                  ],
-                )
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
