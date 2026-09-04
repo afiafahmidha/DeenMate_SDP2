@@ -811,25 +811,55 @@ class _AssistantTabState extends State<AssistantTab> with SingleTickerProviderSt
                       final title = item['title'] as String? ?? 'Islamic Question';
                       final chatId = item['id'] as String;
 
+                      // Format last modified date
+                      String dateLabel = '';
+                      final ts = item['updatedAt'] ?? item['createdAt'];
+                      if (ts != null) {
+                        try {
+                          final dt = (ts as dynamic).toDate() as DateTime;
+                          const months = [
+                            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+                          ];
+                          dateLabel = '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+                        } catch (_) {}
+                      }
+
                       return InkWell(
                         onTap: () => _openFirestoreChat(item),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               const Icon(Icons.chat_bubble_outline_rounded,
                                   color: AppColors.midTeal, size: 16),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: _primaryText(context),
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: _primaryText(context),
+                                      ),
+                                    ),
+                                    if (dateLabel.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        dateLabel,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10,
+                                          color: _secondaryText(context),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                               GestureDetector(

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:io';
 import 'dart:async';
 import 'dart:math' as math;
@@ -31,12 +32,14 @@ class ProfileTab extends StatefulWidget {
   final VoidCallback onLogout;
   final bool isDarkMode;
   final ValueChanged<bool> onThemeChanged;
+  final ValueChanged<String>? onUserNameChanged;
 
   const ProfileTab({
     super.key,
     required this.onLogout,
     required this.isDarkMode,
     required this.onThemeChanged,
+    this.onUserNameChanged,
   });
 
   @override
@@ -49,6 +52,7 @@ class _ProfileTabState extends State<ProfileTab> {
   // Profile photo — a real picked file now, instead of a preset gradient avatar.
   File? _avatarImage;
   String? _avatarBase64;
+  Uint8List? _avatarBytes;
 
   // Quran reading preferences (merged in from the old "Quran Journey" settings page).
   double _arabicFontSize = 24;
@@ -93,7 +97,9 @@ class _ProfileTabState extends State<ProfileTab> {
     _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (!mounted) return;
       if (user?.uid != _loadedForUid) {
-        setState(() => _profileLoaded = false); // show spinner, not stale data
+        if (_loadedForUid != null) {
+          setState(() => _profileLoaded = false);
+        }
         _loadSettings();
       }
     });
@@ -145,6 +151,12 @@ class _ProfileTabState extends State<ProfileTab> {
     String phone = prefs.getString(k('profile_phone')) ?? "";
     String address = prefs.getString(k('profile_address')) ?? "";
     String email = prefs.getString(k('profile_email')) ?? user.email ?? "";
+
+    // Purge Rahim Uddin if lingering in local cache
+    if (name.trim().toLowerCase() == 'rahim uddin') {
+      name = "";
+      await prefs.remove(k('profile_name'));
+    }
 
     try {
       final doc = await FirebaseFirestore.instance
@@ -203,8 +215,21 @@ class _ProfileTabState extends State<ProfileTab> {
       debugPrint("Error loading profile from Firestore: $e");
     }
 
-    if (name.isEmpty) name = user.displayName ?? "";
+    if (name.trim().toLowerCase() == 'rahim uddin') name = "";
+    if (name.isEmpty) {
+      name = user.displayName ?? (user.email != null && user.email!.isNotEmpty ? user.email!.split('@')[0] : "User");
+      if (name.trim().toLowerCase() == 'rahim uddin') name = "User";
+    }
     if (email.isEmpty) email = user.email ?? "";
+
+    Uint8List? decodedBytes;
+    if (savedImageBase64.isNotEmpty) {
+      try {
+        decodedBytes = base64Decode(savedImageBase64);
+      } catch (_) {}
+    }
+
+    widget.onUserNameChanged?.call(name);
 
     setState(() {
       _fullNameController.text = name;
@@ -221,6 +246,7 @@ class _ProfileTabState extends State<ProfileTab> {
       _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
 
       _avatarBase64 = savedImageBase64;
+      _avatarBytes = decodedBytes;
       if (savedImagePath != null && savedImagePath.isNotEmpty) {
         _avatarImage = File(savedImagePath);
       }
@@ -270,6 +296,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
         // Also update FirebaseAuth display name
         await user.updateDisplayName(fullName);
+        widget.onUserNameChanged?.call(fullName);
       } catch (e) {
         // If document doesn't support update (e.g. doesn't exist yet), set it
         try {
@@ -311,12 +338,32 @@ class _ProfileTabState extends State<ProfileTab> {
         final base64Str = base64Encode(bytes);
 
         final prefs = await SharedPreferences.getInstance();
+        final user = FirebaseAuth.instance.currentUser;
+        // Save under BOTH the namespaced key (profile tab reads this)
+        // AND the legacy global key (QurbaniRepository reads this).
+        // This keeps both screens in sync even before a full migration.
         await prefs.setString('profile_avatar_base64', base64Str);
         await prefs.setString('profile_avatar_path', picked.path);
+        if (user != null) {
+          await prefs.setString('profile_avatar_base64_${user.uid}', base64Str);
+          await prefs.setString('profile_avatar_path_${user.uid}', picked.path);
+          // Immediately push the new avatar to Firestore so other devices
+          // (web, second mobile) can also see the updated image.
+          try {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .update({
+              'profile.avatarBase64': base64Str,
+              'profile.updatedAt': FieldValue.serverTimestamp(),
+            });
+          } catch (_) {}
+        }
 
         setState(() {
           _avatarImage = File(picked.path);
           _avatarBase64 = base64Str;
+          _avatarBytes = bytes;
         });
         await _saveSettings();
       }
@@ -507,6 +554,21 @@ class _ProfileTabState extends State<ProfileTab> {
 
   // ===== HEADER: photo, name, locked email, edit toggle =====
   Widget _buildProfileAvatarCard(Color primaryColor, Color cardBg, Color textColor, Color subtextColor) {
+    final user = FirebaseAuth.instance.currentUser;
+    final ImageProvider? imageProvider = _avatarImage != null
+        ? FileImage(_avatarImage!)
+        : (_avatarBytes != null && _avatarBytes!.isNotEmpty)
+            ? MemoryImage(_avatarBytes!)
+            : (user?.photoURL != null && user!.photoURL!.isNotEmpty)
+                ? NetworkImage(user.photoURL!)
+                : null;
+
+    final String initial = _fullNameController.text.trim().isNotEmpty
+        ? _fullNameController.text.trim().substring(0, 1).toUpperCase()
+        : (user?.email != null && user!.email!.isNotEmpty)
+            ? user.email!.substring(0, 1).toUpperCase()
+            : "U";
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 18),
       decoration: BoxDecoration(
@@ -527,21 +589,17 @@ class _ProfileTabState extends State<ProfileTab> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: primaryColor.withValues(alpha: 0.15),
-                    image: _avatarImage != null
-                        ? DecorationImage(image: FileImage(_avatarImage!), fit: BoxFit.cover)
-                        : (_avatarBase64 != null && _avatarBase64!.isNotEmpty)
-                            ? DecorationImage(image: MemoryImage(base64Decode(_avatarBase64!)), fit: BoxFit.cover)
-                            : null,
+                    image: imageProvider != null
+                        ? DecorationImage(image: imageProvider, fit: BoxFit.cover)
+                        : null,
                     boxShadow: [
                       BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 8, offset: const Offset(0, 3)),
                     ],
                   ),
-                  child: (_avatarImage == null && (_avatarBase64 == null || _avatarBase64!.isEmpty))
+                  child: imageProvider == null
                       ? Center(
                           child: Text(
-                            _fullNameController.text.isNotEmpty
-                                ? _fullNameController.text.substring(0, 1).toUpperCase()
-                                : "U",
+                            initial,
                             style: GoogleFonts.poppins(fontSize: 34, fontWeight: FontWeight.bold, color: primaryColor),
                           ),
                         )
@@ -581,13 +639,13 @@ class _ProfileTabState extends State<ProfileTab> {
                   ),
                 )
               : Text(
-                  _fullNameController.text,
+                  _fullNameController.text.isNotEmpty ? _fullNameController.text : 'User',
                   style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.bold, color: textColor),
                 ),
           const SizedBox(height: 2),
 
           // Email — always plain text here too, never editable.
-          Text(_email, style: GoogleFonts.inter(fontSize: 12, color: subtextColor)),
+          Text(_email.isNotEmpty ? _email : (user?.email ?? ""), style: GoogleFonts.inter(fontSize: 12, color: subtextColor)),
           const SizedBox(height: 10),
 
           OutlinedButton.icon(
@@ -694,11 +752,21 @@ class _ProfileTabState extends State<ProfileTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(_t('language'), style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
-              // Locked to English — no picker, since there's nothing else to
-              // switch to right now. (The old dropdown's onChanged also had a
-              // broken ternary — `val ? 'en'` with no `:` branch — which was
-              // invalid Dart. Removed rather than patched.)
-              Text("English", style: GoogleFonts.poppins(fontSize: 12, color: textColor, fontWeight: FontWeight.bold)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'English',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: primaryColor,
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -1121,7 +1189,6 @@ class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectio
       ),
     );
   }
-
   // ── VECTOR CARD: renders the actual animated vector art ──
   Widget _buildVectorCard({
     required bool isSelected,
@@ -1249,7 +1316,6 @@ class _PrayerCardThemeSelectionScreenState extends State<PrayerCardThemeSelectio
     );
   }
 }
-
 // ── Actual video player preview widget ──
 class _ActualVideoPreview extends StatefulWidget {
   final String videoAsset;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -5,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth_header.dart'; // AppColors
@@ -27,6 +29,8 @@ class SurahInfo {
 class AyahContent {
   final int number;
   final String arabic;
+  final String banglaPronunciation;
+  final String englishPronunciation;
   final String banglaTranslation;
   final String englishTranslation;
   final String banglaExplanation;
@@ -36,6 +40,8 @@ class AyahContent {
   const AyahContent({
     required this.number,
     required this.arabic,
+    this.banglaPronunciation = '',
+    this.englishPronunciation = '',
     required this.banglaTranslation,
     required this.englishTranslation,
     required this.banglaExplanation,
@@ -1050,17 +1056,554 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   // Dynamic Hifz Visual Quran Map state
   Set<int> _memorizedSurahIds = {};
 
+  // Weekly Reading History for Functional Statistics (Mon -> Sun)
+  Map<String, int> _weeklyAyahsHistory = {
+    'Mon': 0,
+    'Tue': 0,
+    'Wed': 0,
+    'Thu': 0,
+    'Fri': 0,
+    'Sat': 0,
+    'Sun': 0,
+  };
+
   // Settings state
+  // Real-time Cloud Sync Subscription
+  StreamSubscription<DocumentSnapshot>? _cloudSyncSubscription;
+  bool _isSyncingWithCloud = false;
+
+  // Quran Audio Tilawat Player State
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlayingAudio = false;
+  bool _isLoadingAudio = false;
+  int? _currentlyPlayingSurah;
+  int? _currentlyPlayingAyah;
+  String _selectedReciter = 'Alafasy_128kbps';
+
+  static const List<Map<String, String>> _reciterList = [
+    {'id': 'Alafasy_128kbps', 'name': 'Mishary Rashid Alafasy'},
+    {'id': 'Abdul_Basit_Murattal_192kbps', 'name': 'Abdul Basit (Murattal)'},
+    {'id': 'Husary_128kbps', 'name': 'Mahmoud Khalil Al-Husary'},
+    {'id': 'Abdurrahmaan_As-Sudais_192kbps', 'name': 'Abdur-Rahman As-Sudais'},
+    {'id': 'Ghamadi_40kbps', 'name': 'Saad Al-Ghamdi'},
+    {'id': 'Abu_Bakr_Ash-Shaatree_128kbps', 'name': 'Abu Bakr Al-Shatri'},
+    {'id': 'Ali_Jaber_64kbps', 'name': 'Ali Jaber'},
+  ];
+
+  String _getReciterName(String id) {
+    final match = _reciterList.firstWhere((r) => r['id'] == id, orElse: () => {'name': 'Mishary Alafasy'});
+    return match['name']!;
+  }
+
   double _arabicFontSize = 24.0;
+  String _arabicFont = 'Amiri'; // 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', 'Lateef', 'Katibeh'
+  bool _showBanglaPronunciation = true;
+  bool _showEnglishPronunciation = true;
   bool _showBanglaTranslation = true;
   bool _showEnglishTranslation = true;
+  bool _showBanglaTafsir = true;
+  bool _showEnglishTafsir = true;
   bool _isDarkMode = false;
   bool _readingReminderEnabled = true;
+
+  TextStyle _getArabicStyle({double? fontSize, FontWeight? fontWeight, Color? color, double? height}) {
+    final size = fontSize ?? _arabicFontSize;
+    final wt = fontWeight ?? FontWeight.bold;
+    final h = height ?? 1.8;
+    switch (_arabicFont) {
+      case 'Scheherazade New':
+        return GoogleFonts.scheherazadeNew(fontSize: size, fontWeight: wt, color: color, height: h);
+      case 'Noto Naskh Arabic':
+        return GoogleFonts.notoNaskhArabic(fontSize: size, fontWeight: wt, color: color, height: h);
+      case 'Lateef':
+        return GoogleFonts.lateef(fontSize: size + 4, fontWeight: wt, color: color, height: h);
+      case 'Katibeh':
+        return GoogleFonts.katibeh(fontSize: size + 2, fontWeight: wt, color: color, height: h);
+      case 'Amiri':
+      default:
+        return GoogleFonts.amiri(fontSize: size, fontWeight: wt, color: color, height: h);
+    }
+  }
+
+  static String _translitToBangla(String englishTranslit) {
+    if (englishTranslit.trim().isEmpty) return '';
+
+    String text = englishTranslit.trim();
+
+    final Map<String, String> wordMap = {
+      'bismillahir': 'বিসমিল্লাহির',
+      'bismillaahir': 'বিসমিল্লাহির',
+      'rahmaanir': 'রাহমানির',
+      'rahmaan': 'রাহমান',
+      'raheem': 'রাহীম',
+      'alhamdu': 'আলহামদু',
+      'lillaahi': 'লিল্লাহি',
+      'lillahi': 'লিল্লাহি',
+      'rabbil': 'রাব্বিল',
+      'aalameen': 'আলামীন',
+      'maaliki': 'মালিকি',
+      'yawmid-deen': 'ইয়াওমিদ-দ্বীন',
+      'yawmiddin': 'ইয়াওমিদ-দ্বীন',
+      'iyyaaka': 'ইয়্যাকা',
+      'na\'budu': 'না\'বুদু',
+      'wa': 'ওয়া',
+      'nasta\'een': 'নাসতা\'ঈন',
+      'ihdinas-siraatal-mustaqeem': 'ইহদিনাস সিরাতাল মুস্তাক্বীম',
+      'ihdinas': 'ইহদিনাস',
+      'siraatal': 'সিরাতাল',
+      'siraata': 'সিরাতা',
+      'mustaqeem': 'মুস্তাক্বীম',
+      'al-mustaqeem': 'আল-মুস্তাক্বীম',
+      'allazeena': 'আল্লাযীনা',
+      'allazee': 'আল্লাযী',
+      'lazeena': 'লাযীনা',
+      'lazee': 'লাযী',
+      'an\'amta': 'আন\'আমতা',
+      'alayhim': 'আলাইহিম',
+      'ghayril': 'গাইরিল',
+      'maghdoobi': 'মাগদূবী',
+      'lad-daalleen': 'লাদ-দোয়াল্লীন',
+      'daalleen': 'দোয়াল্লীন',
+      'qul': 'ক্বুল',
+      'huwal': 'হুয়াল',
+      'laahu': 'ল্লাহু',
+      'laaha': 'ল্লাহা',
+      'laahi': 'ল্লাহি',
+      'allah': 'আল্লাহ',
+      'allahu': 'আল্লাহু',
+      'ahad': 'আহাদ',
+      'samad': 'সামাদ',
+      'lam': 'লাম',
+      'yalid': 'য়ালিদ',
+      'yoolad': 'য়ূলাদ',
+      'yakul-lahu': 'ইয়াকুল-লাহু',
+      'kufuwan': 'কুফুওয়ান',
+      'wal-\'asr': 'ওয়াল-\'আসর',
+      'innal': 'ইন্নাল',
+      'insana': 'ইনসানা',
+      'lafee': 'লাফী',
+      'khusr': 'খুসর',
+      'illal-lazeena': 'ইল্লাল্লাযীনা',
+      'aamanoo': 'আমানূ',
+      'amilus-saalihaati': '\'আমিলুস সালিহাত',
+      'saalihaati': 'সালিহাত',
+      'tawaasaw': 'তাওয়াসাও',
+      'bil-haqqi': 'বিল-হাক্ব',
+      'bis-sabr': 'বিস-সাবর',
+      'yaaa': 'ইয়া',
+      'aiyuhan': 'আইয়্যুহান',
+      'naasut': 'নাসুত',
+      'taqoo': 'তাক্বু',
+      'rabbakumul': 'রাব্বাকুমুল',
+      'khalaqakum': 'খালাক্বাকুম',
+      'min': 'মিন',
+      'nafsinw': 'নাফসিঁও',
+      'waahidatinw': 'ওয়াহিদাতিঁও',
+      'khalaqa': 'খালাক্বা',
+      'minhaa': 'মিনহা',
+      'zawjahaa': 'যাওজাহা',
+      'bas': 'বাসসা',
+      'sa': '',
+      'minhumaa': 'মিনহুমা',
+      'rijaalan': 'রিজালান',
+      'kaseeranw': 'কাসীরাঁও',
+      'nisaaa\'aa': 'নিসা-আ',
+      'wattaqul': 'ওয়াত্তাক্বুল',
+      'laahallazee': 'ল্লাহাল্লাযী',
+      'tasaaa': 'তাসা-আ',
+      '\'aloona': '\'আলূনা',
+      'bihee': 'বিহী',
+      'wal': 'ওয়াল',
+      'arhaam': 'আরহাম',
+      'kaana': 'কানা',
+      '\'alaikum': '\'আলাইকুম',
+      'raqeeba': 'রাক্বীবা',
+    };
+
+    final List<String> words = text.split(' ');
+    final List<String> converted = [];
+
+    for (final rawWord in words) {
+      if (rawWord.trim().isEmpty) continue;
+      String clean = rawWord.toLowerCase().replaceAll(RegExp(r"[^a-z0-9\-']"), '');
+      String trailingPunct = '';
+      if (rawWord.endsWith(';') || rawWord.endsWith(',') || rawWord.endsWith('.')) {
+        trailingPunct = rawWord.substring(rawWord.length - 1);
+      }
+
+      if (wordMap.containsKey(clean)) {
+        final bn = wordMap[clean]!;
+        if (bn.isNotEmpty) {
+          converted.add(bn + trailingPunct);
+        }
+        continue;
+      }
+
+      // Phonetic word builder
+      String w = clean;
+      w = w.replaceAll('sh', 'শ');
+      w = w.replaceAll('kh', 'খ');
+      w = w.replaceAll('gh', 'গ');
+      w = w.replaceAll('th', 'ছ');
+      w = w.replaceAll(RegExp(r'dh|zh|z'), 'য');
+      w = w.replaceAll('q', 'ক্ব');
+      w = w.replaceAll('k', 'ক');
+      w = w.replaceAll('b', 'ব');
+      w = w.replaceAll('t', 'ত');
+      w = w.replaceAll('j', 'জ');
+      w = w.replaceAll('h', 'হ');
+      w = w.replaceAll('d', 'দ');
+      w = w.replaceAll('r', 'র');
+      w = w.replaceAll('s', 'স');
+      w = w.replaceAll(RegExp(r'f|ph'), 'ফ');
+      w = w.replaceAll('l', 'ল');
+      w = w.replaceAll('m', 'ম');
+      w = w.replaceAll('n', 'ন');
+      w = w.replaceAll(RegExp(r'w|v'), 'ওয়');
+      w = w.replaceAll('y', 'ইয়');
+      w = w.replaceAll(RegExp(r'ee|iy|ii'), 'ী');
+      w = w.replaceAll(RegExp(r'oo|uu'), 'ূ');
+      w = w.replaceAll('aa', 'া');
+      w = w.replaceAll(RegExp(r'ai|ay'), 'াই');
+      w = w.replaceAll(RegExp(r'au|aw'), 'াও');
+      w = w.replaceAll('a', 'া');
+      w = w.replaceAll('i', 'ি');
+      w = w.replaceAll('u', 'ু');
+      w = w.replaceAll('o', 'ো');
+      w = w.replaceAll('e', 'ে');
+
+      // Fix leading vowel signs
+      if (w.startsWith('া')) w = 'আ${w.substring(1)}';
+      if (w.startsWith('ি') || w.startsWith('ী')) w = 'ই${w.substring(1)}';
+      if (w.startsWith('ু') || w.startsWith('ূ')) w = 'উ${w.substring(1)}';
+      if (w.startsWith('ে')) w = 'এ${w.substring(1)}';
+      if (w.startsWith('ো')) w = 'ও${w.substring(1)}';
+      if (w.startsWith('াই')) w = 'আই${w.substring(2)}';
+      if (w.startsWith('াও')) w = 'আও${w.substring(2)}';
+
+      converted.add(w + trailingPunct);
+    }
+
+    return converted.join(' ');
+  }
+
+  static String _phoneticEnglishPronunciation(String arabic) {
+    if (arabic.isEmpty) return '';
+    String res = arabic;
+    res = res.replaceAll('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', 'Bismillahir-Rahmanir-Rahim');
+    res = res.replaceAll('الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ', 'Al-hamdu lillahi Rabbil-\'alamin');
+    res = res.replaceAll('الرَّحْمَٰنِ الرَّحِيمِ', 'Ar-Rahmanir-Rahim');
+    res = res.replaceAll('مَالِكِ يَوْمِ الدِّينِ', 'Maliki Yawmid-Din');
+    res = res.replaceAll('إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ', 'Iyyaka na\'budu wa iyyaka nasta\'in');
+    res = res.replaceAll('اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ', 'Ihdinas-Siratal-Mustaqim');
+    res = res.replaceAll('صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ', 'Siratal-ladhina an\'amta \'alayhim, ghayril-maghdubi \'alayhim walad-dallin');
+    res = res.replaceAll('قُلْ هُوَ اللَّهُ أَحَدٌ', 'Qul Huwallahu Ahad');
+    res = res.replaceAll('اللَّهُ الصَّمَدُ', 'Allahus-Samad');
+    res = res.replaceAll('لَمْ يَلِدْ وَلَمْ يُولَدْ', 'Lam yalid wa lam yulad');
+    res = res.replaceAll('وَلَمْ يَكُن لَّهُ كُফُوًا أَحَدٌ', 'Wa lam yakul-lahu kufuwan ahad');
+    res = res.replaceAll('وَالْعَصْرِ', 'Wal-\'Asr');
+    res = res.replaceAll('إِنَّ الْإِنْسَانَ لَفِي خُসْرٍ', 'Innal-insana lafi khusr');
+    res = res.replaceAll('إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ وَتَوَاصَوْا بِالْحَقِّ وَتَوَاصَوْا بِالصَّবْرِ', 'Illal-ladhina amanu wa \'amilus-salihati wa tawasa bi-haqqi wa tawasa bis-sabr');
+    return res == arabic ? '' : res;
+  }
 
   @override
   void initState() {
     super.initState();
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _isPlayingAudio = false;
+          _isLoadingAudio = false;
+          _currentlyPlayingSurah = null;
+          _currentlyPlayingAyah = null;
+        });
+      }
+    });
     _loadState();
+    _initCloudSync();
+  }
+
+  void _initCloudSync() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    _cloudSyncSubscription?.cancel();
+    _cloudSyncSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('quranTracker')
+        .doc('state')
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists || snapshot.data() == null) {
+        // Cloud document doesn't exist yet, seed it with current local state
+        _pushStateToCloud();
+        return;
+      }
+
+      if (_isSyncingWithCloud) return; // Prevent loop during local save
+
+      final data = snapshot.data()!;
+      _applyCloudState(data);
+    }, onError: (e) {
+      debugPrint('Quran Tracker Cloud Sync listener error: $e');
+    });
+  }
+
+  void _applyCloudState(Map<String, dynamic> data) async {
+    if (!mounted) return;
+
+    setState(() {
+      _currentStreak = (data['streak'] as num?)?.toInt() ?? _currentStreak;
+      _longestStreak = (data['longestStreak'] as num?)?.toInt() ?? _longestStreak;
+      _completedAyahsToday = (data['completedAyahsToday'] as num?)?.toInt() ?? _completedAyahsToday;
+      _targetDailyAyahs = (data['targetDailyAyahs'] as num?)?.toInt() ?? _targetDailyAyahs;
+      _khatmTotalJuzCompleted = (data['khatmTotalJuzCompleted'] as num?)?.toInt() ?? _khatmTotalJuzCompleted;
+
+      _arabicFont = data['arabicFont']?.toString() ?? _arabicFont;
+      _selectedReciter = data['selectedReciter']?.toString() ?? _selectedReciter;
+      _showBanglaPronunciation = data['showBanglaPronunciation'] as bool? ?? _showBanglaPronunciation;
+      _showEnglishPronunciation = data['showEnglishPronunciation'] as bool? ?? _showEnglishPronunciation;
+      _showBanglaTranslation = data['showBanglaTranslation'] as bool? ?? _showBanglaTranslation;
+      _showEnglishTranslation = data['showEnglishTranslation'] as bool? ?? _showEnglishTranslation;
+      _showBanglaTafsir = data['showBanglaTafsir'] as bool? ?? _showBanglaTafsir;
+      _showEnglishTafsir = data['showEnglishTafsir'] as bool? ?? _showEnglishTafsir;
+
+      if (data['arabicFontSize'] != null) {
+        _arabicFontSize = (data['arabicFontSize'] as num).toDouble();
+      }
+
+      _continueSurahId = (data['continueSurahId'] as num?)?.toInt() ?? _continueSurahId;
+      _continuePage = (data['continuePage'] as num?)?.toInt() ?? _continuePage;
+      _continueAyah = (data['continueAyah'] as num?)?.toInt() ?? _continueAyah;
+
+      if (data['readAyahsToday'] is List) {
+        _readAyahsToday = (data['readAyahsToday'] as List).map((e) => e.toString()).toSet();
+      }
+      if (data['readAyahsAllTime'] is List) {
+        _readAyahsAllTime = (data['readAyahsAllTime'] as List).map((e) => e.toString()).toSet();
+      }
+
+      if (data['wazifaSupplications'] is Map) {
+        final suppMap = data['wazifaSupplications'] as Map;
+        suppMap.forEach((catKey, val) {
+          final cat = catKey.toString();
+          if (val is List) {
+            _wazifaSupplications[cat] = val.map((e) {
+              if (e is Map) {
+                return CustomWazifa.fromJson(Map<String, dynamic>.from(e));
+              } else {
+                return CustomWazifa(title: e.toString());
+              }
+            }).toList();
+          }
+        });
+      }
+
+      if (data['completedWazifas'] is Map) {
+        final cMap = data['completedWazifas'] as Map;
+        cMap.forEach((k, v) {
+          if (v is bool) _completedWazifas[k.toString()] = v;
+        });
+      }
+
+      if (data['completedHadithWazifas'] is Map) {
+        final hMap = data['completedHadithWazifas'] as Map;
+        hMap.forEach((k, v) {
+          if (v is bool) _completedHadithWazifas[k.toString()] = v;
+        });
+      }
+
+      if (data['bookmarks'] is List) {
+        _bookmarks.clear();
+        for (final item in data['bookmarks']) {
+          if (item is Map) {
+            _bookmarks.add(Map<String, String>.from(
+              item.map((k, v) => MapEntry(k.toString(), v.toString())),
+            ));
+          }
+        }
+      }
+
+      if (data['reflections'] is List) {
+        _reflections.clear();
+        for (final item in data['reflections']) {
+          if (item is Map) {
+            _reflections.add(Map<String, String>.from(
+              item.map((k, v) => MapEntry(k.toString(), v.toString())),
+            ));
+          }
+        }
+      }
+
+      if (data['memorizedSurahIds'] is List) {
+        _memorizedSurahIds = (data['memorizedSurahIds'] as List)
+            .map((e) => (e as num).toInt())
+            .toSet();
+      }
+
+      if (data['weeklyAyahsHistory'] is Map) {
+        final wMap = data['weeklyAyahsHistory'] as Map;
+        wMap.forEach((k, v) {
+          if (v is num) _weeklyAyahsHistory[k.toString()] = v.toInt();
+        });
+      }
+    });
+
+    // Also update SharedPreferences so local cache stays fresh
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('quran_tracker_streak', _currentStreak);
+      await prefs.setInt('quran_longest_streak', _longestStreak);
+      await prefs.setInt('quran_completed_ayahs_today', _completedAyahsToday);
+      await prefs.setInt('quran_target_daily_ayahs', _targetDailyAyahs);
+      await prefs.setInt('quran_khatm_juz_completed', _khatmTotalJuzCompleted);
+      await prefs.setBool('is_dark_mode', _isDarkMode);
+      await prefs.setString('quran_arabic_font', _arabicFont);
+      await prefs.setString('quran_selected_reciter', _selectedReciter);
+      await prefs.setBool('quran_show_bangla_pronunciation', _showBanglaPronunciation);
+      await prefs.setBool('quran_show_english_pronunciation', _showEnglishPronunciation);
+      await prefs.setBool('quran_show_bangla_translation', _showBanglaTranslation);
+      await prefs.setBool('quran_show_english_translation', _showEnglishTranslation);
+      await prefs.setBool('quran_show_bangla_tafsir', _showBanglaTafsir);
+      await prefs.setBool('quran_show_english_tafsir', _showEnglishTafsir);
+      await prefs.setDouble('quran_settings_font_size', _arabicFontSize);
+      await prefs.setInt('quran_continue_surah', _continueSurahId);
+      await prefs.setInt('quran_continue_page', _continuePage);
+      await prefs.setInt('quran_continue_ayah', _continueAyah);
+      await prefs.setString('quran_read_ayahs_today', jsonEncode(_readAyahsToday.toList()));
+      await prefs.setString('quran_read_ayahs_all_time', jsonEncode(_readAyahsAllTime.toList()));
+
+      for (final cat in _wazifaSupplications.keys) {
+        await prefs.setString(
+          'quran_wazifa_supps_$cat',
+          jsonEncode(_wazifaSupplications[cat]?.map((e) => e.toJson()).toList()),
+        );
+      }
+      await prefs.setString('quran_wazifa_checks', jsonEncode(_completedWazifas));
+      await prefs.setString('quran_hadith_wazifa_checks', jsonEncode(_completedHadithWazifas));
+      await prefs.setString('quran_bookmarks_json', jsonEncode(_bookmarks));
+      await prefs.setString('quran_reflections_json', jsonEncode(_reflections));
+      await prefs.setString('quran_hifz_memorized_ids', jsonEncode(_memorizedSurahIds.toList()));
+      await prefs.setString('quran_weekly_ayahs_history', jsonEncode(_weeklyAyahsHistory));
+    } catch (e) {
+      debugPrint('Error updating SharedPreferences from cloud: $e');
+    }
+  }
+
+  Future<void> _pushStateToCloud() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    _isSyncingWithCloud = true;
+    try {
+      final Map<String, dynamic> suppMap = {};
+      for (final cat in _wazifaSupplications.keys) {
+        suppMap[cat] = _wazifaSupplications[cat]?.map((e) => e.toJson()).toList() ?? [];
+      }
+
+      final Map<String, dynamic> cloudData = {
+        'streak': _currentStreak,
+        'longestStreak': _longestStreak,
+        'completedAyahsToday': _completedAyahsToday,
+        'targetDailyAyahs': _targetDailyAyahs,
+        'khatmTotalJuzCompleted': _khatmTotalJuzCompleted,
+        'arabicFont': _arabicFont,
+        'selectedReciter': _selectedReciter,
+        'showBanglaPronunciation': _showBanglaPronunciation,
+        'showEnglishPronunciation': _showEnglishPronunciation,
+        'showBanglaTranslation': _showBanglaTranslation,
+        'showEnglishTranslation': _showEnglishTranslation,
+        'showBanglaTafsir': _showBanglaTafsir,
+        'showEnglishTafsir': _showEnglishTafsir,
+        'arabicFontSize': _arabicFontSize,
+        'continueSurahId': _continueSurahId,
+        'continuePage': _continuePage,
+        'continueAyah': _continueAyah,
+        'readAyahsToday': _readAyahsToday.toList(),
+        'readAyahsAllTime': _readAyahsAllTime.toList(),
+        'lastSavedDate': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+        'wazifaSupplications': suppMap,
+        'completedWazifas': _completedWazifas,
+        'completedHadithWazifas': _completedHadithWazifas,
+        'bookmarks': _bookmarks,
+        'reflections': _reflections,
+        'memorizedSurahIds': _memorizedSurahIds.toList(),
+        'weeklyAyahsHistory': _weeklyAyahsHistory,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('quranTracker')
+          .doc('state')
+          .set(cloudData, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error pushing Quran Tracker state to Firestore: $e');
+    } finally {
+      _isSyncingWithCloud = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _cloudSyncSubscription?.cancel();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePlayAyahAudio(int surahId, int ayahNum) async {
+    if (_isPlayingAudio && _currentlyPlayingSurah == surahId && _currentlyPlayingAyah == ayahNum) {
+      await _audioPlayer.pause();
+      setState(() => _isPlayingAudio = false);
+      return;
+    }
+
+    setState(() {
+      _isLoadingAudio = true;
+      _currentlyPlayingSurah = surahId;
+      _currentlyPlayingAyah = ayahNum;
+    });
+
+    try {
+      final sStr = surahId.toString().padLeft(3, '0');
+      final aStr = ayahNum.toString().padLeft(3, '0');
+      final url = 'https://everyayah.com/data/$_selectedReciter/$sStr$aStr.mp3';
+
+      await _audioPlayer.stop();
+      await _audioPlayer.play(UrlSource(url));
+      if (mounted) {
+        setState(() {
+          _isPlayingAudio = true;
+          _isLoadingAudio = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Audio playback error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not play audio: $e')),
+        );
+        setState(() {
+          _isPlayingAudio = false;
+          _isLoadingAudio = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _stopAyahAudio() async {
+    await _audioPlayer.stop();
+    if (mounted) {
+      setState(() {
+        _isPlayingAudio = false;
+        _isLoadingAudio = false;
+        _currentlyPlayingSurah = null;
+        _currentlyPlayingAyah = null;
+      });
+    }
   }
 
   void _showWheelPagePickerModal(BuildContext context, Color cardBg, Color themeText) {
@@ -1262,6 +1805,14 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         _targetDailyAyahs = prefs.getInt('quran_target_daily_ayahs') ?? 208;
 
         _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
+        _arabicFont = prefs.getString('quran_arabic_font') ?? 'Amiri';
+        _selectedReciter = prefs.getString('quran_selected_reciter') ?? 'Alafasy_128kbps';
+        _showBanglaPronunciation = prefs.getBool('quran_show_bangla_pronunciation') ?? true;
+        _showEnglishPronunciation = prefs.getBool('quran_show_english_pronunciation') ?? true;
+        _showBanglaTranslation = prefs.getBool('quran_show_bangla_translation') ?? true;
+        _showEnglishTranslation = prefs.getBool('quran_show_english_translation') ?? true;
+        _showBanglaTafsir = prefs.getBool('quran_show_bangla_tafsir') ?? true;
+        _showEnglishTafsir = prefs.getBool('quran_show_english_tafsir') ?? true;
         
         final fontVal = prefs.get('quran_settings_font_size');
         if (fontVal is double) {
@@ -1374,6 +1925,19 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           final List<dynamic> decoded = jsonDecode(hifzStr);
           _memorizedSurahIds = decoded.map((e) => e as int).toSet();
         }
+
+        // Load weekly stats
+        final weeklyStr = prefs.getString('quran_weekly_ayahs_history');
+        if (weeklyStr != null) {
+          final Map<String, dynamic> decoded = jsonDecode(weeklyStr);
+          decoded.forEach((key, val) {
+            _weeklyAyahsHistory[key] = (val as num).toInt();
+          });
+        }
+        final todayShort = DateFormat('E').format(DateTime.now());
+        if (_completedAyahsToday > 0) {
+          _weeklyAyahsHistory[todayShort] = _completedAyahsToday;
+        }
       });
     } catch (e) {
       debugPrint("Error loading state from SharedPreferences: $e");
@@ -1388,6 +1952,14 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     await prefs.setInt('quran_target_daily_ayahs', _targetDailyAyahs);
     await prefs.setInt('quran_khatm_juz_completed', _khatmTotalJuzCompleted);
     await prefs.setBool('is_dark_mode', _isDarkMode);
+    await prefs.setString('quran_arabic_font', _arabicFont);
+    await prefs.setString('quran_selected_reciter', _selectedReciter);
+    await prefs.setBool('quran_show_bangla_pronunciation', _showBanglaPronunciation);
+    await prefs.setBool('quran_show_english_pronunciation', _showEnglishPronunciation);
+    await prefs.setBool('quran_show_bangla_translation', _showBanglaTranslation);
+    await prefs.setBool('quran_show_english_translation', _showEnglishTranslation);
+    await prefs.setBool('quran_show_bangla_tafsir', _showBanglaTafsir);
+    await prefs.setBool('quran_show_english_tafsir', _showEnglishTafsir);
     await prefs.setDouble('quran_settings_font_size', _arabicFontSize);
 
     await prefs.setInt('quran_continue_surah', _continueSurahId);
@@ -1411,6 +1983,13 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     await prefs.setString('quran_bookmarks_json', jsonEncode(_bookmarks));
     await prefs.setString('quran_reflections_json', jsonEncode(_reflections));
     await prefs.setString('quran_hifz_memorized_ids', jsonEncode(_memorizedSurahIds.toList()));
+
+    final todayShort = DateFormat('E').format(DateTime.now());
+    _weeklyAyahsHistory[todayShort] = _completedAyahsToday;
+    await prefs.setString('quran_weekly_ayahs_history', jsonEncode(_weeklyAyahsHistory));
+
+    // Push full state to Cloud Firestore for cross-device sync
+    _pushStateToCloud();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1426,8 +2005,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       final arabicUri    = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId');
       final banglaUri    = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId/bn.bengali');
       final englishUri   = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId/en.sahih');
+      final translitUri  = Uri.parse('https://api.alquran.cloud/v1/surah/$surahId/en.transliteration');
       // Tafsir Ibn Kathir (id=169, English) & Tafsir Abu Bakr Zakaria / Ibn Kathir (id=166, Bangla)
-      // Pass per_page=300 to fetch ALL verses in the Surah (default per_page=10 truncates after verse 10)
       final engTafsirUri = Uri.parse('https://api.quran.com/api/v4/tafsirs/169/by_chapter/$surahId?per_page=300');
       final bnTafsirUri  = Uri.parse('https://api.quran.com/api/v4/tafsirs/166/by_chapter/$surahId?per_page=300');
 
@@ -1435,6 +2014,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         http.get(arabicUri).timeout(const Duration(seconds: 8)),
         http.get(banglaUri).timeout(const Duration(seconds: 8)),
         http.get(englishUri).timeout(const Duration(seconds: 8)),
+        http.get(translitUri).timeout(const Duration(seconds: 8)),
         http.get(engTafsirUri, headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 10)),
         http.get(bnTafsirUri,  headers: {'Accept': 'application/json'}).timeout(const Duration(seconds: 10)),
       ]);
@@ -1446,14 +2026,21 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         final banglaJson  = jsonDecode(responses[1].body);
         final englishJson = jsonDecode(responses[2].body);
 
+        List<dynamic> translitAyahs = [];
+        if (responses[3].statusCode == 200) {
+          try {
+            translitAyahs = (jsonDecode(responses[3].body))['data']['ayahs'] ?? [];
+          } catch (_) {}
+        }
+
         final List<dynamic> arabicAyahs  = arabicJson['data']['ayahs'];
         final List<dynamic> banglaAyahs  = banglaJson['data']['ayahs'];
         final List<dynamic> englishAyahs = englishJson['data']['ayahs'];
 
         // Populate tafsir caches from quran.com
-        if (responses[3].statusCode == 200) {
+        if (responses[4].statusCode == 200) {
           try {
-            final List<dynamic> items = (jsonDecode(responses[3].body))['tafsirs'] ?? [];
+            final List<dynamic> items = (jsonDecode(responses[4].body))['tafsirs'] ?? [];
             for (final t in items) {
               final k = t['verse_key']?.toString() ?? '';
               final v = t['text']?.toString() ?? '';
@@ -1461,9 +2048,9 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
             }
           } catch (_) {}
         }
-        if (responses[4].statusCode == 200) {
+        if (responses[5].statusCode == 200) {
           try {
-            final List<dynamic> items = (jsonDecode(responses[4].body))['tafsirs'] ?? [];
+            final List<dynamic> items = (jsonDecode(responses[5].body))['tafsirs'] ?? [];
             for (final t in items) {
               final k = t['verse_key']?.toString() ?? '';
               final v = t['text']?.toString() ?? '';
@@ -1478,6 +2065,16 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           final cleanArabic = i == 0 ? _cleanBismillahPrefix(rawArabic, surahId) : rawArabic;
           final ayahNum     = arabicAyahs[i]['numberInSurah'] ?? (i + 1);
           final verseKey    = '$surahId:$ayahNum';
+
+          String engPronounce = '';
+          if (i < translitAyahs.length) {
+            engPronounce = translitAyahs[i]['text'] ?? '';
+          }
+          if (engPronounce.isEmpty) {
+            engPronounce = _phoneticEnglishPronunciation(cleanArabic);
+          }
+
+          final bnPronounce = _translitToBangla(engPronounce);
 
           // Extract Bangla Tafsir with fallback to previous grouped ayah if empty
           String bnExplanation = _bnTafsirCache[verseKey] ?? '';
@@ -1508,6 +2105,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           fetchedList.add(AyahContent(
             number: ayahNum,
             arabic: cleanArabic,
+            banglaPronunciation: bnPronounce,
+            englishPronunciation: engPronounce,
             banglaTranslation: banglaAyahs[i]['text'] ?? '',
             englishTranslation: englishAyahs[i]['text'] ?? '',
             banglaExplanation: bnExplanation,
@@ -1542,21 +2141,13 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           final startPage = _getSurahStartPage(surahId);
           final offset = (idx / list.length) * _getSurahTotalPages(surahId, totalAyahs);
           final pageVal = (startPage + offset.toInt()).clamp(1, 604);
+          final ar = idx == 0 ? _cleanBismillahPrefix(item.arabic, surahId) : item.arabic;
           
-          if (idx == 0) {
-            return AyahContent(
-              number: item.number,
-              arabic: _cleanBismillahPrefix(item.arabic, surahId),
-              banglaTranslation: item.banglaTranslation,
-              englishTranslation: item.englishTranslation,
-              banglaExplanation: item.banglaExplanation,
-              englishExplanation: item.englishExplanation,
-              page: pageVal,
-            );
-          }
           return AyahContent(
             number: item.number,
-            arabic: item.arabic,
+            arabic: ar,
+            banglaPronunciation: item.banglaPronunciation.isNotEmpty ? item.banglaPronunciation : _translitToBangla(item.englishPronunciation.isNotEmpty ? item.englishPronunciation : _phoneticEnglishPronunciation(ar)),
+            englishPronunciation: item.englishPronunciation.isNotEmpty ? item.englishPronunciation : _phoneticEnglishPronunciation(ar),
             banglaTranslation: item.banglaTranslation,
             englishTranslation: item.englishTranslation,
             banglaExplanation: item.banglaExplanation,
@@ -1573,10 +2164,13 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       final startPage = _getSurahStartPage(surahId);
       final offset = (i / totalAyahs) * _getSurahTotalPages(surahId, totalAyahs);
       final pageVal = (startPage + offset.toInt()).clamp(1, 604);
+      final sampleArabic = 'وَإِذْ قَالَ رَبُّكَ لِلْمَلَائِكَةِ إِنِّي جَاعِلٌ فِي الْأَرْضِ خَلِيفَةً ($ayahNum)';
 
       return AyahContent(
         number: ayahNum,
-        arabic: 'وَإِذْ قَالَ رَبُّكَ لِلْمَلَائِكَةِ إِنِّي جَاعِلٌ فِي الْأَرْضِ خَلِيفَةً ($ayahNum)',
+        arabic: sampleArabic,
+        banglaPronunciation: _translitToBangla('Wa idh qala rabbuka lil-mala\'ikati inni ja\'ilun fil-ardi khalifah'),
+        englishPronunciation: 'Wa idh qala rabbuka lil-mala\'ikati inni ja\'ilun fil-ardi khalifah ($ayahNum)',
         banglaTranslation: '${surah.name} এর $ayahNum নং আয়াতের বাংলা অনুবাদ। মুমিনদের জন্য রয়েছে এতে কল্যাণ।',
         englishTranslation: 'This is the English translation of Surah ${surah.englishName} Ayah $ayahNum.',
         banglaExplanation: 'আয়াতটির তাফসিরে বর্ণিত হয়েছে যে আল্লাহ মুমিনদের সর্বদা সৎ পথে চলার নির্দেশনা দিয়েছেন।',
@@ -2289,22 +2883,128 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           ),
           const SizedBox(height: 4),
 
-          // Memorization switch inside Quran Reader
+          // Audio Tilawat Recitation Playback Bar
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: isSurahMemorized ? AppColors.midTeal.withValues(alpha: 0.08) : Colors.grey.withValues(alpha: 0.05),
+              color: (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                  ? AppColors.midTeal.withValues(alpha: 0.14)
+                  : cardBg,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                    ? AppColors.midTeal.withValues(alpha: 0.45)
+                    : Colors.grey.withValues(alpha: 0.15),
+                width: 0.8,
+              ),
+            ),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: () => _togglePlayAyahAudio(surah.id, currentAyah.number),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                          ? AppColors.midTeal
+                          : AppColors.midTeal.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: (_isLoadingAudio && _currentlyPlayingAyah == currentAyah.number)
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Icon(
+                            (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            color: (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                                ? Colors.white
+                                : AppColors.midTeal,
+                            size: 20,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                            ? 'Playing Tilawat...'
+                            : 'Listen Ayah Tilawat (Audio)',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                              ? AppColors.midTeal
+                              : themeText,
+                        ),
+                      ),
+                      Text(
+                        'Qari: ${_getReciterName(_selectedReciter)} · Ayah ${currentAyah.number}',
+                        style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_isPlayingAudio && _currentlyPlayingAyah == currentAyah.number)
+                  IconButton(
+                    tooltip: 'Stop',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.stop_circle_outlined, color: Colors.redAccent, size: 22),
+                    onPressed: _stopAyahAudio,
+                  ),
+              ],
+            ),
+          ),
+
+          // Sleek, ultra-thin Memorization Strip (Zero screen squeeze)
+          Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: isSurahMemorized
+                  ? AppColors.midTeal.withValues(alpha: 0.12)
+                  : cardBg,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSurahMemorized
+                    ? AppColors.midTeal.withValues(alpha: 0.35)
+                    : Colors.grey.withValues(alpha: 0.15),
+                width: 0.8,
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  isSurahMemorized ? '✓ Memorized in Hifz Map' : 'Not marked as memorized',
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: isSurahMemorized ? AppColors.midTeal : AppColors.placeholder),
+                Row(
+                  children: [
+                    Icon(
+                      isSurahMemorized ? Icons.check_circle_rounded : Icons.bookmark_border_rounded,
+                      size: 14,
+                      color: isSurahMemorized ? AppColors.midTeal : AppColors.placeholder,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isSurahMemorized ? 'Memorized in Hifz Map' : 'Not marked as memorized',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isSurahMemorized ? AppColors.midTeal : AppColors.placeholder,
+                      ),
+                    ),
+                  ],
                 ),
-                TextButton(
-                  onPressed: () {
+                InkWell(
+                  onTap: () {
                     setState(() {
                       if (isSurahMemorized) {
                         _memorizedSurahIds.remove(surah.id);
@@ -2314,15 +3014,23 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                       _saveState();
                     });
                   },
-                  child: Text(
-                    isSurahMemorized ? 'Mark Not Done' : 'Mark Memorized',
-                    style: GoogleFonts.poppins(fontSize: 11.5, color: isSurahMemorized ? Colors.red : AppColors.midTeal, fontWeight: FontWeight.bold),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Text(
+                      isSurahMemorized ? 'Mark Not Done' : 'Mark Memorized',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: isSurahMemorized ? Colors.redAccent : AppColors.midTeal,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           Expanded(
             child: SingleChildScrollView(
@@ -2332,7 +3040,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
                 elevation: 0,
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -2340,32 +3048,61 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                         Text(
                           'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.amiri(
+                          style: _getArabicStyle(
                             fontSize: _arabicFontSize + 2,
                             fontWeight: FontWeight.bold,
                             color: AppColors.midTeal,
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                         const Divider(height: 1),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                       ],
                       Text(
                         currentAyah.arabic,
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.amiri(
+                        style: _getArabicStyle(
                           fontSize: _arabicFontSize,
                           fontWeight: FontWeight.bold,
                           height: 1.8,
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      const Divider(height: 1),
                       const SizedBox(height: 16),
+                      const Divider(height: 1),
+                      const SizedBox(height: 14),
 
-                      if (_showBanglaTranslation) ...[
+                      // 1. Bangla Pronunciation
+                      if (_showBanglaPronunciation && currentAyah.banglaPronunciation.isNotEmpty) ...[
                         Text(
-                          'বাংলা অনুবাদ',
+                          'Bangla Pronunciation',
+                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          currentAyah.banglaPronunciation,
+                          style: GoogleFonts.inter(fontSize: 12.5, height: 1.45, color: themeText),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // 2. English Pronunciation
+                      if (_showEnglishPronunciation && currentAyah.englishPronunciation.isNotEmpty) ...[
+                        Text(
+                          'English Pronunciation',
+                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          currentAyah.englishPronunciation,
+                          style: GoogleFonts.inter(fontSize: 12.5, height: 1.45, color: themeText, fontStyle: FontStyle.italic),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // 3. Bangla Translation
+                      if (_showBanglaTranslation && currentAyah.banglaTranslation.isNotEmpty) ...[
+                        Text(
+                          'Bangla Translation',
                           style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal),
                         ),
                         const SizedBox(height: 4),
@@ -2373,10 +3110,11 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                           currentAyah.banglaTranslation,
                           style: GoogleFonts.inter(fontSize: 13, height: 1.45, color: themeText),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                       ],
 
-                      if (_showEnglishTranslation) ...[
+                      // 4. English Translation
+                      if (_showEnglishTranslation && currentAyah.englishTranslation.isNotEmpty) ...[
                         Text(
                           'English Translation',
                           style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal),
@@ -2386,14 +3124,14 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                           currentAyah.englishTranslation,
                           style: GoogleFonts.inter(fontSize: 13, height: 1.45, color: themeText),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                       ],
 
                       const Divider(height: 1),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
 
-                      // Tafsir section — follows translation toggle state
-                      if (_showBanglaTranslation && currentAyah.banglaExplanation.isNotEmpty) ...[
+                      // 5. Bangla Tafsir
+                      if (_showBanglaTafsir && currentAyah.banglaExplanation.isNotEmpty) ...[
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -2411,7 +3149,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  'তাফসির ইবনে কাসীর (আবু বকর জাকারিয়া)',
+                                  'Bangla Tafsir',
                                   style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                                 ),
                               ),
@@ -2426,7 +3164,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                         const SizedBox(height: 10),
                       ],
 
-                      if (_showEnglishTranslation && currentAyah.englishExplanation.isNotEmpty) ...[
+                      // 6. English Tafsir
+                      if (_showEnglishTafsir && currentAyah.englishExplanation.isNotEmpty) ...[
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -2444,7 +3183,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  'Tafsir Ibn Kathir',
+                                  'English Tafsir',
                                   style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                                 ),
                               ),
@@ -2458,118 +3197,182 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                         ),
                         const SizedBox(height: 4),
                       ],
-
-                      if (!_showBanglaTranslation && !_showEnglishTranslation)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            'Enable Bangla or English translation in Settings to see Tafsir.',
-                            style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.placeholder, fontStyle: FontStyle.italic),
-                          ),
-                        ),
-
-                      if (currentAyah.banglaExplanation.isEmpty && currentAyah.englishExplanation.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            'Tafsir not available for this verse in offline mode.',
-                            style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.placeholder, fontStyle: FontStyle.italic),
-                          ),
-                        ),
                     ],
                   ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                onPressed: _activeReaderAyahIndex > 1
-                    ? () => setState(() => _activeReaderAyahIndex--)
-                    : null,
-                child: Text('← Previous', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-              GestureDetector(
-                onTap: () => _showWheelPagePickerModal(context, cardBg, themeText),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.midTeal.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.30)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.unfold_more_rounded, size: 16, color: AppColors.midTeal),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Ayah $_activeReaderAyahIndex / ${_loadedAyahs.length}',
-                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+          const SizedBox(height: 10),
+
+          // Bottom Navigation Row with distinct Manual "Mark as Read" action
+          Builder(
+            builder: (context) {
+              final ayahKey = '${surah.id}_$_activeReaderAyahIndex';
+              final isCurrentAyahRead = _readAyahsToday.contains(ayahKey);
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // 1. Prev Button (Uniform 36px pill)
+                  InkWell(
+                    onTap: _activeReaderAyahIndex > 1
+                        ? () => setState(() {
+                            _activeReaderAyahIndex--;
+                            _continueAyah = _activeReaderAyahIndex;
+                            _continueSurahId = surah.id;
+                            _saveState();
+                          })
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: _activeReaderAyahIndex > 1
+                            ? (_isDarkMode ? const Color(0xFF282828) : Colors.grey[200])
+                            : (_isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey[100]),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ],
+                      alignment: Alignment.center,
+                      child: Text(
+                        '← Prev',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: _activeReaderAyahIndex > 1 ? themeText : AppColors.placeholder.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.navyBlue,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                onPressed: () {
-                  setState(() {
-                    if (_activeReaderAyahIndex < _loadedAyahs.length) {
-                      _activeReaderAyahIndex++;
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Completed Surah ${surah.name}!')),
-                      );
-                      return;
-                    }
-                    _continueSurahId = surah.id;
-                    _continueAyah = _activeReaderAyahIndex;
 
-                    final currentAyahObj = _loadedAyahs[_activeReaderAyahIndex - 1];
-                    if (currentAyahObj.page != null) {
-                      _continuePage = currentAyahObj.page!;
-                    } else {
-                      final startPage = _getSurahStartPage(surah.id);
-                      final offsetPages = _calculatePagesCompleted(surah.id, _activeReaderAyahIndex);
-                      _continuePage = (startPage + offsetPages.toInt()).clamp(1, 604);
-                    }
+                  // 2. Explicit "Mark as Read" toggle button (Uniform 36px pill)
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        if (isCurrentAyahRead) {
+                          _readAyahsToday.remove(ayahKey);
+                          if (_completedAyahsToday > 0) _completedAyahsToday--;
+                        } else {
+                          _readAyahsToday.add(ayahKey);
+                          _completedAyahsToday++;
+                          if (!_readAyahsAllTime.contains(ayahKey)) {
+                            _readAyahsAllTime.add(ayahKey);
+                            _khatmTotalJuzCompleted = ((_readAyahsAllTime.length / 6236.0) * 30).floor();
+                            if (_khatmTotalJuzCompleted > 30) _khatmTotalJuzCompleted = 30;
+                          }
+                        }
+                        _saveState();
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: isCurrentAyahRead
+                            ? Colors.green.withValues(alpha: 0.15)
+                            : (_isDarkMode ? const Color(0xFF282828) : Colors.grey[100]),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isCurrentAyahRead ? Colors.green : (_isDarkMode ? const Color(0xFF383838) : Colors.grey.withValues(alpha: 0.3)),
+                          width: 1,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isCurrentAyahRead ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                            size: 13,
+                            color: isCurrentAyahRead ? Colors.green : AppColors.placeholder,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isCurrentAyahRead ? 'Read Today' : 'Mark as Read',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isCurrentAyahRead ? Colors.green : themeText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
-                    final ayahKey = '${surah.id}_$_activeReaderAyahIndex';
-                    final alreadyReadToday = _readAyahsToday.contains(ayahKey);
-                    
-                    if (!alreadyReadToday) {
-                      _readAyahsToday.add(ayahKey);
-                      _completedAyahsToday++;
-                    }
-                    
-                    if (!_readAyahsAllTime.contains(ayahKey)) {
-                      _readAyahsAllTime.add(ayahKey);
-                      _khatmTotalJuzCompleted = ((_readAyahsAllTime.length / 6236.0) * 30).floor();
-                      if (_khatmTotalJuzCompleted > 30) _khatmTotalJuzCompleted = 30;
-                    }
-                    _saveState();
-                  });
-                },
-                child: Text(
-                  _activeReaderAyahIndex == _loadedAyahs.length ? 'Finish' : 'Next Ayah →',
-                  style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                ),
-              ),
-            ],
+                  // 3. Ayah Picker (Uniform 36px pill)
+                  InkWell(
+                    onTap: () => _showWheelPagePickerModal(context, cardBg, themeText),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.midTeal.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.30)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.unfold_more_rounded, size: 14, color: AppColors.midTeal),
+                          const SizedBox(width: 2),
+                          Text(
+                            '$_activeReaderAyahIndex / ${_loadedAyahs.length}',
+                            style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // 4. Next Button (Uniform 36px pill)
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        if (_activeReaderAyahIndex < _loadedAyahs.length) {
+                          _activeReaderAyahIndex++;
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Completed Surah ${surah.name}!')),
+                          );
+                          return;
+                        }
+                        _continueSurahId = surah.id;
+                        _continueAyah = _activeReaderAyahIndex;
+
+                        final currentAyahObj = _loadedAyahs[_activeReaderAyahIndex - 1];
+                        if (currentAyahObj.page != null) {
+                          _continuePage = currentAyahObj.page!;
+                        } else {
+                          final startPage = _getSurahStartPage(surah.id);
+                          final offsetPages = _calculatePagesCompleted(surah.id, _activeReaderAyahIndex);
+                          _continuePage = (startPage + offsetPages.toInt()).clamp(1, 604);
+                        }
+                        _saveState();
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.navyBlue,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _activeReaderAyahIndex == _loadedAyahs.length ? 'Finish' : 'Next →',
+                        style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -2809,7 +3612,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   Widget _buildHadithWazifaListTab(Color cardBg, Color themeText) {
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       itemCount: _hadithWazifaList.length,
       itemBuilder: (ctx, idx) {
         final w = _hadithWazifaList[idx];
@@ -2819,9 +3622,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
         return Card(
           color: _isDarkMode ? cardBg : Colors.white,
           elevation: _isDarkMode ? 0 : 1,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: itemBorder),
-          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: itemBorder),
+          margin: const EdgeInsets.only(bottom: 10),
           child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
             leading: Checkbox(
               value: val,
               activeColor: AppColors.midTeal,
@@ -2832,24 +3636,28 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 });
               },
             ),
-            title: Text(w.title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: themeText)),
-            subtitle: Text('Virtues: ${w.targetDay} • Count: ${w.recitationCount}', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+            title: Text(w.title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 12.5, color: themeText)),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text('Virtues: ${w.targetDay} • Count: ${w.recitationCount}', style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder, height: 1.3)),
+            ),
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Divider(),
-                    const SizedBox(height: 6),
-                    Text('Virtues & Benefit:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                    Text(w.benefitEnglish, style: GoogleFonts.inter(fontSize: 12, color: themeText, height: 1.35)),
+                    const Divider(height: 16),
+                    Text('Virtues & Benefit:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                    const SizedBox(height: 2),
+                    Text(w.benefitEnglish, style: GoogleFonts.inter(fontSize: 11, color: themeText, height: 1.4)),
                     const SizedBox(height: 8),
-                    Text('Hadith Reference:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.placeholder)),
-                    Text(w.hadithReference, style: GoogleFonts.inter(fontSize: 11, color: AppColors.placeholder, fontStyle: FontStyle.italic)),
+                    Text('Hadith Reference:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.placeholder)),
+                    const SizedBox(height: 2),
+                    Text(w.hadithReference, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder, fontStyle: FontStyle.italic)),
                     
                     if (w.surahId != null) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       ElevatedButton.icon(
                         onPressed: () {
                           final targetSurah = _surahList.firstWhere(
@@ -2867,35 +3675,36 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.navyBlue,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
                         ),
-                        icon: const Icon(Icons.menu_book_rounded, size: 16, color: Colors.white),
+                        icon: const Icon(Icons.menu_book_rounded, size: 14, color: Colors.white),
                         label: Text(
                           'Read Surah in Quran Reader',
-                          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
                         ),
                       ),
                     ],
 
                     if (w.arabicText != null) ...[
-                      const Divider(height: 24),
-                      Text('Arabic Verse:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                      const SizedBox(height: 6),
+                      const Divider(height: 20),
+                      Text('Arabic Verse:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                      const SizedBox(height: 4),
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF8FAFC),
                           border: Border.all(color: _isDarkMode ? const Color(0xFF3C3C3C) : const Color(0xFFE2E8F0)),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: SelectableText(
                           w.arabicText!,
                           textAlign: TextAlign.right,
                           textDirection: TextDirection.rtl,
                           style: GoogleFonts.amiri(
-                            fontSize: 18,
-                            height: 1.8,
+                            fontSize: 15.5,
+                            height: 1.7,
                             color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                             fontWeight: FontWeight.bold,
                           ),
@@ -2904,24 +3713,24 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     ],
 
                     if (w.englishPronunciation != null) ...[
-                      const SizedBox(height: 12),
-                      Text('English Transliteration:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                      const SizedBox(height: 4),
-                      Text(w.englishPronunciation!, style: GoogleFonts.inter(fontSize: 12.5, color: themeText, height: 1.45)),
+                      const SizedBox(height: 8),
+                      Text('English Transliteration:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                      const SizedBox(height: 2),
+                      Text(w.englishPronunciation!, style: GoogleFonts.inter(fontSize: 11, color: themeText, height: 1.4)),
                     ],
 
                     if (w.englishTranslation != null) ...[
-                      const SizedBox(height: 12),
-                      Text('English Meaning:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                      const SizedBox(height: 4),
-                      Text(w.englishTranslation!, style: GoogleFonts.inter(fontSize: 12.5, color: themeText, height: 1.45)),
+                      const SizedBox(height: 8),
+                      Text('English Meaning:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                      const SizedBox(height: 2),
+                      Text(w.englishTranslation!, style: GoogleFonts.inter(fontSize: 11, color: themeText, height: 1.4)),
                     ],
 
                     if (w.readingRules != null) ...[
-                      const SizedBox(height: 12),
-                      Text('Instructions & Rules:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
-                      const SizedBox(height: 4),
-                      Text(w.readingRules!, style: GoogleFonts.inter(fontSize: 12, color: AppColors.placeholder, fontStyle: FontStyle.italic)),
+                      const SizedBox(height: 8),
+                      Text('Instructions & Rules:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
+                      const SizedBox(height: 2),
+                      Text(w.readingRules!, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder, fontStyle: FontStyle.italic, height: 1.35)),
                     ],
                   ],
                 ),
@@ -2940,7 +3749,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       backgroundColor: Colors.transparent,
       body: ListView.builder(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         itemCount: list.length,
         itemBuilder: (ctx, idx) {
           final wazifa = list[idx];
@@ -2960,6 +3769,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
             margin: const EdgeInsets.only(bottom: 10),
             child: hasDetails
                 ? ExpansionTile(
+                    tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     leading: Checkbox(
                       value: val,
                       activeColor: AppColors.midTeal,
@@ -2970,8 +3780,11 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                         });
                       },
                     ),
-                    title: Text(wazifa.title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: themeText)),
-                    subtitle: Text('Virtues & Supplication Details (Tap to expand)', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+                    title: Text(wazifa.title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 12.5, color: themeText)),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text('Virtues & Supplication Details (Tap to expand)', style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder, height: 1.3)),
+                    ),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, color: AppColors.coralOrange, size: 18),
                       onPressed: () {
@@ -2984,35 +3797,34 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     ),
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (wazifa.benefitEnglish != null) ...[
-                              const Divider(),
-                              const SizedBox(height: 6),
-                              Text('Virtues & Benefit:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                              Text(wazifa.benefitEnglish!, style: GoogleFonts.inter(fontSize: 12, color: themeText, height: 1.35)),
+                              const Divider(height: 16),
+                              Text('Virtues & Benefit:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                              const SizedBox(height: 2),
+                              Text(wazifa.benefitEnglish!, style: GoogleFonts.inter(fontSize: 11, color: themeText, height: 1.4)),
                             ],
                             if (wazifa.arabicText != null) ...[
-                              const Divider(),
-                              const SizedBox(height: 6),
-                              Text('Arabic Verse:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                              const SizedBox(height: 6),
+                              const Divider(height: 16),
+                              Text('Arabic Verse:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                              const SizedBox(height: 4),
                               Container(
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
                                   color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF8FAFC),
-                          border: Border.all(color: _isDarkMode ? const Color(0xFF3C3C3C) : const Color(0xFFE2E8F0)),
-                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: _isDarkMode ? const Color(0xFF3C3C3C) : const Color(0xFFE2E8F0)),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: SelectableText(
                                   wazifa.arabicText!,
                                   textAlign: TextAlign.right,
                                   textDirection: TextDirection.rtl,
                                   style: GoogleFonts.amiri(
-                                    fontSize: 18,
-                                    height: 1.8,
+                                    fontSize: 15.5,
+                                    height: 1.7,
                                     color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -3020,22 +3832,22 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                               ),
                             ],
                             if (wazifa.englishPronunciation != null) ...[
-                              const SizedBox(height: 12),
-                              Text('English Transliteration:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                              const SizedBox(height: 4),
-                              Text(wazifa.englishPronunciation!, style: GoogleFonts.inter(fontSize: 12.5, color: themeText, height: 1.45)),
+                              const SizedBox(height: 8),
+                              Text('English Transliteration:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                              const SizedBox(height: 2),
+                              Text(wazifa.englishPronunciation!, style: GoogleFonts.inter(fontSize: 11, color: themeText, height: 1.4)),
                             ],
                             if (wazifa.englishTranslation != null) ...[
-                              const SizedBox(height: 12),
-                              Text('English Meaning:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                              const SizedBox(height: 4),
-                              Text(wazifa.englishTranslation!, style: GoogleFonts.inter(fontSize: 12.5, color: themeText, height: 1.45)),
+                              const SizedBox(height: 8),
+                              Text('English Meaning:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                              const SizedBox(height: 2),
+                              Text(wazifa.englishTranslation!, style: GoogleFonts.inter(fontSize: 11, color: themeText, height: 1.4)),
                             ],
                             if (wazifa.readingRules != null) ...[
-                              const SizedBox(height: 12),
-                              Text('Instructions & Rules:', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
-                              const SizedBox(height: 4),
-                              Text(wazifa.readingRules!, style: GoogleFonts.inter(fontSize: 12, color: AppColors.placeholder, fontStyle: FontStyle.italic)),
+                              const SizedBox(height: 8),
+                              Text('Instructions & Rules:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
+                              const SizedBox(height: 2),
+                              Text(wazifa.readingRules!, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder, fontStyle: FontStyle.italic, height: 1.35)),
                             ],
                           ],
                         ),
@@ -3043,6 +3855,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     ],
                   )
                 : ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                     leading: Checkbox(
                       value: val,
                       activeColor: AppColors.midTeal,
@@ -3053,8 +3866,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                         });
                       },
                     ),
-                    title: Text(wazifa.title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: themeText)),
-                    subtitle: Text('Supplication Checklist entry', style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+                    title: Text(wazifa.title, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 12.5, color: themeText)),
+                    subtitle: Text('Supplication Checklist entry', style: GoogleFonts.inter(fontSize: 10, color: AppColors.placeholder)),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, color: AppColors.coralOrange, size: 18),
                       onPressed: () {
@@ -3080,18 +3893,20 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   }
 
   void _showAddWazifaDialog(String category) {
+    String searchQuery = '';
+    String selectedFilterTag = 'All';
+    final searchController = TextEditingController();
+    final titleController = TextEditingController();
+    final arabicController = TextEditingController();
+    final pronunciationController = TextEditingController();
+    final translationController = TextEditingController();
+    final rulesController = TextEditingController();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        String searchQuery = '';
-        String selectedFilterTag = 'All';
-        final titleController = TextEditingController();
-        final arabicController = TextEditingController();
-        final pronunciationController = TextEditingController();
-        final translationController = TextEditingController();
-        final rulesController = TextEditingController();
 
         final quickTags = [
           'All',
@@ -3222,6 +4037,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                               Padding(
                                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                                 child: TextField(
+                                  controller: searchController,
                                   onChanged: (val) {
                                     setModalState(() {
                                       searchQuery = val;
@@ -3236,6 +4052,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                                         ? IconButton(
                                             icon: const Icon(Icons.clear_rounded, size: 18),
                                             onPressed: () {
+                                              searchController.clear();
                                               setModalState(() {
                                                 searchQuery = '';
                                               });
@@ -3244,7 +4061,9 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                                         : null,
                                     filled: true,
                                     fillColor: cardBg,
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppColors.midTeal.withValues(alpha: 0.35))),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppColors.midTeal.withValues(alpha: 0.35))),
+                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppColors.midTeal, width: 1.5)),
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                   ),
                                 ),
@@ -3315,152 +4134,175 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                                           final isAlreadyAdded = (_wazifaSupplications[category] ?? [])
                                               .any((w) => w.title == dua.title);
 
-                                          return Card(
-                                            color: cardBg,
-                                            margin: const EdgeInsets.only(bottom: 12),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: itemBorderColor)),
-                                            child: ExpansionTile(
-                                              tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                                              title: Text(
-                                                dua.title,
-                                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: fieldColor),
-                                              ),
-                                              subtitle: Padding(
-                                                padding: const EdgeInsets.only(top: 4),
-                                                child: Row(
-                                                  children: [
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: AppColors.midTeal.withValues(alpha: 0.15),
-                                                        borderRadius: BorderRadius.circular(6),
-                                                      ),
-                                                      child: Text(
-                                                        dua.hadithReference,
-                                                        style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.midTeal),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Expanded(
-                                                      child: Text(
-                                                        dua.benefitEnglish,
-                                                        maxLines: 1,
+                                            return Card(
+                                              color: cardBg,
+                                              margin: const EdgeInsets.only(bottom: 10),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: itemBorderColor)),
+                                              child: Theme(
+                                                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                                                child: ExpansionTile(
+                                                  tilePadding: const EdgeInsets.fromLTRB(14, 8, 12, 8),
+                                                  title: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        dua.title,
+                                                        maxLines: 2,
                                                         overflow: TextOverflow.ellipsis,
-                                                        style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder),
+                                                        style: GoogleFonts.poppins(
+                                                          fontWeight: FontWeight.w600,
+                                                          fontSize: 12.5,
+                                                          color: fieldColor,
+                                                          height: 1.3,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: AppColors.midTeal.withValues(alpha: 0.15),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                        ),
+                                                        child: Text(
+                                                          dua.hadithReference,
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                          style: GoogleFonts.inter(fontSize: 9.0, fontWeight: FontWeight.w600, color: AppColors.midTeal),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        dua.benefitEnglish,
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                        style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder, height: 1.35),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  trailing: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                                    children: [
+                                                      isAlreadyAdded
+                                                          ? Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.green.withValues(alpha: 0.15),
+                                                                borderRadius: BorderRadius.circular(8),
+                                                              ),
+                                                              child: Row(
+                                                                mainAxisSize: MainAxisSize.min,
+                                                                children: [
+                                                                  const Icon(Icons.check_circle_rounded, color: Colors.green, size: 12),
+                                                                  const SizedBox(width: 3),
+                                                                  Text(
+                                                                    'Added',
+                                                                    style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.green),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            )
+                                                          : SizedBox(
+                                                              height: 30,
+                                                              child: ElevatedButton.icon(
+                                                                onPressed: () {
+                                                                  setState(() {
+                                                                    _wazifaSupplications.putIfAbsent(category, () => []).add(dua.toCustomWazifa());
+                                                                    _saveState();
+                                                                  });
+                                                                  Navigator.pop(modalCtx);
+                                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                                    SnackBar(
+                                                                      backgroundColor: AppColors.navyBlue,
+                                                                      behavior: SnackBarBehavior.floating,
+                                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                                      content: Row(
+                                                                        children: [
+                                                                          const Icon(Icons.check_circle_rounded, color: AppColors.midTeal, size: 18),
+                                                                          const SizedBox(width: 8),
+                                                                          Expanded(
+                                                                            child: Text(
+                                                                              '"${dua.title}" added to your $category routine!',
+                                                                              style: GoogleFonts.poppins(fontSize: 11.5, color: Colors.white),
+                                                                            ),
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                    ),
+                                                                  );
+                                                                },
+                                                                style: ElevatedButton.styleFrom(
+                                                                  backgroundColor: AppColors.midTeal,
+                                                                  foregroundColor: Colors.white,
+                                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                                  elevation: 0,
+                                                                ),
+                                                                icon: const Icon(Icons.add_rounded, size: 14, color: Colors.white),
+                                                                label: Text(
+                                                                  'Add',
+                                                                  style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w600, color: Colors.white),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                      const SizedBox(height: 4),
+                                                      const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AppColors.placeholder),
+                                                    ],
+                                                  ),
+                                                  children: [
+                                                   Padding(
+                                                     padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                                                     child: Column(
+                                                       crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                       children: [
+                                                         const Divider(height: 16),
+                                                         Text('Arabic Verse:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                                                         const SizedBox(height: 4),
+                                                         Container(
+                                                           padding: const EdgeInsets.all(10),
+                                                           decoration: BoxDecoration(
+                                                             color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF8FAFC),
+                                                             border: Border.all(color: _isDarkMode ? const Color(0xFF3C3C3C) : const Color(0xFFE2E8F0)),
+                                                             borderRadius: BorderRadius.circular(10),
+                                                           ),
+                                                           child: SelectableText(
+                                                             dua.arabicText,
+                                                             textAlign: TextAlign.right,
+                                                             textDirection: TextDirection.rtl,
+                                                             style: GoogleFonts.amiri(
+                                                               fontSize: 15.5,
+                                                               height: 1.7,
+                                                               fontWeight: FontWeight.bold,
+                                                               color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                                                             ),
+                                                           ),
+                                                         ),
+                                                         const SizedBox(height: 8),
+                                                         Text('English Transliteration:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                                                         const SizedBox(height: 2),
+                                                         Text(dua.englishPronunciation, style: GoogleFonts.inter(fontSize: 11, color: fieldColor, height: 1.4)),
+                                                         const SizedBox(height: 8),
+                                                         Text('English Meaning:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                                                         const SizedBox(height: 2),
+                                                         Text(dua.englishTranslation, style: GoogleFonts.inter(fontSize: 11, color: fieldColor, height: 1.4)),
+                                                         const SizedBox(height: 8),
+                                                         Text('Instructions & Rules:', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
+                                                         const SizedBox(height: 2),
+                                                          Text(dua.readingRules, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder, fontStyle: FontStyle.italic, height: 1.35)),
+                                                        ],
                                                       ),
                                                     ),
                                                   ],
                                                 ),
                                               ),
-                                              trailing: isAlreadyAdded
-                                                  ? Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.green.withValues(alpha: 0.15),
-                                                        borderRadius: BorderRadius.circular(12),
-                                                      ),
-                                                      child: Row(
-                                                        mainAxisSize: MainAxisSize.min,
-                                                        children: [
-                                                          const Icon(Icons.check_circle_rounded, color: Colors.green, size: 14),
-                                                          const SizedBox(width: 4),
-                                                          Text(
-                                                            'Added',
-                                                            style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.green),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    )
-                                                  : ElevatedButton.icon(
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          _wazifaSupplications[category]?.add(dua.toCustomWazifa());
-                                                          _saveState();
-                                                        });
-                                                        Navigator.pop(modalCtx);
-                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                          SnackBar(
-                                                            backgroundColor: AppColors.navyBlue,
-                                                            behavior: SnackBarBehavior.floating,
-                                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                            content: Row(
-                                                              children: [
-                                                                const Icon(Icons.check_circle_rounded, color: AppColors.midTeal, size: 20),
-                                                                const SizedBox(width: 8),
-                                                                Expanded(
-                                                                  child: Text(
-                                                                    '"${dua.title}" added to your $category routine!',
-                                                                    style: GoogleFonts.poppins(fontSize: 12, color: Colors.white),
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
-                                                      style: ElevatedButton.styleFrom(
-                                                        backgroundColor: AppColors.midTeal,
-                                                        foregroundColor: Colors.white,
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                                        elevation: 0,
-                                                      ),
-                                                      icon: const Icon(Icons.add_rounded, size: 15, color: Colors.white),
-                                                      label: Text(
-                                                        'Add',
-                                                        style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                                                      ),
-                                                    ),
-                                              children: [
-                                                Padding(
-                                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                    children: [
-                                                      const Divider(),
-                                                      const SizedBox(height: 4),
-                                                      Text('Arabic Verse:', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                                                      const SizedBox(height: 4),
-                                                      Container(
-                                                        padding: const EdgeInsets.all(10),
-                                                        decoration: BoxDecoration(
-                                                          color: _isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF8FAFC),
-                                                          border: Border.all(color: _isDarkMode ? const Color(0xFF3C3C3C) : const Color(0xFFE2E8F0)),
-                                                          borderRadius: BorderRadius.circular(10),
-                                                        ),
-                                                        child: SelectableText(
-                                                          dua.arabicText,
-                                                          textAlign: TextAlign.right,
-                                                          textDirection: TextDirection.rtl,
-                                                          style: GoogleFonts.amiri(
-                                                            fontSize: 17,
-                                                            height: 1.8,
-                                                            fontWeight: FontWeight.bold,
-                                                            color: _isDarkMode ? Colors.white : AppColors.navyBlue,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 8),
-                                                      Text('English Transliteration:', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                                                      Text(dua.englishPronunciation, style: GoogleFonts.inter(fontSize: 11.5, color: fieldColor, height: 1.4)),
-                                                      const SizedBox(height: 8),
-                                                      Text('English Meaning:', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                                                      Text(dua.englishTranslation, style: GoogleFonts.inter(fontSize: 11.5, color: fieldColor, height: 1.4)),
-                                                      const SizedBox(height: 8),
-                                                      Text('Instructions & Rules:', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
-                                                      Text(dua.readingRules, style: GoogleFonts.inter(fontSize: 11, color: AppColors.placeholder, fontStyle: FontStyle.italic)),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
+                                            );
+                                          },
+                                        ),
                                       ),
-                              ),
-                            ],
-                          ),
-                          SingleChildScrollView(
+                                    ],
+                                  ),
+                                  SingleChildScrollView(
                             physics: const BouncingScrollPhysics(),
                             padding: const EdgeInsets.all(20),
                             child: Column(
@@ -3540,18 +4382,42 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                                   onPressed: () {
                                     final title = titleController.text.trim();
                                     if (title.isNotEmpty) {
+                                      final newWazifa = CustomWazifa(
+                                        title: title,
+                                        benefitEnglish: rulesController.text.trim().isNotEmpty
+                                            ? rulesController.text.trim()
+                                            : (translationController.text.trim().isNotEmpty
+                                                ? translationController.text.trim()
+                                                : 'Custom User Added Supplication'),
+                                        arabicText: arabicController.text.trim().isNotEmpty ? arabicController.text.trim() : null,
+                                        englishPronunciation: pronunciationController.text.trim().isNotEmpty ? pronunciationController.text.trim() : null,
+                                        englishTranslation: translationController.text.trim().isNotEmpty ? translationController.text.trim() : null,
+                                        readingRules: rulesController.text.trim().isNotEmpty ? rulesController.text.trim() : null,
+                                      );
                                       setState(() {
-                                        final newWazifa = CustomWazifa(
-                                          title: title,
-                                          arabicText: arabicController.text.trim().isNotEmpty ? arabicController.text.trim() : null,
-                                          englishPronunciation: pronunciationController.text.trim().isNotEmpty ? pronunciationController.text.trim() : null,
-                                          englishTranslation: translationController.text.trim().isNotEmpty ? translationController.text.trim() : null,
-                                          readingRules: rulesController.text.trim().isNotEmpty ? rulesController.text.trim() : null,
-                                        );
-                                        _wazifaSupplications[category]?.add(newWazifa);
+                                        _wazifaSupplications.putIfAbsent(category, () => []).add(newWazifa);
                                         _saveState();
                                       });
                                       Navigator.pop(modalCtx);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          backgroundColor: AppColors.navyBlue,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          content: Row(
+                                            children: [
+                                              const Icon(Icons.check_circle_rounded, color: AppColors.midTeal, size: 18),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  '"$title" added to your $category routine!',
+                                                  style: GoogleFonts.poppins(fontSize: 11.5, color: Colors.white),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
                                     }
                                   },
                                   style: ElevatedButton.styleFrom(
@@ -4041,19 +4907,33 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Beautiful custom visual bar chart using styled container columns
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    _buildStatsBarItem('Mon', 4, AppColors.midTeal),
-                    _buildStatsBarItem('Tue', 7, AppColors.coralOrange),
-                    _buildStatsBarItem('Wed', 5, AppColors.midTeal),
-                    _buildStatsBarItem('Thu', 2, AppColors.placeholder.withValues(alpha: 0.4)),
-                    _buildStatsBarItem('Fri', 8, AppColors.navyBlue),
-                    _buildStatsBarItem('Sat', 5, AppColors.midTeal),
-                    _buildStatsBarItem('Sun', 3, AppColors.midTeal),
-                  ],
+                // Fully Functional Live Weekly Consistency Bar Chart
+                Builder(
+                  builder: (context) {
+                    final todayName = DateFormat('E').format(DateTime.now());
+                    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                    
+                    int maxVal = 1;
+                    for (final d in days) {
+                      final v = _weeklyAyahsHistory[d] ?? 0;
+                      if (v > maxVal) maxVal = v;
+                    }
+
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: days.map((d) {
+                        final val = _weeklyAyahsHistory[d] ?? 0;
+                        final isToday = d == todayName;
+                        final double factor = maxVal > 0 ? (val / maxVal).clamp(0.12, 1.0) * 8.0 : 1.0;
+                        final Color barColor = isToday
+                            ? (val > 0 ? AppColors.coralOrange : AppColors.midTeal)
+                            : (val > 0 ? AppColors.midTeal : AppColors.placeholder.withValues(alpha: 0.25));
+
+                        return _buildStatsBarItem(d, factor, barColor, val);
+                      }).toList(),
+                    );
+                  },
                 ),
               ],
             ),
@@ -4151,21 +5031,36 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
     );
   }
 
-  Widget _buildStatsBarItem(String day, double heightFactor, Color color) {
+  Widget _buildStatsBarItem(String day, double heightFactor, Color color, [int? realCount]) {
+    final displayNum = realCount ?? (heightFactor * 2).toInt();
     return Column(
       children: [
-        Text('${(heightFactor * 2).toInt()}', style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.bold, color: color)),
+        Text(
+          '$displayNum',
+          style: GoogleFonts.poppins(
+            fontSize: 9.5,
+            fontWeight: FontWeight.bold,
+            color: displayNum > 0 ? color : AppColors.placeholder.withValues(alpha: 0.6),
+          ),
+        ),
         const SizedBox(height: 4),
         Container(
-          width: 24,
-          height: heightFactor * 12,
+          width: 26,
+          height: (heightFactor * 10).clamp(10.0, 90.0),
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(6),
           ),
         ),
         const SizedBox(height: 6),
-        Text(day, style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.placeholder)),
+        Text(
+          day,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppColors.placeholder,
+          ),
+        ),
       ],
     );
   }
@@ -4193,6 +5088,14 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
 
   // 5. SETTINGS
   Widget _buildSettingsFullPage(Color cardBg, Color themeText) {
+    const arabicFonts = [
+      {'name': 'Amiri', 'label': 'Amiri'},
+      {'name': 'Scheherazade New', 'label': 'Scheherazade'},
+      {'name': 'Noto Naskh Arabic', 'label': 'Noto Naskh'},
+      {'name': 'Lateef', 'label': 'Lateef'},
+      {'name': 'Katibeh', 'label': 'Katibeh'},
+    ];
+
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -4204,28 +5107,181 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Arabic Font Size', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
-                  Row(
-                    children: [
-                      IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () => setState(() => _arabicFontSize = (_arabicFontSize - 2).clamp(16.0, 36.0))),
-                      Text('${_arabicFontSize.toInt()}'),
-                      IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => setState(() => _arabicFontSize = (_arabicFontSize + 2).clamp(16.0, 36.0))),
-                    ],
-                  ),
-                ],
+              // Quran Reciter (Tilawat) Selection (Uniform 48px height)
+              SizedBox(
+                height: 48,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Quran Reciter',
+                      style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 8),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedReciter,
+                        dropdownColor: cardBg,
+                        isDense: true,
+                        alignment: AlignmentDirectional.centerEnd,
+                        selectedItemBuilder: (context) {
+                          return _reciterList.map((r) {
+                            return Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                r['name']!,
+                                textAlign: TextAlign.right,
+                                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                              ),
+                            );
+                          }).toList();
+                        },
+                        items: _reciterList.map((r) {
+                          return DropdownMenuItem<String>(
+                            value: r['id']!,
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: Text(
+                              r['name']!,
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _selectedReciter = val);
+                            _saveState();
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const Divider(height: 16),
 
+              // Arabic Font Selection (Uniform 48px height)
+              SizedBox(
+                height: 48,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Arabic Quran Font',
+                      style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 8),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _arabicFont,
+                        dropdownColor: cardBg,
+                        isDense: true,
+                        alignment: AlignmentDirectional.centerEnd,
+                        selectedItemBuilder: (context) {
+                          return arabicFonts.map((f) {
+                            return Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                f['label']!,
+                                textAlign: TextAlign.right,
+                                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                              ),
+                            );
+                          }).toList();
+                        },
+                        items: arabicFonts.map((f) {
+                          return DropdownMenuItem<String>(
+                            value: f['name']!,
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: Text(
+                              f['label']!,
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: themeText),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _arabicFont = val);
+                            _saveState();
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 16),
+
+              // Arabic Font Size (Uniform 48px height)
+              SizedBox(
+                height: 48,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Arabic Font Size', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: () {
+                            setState(() => _arabicFontSize = (_arabicFontSize - 2).clamp(16.0, 36.0));
+                            _saveState();
+                          },
+                        ),
+                        Text('${_arabicFontSize.toInt()}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          onPressed: () {
+                            setState(() => _arabicFontSize = (_arabicFontSize + 2).clamp(16.0, 36.0));
+                            _saveState();
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 16),
+
+              // Pronunciation Options (Clean English titles without brackets)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Bangla Pronunciation', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                value: _showBanglaPronunciation,
+                activeTrackColor: AppColors.midTeal.withValues(alpha: 0.5),
+                activeThumbColor: AppColors.midTeal,
+                onChanged: (v) {
+                  setState(() => _showBanglaPronunciation = v);
+                  _saveState();
+                },
+              ),
+              const Divider(height: 16),
+
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('English Pronunciation', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                value: _showEnglishPronunciation,
+                activeTrackColor: AppColors.midTeal.withValues(alpha: 0.5),
+                activeThumbColor: AppColors.midTeal,
+                onChanged: (v) {
+                  setState(() => _showEnglishPronunciation = v);
+                  _saveState();
+                },
+              ),
+              const Divider(height: 16),
+
+              // Translation Options (Clean English titles)
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text('Bangla Translation', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
                 value: _showBanglaTranslation,
                 activeTrackColor: AppColors.midTeal.withValues(alpha: 0.5),
                 activeThumbColor: AppColors.midTeal,
-                onChanged: (v) => setState(() => _showBanglaTranslation = v),
+                onChanged: (v) {
+                  setState(() => _showBanglaTranslation = v);
+                  _saveState();
+                },
               ),
               const Divider(height: 16),
 
@@ -4235,22 +5291,38 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 value: _showEnglishTranslation,
                 activeTrackColor: AppColors.midTeal.withValues(alpha: 0.5),
                 activeThumbColor: AppColors.midTeal,
-                onChanged: (v) => setState(() => _showEnglishTranslation = v),
+                onChanged: (v) {
+                  setState(() => _showEnglishTranslation = v);
+                  _saveState();
+                },
+              ),
+              const Divider(height: 16),
+
+              // Tafsir Options (Clean English titles, no extra subtitles)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Bangla Tafsir', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                value: _showBanglaTafsir,
+                activeTrackColor: AppColors.coralOrange.withValues(alpha: 0.5),
+                activeThumbColor: AppColors.coralOrange,
+                onChanged: (v) {
+                  setState(() => _showBanglaTafsir = v);
+                  _saveState();
+                },
               ),
               const Divider(height: 16),
 
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('Dark Reading Theme', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
-                value: _isDarkMode,
+                title: Text('English Tafsir', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.bold)),
+                value: _showEnglishTafsir,
                 activeTrackColor: AppColors.coralOrange.withValues(alpha: 0.5),
                 activeThumbColor: AppColors.coralOrange,
-                onChanged: (v) async {
-                  setState(() => _isDarkMode = v);
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setBool('is_dark_mode', v);
-                                     },
-                              ),             
+                onChanged: (v) {
+                  setState(() => _showEnglishTafsir = v);
+                  _saveState();
+                },
+              ),
               const Divider(height: 16),
 
               SwitchListTile(
@@ -4259,7 +5331,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 value: _readingReminderEnabled,
                 activeTrackColor: AppColors.midTeal.withValues(alpha: 0.5),
                 activeThumbColor: AppColors.midTeal,
-                onChanged: (v) => setState(() => _readingReminderEnabled = v),
+                onChanged: (v) {
+                  setState(() => _readingReminderEnabled = v);
+                  _saveState();
+                },
               ),
               const Divider(height: 16),
 

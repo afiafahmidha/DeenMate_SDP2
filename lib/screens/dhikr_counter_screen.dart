@@ -852,9 +852,8 @@ body: SafeArea(
     );
   }
 
-  // ============================================================
-  // TAB 1: COUNTER
-  // ============================================================
+   // TAB 1: COUNTER
+ 
   Widget _buildCounterTab() {
     return ListView(
       key: const ValueKey('CounterTab'),
@@ -1185,9 +1184,9 @@ body: SafeArea(
     );
   }
 
-  // ============================================================
+  
   // TAB 2: ADHKAR COLLECTIONS (Morning & Evening)
-  // ============================================================
+  
   Widget _buildAdhkarTab() {
     final list = _showMorningAdhkar ? _morningAdhkar : _eveningAdhkar;
     return ListView(
@@ -1292,10 +1291,8 @@ body: SafeArea(
       ],
     );
   }
-
-  // ============================================================
   // TAB 3: STATS & HISTORY
-  // ============================================================
+
   Widget _buildStatsHistoryTab() {
     return ListView(
       key: const ValueKey('StatsTab'),
@@ -1452,10 +1449,8 @@ body: SafeArea(
     }
     return result.reversed.toList();
   }
-
-  // ============================================================
   // TAB 4: REMINDERS & ACHIEVEMENTS
-  // ============================================================
+  
   Widget _buildRemindersAchievementsTab() {
     return ListView(
       key: const ValueKey('RemindersTab'),
@@ -1606,7 +1601,6 @@ body: SafeArea(
     final lifetime = prefs.getInt('dhikr_lifetime_total') ?? 0;
     return {'lifetime': lifetime, 'streak': _currentStreak};
   }
-
   // ===== DETAIL POPUPS (small card, blurred backdrop) =====
   void _showTodayDetails() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1776,7 +1770,6 @@ body: SafeArea(
     );
   }
 }
-
 // ===== ADHKAR DETAIL PAGE =====
 class _AdhkarDetailPage extends StatelessWidget {
   final _AdhkarItem item;

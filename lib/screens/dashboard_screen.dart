@@ -133,7 +133,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Cached today's prayer DateTimes for alarm scheduling
   DateTime? _fajrTime, _sunriseTime, _dhuhrTime, _asrTime, _maghribTime, _ishaTime;
 
-
   // Stars configuration for dashboard background
   final List<_DashboardStarConfig> _stars = [
     _DashboardStarConfig(topFraction: 0.02, leftFraction: 0.08, size: 5, delayMs: 200),
@@ -152,7 +151,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _DashboardStarConfig(topFraction: 0.78, leftFraction: 0.40, size: 4, delayMs: 550),
   ];
 
-
 Future<void> _loadUserProfile() async {
   debugPrint('🔥🔥🔥 LOAD USER PROFILE CALLED 🔥🔥🔥');
 
@@ -163,23 +161,36 @@ Future<void> _loadUserProfile() async {
       return;
     }
 
+    final uid = user.uid;
+    String k(String base) => '${base}_$uid';
+
     // 1. Immediately load cached name from SharedPreferences
     final prefs = await SharedPreferences.getInstance();
-    final cachedName = prefs.getString('profile_name');
+    String? cachedName = prefs.getString(k('profile_name')) ?? prefs.getString('profile_name');
+    if (cachedName != null && cachedName.trim().toLowerCase() == 'rahim uddin') {
+      cachedName = null;
+      await prefs.remove(k('profile_name'));
+      await prefs.remove('profile_name');
+    }
+
     if (cachedName != null && cachedName.trim().isNotEmpty) {
       if (mounted) {
         setState(() {
-          _userName = cachedName.trim();
+          _userName = cachedName!.trim();
         });
       }
-    } else {
-      // Fallback to auth display name if available
-      if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _userName = user.displayName!.trim();
-          });
-        }
+    } else if (user.displayName != null && user.displayName!.trim().isNotEmpty && user.displayName!.trim().toLowerCase() != 'rahim uddin') {
+      if (mounted) {
+        setState(() {
+          _userName = user.displayName!.trim();
+        });
+      }
+    } else if (user.email != null && user.email!.isNotEmpty) {
+      final prefix = user.email!.split('@')[0];
+      if (mounted) {
+        setState(() {
+          _userName = prefix;
+        });
       }
     }
 
@@ -195,15 +206,18 @@ Future<void> _loadUserProfile() async {
         // Sync profile details
         if (data['profile'] != null) {
           final profile = data['profile'] as Map<String, dynamic>;
-          final fullName = profile['fullName'] as String?;
+          String? fullName = profile['fullName'] as String?;
+          if (fullName != null && fullName.trim().toLowerCase() == 'rahim uddin') {
+            fullName = null;
+          }
           
           if (fullName != null && fullName.trim().isNotEmpty) {
             if (mounted) {
               setState(() {
-                _userName = fullName.trim();
+                _userName = fullName!.trim();
               });
             }
-            await prefs.setString('profile_name', _userName);
+            await prefs.setString(k('profile_name'), _userName);
           }
         }
 
@@ -969,6 +983,20 @@ Future<void> _onPositionUpdate(Position position) async {
                 ),
               ),
 
+              // Pinned Top Status Bar Shield (prevents scrolling content from overlapping system status bar icons)
+              if (_currentIndex == 0)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: MediaQuery.of(context).padding.top,
+                      color: _isDarkMode ? const Color(0xFF121212) : Colors.white,
+                    ),
+                  ),
+                ),
+
               // Bottom Navigation Bar
               Positioned(
                 bottom: 0,
@@ -1188,7 +1216,6 @@ Future<void> _onPositionUpdate(Position position) async {
       ),
     );
   }
-
   // ===== ZAKAT NAVIGATION =====
   void _showZakatCalculatorSheet() {
     Navigator.of(context).push(
@@ -1255,6 +1282,13 @@ Widget _buildActiveTabContent() {
           key: const ValueKey('ProfileTab'),
           onLogout: widget.onLogout,
           isDarkMode: _isDarkMode,
+          onUserNameChanged: (newName) {
+            if (mounted && newName.trim().isNotEmpty) {
+              setState(() {
+                _userName = newName.trim();
+              });
+            }
+          },
           onThemeChanged: (isDark) async {
             setState(() {
               _isDarkMode = isDark;
@@ -1274,7 +1308,10 @@ Widget _buildActiveTabContent() {
     return SingleChildScrollView(
       key: const ValueKey('HomeTab'),
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.only(top: 50, bottom: 20),
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 14,
+        bottom: 20,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1305,7 +1342,6 @@ _buildAnimatedEntry(
   child: _buildQuickStart(),
 ),
 const SizedBox(height: 28),
-
 
 // Islamic Wealth Section
 _buildAnimatedEntry(
@@ -1338,7 +1374,6 @@ _buildAnimatedEntry(
       ),
     );
   }
-
   // ===== ANIMATED ENTRY WRAPPER =====
   Widget _buildAnimatedEntry({required double delay, required Widget child}) {
     final animation = CurvedAnimation(
@@ -1363,7 +1398,6 @@ _buildAnimatedEntry(
       },
     );
   }
-
   // ===== GREETING HEADER =====
   Widget _buildGreetingHeader() {
     return Padding(
@@ -1476,7 +1510,6 @@ _buildAnimatedEntry(
       ),
     );
   }
-
   // ===== NEXT PRAYER CARD (static — no float, but animated decoration) =====
   // Returns the gradient for the Next Prayer Card based on the current prayer time
   LinearGradient _getPrayerCardGradient() {
@@ -2098,14 +2131,15 @@ _buildAnimatedEntry(
                   )
                 : Text(
                     _todaysGuidance,
-                    textAlign: TextAlign.justify,
+                    textAlign: TextAlign.start,
                     style: GoogleFonts.inter(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w400,
                       color: _isDarkMode
                           ? Colors.white70
                           : AppColors.navyBlue.withValues(alpha: 0.75),
-                      height: 1.5,
+                      height: 1.55,
+                      letterSpacing: 0.1,
                     ),
                   ),
           ],

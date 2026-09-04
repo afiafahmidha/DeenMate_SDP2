@@ -760,19 +760,39 @@ class QurbaniRepository {
   static String _prefsPlanKey()  => 'qurbani_plan_id_${currentUid()}';
 
   /// Fetches current user's avatarBase64 from SharedPreferences or Firestore user document.
+  /// Checks the UID-namespaced key first (written by profile_tab after an update),
+  /// then falls back to the legacy global key, then Firestore.
   static Future<String?> currentAvatarBase64() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final cached = prefs.getString('profile_avatar_base64');
-      if (cached != null && cached.trim().isNotEmpty) return cached.trim();
       final uid = currentUid();
+      final prefs = await SharedPreferences.getInstance();
+
+      // 1. Prefer the namespaced key — always written on image update.
+      final namespaced = prefs.getString('profile_avatar_base64_$uid');
+      if (namespaced != null && namespaced.trim().isNotEmpty) {
+        return namespaced.trim();
+      }
+
+      // 2. Fall back to legacy global key (old devices / web that haven't updated yet).
+      final legacy = prefs.getString('profile_avatar_base64');
+      if (legacy != null && legacy.trim().isNotEmpty) {
+        // Migrate it to the namespaced key so future reads are faster.
+        await prefs.setString('profile_avatar_base64_$uid', legacy.trim());
+        return legacy.trim();
+      }
+
+      // 3. Fetch from Firestore as the definitive source of truth.
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       if (doc.exists) {
         final profile = doc.data()?['profile'] as Map<String, dynamic>?;
         if (profile != null && profile['avatarBase64'] != null) {
           final b64 = (profile['avatarBase64'] as String).trim();
-          await prefs.setString('profile_avatar_base64', b64);
-          return b64;
+          if (b64.isNotEmpty) {
+            // Cache under both keys for future calls.
+            await prefs.setString('profile_avatar_base64_$uid', b64);
+            await prefs.setString('profile_avatar_base64', b64);
+            return b64;
+          }
         }
       }
     } catch (e) {
@@ -781,52 +801,75 @@ class QurbaniRepository {
     return null;
   }
 
-  /// Loads the locally remembered group. A group is created only when the
-  /// user explicitly chooses "Create a group" in the planner.
+  /// Loads the active group for the signed-in user.
+  ///
+  /// Strategy (in priority order):
+  ///   1. If local SharedPreferences has a saved ownerUid+planId, validate it
+  ///      against Firestore and return it if still valid.
+  ///   2. Check if the user owns any plan (users/{uid}/qurbaniPlans).
+  ///   3. Check the collectionGroup for plans where memberIds contains uid.
+  ///   4. Check if the user has a members subcollection document in any plan
+  ///      (handles the edge case where memberIds array wasn't updated).
+  ///
+  /// On success the ownerUid+planId is always persisted so future loads are fast.
   static Future<QurbaniRepository?> load() async {
     final uid = currentUid();
-    final prefs = await SharedPreferences.getInstance();
-    final savedOwner = prefs.getString(_prefsOwnerKey());
-    final savedPlan = prefs.getString(_prefsPlanKey());
+    if (uid == 'local_device') return null;
 
-    if (savedOwner != null && savedPlan != null) {
-      try {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(savedOwner)
-            .collection('qurbaniPlans')
-            .doc(savedPlan)
-            .get();
-
-        if (doc.exists) {
-          final isOwner = savedOwner == uid;
-          final data = doc.data() ?? {};
-          final memberIds = List<String>.from(data['memberIds'] ?? []);
-          final isMemberInArray = memberIds.contains(uid);
-          final memberDoc = await doc.reference.collection('members').doc(uid).get();
-
-          if (isOwner || isMemberInArray || memberDoc.exists) {
-            // Ensure uid is inside memberIds array for Firestore rules consistency
-            if (!memberIds.contains(uid)) {
-              try {
-                await doc.reference.update({
-                  'memberIds': FieldValue.arrayUnion([uid]),
-                });
-              } catch (_) {}
+    // ── Step 1: Check Cloud User Document for activeQurbaniPlan (100% Cross-Device & Web Synced)
+    try {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        final active = userDoc.data()?['activeQurbaniPlan'] as Map<String, dynamic>?;
+        if (active != null) {
+          final owner = active['ownerUid'] as String?;
+          final plan = active['planId'] as String?;
+          if (owner != null && plan != null) {
+            final planDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(owner)
+                .collection('qurbaniPlans')
+                .doc(plan)
+                .get();
+            if (planDoc.exists) {
+              await _persist(owner, plan);
+              return QurbaniRepository._(owner, plan);
             }
-            return QurbaniRepository._(savedOwner, savedPlan);
           }
-        } else {
-          // Document was permanently deleted
-          await _clearPersistedPlan();
         }
-      } catch (e) {
-        debugPrint("Error validating saved group: $e");
-        // Don't wipe cached plan on transient offline or network error
       }
+    } catch (e) {
+      debugPrint("Error checking cloud activeQurbaniPlan: $e");
     }
 
-    // Fallback 1: Check direct owned plan under users/{uid}/qurbaniPlans
+    // ── Step 2: Check Cloud joinedQurbaniPlans subcollection ─────────────────
+    try {
+      final joinedSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('joinedQurbaniPlans')
+          .limit(1)
+          .get();
+      if (joinedSnap.docs.isNotEmpty) {
+        final jData = joinedSnap.docs.first.data();
+        final owner = (jData['ownerUid'] as String?) ?? joinedSnap.docs.first.id;
+        final plan = (jData['planId'] as String?) ?? joinedSnap.docs.first.id;
+        final planDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(owner)
+            .collection('qurbaniPlans')
+            .doc(plan)
+            .get();
+        if (planDoc.exists) {
+          await _persist(owner, plan);
+          return QurbaniRepository._(owner, plan);
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking joinedQurbaniPlans subcollection: $e");
+    }
+
+    // ── Step 3: Check direct owned plan under users/{uid}/qurbaniPlans ──────
     try {
       final ownedSnap = await FirebaseFirestore.instance
           .collection('users')
@@ -836,15 +879,33 @@ class QurbaniRepository {
           .get();
       if (ownedSnap.docs.isNotEmpty) {
         final planDoc = ownedSnap.docs.first;
-        final planId = planDoc.id;
-        await _persist(uid, planId);
-        return QurbaniRepository._(uid, planId);
+        await _persist(uid, planDoc.id);
+        return QurbaniRepository._(uid, planDoc.id);
       }
     } catch (e) {
       debugPrint("Error checking owned plans: $e");
     }
 
-    // Fallback 2: Check member plans where memberIds contains uid (no orderBy to avoid index requirement)
+    // ── Step 4: Check local cache as fallback ──────────────────────────────
+    final prefs = await SharedPreferences.getInstance();
+    final savedOwner = prefs.getString(_prefsOwnerKey());
+    final savedPlan = prefs.getString(_prefsPlanKey());
+    if (savedOwner != null && savedPlan != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(savedOwner)
+            .collection('qurbaniPlans')
+            .doc(savedPlan)
+            .get();
+        if (doc.exists) {
+          await _persist(savedOwner, savedPlan);
+          return QurbaniRepository._(savedOwner, savedPlan);
+        }
+      } catch (_) {}
+    }
+
+    // ── Step 5: Global collectionGroup query (memberIds array) ─────────────
     try {
       final memberSnap = await FirebaseFirestore.instance
           .collectionGroup('qurbaniPlans')
@@ -854,13 +915,41 @@ class QurbaniRepository {
       if (memberSnap.docs.isNotEmpty) {
         final planDoc = memberSnap.docs.first;
         final ownerUid = planDoc.reference.parent.parent!.id;
-        final planId = planDoc.id;
+        await _persist(ownerUid, planDoc.id);
+        return QurbaniRepository._(ownerUid, planDoc.id);
+      }
+    } catch (e) {
+      debugPrint("Error in collectionGroup memberIds query: $e");
+    }
+
+    // ── Step 6: Global collectionGroup participants / members ──────────────
+    try {
+      final participantSubSnap = await FirebaseFirestore.instance
+          .collectionGroup('participants')
+          .where(FieldPath.documentId, isEqualTo: uid)
+          .limit(1)
+          .get();
+      if (participantSubSnap.docs.isNotEmpty) {
+        final partRef = participantSubSnap.docs.first.reference;
+        final planRef = partRef.parent.parent!;
+        final ownerUid = planRef.parent.parent!.id;
+        final planId = planRef.id;
+
+        // Self heal memberIds
+        try {
+          await planRef.update({
+            'memberIds': FieldValue.arrayUnion([uid]),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } catch (_) {}
+
         await _persist(ownerUid, planId);
         return QurbaniRepository._(ownerUid, planId);
       }
     } catch (e) {
-      debugPrint("Error discovering member plan: $e");
+      debugPrint("Error in collectionGroup participants query: $e");
     }
+
     return null;
   }
 
@@ -958,9 +1047,38 @@ class QurbaniRepository {
   }
 
   static Future<void> _persist(String ownerUid, String planId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsOwnerKey(), ownerUid);
-    await prefs.setString(_prefsPlanKey(), planId);
+    final uid = currentUid();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsOwnerKey(), ownerUid);
+      await prefs.setString(_prefsPlanKey(), planId);
+    } catch (_) {}
+
+    if (uid != 'local_device') {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'activeQurbaniPlan': {
+            'ownerUid': ownerUid,
+            'planId': planId,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }
+        }, SetOptions(merge: true));
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('joinedQurbaniPlans')
+            .doc(planId)
+            .set({
+          'ownerUid': ownerUid,
+          'planId': planId,
+          'isOwner': ownerUid == uid,
+          'joinedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint("Error persisting activeQurbaniPlan to Firestore: $e");
+      }
+    }
   }
 
   Future<String> createInviteCode() async {
@@ -983,9 +1101,20 @@ class QurbaniRepository {
   }
 
   static Future<void> _clearPersistedPlan() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefsOwnerKey());
-    await prefs.remove(_prefsPlanKey());
+    final uid = currentUid();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefsOwnerKey());
+      await prefs.remove(_prefsPlanKey());
+    } catch (_) {}
+
+    if (uid != 'local_device') {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(uid).update({
+          'activeQurbaniPlan': FieldValue.delete(),
+        });
+      } catch (_) {}
+    }
   }
 
   static Future<QurbaniRepository> createGroup() => _createNewPlan();
@@ -1120,6 +1249,42 @@ class QurbaniRepository {
   Future<void> updateOwnShares(int shares) => joinCurrentUserWithShares(shares);
 
   Future<void> forgetLocally() => _clearPersistedPlan();
+
+  /// Syncs the signed-in user's latest avatar and name from profile cache / Firestore
+  /// to their participant and member records in the current group.
+  Future<void> syncCurrentUserProfile() async {
+    try {
+      final uid = currentUid();
+      if (uid == 'local_device') return;
+      final name = currentDisplayName();
+      final photoUrl = currentPhotoUrl();
+      final avatarBase64 = await currentAvatarBase64();
+
+      final memberDoc = planRef.collection('members').doc(uid);
+      final mSnap = await memberDoc.get();
+      if (mSnap.exists) {
+        await memberDoc.update({
+          if (name.isNotEmpty) 'name': name,
+          'photoUrl': photoUrl,
+          'avatarBase64': avatarBase64,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      final participantDoc = participantsRef.doc(uid);
+      final pSnap = await participantDoc.get();
+      if (pSnap.exists) {
+        await participantDoc.update({
+          if (name.isNotEmpty) 'name': name,
+          if (name.isNotEmpty) 'ownerName': name,
+          'photoUrl': photoUrl,
+          'avatarBase64': avatarBase64,
+        });
+      }
+    } catch (e) {
+      debugPrint("Error syncing profile to Qurbani group: $e");
+    }
+  }
 
   static Future<QurbaniRepository> joinByCode(String code, int shares) async {
     final trimmed = code.trim().toUpperCase();
@@ -1863,6 +2028,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   bool _isDarkMode = false;
   QurbaniRepository? _repo;
   String? _repositoryError;
+  bool _isLoadingRepo = false;
 
   // Registered User Search
   List<Map<String, dynamic>> _userSearchResults = [];
@@ -1873,6 +2039,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   // Real-time Chat & Media Playback
   final TextEditingController _chatMsgCtrl = TextEditingController();
   String? _editingMessageId;
+  String? _myCurrentAvatarBase64;
+  Map<String, String> _membersAvatarCache = {};
 
   // Location Share Board
   Position? _currentUserPosition;
@@ -1953,6 +2121,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   void initState() {
     super.initState();
     _loadTheme();
+    _loadCurrentAvatar();
     _calculateCosts();
     _calculateAqiqahCosts();
     _loadRepository();
@@ -2051,28 +2220,51 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
 
   Future<void> _loadRepository() async {
     setState(() {
-      _repo = null;
+      _isLoadingRepo = true;
       _repositoryError = null;
     });
 
     if (FirebaseAuth.instance.currentUser == null) {
       if (mounted) {
-        setState(() => _repositoryError = 'Please sign in before using the Qurbani Planner.');
+        setState(() {
+          _repo = null;
+          _isLoadingRepo = false;
+          _repositoryError = 'Please sign in before using the Qurbani Planner.';
+        });
       }
       return;
     }
 
     try {
       final repository = await QurbaniRepository.load();
-      if (mounted) setState(() => _repo = repository);
+      if (repository != null) {
+        // Sync the latest profile avatar & name into the group
+        repository.syncCurrentUserProfile();
+      }
+      if (mounted) {
+        setState(() {
+          _repo = repository;
+          _isLoadingRepo = false;
+        });
+      }
     } on FirebaseException catch (error) {
       if (mounted) {
-        setState(() => _repositoryError = error.code == 'permission-denied'
-            ? 'The Qurbani Planner is not permitted by Firestore yet. Deploy the updated Firestore rules, then try again.'
-            : 'Could not load your Qurbani plan: ${error.message ?? error.code}');
+        setState(() {
+          _repo = null;
+          _isLoadingRepo = false;
+          _repositoryError = error.code == 'permission-denied'
+              ? 'The Qurbani Planner is not permitted by Firestore yet. Deploy the updated Firestore rules, then try again.'
+              : 'Could not load your Qurbani plan: ${error.message ?? error.code}';
+        });
       }
     } catch (error) {
-      if (mounted) setState(() => _repositoryError = 'Could not load your Qurbani plan: $error');
+      if (mounted) {
+        setState(() {
+          _repo = null;
+          _isLoadingRepo = false;
+          _repositoryError = 'Could not load your Qurbani plan: $error';
+        });
+      }
     }
   }
 
@@ -4158,6 +4350,22 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   }
 
   Widget _buildSharesTab(NumberFormat fmt) {
+    if (_isLoadingRepo) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(color: AppColors.midTeal),
+            const SizedBox(height: 16),
+            Text(
+              'Connecting to your Qurbani Group...',
+              style: GoogleFonts.poppins(fontSize: 13, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (_repo == null) {
       return Center(
         child: Padding(
@@ -4172,15 +4380,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
               ),
-              if (_repositoryError != null) ...[
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _loadRepository,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Try again'),
-                ),
-              ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: _createGroup,
                 icon: const Icon(Icons.group_add_rounded),
@@ -4197,6 +4397,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   side: const BorderSide(color: AppColors.navyBlue),
                 ),
               ),
+
             ],
           ),
         ),
@@ -5002,6 +5203,36 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     );
   }
 
+  Future<void> _loadCurrentAvatar() async {
+    final b64 = await QurbaniRepository.currentAvatarBase64();
+    if (mounted && b64 != null) {
+      setState(() => _myCurrentAvatarBase64 = b64);
+    }
+  }
+
+  String _formatMessageDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(date.year, date.month, date.day);
+    final diffDays = today.difference(messageDate).inDays;
+
+    if (diffDays == 0) {
+      return 'Today';
+    } else if (diffDays == 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7 && diffDays > 0) {
+      return DateFormat('EEEE').format(date); // e.g. Monday
+    } else if (date.year == now.year) {
+      return DateFormat('MMMM d').format(date); // e.g. August 23
+    } else {
+      return DateFormat('MMMM d, yyyy').format(date); // e.g. August 23, 2026
+    }
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   Widget _buildGroupChatSection() {
     final myUid = QurbaniRepository.currentUid();
     final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
@@ -5032,64 +5263,117 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   child: Text('No messages yet. Start the conversation!', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
                 );
               }
-              return ListView.builder(
-                controller: widget.scrollController,
-                reverse: true,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                itemCount: messages.length,
-                itemBuilder: (ctx, i) {
-                  final msg = messages[i];
-                  final isMe = msg.senderUid == myUid;
-                  final bubbleColor = isMe ? AppColors.midTeal : (_isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF0F0F0));
+              return StreamBuilder<List<QPlanMember>>(
+                stream: _repo!.watchMembers(),
+                builder: (context, memberSnap) {
+                  final members = memberSnap.data ?? [];
+                  final memberAvatarMap = <String, String>{};
+                  for (final m in members) {
+                    if (m.avatarBase64 != null && m.avatarBase64!.isNotEmpty) {
+                      memberAvatarMap[m.id] = m.avatarBase64!;
+                    }
+                  }
 
-                  return GestureDetector(
-                    onLongPress: isMe ? () => _showMessageOptions(msg) : null,
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: 6, left: isMe ? 48 : 0, right: isMe ? 0 : 48),
-                      child: Row(
-                        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                  return ListView.builder(
+                    controller: widget.scrollController,
+                    reverse: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    itemCount: messages.length,
+                    itemBuilder: (ctx, i) {
+                      final msg = messages[i];
+                      final isMe = msg.senderUid == myUid;
+                      final bubbleColor = isMe ? AppColors.midTeal : (_isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF0F0F0));
+
+                      // Resolve live latest avatar:
+                      // For current user: always use current live profile avatar _myCurrentAvatarBase64
+                      // For other members: use live member avatar from group member record
+                      final liveAvatar = isMe
+                          ? (_myCurrentAvatarBase64 ?? msg.avatarBase64)
+                          : (memberAvatarMap[msg.senderUid] ?? msg.avatarBase64);
+
+                      // Messenger-style Date Header Check (reverse: true -> i+1 is previous chronologically)
+                      final bool isFirstInDay = i == messages.length - 1 || !_isSameDay(messages[i].createdAt, messages[i + 1].createdAt);
+
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (!isMe) ...[DeenMateAvatar(name: msg.senderName, photoUrl: msg.photoUrl, avatarBase64: msg.avatarBase64, radius: 13), const SizedBox(width: 6)],
-                          Flexible(
-                            child: Column(
-                              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                              children: [
-                                if (!isMe)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 4, bottom: 2),
-                                    child: Text(msg.senderName, style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
-                                  ),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(16),
-                                    topRight: const Radius.circular(16),
-                                    bottomLeft: isMe ? const Radius.circular(16) : const Radius.circular(4),
-                                    bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(16),
-                                  ),
-                                  child: Container(
-                                    color: bubbleColor,
-                                    child: _buildChatMediaContent(msg, isMe, textColor),
+                          if (isFirstInDay)
+                            Center(
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  _formatMessageDateHeader(msg.createdAt),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: _isDarkMode ? Colors.white70 : Colors.grey[700],
                                   ),
                                 ),
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (msg.edited == true)
-                                        Text('edited · ', style: GoogleFonts.inter(fontSize: 8, color: Colors.grey)),
-                                      Text(DateFormat('hh:mm a').format(msg.createdAt), style: GoogleFonts.inter(fontSize: 8.5, color: Colors.grey)),
-                                    ],
+                              ),
+                            ),
+                          GestureDetector(
+                            onLongPress: isMe ? () => _showMessageOptions(msg) : null,
+                            child: Padding(
+                              padding: EdgeInsets.only(bottom: 6, left: isMe ? 48 : 0, right: isMe ? 0 : 48),
+                              child: Row(
+                                mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  if (!isMe) ...[
+                                    DeenMateAvatar(name: msg.senderName, photoUrl: msg.photoUrl, avatarBase64: liveAvatar, radius: 13),
+                                    const SizedBox(width: 6),
+                                  ],
+                                  Flexible(
+                                    child: Column(
+                                      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                      children: [
+                                        if (!isMe)
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 4, bottom: 2),
+                                            child: Text(msg.senderName, style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                                          ),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: const Radius.circular(16),
+                                            topRight: const Radius.circular(16),
+                                            bottomLeft: isMe ? const Radius.circular(16) : const Radius.circular(4),
+                                            bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(16),
+                                          ),
+                                          child: Container(
+                                            color: bubbleColor,
+                                            child: _buildChatMediaContent(msg, isMe, textColor),
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (msg.edited == true)
+                                                Text('edited · ', style: GoogleFonts.inter(fontSize: 8, color: Colors.grey)),
+                                              Text(DateFormat('hh:mm a').format(msg.createdAt), style: GoogleFonts.inter(fontSize: 8.5, color: Colors.grey)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  if (isMe) ...[
+                                    const SizedBox(width: 6),
+                                    DeenMateAvatar(name: msg.senderName, photoUrl: QurbaniRepository.currentPhotoUrl(), avatarBase64: liveAvatar, radius: 13),
+                                  ],
+                                ],
+                              ),
                             ),
                           ),
-                          if (isMe) ...[const SizedBox(width: 6), DeenMateAvatar(name: msg.senderName, photoUrl: msg.photoUrl, avatarBase64: msg.avatarBase64, radius: 13)],
                         ],
-                      ),
-                    ),
+                      );
+                    },
                   );
                 },
               );
