@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
 
 class NotificationCenterModal extends StatefulWidget {
@@ -46,6 +47,7 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
   String _selectedCategory = 'all';
   bool _showSettings = false;
   bool _hasPermission = true;
+  DateTime? _upcomingFastingDate;
 
   final List<Map<String, String>> _categories = const [
     {'id': 'all', 'label': 'All'},
@@ -61,6 +63,26 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
   void initState() {
     super.initState();
     _checkPermission();
+    _loadUpcomingFasting();
+    NotificationService.instance.fastingAlarmsRevision
+        .addListener(_loadUpcomingFasting);
+  }
+
+  @override
+  void dispose() {
+    NotificationService.instance.fastingAlarmsRevision
+        .removeListener(_loadUpcomingFasting);
+    super.dispose();
+  }
+
+  Future<void> _loadUpcomingFasting() async {
+    final date =
+        await NotificationService.instance.getEarliestUpcomingFastingDate();
+    if (mounted) {
+      setState(() {
+        _upcomingFastingDate = date;
+      });
+    }
   }
 
   Future<void> _checkPermission() async {
@@ -120,9 +142,24 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
     final dividerColor = isDark ? Colors.white12 : Colors.black12;
 
     final history = NotificationService.instance.history;
-    final filteredItems = _selectedCategory == 'all'
-        ? history
-        : history.where((item) => item.category == _selectedCategory).toList();
+    final filteredItems = history.where((item) {
+      if (_selectedCategory != 'all' && item.category != _selectedCategory) {
+        return false;
+      }
+      // Filter out pre-scheduled or legacy fasting entries from history
+      // so only the dynamic upcoming fast is shown without duplicate or stale items
+      if (item.category == 'events' &&
+          (item.title.toLowerCase().contains('fasting') ||
+              item.title.contains('রোজা'))) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final showUpcomingFast = _upcomingFastingDate != null &&
+        (_selectedCategory == 'all' || _selectedCategory == 'events');
+    final hasContent = filteredItems.isNotEmpty || showUpcomingFast;
+    final totalCount = filteredItems.length + (showUpcomingFast ? 1 : 0);
 
     return Container(
       height: size.height * 0.85,
@@ -370,7 +407,7 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
 
                       // Notification History Feed
                       Expanded(
-                        child: filteredItems.isEmpty
+                        child: !hasContent
                             ? Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -398,9 +435,18 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
                                   16,
                                   40,
                                 ),
-                                itemCount: filteredItems.length,
+                                itemCount: totalCount,
                                 itemBuilder: (context, index) {
-                                  final item = filteredItems[index];
+                                  if (showUpcomingFast && index == 0) {
+                                    return _buildUpcomingFastingCard(
+                                      _upcomingFastingDate!,
+                                      textColor,
+                                      isDark,
+                                    );
+                                  }
+                                  final itemIndex =
+                                      showUpcomingFast ? index - 1 : index;
+                                  final item = filteredItems[itemIndex];
                                   final accent = _categoryColor(item.category);
 
                                   return Dismissible(
@@ -638,6 +684,118 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUpcomingFastingCard(
+    DateTime date,
+    Color textColor,
+    bool isDark,
+  ) {
+    final isMonday = date.weekday == DateTime.monday;
+    final isThursday = date.weekday == DateTime.thursday;
+    final dateStr = DateFormat('EEEE, d MMMM').format(date);
+    final eveningBefore = date.subtract(const Duration(days: 1));
+    final eveDayStr = DateFormat('EEEE').format(eveningBefore);
+
+    String fastTitle = 'Sunnah Fast';
+    if (isMonday) {
+      fastTitle = 'Sunnah Monday Fast';
+    } else if (isThursday) {
+      fastTitle = 'Sunnah Thursday Fast';
+    } else {
+      fastTitle = 'Voluntary (Nafl) Fast';
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      color: isDark
+          ? const Color(0xFFE9C46A).withValues(alpha: 0.12)
+          : const Color(0xFFFFF9E6),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: const Color(0xFFE9C46A).withValues(alpha: 0.45),
+          width: 1.2,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE9C46A).withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'EVENTS',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isDark
+                          ? const Color(0xFFFFD54F)
+                          : const Color(0xFFB78103),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A9D8F).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.notifications_active_rounded,
+                        size: 11,
+                        color: Color(0xFF2A9D8F),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'UPCOMING FAST',
+                        style: GoogleFonts.inter(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF2A9D8F),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '$fastTitle – $dateStr',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Reminder scheduled for $eveDayStr at Maghrib (sunset, Islamic start of day). Make intention (Niyyah) and prepare for Suhoor.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: textColor.withValues(alpha: 0.8),
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

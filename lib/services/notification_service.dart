@@ -98,6 +98,7 @@ class NotificationService {
 
   final List<NotificationItem> _history = [];
   final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> fastingAlarmsRevision = ValueNotifier<int>(0);
 
   List<NotificationItem> get history => List.unmodifiable(_history);
   int get snoozeDurationMinutes => _snoozeDurationMinutes;
@@ -749,6 +750,15 @@ class NotificationService {
     await _plugin.cancelAll();
   }
 
+  /// Cancels a single previously-scheduled custom notification (e.g. one
+  /// created via [scheduleCustomNotification]) by its id. Used by callers
+  /// that schedule their own one-off reminders — such as the calendar's
+  /// per-date fasting alarm — and need to turn a specific one back off.
+  Future<void> cancelCustomNotification(int id) async {
+    if (!_initialized) await init();
+    await _plugin.cancel(id);
+  }
+
   String _arabicName(String prayerName) {
     const map = {
       'Fajr': 'Fajr (الفجر)',
@@ -775,16 +785,27 @@ class NotificationService {
     required DateTime scheduledTime,
     String category = 'events',
     String? targetRoute,
+    // When true (default, unchanged for existing callers), an entry is
+    // added to the in-app Notification Center immediately, at schedule
+    // time. For a reminder that's actually scheduled well into the
+    // future (e.g. the fasting alarm, set days/weeks ahead), that made
+    // it look like the notification had already been sent ("Just now")
+    // even though nothing had fired yet. Pass false to skip that and
+    // only rely on the real system notification firing at scheduledTime
+    // — the same pattern schedulePrayerAlarm already uses.
+    bool addToHistory = true,
   }) async {
     if (!_initialized) await init();
     if (!isCategoryEnabled(category)) return;
 
-    await addNotificationItem(
-      title: title,
-      body: body,
-      category: category,
-      targetRoute: targetRoute,
-    );
+    if (addToHistory) {
+      await addNotificationItem(
+        title: title,
+        body: body,
+        category: category,
+        targetRoute: targetRoute,
+      );
+    }
 
     if (scheduledTime.isBefore(DateTime.now())) return;
 
@@ -798,7 +819,12 @@ class NotificationService {
         importance: Importance.max,
         priority: Priority.max,
         playSound: true,
+        sound: UriAndroidNotificationSound(
+          "content://settings/system/alarm_alert",
+        ),
         enableVibration: true,
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
         ongoing: false,
       );
@@ -807,6 +833,8 @@ class NotificationService {
         presentAlert: true,
         presentSound: true,
         presentBadge: true,
+        presentBanner: true,
+        presentList: true,
       );
 
       const details = NotificationDetails(
@@ -828,6 +856,43 @@ class NotificationService {
     } catch (e) {
       debugPrint('[NotificationService] System zonedSchedule error: $e');
     }
+  }
+
+  void notifyFastingAlarmsChanged() {
+    fastingAlarmsRevision.value++;
+  }
+
+  Future<List<String>> getFastingAlarmDateKeys() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList('fasting_alarm_dates') ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<DateTime?> getEarliestUpcomingFastingDate() async {
+    final keys = await getFastingAlarmDateKeys();
+    final dates = <DateTime>[];
+    for (final k in keys) {
+      if (k.length == 8) {
+        final d = DateTime.tryParse(
+          '${k.substring(0, 4)}-${k.substring(4, 6)}-${k.substring(6, 8)}',
+        );
+        if (d != null) dates.add(d);
+      }
+    }
+    if (dates.isEmpty) return null;
+    dates.sort();
+    final now = DateTime.now();
+    for (final d in dates) {
+      // Fast day 'd' is completed after Maghrib of 'd' (~7 PM).
+      final endOfFast = DateTime(d.year, d.month, d.day, 19, 0);
+      if (now.isBefore(endOfFast)) {
+        return d;
+      }
+    }
+    return null;
   }
 
   Future<void> showCustomNotification({
