@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:math' as math;
@@ -6,7 +7,12 @@ import 'package:intl/intl.dart';
 import 'package:adhan/adhan.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../widgets/auth_header.dart'; 
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/auth_header.dart';
+// Adjust this path if notification_service.dart lives elsewhere in your project.
+import '../services/notification_service.dart';
+import '../widgets/notification_center_modal.dart';
 
 // ===== HIJRI DATE MODEL =====
 class HijriDate {
@@ -202,6 +208,83 @@ class HijriConverter {
     int jd = gToJd(date.year, date.month, date.day);
     return jdToH(jd);
   }
+}
+
+// ===== HIJRI API SERVICE (AlAdhan) =====
+// Fetches Hijri dates for a whole Gregorian month in ONE request from the
+// AlAdhan Islamic Calendar API (https://aladhan.com), using the Umm al-Qura
+// astronomical calculation — a widely-used standard, and far more accurate
+// than the raw tabular arithmetic in HijriConverter above.
+//
+// Important nuance: this is a *calculated* calendar, not a live feed of
+// actual regional crescent-sighting announcements (no such public API
+// exists anywhere — moon-sighting committees announce case by case, not
+// through an API). That's exactly what CalendarDatabase.gregorianOverrides
+// is for: it stays the final source of truth for any date where Bangladesh's
+// official moon-sighting announcement is confirmed to differ from the
+// calculated date. Priority order used everywhere in this file is:
+//   1. gregorianOverrides (confirmed local moon-sighting correction)
+//   2. HijriApiService cache (AlAdhan / Umm al-Qura calculation)
+//   3. HijriConverter.fromGregorian (local arithmetic fallback — used only
+//      while the API call is still in flight, or if it fails/there's no
+//      internet, so the calendar never breaks or looks empty).
+class HijriApiService {
+  static const String _baseUrl = 'https://api.aladhan.com/v1/gToHCalendar';
+  // Umm al-Qura — the most widely recognised astronomical Hijri method.
+  static const String _calendarMethod = 'UAQ';
+
+  static final Map<String, HijriDate> _cache = {};
+  static final Set<String> _fetchedMonths = {}; // "yyyy-MM" already requested
+
+  static String _dayKey(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
+  static String _monthKey(int year, int month) =>
+      '$year-${month.toString().padLeft(2, '0')}';
+
+  /// Fetches and caches the Hijri date for every day of [month]/[year].
+  /// Safe to call repeatedly — a month already fetched (or in flight)
+  /// returns immediately without hitting the network again.
+  static Future<void> fetchMonth(int year, int month) async {
+    final mKey = _monthKey(year, month);
+    if (_fetchedMonths.contains(mKey)) return;
+    _fetchedMonths.add(mKey);
+
+    try {
+      final uri = Uri.parse('$_baseUrl/$month/$year?calendarMethod=$_calendarMethod');
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) {
+        _fetchedMonths.remove(mKey); // allow a retry later
+        return;
+      }
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = decoded['data'] as List<dynamic>?;
+      if (data == null) {
+        _fetchedMonths.remove(mKey);
+        return;
+      }
+
+      for (final entry in data) {
+        final e = entry as Map<String, dynamic>;
+        final gregorian = e['gregorian'] as Map<String, dynamic>;
+        final hijri = e['hijri'] as Map<String, dynamic>;
+        final gDateParts = (gregorian['date'] as String).split('-'); // DD-MM-YYYY
+        final key = '${gDateParts[2]}-${gDateParts[1]}-${gDateParts[0]}'; // yyyy-MM-dd
+
+        final hDay = int.parse(hijri['day'].toString());
+        final hMonth = int.parse((hijri['month'] as Map<String, dynamic>)['number'].toString());
+        final hYear = int.parse(hijri['year'].toString());
+        _cache[key] = HijriDate(hYear, hMonth, hDay);
+      }
+    } catch (_) {
+      // Offline or the API is down — never let this break the calendar.
+      // Just remove the month from "fetched" so a later navigation can
+      // retry, and let callers keep using the arithmetic fallback.
+      _fetchedMonths.remove(mKey);
+    }
+  }
+
+  /// Returns the API-sourced Hijri date if already fetched, else null.
+  static HijriDate? cached(DateTime date) => _cache[_dayKey(date)];
 }
 
 class IslamicEvent {
@@ -602,8 +685,23 @@ class CalendarTab extends StatefulWidget {
 class _CalendarTabState extends State<CalendarTab> {
   DateTime _currentMonth = DateTime(2026, 7, 1);
   DateTime _selectedDate = DateTime(2026, 7, 13);
+  // Bengali toggle removed per request — English only now. Kept as a
+  // (permanently false) field so the many "_isBengali ? bn : en" checks
+  // scattered through this file keep compiling and behave as "always
+  // English" without needing to touch every single one of them.
+  final bool _isBengali = false;
   bool _showCalendarGridTab = true;
   final Map<String, bool> _activityStatus = {};
+  // Dates (as 'yyyyMMdd') the user has turned the fasting reminder ON for.
+  // Persisted locally so the bell icon reflects the right state after an
+  // app restart — the actual OS-level alarm survives on its own once
+  // scheduled, this set is just what drives the UI.
+  final Set<String> _fastingAlarmDates = {};
+  // Set for one tap right when the bell badge is pressed, so the cell's
+  // own onTap (select date / open event) can check it and bail out if the
+  // same tap also reached it — then cleared on the next microtask so it
+  // never affects a later, unrelated tap on the cell.
+  bool _suppressNextCellTap = false;
 
   @override
   void initState() {
@@ -614,6 +712,45 @@ class _CalendarTabState extends State<CalendarTab> {
       _currentMonth = DateTime(2026, today.month, 1);
     }
     _loadCalendarActivities();
+    _loadFastingAlarmDates();
+    _refreshHijriApiData();
+  }
+
+  // Returns the most accurate Hijri date available for [date] right now:
+  // a confirmed local moon-sighting override wins if present, then the
+  // AlAdhan/Umm-al-Qura API result once it's loaded, then the offline
+  // arithmetic estimate as a safe fallback. See HijriApiService's doc
+  // comment for the full reasoning.
+  HijriDate _hijriFor(DateTime date) {
+    return HijriApiService.cached(date) ?? HijriConverter.fromGregorian(date);
+  }
+
+  // Kicks off (non-blocking) AlAdhan API fetches for the currently viewed
+  // month plus its neighbours, so prev/next month navigation feels instant
+  // — by the time the user flips a page the next month is usually already
+  // cached. Cheap to call often: fetchMonth() is a no-op for months
+  // already fetched.
+  Future<void> _refreshHijriApiData() async {
+    final y = _currentMonth.year;
+    final m = _currentMonth.month;
+    final prev = DateTime(y, m - 1, 1);
+    final next = DateTime(y, m + 1, 1);
+    await Future.wait([
+      HijriApiService.fetchMonth(y, m),
+      HijriApiService.fetchMonth(prev.year, prev.month),
+      HijriApiService.fetchMonth(next.year, next.month),
+    ]);
+    if (mounted) setState(() {});
+  }
+
+  // Fetches every month of [year] from the API (each already-fetched month
+  // is skipped), used before showing the full-year "Special Events" list so
+  // that list also reflects the API/override dates instead of only arithmetic.
+  Future<void> _ensureYearHijriFetched(int year) async {
+    await Future.wait(
+      List.generate(12, (i) => HijriApiService.fetchMonth(year, i + 1)),
+    );
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadCalendarActivities() async {
@@ -676,12 +813,14 @@ class _CalendarTabState extends State<CalendarTab> {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
     });
+    _refreshHijriApiData();
   }
 
   void _prevMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
     });
+    _refreshHijriApiData();
   }
 
   bool _isMondayOrThursday(DateTime date) {
@@ -690,6 +829,156 @@ class _CalendarTabState extends State<CalendarTab> {
 
   bool _isWhiteDay(HijriDate hijri) {
     return hijri.day == 13 || hijri.day == 14 || hijri.day == 15;
+  }
+
+  // ===== FASTING ALARM (evening-before reminder) =====
+  // The Islamic (Hijri) day starts at sunset, not midnight — so the
+  // reminder for a fasting day has to fire at Maghrib on the evening
+  // BEFORE that date, which is when the user should make their intention
+  // (Niyyah) and get ready for Suhoor. This section decides which cells
+  // get the bell icon, and schedules/cancels that one reminder per date.
+
+  String _dateKey(DateTime d) => DateFormat('yyyyMMdd').format(d);
+
+  // Stable per-date notification id, offset well clear of the prayer
+  // (1000s) and prayer-nudge (1500s) ids already used in NotificationService.
+  int _fastingAlarmNotifId(DateTime d) => 8000000 + d.year * 10000 + d.month * 100 + d.day;
+
+  // Any day the user may want to fast: the weekly Sunnah days, the lunar
+  // "white days", any day in Ramadan, or a special day whose own
+  // recommended activities mention fasting (Ashura, 9th of Dhul-Hijjah, etc).
+  bool _isFastingDay(DateTime date, HijriDate hijri, IslamicEvent? event) {
+    final isRamadan = hijri.month == 9;
+    final isEventFast = event != null &&
+        event.activities.any((a) => a.toLowerCase().contains('fast'));
+    return _isMondayOrThursday(date) || _isWhiteDay(hijri) || isRamadan || isEventFast;
+  }
+
+  Future<void> _loadFastingAlarmDates() async {
+    Set<String> merged = {};
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      merged.addAll(prefs.getStringList('fasting_alarm_dates') ?? []);
+    } catch (e) {
+      debugPrint('[CalendarTab] Error loading local fasting alarm dates: $e');
+    }
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final remote = doc.data()?['fastingAlarmDates'];
+        if (remote is List) {
+          merged.addAll(remote.map((e) => e.toString()));
+        }
+      }
+    } catch (e) {
+      debugPrint('[CalendarTab] Error loading fasting alarm dates from Firestore: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _fastingAlarmDates
+          ..clear()
+          ..addAll(merged);
+      });
+    }
+    // Write the merged result back locally so a Firestore-only date (e.g.
+    // set on another device) also has a fast local copy from now on.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('fasting_alarm_dates', merged.toList());
+    } catch (_) {}
+  }
+
+  Future<void> _persistFastingAlarmDates() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('fasting_alarm_dates', _fastingAlarmDates.toList());
+    } catch (e) {
+      debugPrint('[CalendarTab] Error saving fasting alarm dates locally: $e');
+    }
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'fastingAlarmDates': _fastingAlarmDates.toList(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('[CalendarTab] Error saving fasting alarm dates to Firestore: $e');
+    }
+  }
+
+  Future<void> _toggleFastingAlarm(DateTime fastDate) async {
+    final key = _dateKey(fastDate);
+    final isOn = _fastingAlarmDates.contains(key);
+    final notifId = _fastingAlarmNotifId(fastDate);
+
+    if (isOn) {
+      setState(() => _fastingAlarmDates.remove(key));
+      await _persistFastingAlarmDates();
+      await NotificationService.instance.cancelCustomNotification(notifId);
+      NotificationService.instance.notifyFastingAlarmsChanged();
+      return;
+    }
+
+    setState(() => _fastingAlarmDates.add(key));
+    await _persistFastingAlarmDates();
+
+    // Fire at Maghrib the evening before — the true start of the fasting
+    // day on the Islamic (lunar) clock, not midnight.
+    final eveningBefore = fastDate.subtract(const Duration(days: 1));
+    final prayerTimes = CalendarDatabase.getPrayerTimesForDate(eveningBefore);
+    final maghrib = prayerTimes.firstWhere((t) => t.name == 'Maghrib').time;
+    final hijri = _hijriFor(fastDate);
+
+    DateTime scheduledTime = maghrib;
+    final now = DateTime.now();
+    if (scheduledTime.isBefore(now)) {
+      final tomorrow = now.add(const Duration(days: 1));
+      final isTomorrow = fastDate.year == tomorrow.year &&
+          fastDate.month == tomorrow.month &&
+          fastDate.day == tomorrow.day;
+      if (isTomorrow) {
+        // If set tonight for tomorrow's fast and Maghrib has already passed,
+        // fire a reminder 3 seconds from now.
+        scheduledTime = now.add(const Duration(seconds: 3));
+      }
+    }
+
+    await NotificationService.instance.scheduleCustomNotification(
+      id: notifId,
+      title: _isBengali ? 'আগামীকাল রোজা' : 'Fasting day tomorrow',
+      body: _isBengali
+          ? '${DateFormat('d MMM').format(fastDate)} (${hijri.day} ${hijri.monthNameBengali}) তারিখে রোজা রাখতে হবে। নিয়ত করে সাহরির প্রস্তুতি নিন।'
+          : '${DateFormat('EEE, d MMM').format(fastDate)} (${hijri.day} ${hijri.monthName}) is a fasting day. Make your intention (Niyyah) and get ready for Suhoor.',
+      scheduledTime: scheduledTime,
+      category: 'events',
+      addToHistory: false,
+    );
+    NotificationService.instance.notifyFastingAlarmsChanged();
+  }
+
+  DateTime? _getUpcomingFastingAlarmDate() {
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+    final upcomingDates = <DateTime>[];
+
+    for (final key in _fastingAlarmDates) {
+      if (key.length != 8) continue;
+      final date = DateTime.tryParse(
+        '${key.substring(0, 4)}-${key.substring(4, 6)}-${key.substring(6, 8)}',
+      );
+      if (date != null && !date.isBefore(todayStart)) {
+        upcomingDates.add(date);
+      }
+    }
+
+    if (upcomingDates.isEmpty) return null;
+    upcomingDates.sort();
+    return upcomingDates.first;
   }
 
 // Ayyam al-Beedh (13/14/15) marker color — kept distinct from
@@ -754,9 +1043,9 @@ class _CalendarTabState extends State<CalendarTab> {
     final daysCount = int.parse(daysInMonthString);
     final firstDayOfWeek = DateTime(_currentMonth.year, _currentMonth.month, 1).weekday % 7;
     final currentHijriMonthStart =
-        HijriConverter.fromGregorian(DateTime(_currentMonth.year, _currentMonth.month, 1));
+        _hijriFor(DateTime(_currentMonth.year, _currentMonth.month, 1));
     final currentHijriMonthEnd =
-        HijriConverter.fromGregorian(DateTime(_currentMonth.year, _currentMonth.month, daysCount));
+        _hijriFor(DateTime(_currentMonth.year, _currentMonth.month, daysCount));
     String hijriRangeStr = '';
     if (currentHijriMonthStart.month == currentHijriMonthEnd.month) {
       final mName = currentHijriMonthStart.monthName;
@@ -766,7 +1055,7 @@ class _CalendarTabState extends State<CalendarTab> {
       final mNameEnd = currentHijriMonthEnd.monthName;
       hijriRangeStr = '$mNameStart - $mNameEnd ${currentHijriMonthStart.year}';
     }
-    final selectedHijri = HijriConverter.fromGregorian(_selectedDate);
+    final selectedHijri = _hijriFor(_selectedDate);
     final selectedEvent = CalendarDatabase.getEvent(_selectedDate, selectedHijri);
     final selectedIsFasting = _isMondayOrThursday(_selectedDate) || _isWhiteDay(selectedHijri);
 
@@ -774,7 +1063,7 @@ class _CalendarTabState extends State<CalendarTab> {
     final isDark = widget.isDarkMode || theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+      backgroundColor: isDark ? Theme.of(context).scaffoldBackgroundColor : Colors.white,
       body: Stack(
         children: [
           // Texture background
@@ -793,60 +1082,137 @@ class _CalendarTabState extends State<CalendarTab> {
           Positioned.fill(
             child: SafeArea(
               bottom: false,
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
-                child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // This outer Column is what makes the title block fixed: the
+              // header lives directly in this Column (not inside the
+              // SingleChildScrollView below), so scrolling the content
+              // underneath never moves it.
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 15, 20, 0),
                     child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? AppColors.dustyBlueTeal.withValues(alpha: 0.18)
-                                : AppColors.navyBlue.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: isDark
-                                  ? AppColors.dustyBlueTeal.withValues(alpha: 0.4)
-                                  : AppColors.navyBlue.withValues(alpha: 0.25),
-                              width: 1,
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.calendar_month_rounded,
-                            color: _primaryTextColor(context),
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
+                          child: Row(
                             children: [
-                              Text(
-                                'Islamic Calendar',
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? AppColors.dustyBlueTeal.withValues(alpha: 0.18)
+                                      : AppColors.navyBlue.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? AppColors.dustyBlueTeal.withValues(alpha: 0.4)
+                                        : AppColors.navyBlue.withValues(alpha: 0.25),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.calendar_month_rounded,
                                   color: _primaryTextColor(context),
+                                  size: 20,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Hijri calendar & Islamic events',
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                                style: GoogleFonts.poppins(fontSize: 12, color: _secondaryTextColor(context)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Islamic Calendar',
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w700,
+                                        color: _primaryTextColor(context),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Hijri calendar & Islamic events',
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                      style: GoogleFonts.poppins(fontSize: 12, color: _secondaryTextColor(context)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Interactive Notification Bell with real-time unread badge
+                        GestureDetector(
+                          onTap: () => NotificationCenterModal.show(
+                            context,
+                            isDarkMode: isDark,
+                          ),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? AppColors.dustyBlueTeal.withValues(alpha: 0.18)
+                                      : Colors.white.withValues(alpha: 0.7),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isDark
+                                        ? AppColors.dustyBlueTeal.withValues(alpha: 0.4)
+                                        : AppColors.navyBlue.withValues(alpha: 0.12),
+                                    width: 1,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.navyBlue.withValues(alpha: 0.06),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  Icons.notifications_outlined,
+                                  color: _primaryTextColor(context),
+                                  size: 20,
+                                ),
+                              ),
+                              ValueListenableBuilder<int>(
+                                valueListenable:
+                                    NotificationService.instance.unreadCountNotifier,
+                                builder: (context, unreadCount, _) {
+                                  if (unreadCount == 0) return const SizedBox.shrink();
+                                  return Positioned(
+                                    right: -2,
+                                    top: -2,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFE63946),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 16,
+                                        minHeight: 16,
+                                      ),
+                                      child: Text(
+                                        unreadCount > 9 ? '9+' : '$unreadCount',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -854,9 +1220,14 @@ class _CalendarTabState extends State<CalendarTab> {
                       ],
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 18),
+                  const SizedBox(height: 18),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(20.0, 0, 20.0, 15.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
               // Tab bar selection: Calendar Grid vs Special Events
               Row(
                 children: [
@@ -908,7 +1279,10 @@ class _CalendarTabState extends State<CalendarTab> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => setState(() => _showCalendarGridTab = false),
+                      onTap: () {
+                        setState(() => _showCalendarGridTab = false);
+                        _ensureYearHijriFetched(_currentMonth.year);
+                      },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1026,6 +1400,30 @@ class _CalendarTabState extends State<CalendarTab> {
                     _legendDot(_ayyamBeedhColor, 'Ayyam al-Beedh'),
                   ],
                 ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.midTeal.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.notifications_none_rounded, size: 14, color: AppColors.midTeal),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _isBengali
+                              ? 'রোজার দিনগুলোতে ঘণ্টা আইকনে ট্যাপ করুন — আগের দিন মাগরিবের সময় (যখন ইসলামি দিন শুরু হয়) রিমাইন্ডার পাবেন, যাতে আগে থেকেই নিয়ত করে সাহরির প্রস্তুতি নিতে পারেন।'
+                              : 'Tap the bell on any fasting day — you\'ll get a reminder at Maghrib the evening before (when the Islamic day begins), so you can make your intention and prepare for Suhoor ahead of time.',
+                          style: GoogleFonts.poppins(fontSize: 10.5, color: _secondaryTextColor(context), height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1056,6 +1454,7 @@ class _CalendarTabState extends State<CalendarTab> {
                     return _buildCalendarGrid(firstDayOfWeek, daysCount);
                   },
                 ),
+                _buildMonthEventsList(),
                 const SizedBox(height: 25),
                 Container(
                   width: double.infinity,
@@ -1112,11 +1511,14 @@ class _CalendarTabState extends State<CalendarTab> {
                 _buildSpecialEventsList(),
               ],
               const SizedBox(height: 20),
-            ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
-    ),
         ],
       ),
     );
@@ -1195,7 +1597,7 @@ class _CalendarTabState extends State<CalendarTab> {
             final entry = events[index];
             final date = entry.key;
             final event = entry.value;
-            final eventHijri = HijriConverter.fromGregorian(date);
+            final eventHijri = _hijriFor(date);
 
             final eventTitle = event.title;
             final eventDesc = event.description;
@@ -1339,13 +1741,93 @@ class _CalendarTabState extends State<CalendarTab> {
     );
   }
 
+  // Scans every day of the currently-viewed month through the same
+  // CalendarDatabase.getEvent() lookup the grid cells use (Hijri date +
+  // gregorianOverrides), so this list can never disagree with what's
+  // actually marked on the grid above it.
+  List<MapEntry<DateTime, IslamicEvent>> _getEventsForMonth(int year, int month) {
+    final events = <MapEntry<DateTime, IslamicEvent>>[];
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    for (int day = 1; day <= daysInMonth; day++) {
+      final date = DateTime(year, month, day);
+      final hijri = _hijriFor(date);
+      final event = CalendarDatabase.getEvent(date, hijri);
+      if (event != null) {
+        events.add(MapEntry(date, event));
+      }
+    }
+    return events;
+  }
+
+  // Compact one-line "this month's Islamic events" indicator. Deliberately
+  // NOT a bordered card with per-event rows — on a phone screen the month
+  // grid already fills almost the whole page, so anything tall here just
+  // pushes the grid further down and forces more scrolling, defeating the
+  // point. This stays a couple of lines at most, tap it to jump to the
+  // full "Special Events" list if there's more than fits.
+  Widget _buildMonthEventsList() {
+    final monthEvents = _getEventsForMonth(_currentMonth.year, _currentMonth.month);
+    if (monthEvents.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final summary = monthEvents.map((entry) {
+      final dateStr = DateFormat('d MMM').format(entry.key);
+      final title = _isBengali ? entry.value.titleBengali : entry.value.title;
+      return '$dateStr – $title';
+    }).join('   •   ');
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 2),
+      child: GestureDetector(
+        onTap: () {
+          setState(() => _showCalendarGridTab = false);
+          _ensureYearHijriFetched(_currentMonth.year);
+        },
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.mosque_rounded, size: 14, color: AppColors.coralOrange),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: _isBengali ? 'এই মাসের ইসলামিক দিবস:  ' : 'Islamic events this month:  ',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: _primaryTextColor(context),
+                      ),
+                    ),
+                    TextSpan(
+                      text: summary,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.coralOrange,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<MapEntry<DateTime, IslamicEvent>> _getEventsForYear(int year) {
     List<MapEntry<DateTime, IslamicEvent>> events = [];
     for (int month = 1; month <= 12; month++) {
       int daysInMonth = DateTime(year, month + 1, 0).day;
       for (int day = 1; day <= daysInMonth; day++) {
         final date = DateTime(year, month, day);
-        final cellHijri = HijriConverter.fromGregorian(date);
+        final cellHijri = _hijriFor(date);
         final event = CalendarDatabase.getEvent(date, cellHijri);
         if (event != null) {
           if (events.isNotEmpty &&
@@ -1380,50 +1862,42 @@ class _CalendarTabState extends State<CalendarTab> {
           return const SizedBox();
         }
         final cellDate = DateTime(_currentMonth.year, _currentMonth.month, dayNumber);
-        final cellHijri = HijriConverter.fromGregorian(cellDate);
+        final cellHijri = _hijriFor(cellDate);
         final isSelected = cellDate.year == _selectedDate.year &&
             cellDate.month == _selectedDate.month &&
             cellDate.day == _selectedDate.day;
         final now = DateTime.now();
         final isToday =
             cellDate.year == now.year && cellDate.month == now.month && cellDate.day == now.day;
-        final event = CalendarDatabase.getEvent(cellDate, cellHijri);
-        final hasEvent = event != null;
-        final isWhiteDay = _isWhiteDay(cellHijri);
-        final isSunnahFast = _isMondayOrThursday(cellDate);
-        final isFasting = isSunnahFast || isWhiteDay;
+final event = CalendarDatabase.getEvent(cellDate, cellHijri);
+final hasEvent = event != null;
+final isWhiteDay = _isWhiteDay(cellHijri);          // 13, 14, 15 — Ayyam al-Beedh
+final isSunnahFast = _isMondayOrThursday(cellDate);  // Mon/Thu (non white-day)
+final isFasting = isSunnahFast || isWhiteDay;
+// Broader than isFasting above (also covers Ramadan + fast-related special
+// days like Ashura) — only used to decide whether the alarm bell shows,
+// never touches the dot-marker color logic below.
+final canSetFastingAlarm = _isFastingDay(cellDate, cellHijri, event);
+final fastingAlarmOn = _fastingAlarmDates.contains(_dateKey(cellDate));
+final isDark = widget.isDarkMode || Theme.of(context).brightness == Brightness.dark;
 
-        Color cellBgColor = Colors.transparent;
-        Border? cellBorder;
+Color cellBgColor = Colors.transparent;
+Border? cellBorder;
 
-        if (isSelected) {
-          cellBgColor = widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue;
-          cellBorder = Border.all(
-            color: widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue,
-            width: 1.2,
-          );
-        } else {
-          if (hasEvent) {
-            cellBgColor = AppColors.coralOrange.withValues(alpha: 0.15);
-            cellBorder = Border.all(color: AppColors.coralOrange.withValues(alpha: 0.45), width: 1);
-          } else if (isWhiteDay) {
-            cellBgColor = _ayyamBeedhColor.withValues(alpha: 0.15);
-            cellBorder = Border.all(color: _ayyamBeedhColor.withValues(alpha: 0.45), width: 1);
-          } else if (isSunnahFast) {
-            cellBgColor = AppColors.midTeal.withValues(alpha: 0.15);
-            cellBorder = Border.all(color: AppColors.midTeal.withValues(alpha: 0.45), width: 1);
-          } else {
-            // General days: clean, standard border and subtle background in both light and dark mode
-            cellBgColor = widget.isDarkMode
-                ? const Color(0xFF1E1E1E).withValues(alpha: 0.6)
-                : const Color(0xFFF8FAFC);
-            cellBorder = Border.all(
-              color: widget.isDarkMode
-                  ? const Color(0xFF333333)
-                  : const Color(0xFFE2E8F0),
-              width: 0.9,
-            );
-          }
+if (isSelected) {
+  cellBgColor = isDark ? AppColors.dustyBlueTeal : AppColors.navyBlue;
+} else {
+  if (hasEvent) {
+    cellBgColor = AppColors.coralOrange.withValues(alpha: 0.15);
+    cellBorder = Border.all(color: AppColors.coralOrange.withValues(alpha: 0.4), width: 1);
+  } else if (isWhiteDay) {
+    // Ayyam al-Beedh gets its own color, distinct from regular Sunnah fasts
+    cellBgColor = _ayyamBeedhColor.withValues(alpha: 0.15);
+    cellBorder = Border.all(color: _ayyamBeedhColor.withValues(alpha: 0.4), width: 1);
+  } else if (isSunnahFast) {
+    cellBgColor = AppColors.midTeal.withValues(alpha: 0.15);
+    cellBorder = Border.all(color: AppColors.midTeal.withValues(alpha: 0.4), width: 1);
+  }
 
           if (isToday) {
             cellBorder = Border.all(
@@ -1435,6 +1909,10 @@ class _CalendarTabState extends State<CalendarTab> {
 
         return GestureDetector(
           onTap: () {
+            if (_suppressNextCellTap) {
+              _suppressNextCellTap = false;
+              return;
+            }
             setState(() => _selectedDate = cellDate);
             if (hasEvent) {
               _openEventDetail(event, cellDate, cellHijri);
@@ -1446,10 +1924,9 @@ class _CalendarTabState extends State<CalendarTab> {
               borderRadius: BorderRadius.circular(10),
               border: cellBorder,
             ),
-            padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+            padding: const EdgeInsets.all(7),
+            child: Stack(
+              clipBehavior: Clip.none,
               children: [
                 Text(
                   '$dayNumber',
@@ -1514,7 +1991,59 @@ class _CalendarTabState extends State<CalendarTab> {
                         ),
                     ],
                   ),
-                ),
+                if (canSetFastingAlarm)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        _suppressNextCellTap = true;
+                        _toggleFastingAlarm(cellDate);
+                        // The suppress-flag only needs to survive long
+                        // enough to be checked by the cell's own onTap for
+                        // this same tap event, if it also fires. Clearing
+                        // it on a microtask (rather than leaving it set)
+                        // means a later, separate tap on the cell is never
+                        // accidentally swallowed.
+                        Future.microtask(() => _suppressNextCellTap = false);
+                      },
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: fastingAlarmOn
+                              ? AppColors.coralOrange
+                              : (isDark ? Colors.black : Colors.white),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: fastingAlarmOn
+                                ? AppColors.coralOrange
+                                : (isDark
+                                    ? Colors.white.withValues(alpha: 0.35)
+                                    : AppColors.navyBlue.withValues(alpha: 0.25)),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.18),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          fastingAlarmOn
+                              ? Icons.notifications_active_rounded
+                              : Icons.notifications_off_rounded,
+                          size: 10,
+                          color: fastingAlarmOn
+                              ? Colors.white
+                              : (isDark ? Colors.white : AppColors.navyBlue),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1715,7 +2244,7 @@ class _CalendarTabState extends State<CalendarTab> {
   }
 
   Widget _buildRelatedAyahSection(IslamicEvent? event) {
-    final selectedHijri = HijriConverter.fromGregorian(_selectedDate);
+    final selectedHijri = _hijriFor(_selectedDate);
     final ayah = CalendarDatabase.getAyahForDate(_selectedDate, selectedHijri, event);
     return Container(
       padding: const EdgeInsets.all(14),
