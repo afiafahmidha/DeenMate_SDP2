@@ -34,7 +34,22 @@ class HijriDate {
     'Dhu al-Qa\'dah',
     'Dhu al-Hijjah',
   ];
+  static const List<String> monthNamesBengali = [
+    'মুহাররম',
+    'সফর',
+    'রবিউল আউয়াল',
+    'রবিউস সানি',
+    'জমাদিউল আউয়াল',
+    'জমাদিউস সানি',
+    'রজব',
+    'শাবান',
+    'রমজান',
+    'শাওয়াল',
+    'জিলকদ',
+    'জিলহজ্জ',
+  ];
   String get monthName => monthNames[month - 1];
+  String get monthNameBengali => monthNamesBengali[month - 1];
   String format() => '$day $monthName $year AH';
 }
 
@@ -289,6 +304,7 @@ class HijriApiService {
 
 class IslamicEvent {
   final String title;
+  final String? titleBengali;
   final String description;
   final String history;
   final List<String> activities;
@@ -303,6 +319,7 @@ class IslamicEvent {
   final List<String> heroImages;
   const IslamicEvent({
     required this.title,
+    this.titleBengali,
     required this.description,
     required this.history,
     required this.activities,
@@ -1772,7 +1789,7 @@ class _CalendarTabState extends State<CalendarTab> {
     }
     final summary = monthEvents.map((entry) {
       final dateStr = DateFormat('d MMM').format(entry.key);
-      final title = _isBengali ? entry.value.titleBengali : entry.value.title;
+      final title = _isBengali ? (entry.value.titleBengali ?? entry.value.title) : entry.value.title;
       return '$dateStr – $title';
     }).join('   •   ');
 
@@ -1928,68 +1945,45 @@ if (isSelected) {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                Text(
-                  '$dayNumber',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12.5,
-                    fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
-                    color: isSelected
-                        ? Colors.white
-                        : _primaryTextColor(context),
+                Align(
+                  alignment: Alignment.topLeft,
+                  child: Text(
+                    dayNumber.toString(),
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : _primaryTextColor(context),
+                    ),
                   ),
                 ),
-                Text(
-                  '${cellHijri.day}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 9.0,
-                    fontWeight: FontWeight.w600,
-                    height: 1.1,
-                    color: isSelected
-                        ? Colors.white.withValues(alpha: 0.8)
-                        : (hasEvent
-                            ? AppColors.coralOrange
-                            : (isWhiteDay
-                                ? _ayyamBeedhColor
-                                : (isSunnahFast
-                                    ? AppColors.midTeal
-                                    : _secondaryTextColor(context)))),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Text(
+                    cellHijri.day.toString(),
+                    style: GoogleFonts.poppins(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? Colors.white
+                          : _secondaryTextColor(context),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 2),
-                SizedBox(
-                  height: 4,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (hasEvent)
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                            color: AppColors.coralOrange,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      if (hasEvent && isFasting) const SizedBox(width: 2),
-                      if (isWhiteDay)
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                            color: _ayyamBeedhColor,
-                            shape: BoxShape.circle,
-                          ),
-                        )
-                      else if (isSunnahFast)
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                            color: AppColors.midTeal,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
+                if (hasEvent || isFasting)
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Container(
+                      width: 5.5,
+                      height: 5.5,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.white
+                            : (hasEvent
+                                ? AppColors.coralOrange
+                                : (isWhiteDay ? _ayyamBeedhColor : AppColors.midTeal)),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                   ),
                 if (canSetFastingAlarm)
                   Positioned(
