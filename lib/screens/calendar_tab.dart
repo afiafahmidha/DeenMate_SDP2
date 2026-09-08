@@ -34,7 +34,22 @@ class HijriDate {
     'Dhu al-Qa\'dah',
     'Dhu al-Hijjah',
   ];
+  static const List<String> monthNamesBengali = [
+    'মুহাররম',
+    'সফর',
+    'রবিউল আউয়াল',
+    'রবিউস সানি',
+    'জুমাদাল উলা',
+    'জুমাদাল উখরা',
+    'রজব',
+    'শাবান',
+    'রমজান',
+    'শাওয়াল',
+    'জিলকদ',
+    'জিলহজ',
+  ];
   String get monthName => monthNames[month - 1];
+  String get monthNameBengali => monthNamesBengali[month - 1];
   String format() => '$day $monthName $year AH';
 }
 
@@ -125,9 +140,17 @@ class _CalendarStarPainter extends CustomPainter {
 }
 
 class _CalendarTexturePainter extends CustomPainter {
+  final bool isDark;
+  const _CalendarTexturePainter({this.isDark = false});
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = AppColors.navyBlue.withValues(alpha: 0.015)..strokeWidth = 0.4..style = PaintingStyle.stroke;
+    final paint = Paint()
+      ..color = isDark
+          ? Colors.white.withValues(alpha: 0.03)
+          : AppColors.navyBlue.withValues(alpha: 0.015)
+      ..strokeWidth = 0.4
+      ..style = PaintingStyle.stroke;
     final double gridWidth = 16.0;
     final int rows = (size.height / gridWidth).ceil() + 1;
     final int cols = (size.width / gridWidth).ceil() + 1;
@@ -289,6 +312,7 @@ class HijriApiService {
 
 class IslamicEvent {
   final String title;
+  final String? _titleBengali;
   final String description;
   final String history;
   final List<String> activities;
@@ -303,13 +327,16 @@ class IslamicEvent {
   final List<String> heroImages;
   const IslamicEvent({
     required this.title,
+    String? titleBengali,
     required this.description,
     required this.history,
     required this.activities,
     this.themeColor = const Color(0xFFEB8A6C),
     this.backgroundImagePath,
     this.heroImages = const [],
-  });
+  }) : _titleBengali = titleBengali;
+
+  String get titleBengali => _titleBengali ?? title;
 
   List<String> get carouselImages {
     if (heroImages.isNotEmpty) return heroImages;
@@ -317,6 +344,7 @@ class IslamicEvent {
     return const [];
   }
 }
+
 
 class CalendarDatabase {
   // Key: Month/Day as "Month-Day"
@@ -1063,12 +1091,12 @@ class _CalendarTabState extends State<CalendarTab> {
     final isDark = widget.isDarkMode || theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? Theme.of(context).scaffoldBackgroundColor : Colors.white,
+      backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
       body: Stack(
         children: [
           // Texture background
           Positioned.fill(
-            child: CustomPaint(painter: _CalendarTexturePainter()),
+            child: CustomPaint(painter: _CalendarTexturePainter(isDark: isDark)),
           ),
           // Twinkling stars
           ..._stars.map((star) {
@@ -1404,9 +1432,9 @@ class _CalendarTabState extends State<CalendarTab> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: AppColors.midTeal.withValues(alpha: 0.08),
+                    color: AppColors.midTeal.withValues(alpha: isDark ? 0.18 : 0.08),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.25)),
+                    border: Border.all(color: AppColors.midTeal.withValues(alpha: isDark ? 0.45 : 0.25)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1459,7 +1487,7 @@ class _CalendarTabState extends State<CalendarTab> {
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.black : Colors.white,   // was _surfaceColor(context)
+                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,   // was _surfaceColor(context)
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: _borderColor(context)),
                     boxShadow: [
@@ -1888,24 +1916,24 @@ if (isSelected) {
   cellBgColor = isDark ? AppColors.dustyBlueTeal : AppColors.navyBlue;
 } else {
   if (hasEvent) {
-    cellBgColor = AppColors.coralOrange.withValues(alpha: 0.15);
-    cellBorder = Border.all(color: AppColors.coralOrange.withValues(alpha: 0.4), width: 1);
+    cellBgColor = AppColors.coralOrange.withValues(alpha: isDark ? 0.28 : 0.15);
+    cellBorder = Border.all(color: AppColors.coralOrange.withValues(alpha: isDark ? 0.6 : 0.4), width: 1);
   } else if (isWhiteDay) {
     // Ayyam al-Beedh gets its own color, distinct from regular Sunnah fasts
-    cellBgColor = _ayyamBeedhColor.withValues(alpha: 0.15);
-    cellBorder = Border.all(color: _ayyamBeedhColor.withValues(alpha: 0.4), width: 1);
+    cellBgColor = _ayyamBeedhColor.withValues(alpha: isDark ? 0.28 : 0.15);
+    cellBorder = Border.all(color: _ayyamBeedhColor.withValues(alpha: isDark ? 0.6 : 0.4), width: 1);
   } else if (isSunnahFast) {
-    cellBgColor = AppColors.midTeal.withValues(alpha: 0.15);
-    cellBorder = Border.all(color: AppColors.midTeal.withValues(alpha: 0.4), width: 1);
+    cellBgColor = AppColors.midTeal.withValues(alpha: isDark ? 0.28 : 0.15);
+    cellBorder = Border.all(color: AppColors.midTeal.withValues(alpha: isDark ? 0.6 : 0.4), width: 1);
   }
 
-          if (isToday) {
-            cellBorder = Border.all(
-              color: widget.isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue,
-              width: 1.5,
-            );
-          }
-        }
+  if (isToday) {
+    cellBorder = Border.all(
+      color: isDark ? AppColors.dustyBlueTeal : AppColors.navyBlue,
+      width: 1.5,
+    );
+  }
+}
 
         return GestureDetector(
           onTap: () {
@@ -1991,6 +2019,7 @@ if (isSelected) {
                         ),
                     ],
                   ),
+                ),
                 if (canSetFastingAlarm)
                   Positioned(
                     top: -4,
@@ -2014,7 +2043,7 @@ if (isSelected) {
                         decoration: BoxDecoration(
                           color: fastingAlarmOn
                               ? AppColors.coralOrange
-                              : (isDark ? Colors.black : Colors.white),
+                              : (isDark ? const Color(0xFF2A2A2A) : Colors.white),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: fastingAlarmOn
@@ -2366,9 +2395,9 @@ if (isSelected) {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: AppColors.midTeal.withValues(alpha: 0.15),
+            color: AppColors.midTeal.withValues(alpha: widget.isDarkMode ? 0.28 : 0.15),
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.3)),
+            border: Border.all(color: AppColors.midTeal.withValues(alpha: widget.isDarkMode ? 0.55 : 0.3)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
