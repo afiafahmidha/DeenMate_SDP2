@@ -1935,147 +1935,156 @@ if (isSelected) {
   }
 }
 
-        return GestureDetector(
-          onTap: () {
-            if (_suppressNextCellTap) {
-              _suppressNextCellTap = false;
-              return;
-            }
-            setState(() => _selectedDate = cellDate);
-            if (hasEvent) {
-              _openEventDetail(event, cellDate, cellHijri);
-            }
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: cellBgColor,
-              borderRadius: BorderRadius.circular(10),
-              border: cellBorder,
-            ),
-            padding: const EdgeInsets.all(7),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Text(
-                  '$dayNumber',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12.5,
-                    fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
-                    color: isSelected
-                        ? Colors.white
-                        : _primaryTextColor(context),
-                  ),
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            GestureDetector(
+              onTap: () {
+                if (_suppressNextCellTap) {
+                  _suppressNextCellTap = false;
+                  return;
+                }
+                setState(() => _selectedDate = cellDate);
+                if (hasEvent) {
+                  _openEventDetail(event, cellDate, cellHijri);
+                }
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: cellBgColor,
+                  borderRadius: BorderRadius.circular(10),
+                  border: cellBorder,
                 ),
-                Text(
-                  '${cellHijri.day}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 9.0,
-                    fontWeight: FontWeight.w600,
-                    height: 1.1,
-                    color: isSelected
-                        ? Colors.white.withValues(alpha: 0.8)
-                        : (hasEvent
-                            ? AppColors.coralOrange
-                            : (isWhiteDay
-                                ? _ayyamBeedhColor
-                                : (isSunnahFast
-                                    ? AppColors.midTeal
-                                    : _secondaryTextColor(context)))),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                SizedBox(
-                  height: 4,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (hasEvent)
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                            color: AppColors.coralOrange,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      if (hasEvent && isFasting) const SizedBox(width: 2),
-                      if (isWhiteDay)
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                            color: _ayyamBeedhColor,
-                            shape: BoxShape.circle,
-                          ),
-                        )
-                      else if (isSunnahFast)
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                            color: AppColors.midTeal,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (canSetFastingAlarm)
-                  Positioned(
-                    top: -4,
-                    right: -4,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        _suppressNextCellTap = true;
-                        _toggleFastingAlarm(cellDate);
-                        // The suppress-flag only needs to survive long
-                        // enough to be checked by the cell's own onTap for
-                        // this same tap event, if it also fires. Clearing
-                        // it on a microtask (rather than leaving it set)
-                        // means a later, separate tap on the cell is never
-                        // accidentally swallowed.
-                        Future.microtask(() => _suppressNextCellTap = false);
-                      },
-                      child: Container(
-                        width: 18,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          color: fastingAlarmOn
-                              ? AppColors.coralOrange
-                              : (isDark ? const Color(0xFF2A2A2A) : Colors.white),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: fastingAlarmOn
-                                ? AppColors.coralOrange
-                                : (isDark
-                                    ? Colors.white.withValues(alpha: 0.35)
-                                    : AppColors.navyBlue.withValues(alpha: 0.25)),
-                            width: 1.2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          fastingAlarmOn
-                              ? Icons.notifications_active_rounded
-                              : Icons.notifications_off_rounded,
-                          size: 10,
-                          color: fastingAlarmOn
-                              ? Colors.white
-                              : (isDark ? Colors.white : AppColors.navyBlue),
-                        ),
+                padding: const EdgeInsets.all(7),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '$dayNumber',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.5,
+                        fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
+                        color: isSelected
+                            ? Colors.white
+                            : _primaryTextColor(context),
                       ),
                     ),
-                  ),
-              ],
+                    Text(
+                      '${cellHijri.day}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 9.0,
+                        fontWeight: FontWeight.w600,
+                        height: 1.1,
+                        color: isSelected
+                            ? Colors.white.withValues(alpha: 0.8)
+                            : (hasEvent
+                                ? AppColors.coralOrange
+                                : (isWhiteDay
+                                    ? _ayyamBeedhColor
+                                    : (isSunnahFast
+                                        ? AppColors.midTeal
+                                        : _secondaryTextColor(context)))),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    SizedBox(
+                      height: 4,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (hasEvent)
+                            Container(
+                              width: 4,
+                              height: 4,
+                              decoration: const BoxDecoration(
+                                color: AppColors.coralOrange,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          if (hasEvent && isFasting) const SizedBox(width: 2),
+                          if (isWhiteDay)
+                            Container(
+                              width: 4,
+                              height: 4,
+                              decoration: const BoxDecoration(
+                                color: _ayyamBeedhColor,
+                                shape: BoxShape.circle,
+                              ),
+                            )
+                          else if (isSunnahFast)
+                            Container(
+                              width: 4,
+                              height: 4,
+                              decoration: const BoxDecoration(
+                                color: AppColors.midTeal,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
+            // Bell now lives on this outer Stack (a sibling of the day
+            // Container, not nested inside its padding) so the negative
+            // offsets below push it up and out past the box's own edge,
+            // matching the floating-bell look used on the Prayer tab.
+            if (canSetFastingAlarm)
+              Positioned(
+                top: -6,
+                right: -6,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    _suppressNextCellTap = true;
+                    _toggleFastingAlarm(cellDate);
+                    // The suppress-flag only needs to survive long
+                    // enough to be checked by the cell's own onTap for
+                    // this same tap event, if it also fires. Clearing
+                    // it on a microtask (rather than leaving it set)
+                    // means a later, separate tap on the cell is never
+                    // accidentally swallowed.
+                    Future.microtask(() => _suppressNextCellTap = false);
+                  },
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: fastingAlarmOn
+                          ? AppColors.coralOrange
+                          : (isDark ? const Color(0xFF2A2A2A) : Colors.white),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: fastingAlarmOn
+                            ? AppColors.coralOrange
+                            : (isDark
+                                ? Colors.white.withValues(alpha: 0.35)
+                                : AppColors.navyBlue.withValues(alpha: 0.25)),
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.18),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      fastingAlarmOn
+                          ? Icons.notifications_active_rounded
+                          : Icons.notifications_off_rounded,
+                      size: 10,
+                      color: fastingAlarmOn
+                          ? Colors.white
+                          : (isDark ? Colors.white : AppColors.navyBlue),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
