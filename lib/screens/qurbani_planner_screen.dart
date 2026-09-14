@@ -8122,7 +8122,21 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     ],
 
                     const SizedBox(height: 20),
-                    Text('🔔 Reminders', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15)),
+                    Row(
+                      children: [
+                        Image.asset(
+                          'assets/icons/bell.png',
+                          width: 18,
+                          height: 18,
+                          filterQuality: FilterQuality.medium,
+                          color: _isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue,
+                          colorBlendMode: BlendMode.srcIn,
+                          fit: BoxFit.contain,
+                        ),
+                        const SizedBox(width: 6),
+                        Text('Reminders', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15)),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     _buildReminderTile(
                       type: 'Eid',
@@ -8252,7 +8266,15 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           if (isCreditor) ...[
             const SizedBox(width: 4),
             IconButton(
-              icon: const Icon(Icons.notifications_active_rounded, color: AppColors.coralOrange, size: 20),
+              icon: Image.asset(
+                'assets/icons/bell.png',
+                width: 22,
+                height: 22,
+                filterQuality: FilterQuality.medium,
+                color: AppColors.coralOrange,
+                colorBlendMode: BlendMode.srcIn,
+                fit: BoxFit.contain,
+              ),
               tooltip: 'Send payment reminder',
               onPressed: () => _notifySettlement(s),
             ),
@@ -8466,6 +8488,18 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       decoration: BoxDecoration(color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Image.asset(
+              'assets/icons/bell.png',
+              width: 22,
+              height: 22,
+              filterQuality: FilterQuality.medium,
+              color: _isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue,
+              colorBlendMode: BlendMode.srcIn,
+              fit: BoxFit.contain,
+            ),
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

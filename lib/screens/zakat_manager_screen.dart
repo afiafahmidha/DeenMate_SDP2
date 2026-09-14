@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -1447,6 +1447,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             _currentHaulCycleNumber = zakat['currentHaulCycleNumber'] as int? ?? _currentHaulCycleNumber;
 
             await _savePrefsToLocalOnly();
+            _recalculate();
+
           }
         }
       } catch (e) {
