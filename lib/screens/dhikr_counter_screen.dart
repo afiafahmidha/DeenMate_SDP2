@@ -754,7 +754,13 @@ body: SafeArea(
               borderRadius: BorderRadius.circular(14),
               border: _dark ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) : null,
             ),
-            child: const Icon(Icons.fingerprint_rounded, color: Colors.white, size: 20),
+            child: Image.asset(
+              'assets/icons/beads.png',
+              width: 20,
+              height: 20,
+              color: Colors.white,
+              colorBlendMode: BlendMode.srcIn,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

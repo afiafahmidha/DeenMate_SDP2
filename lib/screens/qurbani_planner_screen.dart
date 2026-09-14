@@ -2734,7 +2734,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       color: _isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.pets_rounded, color: Colors.white, size: 20),
+                    child: Image.asset(
+                      'assets/icons/cow.png',
+                      width: 20,
+                      height: 20,
+                      color: Colors.white,
+                      colorBlendMode: BlendMode.srcIn,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(

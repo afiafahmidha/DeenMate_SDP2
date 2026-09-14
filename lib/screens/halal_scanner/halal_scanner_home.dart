@@ -577,7 +577,13 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
               color: widget.isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 20),
+            child: Image.asset(
+              'assets/icons/qr-code.png',
+              width: 20,
+              height: 20,
+              color: Colors.white,
+              colorBlendMode: BlendMode.srcIn,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

@@ -1387,10 +1387,12 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               color: const Color(0xFFD32F2F),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(
-              Icons.health_and_safety_rounded,
+            child: Image.asset(
+              'assets/icons/alert.png',
+              width: 20,
+              height: 20,
               color: Colors.white,
-              size: 20,
+              colorBlendMode: BlendMode.srcIn,
             ),
           ),
           const SizedBox(width: 12),
