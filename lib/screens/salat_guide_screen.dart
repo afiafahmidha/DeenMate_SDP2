@@ -131,7 +131,13 @@ gradient: _isDark
               borderRadius: BorderRadius.circular(14),
               border: _isDark ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) : null,
             ),
-            child: const Icon(Icons.mosque_rounded, color: Colors.white, size: 20),
+            child: Image.asset(
+              'assets/icons/salat.png',
+              width: 20,
+              height: 20,
+              color: Colors.white,
+              colorBlendMode: BlendMode.srcIn,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

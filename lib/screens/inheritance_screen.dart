@@ -1375,7 +1375,13 @@ class _InheritanceScreenState extends State<InheritanceScreen>
               color: _isDarkMode ? const Color(0xFF2C2C2C) : AppColors.navyBlue,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
+            child: Image.asset(
+              'assets/icons/inherit.png',
+              width: 20,
+              height: 20,
+              color: Colors.white,
+              colorBlendMode: BlendMode.srcIn,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
