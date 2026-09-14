@@ -2220,7 +2220,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     );
   }
 
-  static const _tabLabels = ['Calculator', 'Haul', 'Rules', 'Al-Fitr', 'Payments', 'History', 'Guide'];
+  static const _tabLabels = ['Calculator', 'Haul', 'Rules', 'Al-Fitr', 'Payments', 'History'];
   static const _tabIcons = [
     Icons.calculate_rounded,
     Icons.hourglass_bottom_rounded,
@@ -2228,7 +2228,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     Icons.people_alt_rounded,
     Icons.receipt_long_rounded,
     Icons.bar_chart_rounded,
-    Icons.help_outline_rounded,
   ];
 
   Widget _buildTabBar() {
@@ -2306,8 +2305,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         return _buildPaymentsTab();
       case 5:
         return _buildHistoryTab();
-      case 6:
-        return _buildGuideTab();
       default:
         return _buildCalculatorTab();
     }
@@ -8279,201 +8276,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // TAB 6 — GUIDE
-  // ═══════════════════════════════════════════════════════════════
-
-  Widget _buildGuideTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF14243B), Color(0xFF1B4D3E)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.28), blurRadius: 14, offset: const Offset(0, 6))],
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle),
-                  child: const Icon(Icons.help_outline_rounded, color: Colors.white, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('How Zakat Manager Works', style: GoogleFonts.poppins(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
-                  Text('دَلِيلُ مُدِيرِ الزَّكَاة', style: GoogleFonts.amiri(color: const Color(0xFFA5D6A7), fontSize: 13, fontWeight: FontWeight.bold)),
-                ])),
-              ]),
-              const SizedBox(height: 12),
-              Text('Follow these 5 steps to calculate, track, and pay your Zakat correctly — in sha Allah.', style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.9), fontSize: 11.5, height: 1.45)),
-            ]),
-          ),
-          const SizedBox(height: 20),
-          _buildGuideStep(1, 'Enter Your Wealth', Icons.calculate_rounded, AppColors.navyBlue,
-            'Open the Calculator tab and enter all your zakatable assets:\n\n'
-            '• Cash & bank savings\n'
-            '• Gold (by karat — 24k, 22k, 21k, 18k)\n'
-            '• Silver (in grams)\n'
-            '• Stocks & investments\n'
-            '• Business inventory & trade goods\n'
-            '• Money owed to you (receivables)\n'
-            '• Net rental income\n'
-            '• Agricultural harvest (Ushr)\n'
-            '• Mined minerals or found treasure (Rikaz)\n\n'
-            'Subtract immediate liabilities (debts due now). Net zakatable wealth is calculated automatically.'),
-          _buildGuideStep(2, 'Set Your Haul Start Date', Icons.hourglass_bottom_rounded, const Color(0xFF6A1B9A),
-            'The Haul is the full Islamic lunar year (354 days) your wealth must be held before standard Zakat becomes obligatory.\n\n'
-            '• Go to the Haul tab\n'
-            '• Set the date your wealth first reached Nisab\n'
-            '• The app tracks the Hijri anniversary automatically and notifies you\n\n'
-            'Note: Agricultural Zakat (Ushr), Mineral Zakat, and Rikaz (Buried Treasure) do NOT need a Haul — they are due the moment of harvest, extraction, or discovery.'),
-          _buildGuideStep(3, 'Zakat Becomes Due', Icons.notifications_active_rounded, AppColors.coralOrange,
-            'Two types of obligation — both tracked in the Calculator tab:\n\n'
-            'Haul-Based (Standard Wealth — 2.5%)\n'
-            'Covers gold, silver, cash, stocks, business assets, and rental income. Due after Haul completes.\n\n'
-            'Event-Based (Immediate — No Haul Required)\n'
-            '• Crops: 10% if rain-fed / 5% if irrigated — due on harvest day (Quran 6:141)\n'
-            '• Minerals: 2.5% if value >= Nisab — due on extraction (scholarly consensus)\n'
-            '• Rikaz: 20% flat — due on discovery, no Nisab required (Bukhari 1499)\n\n'
-            'You will receive an app notification when your Haul year completes.'),
-          _buildGuideStep(4, 'Log Your Payments', Icons.receipt_long_rounded, const Color(0xFF2E7D32),
-            'Once Zakat is due, go to the Payments tab:\n\n'
-            '• Tap "Log Payment" to record each payment\n'
-            '• Assign it to one of the 8 Asnaf categories (Surah 9:60)\n'
-            '• Supports BDT, USD, EUR and all major currencies — auto-converted at live rates\n'
-            '• Use the Verified Charity Directory to find Zakat-eligible organizations\n\n'
-            'Smart Overpayment:\nIf you pay more than your remaining Zakat, the app automatically splits the entry into a Zakat portion and a Sadaqah (voluntary) portion — both are recorded.'),
-          _buildGuideStep(5, 'Track Your History', Icons.bar_chart_rounded, Colors.teal,
-            'The History tab shows your complete year-by-year Zakat record:\n\n'
-            '• Bar chart: Zakat Due vs. Paid for each year\n'
-            '• Each year\'s wealth snapshot is locked permanently when the Haul completes\n'
-            '• Export a full PDF financial statement from the Payments tab\n\n'
-            'All data is stored securely on your device and persists across app restarts.'),
-          const SizedBox(height: 8),
-          _buildRuleSectionCard(
-            title: 'Quick Reference — All Zakat Types',
-            subtitle: 'Rates, Nisab, and timing at a glance',
-            icon: Icons.table_chart_rounded,
-            iconColor: AppColors.navyBlue,
-            child: Column(children: [
-              _buildGuideRefRow('Cash, Gold, Silver, Stocks', '2.5%', 'After Haul', const Color(0xFF1565C0)),
-              _buildGuideRefRow('Business Inventory', '2.5%', 'After Haul', const Color(0xFF1565C0)),
-              _buildGuideRefRow('Net Rental Income', '2.5%', 'After Haul', const Color(0xFF1565C0)),
-              _buildGuideRefRow('Camels (>= 5)', 'Animal', 'After Haul', const Color(0xFF2E7D32)),
-              _buildGuideRefRow('Cattle (>= 30)', 'Animal', 'After Haul', const Color(0xFF2E7D32)),
-              _buildGuideRefRow('Sheep/Goats (>= 40)', 'Animal', 'After Haul', const Color(0xFF2E7D32)),
-              _buildGuideRefRow('Crops (>= 653 kg)', '10% / 5%', 'On harvest day', Colors.teal),
-              _buildGuideRefRow('Minerals (>= Nisab)', '2.5%', 'On extraction', Colors.teal),
-              _buildGuideRefRow('Rikaz (any amount)', '20%', 'On discovery', AppColors.coralOrange),
-              _buildGuideRefRow('Zakat al-Fitr', 'Fixed/person', 'Before Eid prayer', const Color(0xFF6A1B9A)),
-            ]),
-          ),
-          const SizedBox(height: 16),
-          _buildRuleSectionCard(
-            title: 'Live Nisab Values',
-            subtitle: 'Minimum wealth threshold for Zakat',
-            icon: Icons.price_check_rounded,
-            iconColor: Colors.amber.shade800,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _buildGuideNisabRow('Gold Nisab (85g × 24k)', _formatMoney(85 * _effectiveGoldPrice)),
-              _buildGuideNisabRow('Silver Nisab (595g)', _formatMoney(595 * _effectiveSilverPrice)),
-              _buildGuideNisabRow('Crops Nisab (5 Wasaq)', '653 kg minimum'),
-              _buildGuideNisabRow('Minerals Nisab', 'Same as currency Nisab'),
-              _buildGuideNisabRow('Rikaz Nisab', 'None — any amount triggers 20%'),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                child: Text('Your app uses ${_nisabStandard == "gold" ? "Gold" : "Silver"} Nisab standard. Change it in Calculator → Settings.', style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.amber[200] : Colors.amber[900], height: 1.4)),
-              ),
-            ]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGuideStep(int number, String title, IconData icon, Color color, String content) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withValues(alpha: 0.22)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 3))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: _isDarkMode ? 0.15 : 0.07),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-          ),
-          child: Row(children: [
-            Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              child: Center(child: Text('$number', style: GoogleFonts.poppins(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold))),
-            ),
-            const SizedBox(width: 10),
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 8),
-            Expanded(child: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13.5, color: _isDarkMode ? Colors.white : AppColors.navyBlue))),
-            GestureDetector(
-              onTap: () => setState(() => _tab = (number - 1).clamp(0, 5)),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-                child: Text('Go →', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
-              ),
-            ),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(content, style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white.withValues(alpha: 0.82) : AppColors.navyBlue.withValues(alpha: 0.8), height: 1.65)),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildGuideRefRow(String type, String rate, String timing, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
-      child: Row(children: [
-        Expanded(child: Text(type, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white : AppColors.navyBlue))),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
-          child: Text(rate, style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
-        ),
-        const SizedBox(width: 8),
-        Text(timing, style: GoogleFonts.inter(fontSize: 9.5, color: _isDarkMode ? Colors.white54 : AppColors.navyBlue.withValues(alpha: 0.45))),
-      ]),
-    );
-  }
-
-  Widget _buildGuideNisabRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Expanded(child: Text(label, style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.7)))),
-        Text(value, style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
-      ]),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════
   // CROPS / MINERALS / RIKAZ SECTION BUILDERS
   // ═══════════════════════════════════════════════════════════════
 
@@ -8483,6 +8285,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     required String sub,
     required TextEditingController ctrl,
     required String suffix,
+    bool isText = false,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -8515,18 +8318,18 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           ),
           const SizedBox(width: 8),
           SizedBox(
-            width: 95,
+            width: isText ? 130 : 95,
             child: TextField(
               controller: ctrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              textAlign: TextAlign.right,
+              keyboardType: isText ? TextInputType.text : const TextInputType.numberWithOptions(decimal: true),
+              textAlign: isText ? TextAlign.left : TextAlign.right,
               style: GoogleFonts.poppins(
                 fontSize: 12,
-                fontWeight: FontWeight.bold,
+                fontWeight: isText ? FontWeight.w500 : FontWeight.bold,
                 color: _isDarkMode ? Colors.white : AppColors.navyBlue,
               ),
               decoration: InputDecoration(
-                suffixText: ' $suffix',
+                suffixText: suffix.isNotEmpty ? ' $suffix' : null,
                 suffixStyle: GoogleFonts.inter(
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
@@ -8548,7 +8351,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       ),
     );
   }
-
   Widget _buildImmediateBadge(String label, Color color) {
     final effectiveColor = (_isDarkMode && color == AppColors.navyBlue)
         ? const Color(0xFF64B5F6)
@@ -8691,6 +8493,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               sub: 'e.g. Paddy, Barley, Wheat',
               ctrl: _cropItems[i].nameCtrl,
               suffix: '',
+              isText: true,
             ),
             const SizedBox(height: 10),
             _buildSectionInputRow(
@@ -8906,6 +8709,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   sub: 'e.g. Gold Ore, Copper, Salt',
                   ctrl: _mineralItems[i].nameCtrl,
                   suffix: '',
+                  isText: true,
                 ),
                 const SizedBox(height: 10),
                 _buildSectionInputRow(
@@ -9037,6 +8841,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   sub: 'e.g. Ancient Coins, Gold Jar',
                   ctrl: _rikazItems[i].nameCtrl,
                   suffix: '',
+                  isText: true,
                 ),
                 const SizedBox(height: 10),
                 _buildSectionInputRow(
