@@ -82,6 +82,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/icons/
     - assets/images/header_art.svg
     - assets/images/islamic_events/islamic_new_year/
     - assets/images/islamic_events/ashura/

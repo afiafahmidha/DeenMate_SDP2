@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1664,24 +1664,60 @@ _buildAnimatedEntry(
   List<_QuickStartFeature> _quickStartFeatures() {
     final tr = AppLocalizations.of(context)!.tr;
     return [
-      _QuickStartFeature('quran_tracker', tr('quran_tracker'), Icons.menu_book_rounded,
-          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QuranTrackerScreen()))),
-      _QuickStartFeature('dhikr_counter', tr('dhikr_counter'), Icons.fingerprint_rounded,
-          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DhikrCounterScreen(isDarkMode: _isDarkMode)))),
-      _QuickStartFeature('salat_guide', tr('salat_guide'), Icons.crop_portrait_rounded,
-          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SalatGuideScreen(isDarkMode: _isDarkMode)))),
-      _QuickStartFeature('zakat_calculator', tr('zakat_calculator'), Icons.calculate_rounded,
-          _showZakatCalculatorSheet),
-      _QuickStartFeature('qurbani_planner', tr('qurbani_planner'), Icons.pets_rounded,
-          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QurbaniPlannerPage()))),
-      _QuickStartFeature('hajj_umrah', tr('hajj_umrah'), Icons.flight_takeoff_rounded,
-          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HajjUmrahPlannerScreen()))),
-      _QuickStartFeature('inheritance', tr('inheritance'), Icons.account_balance_rounded,
-          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InheritanceGuideScreen()))),
-      _QuickStartFeature('halal_scanner', tr('halal_scanner'), Icons.qr_code_scanner_rounded,
-          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => HalalScannerHomeScreen(isDarkMode: _isDarkMode)))),
-      _QuickStartFeature('emergency_sos', tr('emergency_sos'), Icons.health_and_safety_rounded,
-          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => EmergencySosScreen(isDarkMode: _isDarkMode)))),
+      _QuickStartFeature(
+        id: 'quran_tracker',
+        label: tr('quran_tracker'),
+        imageAsset: 'assets/icons/quran.png',
+        onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QuranTrackerScreen())),
+      ),
+      _QuickStartFeature(
+        id: 'dhikr_counter',
+        label: tr('dhikr_counter'),
+        imageAsset: 'assets/icons/beads.png',
+        onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DhikrCounterScreen(isDarkMode: _isDarkMode))),
+      ),
+      _QuickStartFeature(
+        id: 'salat_guide',
+        label: tr('salat_guide'),
+        imageAsset: 'assets/icons/salat.png',
+        onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SalatGuideScreen(isDarkMode: _isDarkMode))),
+      ),
+      _QuickStartFeature(
+        id: 'zakat_calculator',
+        label: tr('zakat_calculator'),
+        imageAsset: 'assets/icons/zakat.png',
+        onOpen: _showZakatCalculatorSheet,
+      ),
+      _QuickStartFeature(
+        id: 'qurbani_planner',
+        label: tr('qurbani_planner'),
+        imageAsset: 'assets/icons/cow.png',
+        onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const QurbaniPlannerPage())),
+      ),
+      _QuickStartFeature(
+        id: 'hajj_umrah',
+        label: tr('hajj_umrah'),
+        imageAsset: 'assets/icons/kaaba.png',
+        onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HajjUmrahPlannerScreen())),
+      ),
+      _QuickStartFeature(
+        id: 'inheritance',
+        label: tr('inheritance'),
+        imageAsset: 'assets/icons/inherit.png',
+        onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InheritanceGuideScreen())),
+      ),
+      _QuickStartFeature(
+        id: 'halal_scanner',
+        label: tr('halal_scanner'),
+        imageAsset: 'assets/icons/qr-code.png',
+        onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => HalalScannerHomeScreen(isDarkMode: _isDarkMode))),
+      ),
+      _QuickStartFeature(
+        id: 'emergency_sos',
+        label: tr('emergency_sos'),
+        imageAsset: 'assets/icons/alert.png',
+        onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => EmergencySosScreen(isDarkMode: _isDarkMode))),
+      ),
     ];
   }
 
@@ -1748,7 +1784,21 @@ _buildAnimatedEntry(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(shortcut.icon, color: AppColors.midTeal, size: 24),
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: shortcut.imageAsset != null
+                                  ? Image.asset(
+                                      shortcut.imageAsset!,
+                                      width: 24,
+                                      height: 24,
+                                      filterQuality: FilterQuality.medium,
+                                      color: _isDarkMode ? AppColors.dustyBlueTeal : null,
+                                      colorBlendMode: _isDarkMode ? BlendMode.srcIn : null,
+                                      fit: BoxFit.contain,
+                                    )
+                                  : Icon(shortcut.icon ?? Icons.star, color: AppColors.midTeal, size: 24),
+                            ),
                             const Spacer(),
                             Text(
                               shortcut.label,
@@ -1801,18 +1851,16 @@ _buildAnimatedEntry(
             children: [
               Expanded(
                 child: _buildFeatureCard(
-                  icon: Icons.calculate_rounded,
-                   label: AppLocalizations.of(context)!.tr('zakat_calculator'),
-                  iconPainter: _ZakatIconPainter(isDark: _isDarkMode),
+                  imageAsset: 'assets/icons/zakat.png',
+                  label: AppLocalizations.of(context)!.tr('zakat_calculator'),
                   onTap: () => _openFeature('zakat_calculator', _showZakatCalculatorSheet),
                 ),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: _buildFeatureCard(
-                  icon: Icons.pets_rounded,
-                   label: AppLocalizations.of(context)!.tr('qurbani_planner'),
-                  iconPainter: _QurbaniIconPainter(isDark: _isDarkMode),
+                  imageAsset: 'assets/icons/cow.png',
+                  label: AppLocalizations.of(context)!.tr('qurbani_planner'),
                   onTap: () => _openFeature('qurbani_planner', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1829,9 +1877,8 @@ _buildAnimatedEntry(
             children: [
               Expanded(
                 child: _buildFeatureCard(
-                  icon: Icons.flight_takeoff_rounded,
-                   label: AppLocalizations.of(context)!.tr('hajj_umrah'),
-                  iconPainter: _HajjIconPainter(isDark: _isDarkMode),
+                  imageAsset: 'assets/icons/kaaba.png',
+                  label: AppLocalizations.of(context)!.tr('hajj_umrah'),
                   onTap: () => _openFeature('hajj_umrah', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1844,9 +1891,8 @@ _buildAnimatedEntry(
               const SizedBox(width: 14),
               Expanded(
                 child: _buildFeatureCard(
-                  icon: Icons.account_balance_rounded,
-                   label: AppLocalizations.of(context)!.tr('inheritance'),
-                  iconPainter: _InheritanceIconPainter(isDark: _isDarkMode),
+                  imageAsset: 'assets/icons/inherit.png',
+                  label: AppLocalizations.of(context)!.tr('inheritance'),
                   onTap: () => _openFeature('inheritance', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1873,9 +1919,8 @@ _buildAnimatedEntry(
             children: [
               Expanded(
                 child: _buildFeatureCard(
-                  icon: Icons.menu_book_rounded,
-                   label: AppLocalizations.of(context)!.tr('quran_tracker'),
-                  iconPainter: _QuranIconPainter(isDark: _isDarkMode),
+                  imageAsset: 'assets/icons/quran.png',
+                  label: AppLocalizations.of(context)!.tr('quran_tracker'),
                   onTap: () => _openFeature('quran_tracker', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1888,9 +1933,8 @@ _buildAnimatedEntry(
               const SizedBox(width: 14),
               Expanded(
                 child: _buildFeatureCard(
-                  icon: Icons.fingerprint_rounded,
-                   label: AppLocalizations.of(context)!.tr('dhikr_counter'),
-                  iconPainter: _DhikrIconPainter(isDark: _isDarkMode),
+                  imageAsset: 'assets/icons/beads.png',
+                  label: AppLocalizations.of(context)!.tr('dhikr_counter'),
                   onTap: () => _openFeature('dhikr_counter', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1907,9 +1951,8 @@ _buildAnimatedEntry(
             children: [
               Expanded(
                 child: _buildFeatureCard(
-                  icon: Icons.qr_code_scanner_rounded,
-                   label: AppLocalizations.of(context)!.tr('halal_scanner'),
-                  iconPainter: _HalalIconPainter(isDark: _isDarkMode),
+                  imageAsset: 'assets/icons/qr-code.png',
+                  label: AppLocalizations.of(context)!.tr('halal_scanner'),
                   onTap: () => _openFeature('halal_scanner', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1922,9 +1965,8 @@ _buildAnimatedEntry(
               const SizedBox(width: 14),
               Expanded(
                 child: _buildFeatureCard(
-                  icon: Icons.health_and_safety_rounded,
-                   label: AppLocalizations.of(context)!.tr('emergency_sos'),
-                  iconPainter: _EmergencyIconPainter(isDark: _isDarkMode),
+                  imageAsset: 'assets/icons/alert.png',
+                  label: AppLocalizations.of(context)!.tr('emergency_sos'),
                   onTap: () => _openFeature('emergency_sos', () {
                     Navigator.push(
                       context,
@@ -1942,9 +1984,8 @@ _buildAnimatedEntry(
             children: [
               Expanded(
                 child: _buildFeatureCard(
-                  icon: Icons.crop_portrait_rounded,
-                   label: AppLocalizations.of(context)!.tr('salat_guide'),
-                  iconPainter: _SalatGuideIconPainter(isDark: _isDarkMode),
+                  imageAsset: 'assets/icons/salat.png',
+                  label: AppLocalizations.of(context)!.tr('salat_guide'),
                   onTap: () => _openFeature('salat_guide', () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1965,7 +2006,8 @@ _buildAnimatedEntry(
 
  // ===== FEATURE CARD (Reusable) =====
   Widget _buildFeatureCard({
-  required IconData icon,
+  String? imageAsset,
+  IconData? icon,
   required String label,
   CustomPainter? iconPainter,
   VoidCallback? onTap,
@@ -2016,9 +2058,21 @@ _buildAnimatedEntry(
                   width: 1,
                 ),
               ),
-              child: iconPainter != null
-                  ? CustomPaint(painter: iconPainter)
-                  : Icon(icon, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 22),
+              child: Center(
+                child: imageAsset != null
+                    ? Image.asset(
+                        imageAsset,
+                        width: 24,
+                        height: 24,
+                        filterQuality: FilterQuality.medium,
+                        color: _isDarkMode ? AppColors.dustyBlueTeal : null,
+                        colorBlendMode: _isDarkMode ? BlendMode.srcIn : null,
+                        fit: BoxFit.contain,
+                      )
+                    : (iconPainter != null
+                        ? CustomPaint(painter: iconPainter)
+                        : Icon(icon ?? Icons.star, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 22)),
+              ),
             ),
             const SizedBox(height: 14),
             Text(
@@ -2213,11 +2267,18 @@ _buildAnimatedEntry(
 }
 
 class _QuickStartFeature {
-  const _QuickStartFeature(this.id, this.label, this.icon, this.onOpen);
+  const _QuickStartFeature({
+    required this.id,
+    required this.label,
+    this.icon,
+    this.imageAsset,
+    required this.onOpen,
+  });
 
   final String id;
   final String label;
-  final IconData icon;
+  final IconData? icon;
+  final String? imageAsset;
   final VoidCallback onOpen;
 }
 
