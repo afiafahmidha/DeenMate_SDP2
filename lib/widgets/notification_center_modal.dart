@@ -57,6 +57,7 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
     {'id': 'quran', 'label': 'Quran'},
     {'id': 'events', 'label': 'Events'},
     {'id': 'sos', 'label': 'SOS'},
+    {'id': 'qurbani', 'label': 'Qurbani'},
   ];
 
   @override
@@ -109,6 +110,8 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
         return const Color(0xFFE9C46A);
       case 'sos':
         return const Color(0xFFD62828);
+      case 'qurbani':
+        return const Color(0xFF6A994E);
       default:
         return const Color(0xFF1D3557);
     }
@@ -906,6 +909,7 @@ class _NotificationCenterModalState extends State<NotificationCenterModal> {
         _buildCategorySwitch('quran', 'Daily Quran Streaks', service, textColor, isDark),
         _buildCategorySwitch('events', 'Islamic Event Calendar', service, textColor, isDark),
         _buildCategorySwitch('sos', 'Emergency SOS Alerts', service, textColor, isDark),
+        _buildCategorySwitch('qurbani', 'Qurbani Group Updates', service, textColor, isDark),
       ],
     );
   }

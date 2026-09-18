@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -94,11 +97,15 @@ class NotificationService {
     'quran': true,
     'events': true,
     'sos': true,
+    'qurbani': true,
   };
 
   final List<NotificationItem> _history = [];
   final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> fastingAlarmsRevision = ValueNotifier<int>(0);
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _qurbaniNotifSub;
+  int _qurbaniNotifIdCounter = 900000;
 
   List<NotificationItem> get history => List.unmodifiable(_history);
   int get snoozeDurationMinutes => _snoozeDurationMinutes;
@@ -946,5 +953,65 @@ class NotificationService {
     } catch (e) {
       debugPrint('[NotificationService] System show error: $e');
     }
+  }
+
+  // ---- Cross-user notifications (e.g. Qurbani group updates) ----
+  //
+  // Other users' actions (being added as a Qurbani participant, someone
+  // joining your group via invite code, etc.) are written by the acting
+  // client into `users/{recipientUid}/notifications/{id}` — see
+  // firestore.rules for exactly which writes are allowed. This listener
+  // watches the signed-in user's own inbox and turns each unread doc into a
+  // normal local notification + Notification Center entry, then marks it
+  // read so it isn't shown twice.
+  //
+  // Call [startQurbaniNotificationsListener] once after sign-in (e.g. when
+  // the home/dashboard screen loads) and [stopQurbaniNotificationsListener]
+  // on sign-out.
+  void startQurbaniNotificationsListener() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    _qurbaniNotifSub?.cancel();
+    _qurbaniNotifSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('notifications')
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .listen((snapshot) async {
+      for (final change in snapshot.docChanges) {
+        if (change.type != DocumentChangeType.added) continue;
+        final data = change.doc.data();
+        if (data == null) continue;
+
+        final title = data['title'] as String? ?? 'Qurbani update';
+        final body = data['body'] as String? ?? '';
+
+        try {
+          await showCustomNotification(
+            id: _qurbaniNotifIdCounter++,
+            title: title,
+            body: body,
+            category: 'qurbani',
+          );
+        } catch (e) {
+          debugPrint('[NotificationService] Could not surface Qurbani notification: $e');
+        }
+
+        try {
+          await change.doc.reference.update({'read': true});
+        } catch (e) {
+          debugPrint('[NotificationService] Could not mark Qurbani notification read: $e');
+        }
+      }
+    }, onError: (e) {
+      debugPrint('[NotificationService] Qurbani notifications listener error: $e');
+    });
+  }
+
+  void stopQurbaniNotificationsListener() {
+    _qurbaniNotifSub?.cancel();
+    _qurbaniNotifSub = null;
   }
 }

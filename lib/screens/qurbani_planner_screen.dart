@@ -1187,6 +1187,7 @@ class QurbaniRepository {
 
     // Check cap
     final pSnap = await participantsRef.get();
+    final isNewMember = !pSnap.docs.any((d) => d.id == uid);
     final otherTotal = pSnap.docs.fold<int>(0, (sum, d) {
       if (d.id == uid) return sum;
       return sum + ((d.data()['shares'] as num?)?.toInt() ?? 0);
@@ -1226,6 +1227,15 @@ class QurbaniRepository {
     } catch (_) {}
 
     await recalcAndSyncBalances();
+
+    if (isNewMember) {
+      await _sendCrossUserNotification(
+        recipientUid: ownerUid,
+        type: 'qurbani_joined',
+        title: 'New member joined your Qurbani group',
+        body: '$name joined with $shares share${shares > 1 ? "s" : ""}.',
+      );
+    }
 
     // If total shares reach cap, close any linked share post
     try {
@@ -1300,31 +1310,66 @@ class QurbaniRepository {
     final targetPlan = data['planId'] as String;
 
     final repository = QurbaniRepository._(targetOwner, targetPlan);
-
-    // Validate share cap before joining
-    final pSnap = await repository.participantsRef.get();
     final uid = currentUid();
-    final otherTotal = pSnap.docs.fold<int>(0, (sum, d) {
-      if (d.id == uid) return sum;
-      return sum + ((d.data()['shares'] as num?)?.toInt() ?? 0);
-    });
 
     final planDoc = await repository.planRef.get();
     if (!planDoc.exists) {
       throw Exception('The requested Qurbani group no longer exists.');
     }
-    final animalType = (planDoc.data()?['animalType'] as String?) ?? 'cow';
-    final cap = _animalShareCaps[animalType] ?? 7;
-    final remaining = cap - otherTotal;
 
-    if (remaining <= 0) {
-      throw Exception('Sorry, shares are already complete in this group (All $cap shares filled).');
-    }
-    if (shares > remaining) {
-      throw Exception('Cannot join with $shares shares. Only $remaining share${remaining > 1 ? "s" : ""} available for this $animalType (Maximum $cap shares).');
+    // Firestore rules only let a plan MEMBER read the participants
+    // subcollection. A user who just entered an invite code is not a member
+    // yet, so reading participantsRef here (to check the share cap) used to
+    // fail with a permission-denied error before the join could ever happen.
+    // Fix: grant provisional membership first (the rules explicitly allow a
+    // signed-in, not-yet-member user to add only themselves to memberIds),
+    // then validate the share cap now that participants can be read, and
+    // roll the membership back if the cap check fails.
+    final existingMemberIds = ((planDoc.data()?['memberIds'] as List?) ?? []).cast<String>();
+    final alreadyMember = existingMemberIds.contains(uid);
+
+    if (!alreadyMember) {
+      await repository.planRef.update({
+        'memberIds': FieldValue.arrayUnion([uid]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     }
 
-    await repository.joinCurrentUserWithShares(shares);
+    Future<void> revertProvisionalMembership() async {
+      if (alreadyMember) return;
+      try {
+        await repository.planRef.update({
+          'memberIds': FieldValue.arrayRemove([uid]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+    }
+
+    try {
+      // Validate share cap before finishing the join
+      final pSnap = await repository.participantsRef.get();
+      final otherTotal = pSnap.docs.fold<int>(0, (sum, d) {
+        if (d.id == uid) return sum;
+        return sum + ((d.data()['shares'] as num?)?.toInt() ?? 0);
+      });
+
+      final animalType = (planDoc.data()?['animalType'] as String?) ?? 'cow';
+      final cap = _animalShareCaps[animalType] ?? 7;
+      final remaining = cap - otherTotal;
+
+      if (remaining <= 0) {
+        throw Exception('Sorry, shares are already complete in this group (All $cap shares filled).');
+      }
+      if (shares > remaining) {
+        throw Exception('Cannot join with $shares shares. Only $remaining share${remaining > 1 ? "s" : ""} available for this $animalType (Maximum $cap shares).');
+      }
+
+      await repository.joinCurrentUserWithShares(shares);
+    } catch (e) {
+      await revertProvisionalMembership();
+      rethrow;
+    }
+
     await _persist(targetOwner, targetPlan);
     return repository;
   }
@@ -1437,6 +1482,39 @@ class QurbaniRepository {
     });
   }
 
+  /// Drops a notification into [recipientUid]'s own notifications inbox
+  /// (`users/{recipientUid}/notifications`) so they see it in the
+  /// Notification Center (and get a local heads-up if the app supports it).
+  /// Never notifies the acting user about their own action, and never lets a
+  /// failure here break the caller's main action.
+  Future<void> _sendCrossUserNotification({
+    required String recipientUid,
+    required String type,
+    required String title,
+    required String body,
+  }) async {
+    if (recipientUid.isEmpty || recipientUid == currentUid()) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(recipientUid)
+          .collection('notifications')
+          .add({
+        'type': type,
+        'title': title,
+        'body': body,
+        'planId': planId,
+        'ownerUid': ownerUid,
+        'actorUid': currentUid(),
+        'actorName': currentDisplayName(),
+        'read': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Could not send Qurbani notification to $recipientUid: $e');
+    }
+  }
+
   Future<void> addParticipantUser({
     required String name,
     required int shares,
@@ -1484,6 +1562,13 @@ class QurbaniRepository {
       } catch (e) {
         debugPrint('Could not update memberIds array: $e');
       }
+
+      await _sendCrossUserNotification(
+        recipientUid: uid,
+        type: 'qurbani_added',
+        title: 'Added to a Qurbani group',
+        body: '${currentDisplayName()} added you to their Qurbani plan with $shares share${shares > 1 ? "s" : ""}.',
+      );
     }
     await recalcAndSyncBalances();
   }
@@ -8998,4 +9083,3 @@ class _QurbaniPlannerPageState extends State<QurbaniPlannerPage> {
     );
   }
 }
-
