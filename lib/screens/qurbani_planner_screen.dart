@@ -1193,6 +1193,13 @@ class QurbaniRepository {
     });
     await _validateShareCap(otherTotal + shares);
 
+    // Step 1: Add uid to memberIds FIRST so subsequent writes pass security rules
+    await planRef.update({
+      'memberIds': FieldValue.arrayUnion([uid]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    // Step 2: Write member record (now permitted since uid is in memberIds)
     await planRef.collection('members').doc(uid).set({
       'name': name,
       'shares': shares,
@@ -1202,6 +1209,7 @@ class QurbaniRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
+    // Step 3: Write participant record
     await participantsRef.doc(uid).set({
       'name': name,
       'phone': null,
@@ -1217,13 +1225,6 @@ class QurbaniRepository {
       'uid': uid,
     }, SetOptions(merge: true));
 
-    // Ensure memberIds array has uid
-    try {
-      await planRef.update({
-        'memberIds': FieldValue.arrayUnion([uid]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {}
 
     await recalcAndSyncBalances();
 
