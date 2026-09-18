@@ -199,6 +199,35 @@ service cloud.firestore {
         allow read, write: if signedIn() && request.auth.uid == userId;
       }
 
+      // Cross-user notifications inbox. The owner of this inbox can read,
+      // mark-read, and clear their own notifications. Another signed-in
+      // user may drop a notification into someone else's inbox only about
+      // a Qurbani plan they can both already see — this lets "you were
+      // added as a participant" and "someone joined your group" alerts
+      // through without opening the inbox up to arbitrary spam.
+      match /notifications/{notifId} {
+        allow read, delete: if isOwner(userId);
+        allow update: if isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(
+            ['type', 'title', 'body', 'planId', 'ownerUid', 'actorUid', 'actorName', 'read', 'createdAt'])
+          && request.resource.data.keys().hasAll(['type', 'title', 'body', 'read', 'createdAt'])
+          && request.resource.data.type in ['qurbani_added', 'qurbani_joined']
+          && validShortText(request.resource.data.title, 150)
+          && validShortText(request.resource.data.body, 300)
+          && request.resource.data.read == false
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.ownerUid is string
+          && request.resource.data.planId is string
+          && isPlanMember(request.resource.data.ownerUid, request.resource.data.planId)
+          && (
+            (request.resource.data.type == 'qurbani_added' && request.auth.uid != userId)
+            || (request.resource.data.type == 'qurbani_joined' && userId == request.resource.data.ownerUid)
+          );
+      }
+
       match /quranTracker/{docId} {
         allow read, write, delete: if signedIn() && request.auth.uid == userId;
       }

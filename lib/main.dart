@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth_screen.dart';
@@ -45,6 +47,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   bool _splashDone = false;
   VoidCallback? _themeListener;
+  StreamSubscription<User?>? _authSub;
 
   @override
   void initState() {
@@ -52,6 +55,21 @@ class _MyAppState extends State<MyApp> {
     _initSystemUI();
     _themeListener = () => _applySystemUI(appThemeNotifier.value);
     appThemeNotifier.addListener(_themeListener!);
+
+    // Qurbani group updates (added as a participant, someone joined your
+    // group, etc.) are delivered via each user's own notifications inbox in
+    // Firestore. Start/stop watching it as the sign-in state changes.
+    try {
+      _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+        if (user != null) {
+          NotificationService.instance.startQurbaniNotificationsListener();
+        } else {
+          NotificationService.instance.stopQurbaniNotificationsListener();
+        }
+      });
+    } catch (e) {
+      debugPrint("Could not attach auth listener for Qurbani notifications: $e");
+    }
   }
 
   Future<void> _initSystemUI() async {
@@ -72,6 +90,8 @@ class _MyAppState extends State<MyApp> {
     if (_themeListener != null) {
       appThemeNotifier.removeListener(_themeListener!);
     }
+    _authSub?.cancel();
+    NotificationService.instance.stopQurbaniNotificationsListener();
     super.dispose();
   }
 
