@@ -14,13 +14,20 @@ import 'services/language_service.dart';
 import 'services/notification_service.dart';
 import 'l10n/app_localizations.dart';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
     await dotenv.load(fileName: ".env");
-  } catch (e) {
-    debugPrint("dotenv load note: .env file not present ($e)");
+  } catch (_) {
+    try {
+      await dotenv.load(fileName: "assets/.env");
+    } catch (e) {
+      debugPrint("dotenv load note: .env file not loaded: $e");
+    }
   }
 
   await LanguageService.loadLanguagePreference();
@@ -30,6 +37,11 @@ Future<void> main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    if (kIsWeb) {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: false,
+      );
+    }
   } catch (e) {
     debugPrint("Firebase init error: $e");
   }
