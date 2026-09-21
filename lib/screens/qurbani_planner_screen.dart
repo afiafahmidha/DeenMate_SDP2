@@ -1194,6 +1194,13 @@ class QurbaniRepository {
     });
     await _validateShareCap(otherTotal + shares);
 
+    // Step 1: Add uid to memberIds FIRST so subsequent writes pass security rules
+    await planRef.update({
+      'memberIds': FieldValue.arrayUnion([uid]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    // Step 2: Write member record (now permitted since uid is in memberIds)
     await planRef.collection('members').doc(uid).set({
       'name': name,
       'shares': shares,
@@ -1203,6 +1210,7 @@ class QurbaniRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
+    // Step 3: Write participant record
     await participantsRef.doc(uid).set({
       'name': name,
       'phone': null,
@@ -1218,13 +1226,6 @@ class QurbaniRepository {
       'uid': uid,
     }, SetOptions(merge: true));
 
-    // Ensure memberIds array has uid
-    try {
-      await planRef.update({
-        'memberIds': FieldValue.arrayUnion([uid]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {}
 
     await recalcAndSyncBalances();
 
@@ -1540,7 +1541,7 @@ class QurbaniRepository {
       'avatarBase64': avatarBase64,
       'isDeenMateUser': isDeenMateUser,
       'uid': uid,
-    });
+    }, SetOptions(merge: true));
     if (isDeenMateUser && uid != null && uid.isNotEmpty) {
       try {
         await planRef.collection('members').doc(uid).set({
@@ -1563,12 +1564,16 @@ class QurbaniRepository {
         debugPrint('Could not update memberIds array: $e');
       }
 
-      await _sendCrossUserNotification(
-        recipientUid: uid,
-        type: 'qurbani_added',
-        title: 'Added to a Qurbani group',
-        body: '${currentDisplayName()} added you to their Qurbani plan with $shares share${shares > 1 ? "s" : ""}.',
-      );
+      try {
+        await _sendCrossUserNotification(
+          recipientUid: uid,
+          type: 'qurbani_added',
+          title: 'Added to a Qurbani group',
+          body: '${currentDisplayName()} added you to their Qurbani plan with $shares share${shares > 1 ? "s" : ""}.',
+        );
+      } catch (e) {
+        debugPrint('Could not send notification: $e');
+      }
     }
     await recalcAndSyncBalances();
   }
@@ -1737,16 +1742,17 @@ class QurbaniRepository {
       checklistRef.snapshots().map((s) => {for (final d in s.docs) d.id: (d.data()['done'] ?? false) as bool});
 
   Future<void> syncParticipantBalances(List<QBalanceRow> balances) async {
+    if (balances.isEmpty) return;
     final batch = FirebaseFirestore.instance.batch();
     for (final b in balances) {
       final status = b.totalPaid <= 0
           ? 'unpaid'
           : (b.totalPaid >= b.shareOfCost ? 'paid' : 'partial');
-      batch.update(participantsRef.doc(b.participant.id), {
+      batch.set(participantsRef.doc(b.participant.id), {
         'amountDue': b.shareOfCost,
         'amountPaid': b.totalPaid,
         'paymentStatus': status,
-      });
+      }, SetOptions(merge: true));
     }
     await batch.commit();
   }
@@ -4795,7 +4801,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         ? HSLColor.fromColor(color).withLightness(0.72).toColor()
         : color;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(12),
@@ -4804,12 +4810,15 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             title,
             style: GoogleFonts.inter(fontSize: 8.5, fontWeight: FontWeight.bold, color: labelColor, letterSpacing: 0.5),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -4819,6 +4828,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           Text(
             subtitle,
             style: GoogleFonts.inter(fontSize: 9, color: _isDarkMode ? Colors.white54 : Colors.grey[600]),
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         ],

@@ -18,7 +18,11 @@ class IslamicAIService {
   IslamicAIService._internal();
 
   /// Optional Custom Gemini API key (set via setCustomApiKey, .env, or environment).
-  static String customApiKey = const String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+  /// Optional Custom Gemini API key (set via setCustomApiKey, .env, or environment).
+  static String customApiKey = const String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: '',
+  );
 
   /// Groq API key — used as a fallback when Gemini is rate-limited or fails.
   static String groqApiKey = const String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
@@ -26,13 +30,13 @@ class IslamicAIService {
   /// OpenRouter API key — Multi-model AI gateway fallback (Llama 3.3, Qwen, Mistral, Gemma, etc.).
   static String openRouterApiKey = const String.fromEnvironment(
     'OPENROUTER_API_KEY',
-    defaultValue: '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',
+    defaultValue: '',
   );
 
   /// Cerebras Cloud API key — Ultra fast Llama inference engine fallback.
   static String cerebrasApiKey = const String.fromEnvironment(
     'CEREBRAS_API_KEY',
-    defaultValue: 'csk-4nfk8twemf4xy6wmw94h2jn6n282mh4y8emdx88mwjdmk5xe',
+    defaultValue: '',
   );
 
   static String get effectiveGeminiKey => customApiKey.isNotEmpty
@@ -45,18 +49,22 @@ class IslamicAIService {
 
   static String get effectiveOpenRouterKey => openRouterApiKey.isNotEmpty
       ? openRouterApiKey
-      : (dotenv.env['OPENROUTER_API_KEY'] ?? const String.fromEnvironment('OPENROUTER_API_KEY', defaultValue: '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'));
+      : (dotenv.env['OPENROUTER_API_KEY'] ?? const String.fromEnvironment('OPENROUTER_API_KEY', defaultValue: ''));
 
   static String get effectiveCerebrasKey => cerebrasApiKey.isNotEmpty
       ? cerebrasApiKey
-      : (dotenv.env['CEREBRAS_API_KEY'] ?? const String.fromEnvironment('CEREBRAS_API_KEY', defaultValue: 'csk-4nfk8twemf4xy6wmw94h2jn6n282mh4y8emdx88mwjdmk5xe'));
+      : (dotenv.env['CEREBRAS_API_KEY'] ?? const String.fromEnvironment('CEREBRAS_API_KEY', defaultValue: ''));
 
   GenerativeModel? _model;
   ChatSession? _chatSession;
 
   static const List<String> _supportedModels = [
     'gemini-3.6-flash',
+    'gemini-3.7-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-pro-preview',
     'gemini-2.5-flash',
+    'gemini-2.0-flash',
   ];
 
   static const String _greetingPrefsKey = 'islamic_ai_last_greeted_date';
@@ -70,7 +78,7 @@ CRITICAL RELIGIOUS & AUTHENTICITY MANDATES:
    - Whenever citing a Quranic verse or Hadith, include the authentic Arabic text alongside its clear English translation if the user's question is in Bangla then bangla translation or any other language whichever user uses.
    - For every Quranic verse, cite the exact Surah name and Ayah number, e.g. Surah Al-Baqarah (2:255).
    - For every Hadith, cite the collection and Hadith number, e.g. Sahih al-Bukhari (Hadith 1) or Sahih Muslim (Hadith 223).
-3. HUMILITY & ZERO HALLUCINATION: If you do not have absolute certainty or precise authentic textual proof for a question, clearly state that Allah knows best and recommend consulting a trusted Islamic scholar. Please strictly maintain this thing otherwise there will be so much problem.
+3. HUMILITY & ZERO HALLUCINATION: If you do not have absolute certainty or precise authentic textual proof for a question, clearly state that Allah knows best and recommend consulting a trusted Islamic scholar. Please strictly maintain this thing otherwise there will be so much problem.Don't make anything by yourselve. Always provide authentic references and avoid personal opinions or unverified interpretations.
 4. FATWA DISCLAIMER: For complex legal matters or specific fatwas, advise consulting a local Islamic scholar or Mufti.
 5. STRICT SCOPE RESTRICTION: Answer ONLY questions related to Islam. If asked non-Islamic questions, politely state that as DeenMate AI you are dedicated solely to answering questions about Islam.
 
@@ -130,45 +138,145 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     }
   }
 
+  /// Validates and cleans raw AI generated daily guidance text
+  String? _cleanGuidanceText(String raw) {
+    String cleaned = raw.replaceAll(RegExp(r'[\*\#\`]'), '').trim();
+    final lines = cleaned.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    
+    // Filter out internal thinking / scratchpad / meta headers
+    final filtered = lines.where((l) {
+      final lower = l.toLowerCase();
+      if (lower.startsWith('refining') ||
+          lower.startsWith('attempt') ||
+          lower.startsWith('thinking') ||
+          lower.startsWith('thought') ||
+          lower.startsWith('here is') ||
+          lower.startsWith('here\'s') ||
+          lower.startsWith('guidance:') ||
+          lower.startsWith('islamic guidance:') ||
+          lower.startsWith('daily guidance:') ||
+          lower.startsWith('note:') ||
+          lower.startsWith('sure') ||
+          lower.endsWith(':')) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    if (filtered.isNotEmpty) {
+      cleaned = filtered.join(' ').trim();
+    }
+
+    // Strip quotation marks
+    cleaned = cleaned.replaceAll(RegExp(r'^["“]+|["”]+$'), '').trim();
+
+    if (cleaned.length < 20 || cleaned.endsWith(':') || cleaned.toLowerCase().startsWith('refining') || cleaned.toLowerCase().contains('attempt 1')) {
+      return null;
+    }
+    return cleaned;
+  }
+
   /// Fetches daily 2-line AI guidance, cached per day in SharedPreferences
   Future<String> fetchTodaysGuidance() async {
     const String defaultGuidance =
         'Start your day with Bismillah and keep your tongue moist with the remembrance of Allah. Perform your prayers on time and spread peace to those around you.';
+
+    const String guidancePrompt =
+        'You are an authentic Islamic wisdom generator. Output Two beautiful, inspirational Islamic sentence for today (focused on gratitude, Salah, patience, good character, charity, or remembrance of Allah). Do NOT include any thinking process, draft notes, headers, or markdown. Output ONLY the quote sentence itself.Try to maintain a warm, uplifting, and concise tone. Avoid generic or vague statements.and ';
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final now = DateTime.now();
       final todayKey = 'guidance_date_${now.year}_${now.month}_${now.day}';
       final cached = prefs.getString(todayKey);
-      if (cached != null && cached.trim().isNotEmpty) {
-        return cached.trim();
-      }
 
-      await _ensureInitialized();
-      if (_model != null) {
-        try {
-          const prompt =
-              'Generate a short, inspirational 1-sentence Islamic guidance for today focused on faith, prayer, patience, good character, charity, punctuality, discipline. Rules: Exactly 1 sentence, maximum 3 lines, no markdown symbols or headers.';
-          final response = await _model!.generateContent([Content.text(prompt)]);
-          final text = response.text?.trim();
-          if (text != null && text.isNotEmpty) {
-            final cleanText = text.replaceAll(RegExp(r'[\*\#\`\-]'), '').trim();
-            await prefs.setString(todayKey, cleanText);
-            return cleanText;
-          }
-        } catch (modelErr) {
-          debugPrint('Primary Gemini daily guidance failed: $modelErr. Trying fallback AI engines...');
+      // Validate cached guidance
+      if (cached != null && cached.trim().isNotEmpty) {
+        final validated = _cleanGuidanceText(cached);
+        if (validated != null) {
+          return validated;
+        } else {
+          // Invalidate corrupted cached guidance
+          await prefs.remove(todayKey);
         }
       }
 
+      // Priority 1: Direct Gemini REST API (fastest, reliable with user API key)
+      final gmKey = effectiveGeminiKey.trim();
+      if (gmKey.isNotEmpty) {
+        for (final modelName in _supportedModels) {
+          try {
+            final url = Uri.parse(
+                'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$gmKey');
+            final response = await http.post(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': gmKey,
+              },
+              body: jsonEncode({
+                "contents": [
+                  {
+                    "parts": [
+                      {
+                        "text": guidancePrompt
+                      }
+                    ]
+                  }
+                ],
+                "generationConfig": {
+                  "temperature": 0.7,
+                  "maxOutputTokens": 256
+                }
+              }),
+            ).timeout(const Duration(seconds: 8));
+
+            if (response.statusCode == 200) {
+              final data = jsonDecode(response.body);
+              final candidates = data['candidates'] as List?;
+              if (candidates != null && candidates.isNotEmpty) {
+                final text = candidates.first['content']?['parts']?[0]?['text'] as String?;
+                if (text != null && text.trim().isNotEmpty) {
+                  final cleanText = _cleanGuidanceText(text);
+                  if (cleanText != null) {
+                    await prefs.setString(todayKey, cleanText);
+                    return cleanText;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('Direct Gemini guidance failed ($modelName): $e');
+          }
+        }
+      }
+
+      // Priority 2: Firebase AI SDK
+      try {
+        await _ensureInitialized();
+        if (_model != null) {
+          final response = await _model!.generateContent([Content.text(guidancePrompt)]);
+          final text = response.text?.trim();
+          if (text != null && text.isNotEmpty) {
+            final cleanText = _cleanGuidanceText(text);
+            if (cleanText != null) {
+              await prefs.setString(todayKey, cleanText);
+              return cleanText;
+            }
+          }
+        }
+      } catch (modelErr) {
+        debugPrint('Firebase AI daily guidance notice: $modelErr');
+      }
+
       // Fallback: Use OpenRouter / Cerebras / Groq engines
-      const fallbackPrompt =
-          'Generate a short, inspirational 1-sentence Islamic guidance for today focused on faith, prayer, patience, good character, charity, punctuality, discipline. Rules: Exactly 1 sentence, maximum 3 lines, no markdown symbols or headers.';
-      final fallbackText = await _generateOneShotFromFallbacks(fallbackPrompt);
+      final fallbackText = await _generateOneShotFromFallbacks(guidancePrompt);
       if (fallbackText != null && fallbackText.isNotEmpty) {
-        final cleanText = fallbackText.replaceAll(RegExp(r'[\*\#\`\-]'), '').trim();
-        await prefs.setString(todayKey, cleanText);
-        return cleanText;
+        final cleanText = _cleanGuidanceText(fallbackText);
+        if (cleanText != null) {
+          await prefs.setString(todayKey, cleanText);
+          return cleanText;
+        }
       }
     } catch (e) {
       debugPrint('Error fetching AI daily guidance: $e');
@@ -308,14 +416,18 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
 
   // ===== DIRECT GEMINI REST API GENERATION =====
   Stream<String> _streamFromDirectGeminiApi(String enrichedPrompt, String key) async* {
-    if (key.isEmpty || !key.startsWith('AIza')) return;
+    final cleanKey = key.trim();
+    if (cleanKey.isEmpty) return;
 
     for (final modelName in _supportedModels) {
       try {
-        final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$key');
+        final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$cleanKey');
         final response = await http.post(
           url,
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': cleanKey,
+          },
           body: jsonEncode({
             "contents": [
               {
@@ -353,87 +465,77 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     }
   }
 
-  // ===== GROQ FALLBACK (OpenAI-compatible SSE streaming, genuinely free) =====
-  // Used when Gemini/Firebase AI is rate-limited or fails outright.
+  // ===== GROQ (Ultra-fast Llama 3.3 Inference) =====
   Stream<String> _streamFromGroqApi(String enrichedPrompt, String key) async* {
-    if (key.isEmpty) return;
+    final cleanKey = key.trim();
+    if (cleanKey.isEmpty) return;
 
     final uri = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
-    final request = http.Request('POST', uri)
-      ..headers.addAll({
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $key',
-      })
-      ..body = jsonEncode({
-        'model': 'openai/gpt-oss-120b',
-        'messages': [
-          {'role': 'system', 'content': _systemInstructionText},
-          {'role': 'user', 'content': enrichedPrompt},
-        ],
-        'temperature': 0.3,
-        'max_tokens': 2048,
-        'stream': true,
-      });
+    final groqModels = [
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
+    ];
 
-    debugPrint('[DEENMATE_DEBUG] Sending request to Groq API...');
-    try {
-      final streamedResponse = await http.Client()
-          .send(request)
-          .timeout(const Duration(seconds: 15));
+    for (final modelName in groqModels) {
+      try {
+        debugPrint('[DEENMATE_DEBUG] Sending request to Groq API (model: $modelName)...');
+        final response = await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $cleanKey',
+          },
+          body: jsonEncode({
+            'model': modelName,
+            'messages': [
+              {'role': 'system', 'content': _systemInstructionText},
+              {'role': 'user', 'content': enrichedPrompt},
+            ],
+            'temperature': 0.3,
+            'max_tokens': 2048,
+          }),
+        ).timeout(const Duration(seconds: 15));
 
-      debugPrint('[DEENMATE_DEBUG] Groq HTTP status: ${streamedResponse.statusCode}');
+        debugPrint('[DEENMATE_DEBUG] Groq HTTP status: ${response.statusCode} for model $modelName');
 
-      if (streamedResponse.statusCode != 200) {
-        final body = await streamedResponse.stream.bytesToString();
-        debugPrint('[DEENMATE_DEBUG] Groq API HTTP error ${streamedResponse.statusCode}: $body');
-        return;
-      }
-
-      final lines = streamedResponse.stream
-          .transform(utf8.decoder)
-          .transform(const LineSplitter());
-
-      bool receivedAnyChunk = false;
-      await for (final line in lines) {
-        if (!line.startsWith('data: ')) continue;
-        final payload = line.substring(6).trim();
-        if (payload == '[DONE]') {
-          debugPrint('[DEENMATE_DEBUG] Groq stream completed. Received any chunk = $receivedAnyChunk');
-          return;
-        }
-        if (payload.isEmpty) continue;
-
-        try {
-          final data = jsonDecode(payload);
-          final delta = data['choices']?[0]?['delta']?['content'] as String?;
-          if (delta != null && delta.isNotEmpty) {
-            receivedAnyChunk = true;
-            yield delta;
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final content = data['choices']?[0]?['message']?['content'] as String?;
+          if (content != null && content.isNotEmpty) {
+            yield content;
+            return;
           }
-        } catch (e) {
-          debugPrint('[DEENMATE_DEBUG] Groq chunk parse error: $e');
+        } else {
+          debugPrint('[DEENMATE_DEBUG] Groq API HTTP error ${response.statusCode}: ${response.body}');
         }
+      } catch (e) {
+        debugPrint('[DEENMATE_DEBUG] Groq API Exception (model: $modelName): $e');
       }
-    } catch (e) {
-      debugPrint('[DEENMATE_DEBUG] Groq API Exception (network/timeout/etc): $e');
     }
   }
 
-  // ===== CEREBRAS CLOUD FALLBACK (Ultra-fast Llama inference) =====
+  // ===== CEREBRAS CLOUD (Ultra-fast Llama inference) =====
   Stream<String> _streamFromCerebrasApi(String enrichedPrompt, String key) async* {
-    if (key.isEmpty) return;
+    final cleanKey = key.trim();
+    if (cleanKey.isEmpty) return;
 
     final uri = Uri.parse('https://api.cerebras.ai/v1/chat/completions');
-    final supportedModels = ['llama3.1-8b', 'llama-3.3-70b', 'gpt-oss-120b', 'gemma-4-31b'];
+    final supportedModels = [
+      'llama-3.3-70b',
+      'llama3.1-8b',
+      'qwen-2.5-72b',
+    ];
 
     for (final model in supportedModels) {
       try {
-        final request = http.Request('POST', uri)
-          ..headers.addAll({
+        debugPrint('[DEENMATE_DEBUG] Sending request to Cerebras API (model: $model)...');
+        final response = await http.post(
+          uri,
+          headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer $key',
-          })
-          ..body = jsonEncode({
+            'Authorization': 'Bearer $cleanKey',
+          },
+          body: jsonEncode({
             'model': model,
             'messages': [
               {'role': 'system', 'content': _systemInstructionText},
@@ -441,79 +543,52 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
             ],
             'temperature': 0.3,
             'max_tokens': 2048,
-            'stream': true,
-          });
+          }),
+        ).timeout(const Duration(seconds: 15));
 
-        debugPrint('[DEENMATE_DEBUG] Sending request to Cerebras API (model: $model)...');
-        final streamedResponse = await http.Client()
-            .send(request)
-            .timeout(const Duration(seconds: 12));
+        debugPrint('[DEENMATE_DEBUG] Cerebras HTTP status: ${response.statusCode} for model $model');
 
-        debugPrint('[DEENMATE_DEBUG] Cerebras HTTP status: ${streamedResponse.statusCode} for model $model');
-
-        if (streamedResponse.statusCode != 200) {
-          final body = await streamedResponse.stream.bytesToString();
-          debugPrint('[DEENMATE_DEBUG] Cerebras API HTTP error ${streamedResponse.statusCode} ($model): $body');
-          continue;
-        }
-
-        final lines = streamedResponse.stream
-            .transform(utf8.decoder)
-            .transform(const LineSplitter());
-
-        bool receivedAnyChunk = false;
-        await for (final line in lines) {
-          if (!line.startsWith('data: ')) continue;
-          final payload = line.substring(6).trim();
-          if (payload == '[DONE]') {
-            debugPrint('[DEENMATE_DEBUG] Cerebras stream completed ($model). Any chunk: $receivedAnyChunk');
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final content = data['choices']?[0]?['message']?['content'] as String?;
+          if (content != null && content.isNotEmpty) {
+            yield content;
             return;
           }
-          if (payload.isEmpty) continue;
-
-          try {
-            final data = jsonDecode(payload);
-            final delta = data['choices']?[0]?['delta']?['content'] as String?;
-            if (delta != null && delta.isNotEmpty) {
-              receivedAnyChunk = true;
-              yield delta;
-            }
-          } catch (e) {
-            debugPrint('[DEENMATE_DEBUG] Cerebras chunk parse error: $e');
-          }
+        } else {
+          debugPrint('[DEENMATE_DEBUG] Cerebras API HTTP error ${response.statusCode} ($model): ${response.body}');
         }
-
-        if (receivedAnyChunk) return;
       } catch (e) {
         debugPrint('[DEENMATE_DEBUG] Cerebras API Exception ($model): $e');
       }
     }
   }
 
-  // ===== OPENROUTER GATEWAY FALLBACK (Meta Llama 3, Qwen, Gemma, Mistral free tier) =====
+  // ===== OPENROUTER GATEWAY (Meta Llama 3, Qwen, Mistral free tier) =====
   Stream<String> _streamFromOpenRouterApi(String enrichedPrompt, String key) async* {
-    if (key.isEmpty) return;
+    final cleanKey = key.trim();
+    if (cleanKey.isEmpty) return;
 
     final uri = Uri.parse('https://openrouter.ai/api/v1/chat/completions');
     final models = [
-      'openrouter/free',
-      'google/gemma-4-31b-it:free',
-      'google/gemma-4-26b-a4b-it:free',
-      'nvidia/nemotron-3.5-lightning:free',
-      'qwen/qwen-2.5-72b-instruct:free',
       'meta-llama/llama-3.3-70b-instruct:free',
+      'qwen/qwen-2.5-72b-instruct:free',
+      'google/gemini-2.0-flash-exp:free',
+      'mistralai/mistral-7b-instruct:free',
     ];
 
     for (final model in models) {
       try {
-        final request = http.Request('POST', uri)
-          ..headers.addAll({
+        debugPrint('[DEENMATE_DEBUG] Sending request to OpenRouter API (model: $model)...');
+        final response = await http.post(
+          uri,
+          headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer $key',
+            'Authorization': 'Bearer $cleanKey',
             'HTTP-Referer': 'https://deenmate.app',
             'X-Title': 'DeenMate Islamic AI',
-          })
-          ..body = jsonEncode({
+          },
+          body: jsonEncode({
             'model': model,
             'messages': [
               {'role': 'system', 'content': _systemInstructionText},
@@ -521,49 +596,21 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
             ],
             'temperature': 0.3,
             'max_tokens': 2048,
-            'stream': true,
-          });
+          }),
+        ).timeout(const Duration(seconds: 15));
 
-        debugPrint('[DEENMATE_DEBUG] Sending request to OpenRouter API (model: $model)...');
-        final streamedResponse = await http.Client()
-            .send(request)
-            .timeout(const Duration(seconds: 15));
+        debugPrint('[DEENMATE_DEBUG] OpenRouter HTTP status: ${response.statusCode} for model $model');
 
-        debugPrint('[DEENMATE_DEBUG] OpenRouter HTTP status: ${streamedResponse.statusCode} for model $model');
-
-        if (streamedResponse.statusCode != 200) {
-          final body = await streamedResponse.stream.bytesToString();
-          debugPrint('[DEENMATE_DEBUG] OpenRouter API HTTP error ${streamedResponse.statusCode} ($model): $body');
-          continue;
-        }
-
-        final lines = streamedResponse.stream
-            .transform(utf8.decoder)
-            .transform(const LineSplitter());
-
-        bool receivedAnyChunk = false;
-        await for (final line in lines) {
-          if (!line.startsWith('data: ')) continue;
-          final payload = line.substring(6).trim();
-          if (payload == '[DONE]') {
-            debugPrint('[DEENMATE_DEBUG] OpenRouter stream completed ($model). Any chunk: $receivedAnyChunk');
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final content = data['choices']?[0]?['message']?['content'] as String?;
+          if (content != null && content.isNotEmpty) {
+            yield content;
             return;
           }
-          if (payload.isEmpty) continue;
-
-          try {
-            final data = jsonDecode(payload);
-            final delta = data['choices']?[0]?['delta']?['content'] as String?;
-            if (delta != null && delta.isNotEmpty) {
-              receivedAnyChunk = true;
-              yield delta;
-            }
-          } catch (e) {
-            debugPrint('[DEENMATE_DEBUG] OpenRouter chunk parse error: $e');
-          }
+        } else {
+          debugPrint('[DEENMATE_DEBUG] OpenRouter API HTTP error ${response.statusCode} ($model): ${response.body}');
         }
-
-        if (receivedAnyChunk) return;
       } catch (e) {
         debugPrint('[DEENMATE_DEBUG] OpenRouter API Exception ($model): $e');
       }
@@ -636,28 +683,30 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
 
     // 3. Try Groq
     if (gqKey.isNotEmpty) {
-      try {
-        final res = await http.post(
-          Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $gqKey',
-          },
-          body: jsonEncode({
-            'model': 'openai/gpt-oss-120b',
-            'messages': [
-              {'role': 'user', 'content': prompt}
-            ],
-            'temperature': 0.4,
-            'max_tokens': 256,
-          }),
-        ).timeout(const Duration(seconds: 8));
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          final text = data['choices']?[0]?['message']?['content'] as String?;
-          if (text != null && text.trim().isNotEmpty) return text.trim();
-        }
-      } catch (_) {}
+      for (final modelName in ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']) {
+        try {
+          final res = await http.post(
+            Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $gqKey',
+            },
+            body: jsonEncode({
+              'model': modelName,
+              'messages': [
+                {'role': 'user', 'content': prompt}
+              ],
+              'temperature': 0.4,
+              'max_tokens': 256,
+            }),
+          ).timeout(const Duration(seconds: 8));
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            final text = data['choices']?[0]?['message']?['content'] as String?;
+            if (text != null && text.trim().isNotEmpty) return text.trim();
+          }
+        } catch (_) {}
+      }
     }
 
     return null;
@@ -770,9 +819,9 @@ $prompt
 ''';
 
       // Step 2: Direct Gemini REST API if custom key is set
-      if (gmKey.isNotEmpty && gmKey.startsWith('AIza')) {
+      if (gmKey.trim().isNotEmpty) {
         bool customKeySuccess = false;
-        await for (final chunk in _streamFromDirectGeminiApi(enrichedPrompt, gmKey)) {
+        await for (final chunk in _streamFromDirectGeminiApi(enrichedPrompt, gmKey.trim())) {
           customKeySuccess = true;
           yield chunk;
         }

@@ -17,11 +17,15 @@ service cloud.firestore {
     // their UID.
     function isPlanMember(ownerUid, planId) {
       return signedIn()
-        && (request.auth.uid == ownerUid
+        && (
+          request.auth.uid == ownerUid
           || (resource != null && 'memberIds' in resource.data && resource.data.memberIds is list && request.auth.uid in resource.data.memberIds)
           || (exists(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId))
-              && request.auth.uid in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds)
-          || exists(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)/members/$(request.auth.uid)));
+              && ('memberIds' in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data)
+              && (request.auth.uid in get(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)).data.memberIds))
+          || exists(/databases/$(database)/documents/users/$(ownerUid)/qurbaniPlans/$(planId)/members/$(request.auth.uid))
+          || exists(/databases/$(database)/documents/users/$(request.auth.uid)/joinedQurbaniPlans/$(planId))
+        );
     }
 
     function validShortText(value, maxLength) {
@@ -29,13 +33,7 @@ service cloud.firestore {
     }
 
     function validQurbaniPlan(data, ownerUid) {
-      return data.keys().hasOnly([
-          'year', 'status', 'animalType', 'totalShares', 'myShares',
-          'estimatedCost', 'paidAmount', 'vendorName', 'vendorPhone',
-          'slaughterDate', 'notes', 'ownerId', 'ownerName', 'memberIds',
-          'inviteCode', 'createdAt', 'updatedAt'
-        ])
-        && data.keys().hasAll([
+      return data.keys().hasAll([
           'year', 'status', 'animalType', 'totalShares', 'myShares',
           'estimatedCost', 'paidAmount', 'ownerId', 'ownerName', 'memberIds',
           'createdAt', 'updatedAt'
@@ -52,26 +50,26 @@ service cloud.firestore {
         && (data.slaughterDate == null || data.slaughterDate is timestamp)
         && (data.notes == null || validShortText(data.notes, 2000))
         && data.ownerId == ownerUid
-        && validShortText(data.ownerName, 80)
+        && validShortText(data.ownerName, 120)
         && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 20
-        && (!data.keys().hasAll(['inviteCode']) || validShortText(data.inviteCode, 20))
+        && (!('inviteCode' in data) || validShortText(data.inviteCode, 20))
         && data.createdAt is timestamp && data.updatedAt is timestamp;
     }
 
     function validParticipant(data) {
-      return data.keys().hasOnly(['name', 'phone', 'shares', 'amountDue', 'amountPaid', 'paymentStatus', 'ownerId', 'ownerName', 'photoUrl', 'avatarBase64', 'isDeenMateUser', 'uid'])
-        && data.keys().hasAll(['name', 'shares', 'amountDue', 'amountPaid', 'paymentStatus', 'ownerId', 'ownerName'])
-        && validShortText(data.name, 100)
-        && (data.phone == null || validShortText(data.phone, 30))
+      return ('name' in data) && ('shares' in data)
+        && validShortText(data.name, 120)
         && data.shares is int && data.shares >= 1 && data.shares <= 7
-        && data.amountDue is number && data.amountDue >= 0 && data.amountDue <= 10000000
-        && data.amountPaid is number && data.amountPaid >= 0 && data.amountPaid <= 10000000
-        && data.paymentStatus in ['unpaid', 'partial', 'paid']
-        && validShortText(data.ownerId, 128) && validShortText(data.ownerName, 80)
-        && (data.photoUrl == null || validShortText(data.photoUrl, 2048))
-        && (!data.keys().hasAll(['avatarBase64']) || data.avatarBase64 == null || validShortText(data.avatarBase64, 200000))
-        && (!data.keys().hasAll(['isDeenMateUser']) || data.isDeenMateUser is bool)
-        && (!data.keys().hasAll(['uid']) || data.uid == null || validShortText(data.uid, 128));
+        && (!('phone' in data) || data.phone == null || validShortText(data.phone, 50))
+        && (!('amountDue' in data) || data.amountDue is number)
+        && (!('amountPaid' in data) || data.amountPaid is number)
+        && (!('paymentStatus' in data) || data.paymentStatus in ['unpaid', 'partial', 'paid'])
+        && (!('ownerId' in data) || data.ownerId == null || validShortText(data.ownerId, 128))
+        && (!('ownerName' in data) || data.ownerName == null || validShortText(data.ownerName, 120))
+        && (!('photoUrl' in data) || data.photoUrl == null || validShortText(data.photoUrl, 4096))
+        && (!('avatarBase64' in data) || data.avatarBase64 == null || validShortText(data.avatarBase64, 500000))
+        && (!('isDeenMateUser' in data) || data.isDeenMateUser is bool)
+        && (!('uid' in data) || data.uid == null || validShortText(data.uid, 128));
     }
 
     function validExpense(data) {
@@ -285,7 +283,7 @@ service cloud.firestore {
           allow read: if isPlanMember(userId, planId);
           allow create, update: if signedIn()
             && (isPlanMember(userId, planId) || request.auth.uid == memberId || request.auth.uid == userId)
-            && validShortText(request.resource.data.name, 80)
+            && validShortText(request.resource.data.name, 120)
             && request.resource.data.shares is int && request.resource.data.shares >= 1 && request.resource.data.shares <= 7;
           allow delete: if signedIn()
             && (isPlanMember(userId, planId) || request.auth.uid == memberId || request.auth.uid == userId);
@@ -299,11 +297,9 @@ service cloud.firestore {
           // A user joining via invite code can create their own participant doc
           allow create: if signedIn()
             && participantId == request.auth.uid
-            && validParticipant(request.resource.data)
-            && request.resource.data.uid == request.auth.uid;
+            && validParticipant(request.resource.data);
           allow update: if isPlanMember(userId, planId)
-            && validParticipant(request.resource.data)
-            && request.resource.data.ownerId == resource.data.ownerId;
+            && validParticipant(request.resource.data);
           // A member can update their own participant doc (profile sync)
           allow update: if signedIn()
             && participantId == request.auth.uid

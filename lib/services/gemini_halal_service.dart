@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'halal_analyzer_service.dart';
 
@@ -12,8 +13,12 @@ class GeminiHalalService {
   // (e.g. your own backend / secrets manager) — never bundle it in source.
   static String apiKey = const String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
+  static String get effectiveApiKey => apiKey.isNotEmpty
+      ? apiKey
+      : (dotenv.env['GEMINI_API_KEY'] ?? const String.fromEnvironment('GEMINI_API_KEY', defaultValue: ''));
+
   static const String _geminiEndpoint =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
 
   /// Set the Gemini API key at runtime if provided.
   static void setApiKey(String key) {
@@ -26,7 +31,8 @@ class GeminiHalalService {
     required String productName,
     required String barcode,
   }) async {
-    if (apiKey.isEmpty) {
+    final key = effectiveApiKey.trim();
+    if (key.isEmpty) {
       debugPrint('[GeminiHalalService] No Gemini API key provided. Falling back to local smart engine.');
       return null;
     }
@@ -35,7 +41,7 @@ class GeminiHalalService {
       final bytes = await imageFile.readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      final url = Uri.parse('$_geminiEndpoint?key=$apiKey');
+      final url = Uri.parse('$_geminiEndpoint?key=$key');
 
       final promptText = '''
 You are an expert Islamic Halal Food & Ingredient Auditor and Scholar.
@@ -122,13 +128,14 @@ Return ONLY valid raw JSON with no markdown formatting around it.
     required String barcode,
     required String imageUrl,
   }) async {
-    if (apiKey.isEmpty) {
+    final key = effectiveApiKey.trim();
+    if (key.isEmpty) {
       debugPrint('[GeminiHalalService] No Gemini API key provided. Falling back to local engine.');
       return null;
     }
 
     try {
-      final url = Uri.parse('$_geminiEndpoint?key=$apiKey');
+      final url = Uri.parse('$_geminiEndpoint?key=$key');
 
       final promptText = '''
 You are an expert Islamic Halal Food & Ingredient Auditor and Scholar.
