@@ -12,6 +12,7 @@ import 'firebase_options.dart';
 import 'services/theme_service.dart';
 import 'services/language_service.dart';
 import 'services/notification_service.dart';
+import 'services/push_notification_service.dart';
 import 'l10n/app_localizations.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -75,6 +76,10 @@ class _MyAppState extends State<MyApp> {
       _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
         if (user != null) {
           NotificationService.instance.startQurbaniNotificationsListener();
+          // Register every signed-in device for SOS push alerts. Previously
+          // this happened only after visiting the SOS page.
+          PushNotificationService.instance.initialize();
+          PushNotificationService.instance.registerDevice();
         } else {
           NotificationService.instance.stopQurbaniNotificationsListener();
         }
