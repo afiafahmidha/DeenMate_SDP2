@@ -1,49 +1,73 @@
-# deenmate_sdp2
+# DeenMate — Your Daily Islamic Companion 🌙
 
-A new Flutter project.
+**DeenMate** is an all-in-one Islamic lifestyle companion designed to help Muslims around the world practice, organize, and enrich their daily faith. Whether you are keeping up with daily prayers, organizing family Qurbani, scanning food ingredients, or seeking daily spiritual reminders, DeenMate brings everything you need into one clean and intuitive experience.
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## Key Features
 
-A few resources to get you started if this is your first Flutter project:
+### 🕌 Prayer Times & Adhan Reminders
+- Accurate daily prayer times tailored to your exact geographical location.
+- Visual countdown to the next prayer so you never miss a salat.
+- Timely reminders and notification alerts for Fajr, Dhuhr, Asr, Maghrib, and Isha.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+### 🧭 Accurate Qibla Compass
+- Real-time compass pointing straight toward the Kaaba in Makkah.
+- Smooth heading sensor integration designed to work wherever you travel.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-# Emergency SOS production setup
+### 📖 Holy Quran & Reading Tracker
+- Read the Quran with clear typography, verse-by-verse translations, and bookmarks.
+- Track your personal Quran reading progress over days and weeks.
 
-The SOS group tracker uses Firebase Authentication and Cloud Firestore. Before
-testing with more than one phone, deploy the included Firestore rules to the
-Firebase project configured in `firebase_options.dart`:
+### 📿 Digital Tasbih & Dhikr Counter
+- Minimalist digital counter for your morning, evening, and post-prayer adhkar.
+- Haptic touch feedback to help you stay focused on remembrance.
 
-```powershell
-firebase login
-firebase use deenmate-be588
-firebase deploy --only firestore:rules
-```
+### 📅 Hijri Calendar & Important Islamic Dates
+- View the current Hijri date alongside the Gregorian calendar.
+- Discover key dates throughout the year, including Ramadan, Eid-ul-Fitr, Eid-ul-Adha, and the Day of Arafah.
 
-Every member must sign in, grant precise location permission, create or join
-the same SOS group code, and keep the app open while testing live tracking.
-The phone's normal SMS and dialler apps are used for contacts and emergency
-calls; add real contact names and numbers in the Medical tab.
+### 💰 Zakat Calculator
+- Calculate your annual obligatory Zakat easily and accurately.
+- Handles cash, savings, gold, silver, investments, and deductible liabilities according to Nisab thresholds.
 
-## SOS incident database
+### 🐑 Qurbani & Aqiqah Planner
+- Plan and coordinate animal sacrifice with family, friends, or community groups.
+- Manage shares (up to 7 shares for cow/camel, individual goat/sheep).
+- Track expenses, shared payments, and automated balance settlements transparently.
+- Step-by-step checklist for meat distribution and Aqiqah milestones.
 
-The SOS button now writes an owner-private document to `sosIncidents`, keeps
-its latest GPS point updated while the alert is active, and marks it resolved
-when the user selects **I'm Safe Now**. If the app's offline simulation is
-enabled, the alert is stored on-device and is synchronized once the simulation
-is disabled. Deploy the updated rules before testing:
+### 🔍 Smart Halal Food Scanner
+- Instant ingredient auditing: scan product barcodes or snap product ingredient labels.
+- Identifies halal, doubtful (mushbooh), or non-halal additives and ingredients with detailed explanations.
 
-```powershell
-firebase deploy --only firestore:rules
-```
+### 🤖 Islamic Assistant & Daily Guidance
+- Ask Islamic questions and receive helpful, authentic guidance.
+- Fresh daily wisdom, hadith reminders, and inspirational quotes every morning.
 
-The database deliberately contains no medical profile or emergency contact
-numbers. Those details remain on the device and are used only to compose the
-system SMS fallback.
+### 🕋 Hajj & Umrah Interactive Guide
+- Complete walkthrough for pilgrims performing Hajj or Umrah.
+- Step-by-step ritual guides, essential duas, and practical preparation checklists.
+
+### 📜 Inheritance (Faraid) Distribution
+- Guided Islamic inheritance calculator adhering to Shariah distribution principles for heirs.
+
+### 🛡️ Safety & Emergency SOS
+- Real-time location sharing and emergency alerts for family groups during Hajj, Umrah, or travels.
+- Quick SOS trigger to notify trusted emergency contacts immediately when help is needed.
+
+---
+
+## Platforms Supported
+
+- 📱 **Android**
+- 🍏 **iOS**
+- 🌐 **Modern Web Browsers**
+
+---
+
+## Privacy & Respect
+
+DeenMate is built with deep respect for user privacy:
+- Your personal prayers, checklists, and private notes remain secure.
+- Location permissions are used strictly to calculate accurate prayer times, Qibla heading, and optional emergency group safety.
