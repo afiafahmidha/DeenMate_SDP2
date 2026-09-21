@@ -8,6 +8,7 @@ import 'registration_page.dart';
 import 'email_verification_screen.dart';
 import 'dashboard_screen.dart';
 import 'halal_scanner/halal_scanner_home.dart';
+import '../widgets/deen_minimal_loader.dart';
 
 enum AppScreenState {
   loading,
@@ -123,15 +124,7 @@ class _AuthScreenState extends State<AuthScreen> {
     switch (_screenState) {
       // ── Loading spinner ──────────────────────────────────────
       case AppScreenState.loading:
-        activePage = const Scaffold(
-          backgroundColor: Colors.white,
-          body: Center(
-            child: CircularProgressIndicator(
-              valueColor:
-                  AlwaysStoppedAnimation<Color>(Color(0xFF1A2E40)),
-            ),
-          ),
-        );
+        activePage = const DeenMinimalLoadingScreen();
         break;
 
       // ── Login ────────────────────────────────────────────────
