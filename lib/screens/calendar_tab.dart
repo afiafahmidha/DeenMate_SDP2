@@ -13,6 +13,7 @@ import '../widgets/auth_header.dart';
 // Adjust this path if notification_service.dart lives elsewhere in your project.
 import '../services/notification_service.dart';
 import '../widgets/notification_center_modal.dart';
+import '../widgets/deen_minimal_loader.dart';
 
 // ===== HIJRI DATE MODEL =====
 class HijriDate {
@@ -1474,9 +1475,11 @@ class _CalendarTabState extends State<CalendarTab> {
                 LayoutBuilder(
                   builder: (context, constraints) {
                     if (!constraints.maxWidth.isFinite || constraints.maxWidth <= 0) {
-                      return const SizedBox(
+                      return SizedBox(
                         height: 320,
-                        child: Center(child: CircularProgressIndicator()),
+                        child: Center(
+                          child: DeenMinimalLoader(size: 40, isDarkMode: isDark),
+                        ),
                       );
                     }
                     return _buildCalendarGrid(firstDayOfWeek, daysCount);

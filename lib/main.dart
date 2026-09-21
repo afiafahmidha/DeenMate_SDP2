@@ -126,6 +126,13 @@ class _MyAppState extends State<MyApp> {
           theme: ThemeData(
             primaryColor: const Color(0xFF1A2E40),
             scaffoldBackgroundColor: Colors.white,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF1A2E40),
+              primary: const Color(0xFF1A2E40),
+            ),
+            progressIndicatorTheme: const ProgressIndicatorThemeData(
+              color: Color(0xFF459490),
+            ),
           ),
           home: _splashDone
               ? const AuthScreen()

@@ -18,6 +18,7 @@ import '../services/notification_service.dart';
 import '../widgets/notification_center_modal.dart';
 import 'contact_support_screen.dart';
 import 'about_screen.dart';
+import '../widgets/deen_minimal_loader.dart';
 
 /// ===== PROFILE TAB =====
 /// NOTE ON DEPENDENCIES: this file uses `image_picker` to let the user pick
@@ -401,8 +402,10 @@ class _ProfileTabState extends State<ProfileTab> {
     if (!_profileLoaded) {
       return Container(
         color: bgColor,
-        child: const Center(
-          child: CircularProgressIndicator(strokeWidth: 2.5),
+        child: Center(
+          child: DeenMinimalLoadingCard(
+            isDarkMode: widget.isDarkMode,
+          ),
         ),
       );
     }
