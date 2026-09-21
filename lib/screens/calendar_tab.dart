@@ -12,7 +12,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart';
 // Adjust this path if notification_service.dart lives elsewhere in your project.
 import '../services/notification_service.dart';
-import '../widgets/notification_center_modal.dart';
 import '../widgets/deen_minimal_loader.dart';
 
 // ===== HIJRI DATE MODEL =====
@@ -134,39 +133,6 @@ class _CalendarStarPainter extends CustomPainter {
     canvas.drawPath(path, paint);
     final corePaint = Paint()..color = Colors.white.withValues(alpha: 0.95)..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(cx, cy), size.width * 0.12, corePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _CalendarTexturePainter extends CustomPainter {
-  final bool isDark;
-  const _CalendarTexturePainter({this.isDark = false});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = isDark
-          ? Colors.white.withValues(alpha: 0.03)
-          : AppColors.navyBlue.withValues(alpha: 0.015)
-      ..strokeWidth = 0.4
-      ..style = PaintingStyle.stroke;
-    final double gridWidth = 16.0;
-    final int rows = (size.height / gridWidth).ceil() + 1;
-    final int cols = (size.width / gridWidth).ceil() + 1;
-    for (int r = 0; r < rows; r++) {
-      for (int c = 0; c < cols; c++) {
-        double x = c * gridWidth;
-        double y = r * gridWidth;
-        canvas.drawRect(Rect.fromLTWH(x - gridWidth / 2, y - gridWidth / 2, gridWidth, gridWidth), paint);
-        canvas.save();
-        canvas.translate(x, y);
-        canvas.rotate(math.pi / 4);
-        canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: gridWidth, height: gridWidth), paint);
-        canvas.restore();
-      }
-    }
   }
 
   @override
@@ -1095,10 +1061,6 @@ class _CalendarTabState extends State<CalendarTab> {
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
       body: Stack(
         children: [
-          // Texture background
-          Positioned.fill(
-            child: CustomPaint(painter: _CalendarTexturePainter(isDark: isDark)),
-          ),
           // Twinkling stars
           ..._stars.map((star) {
             return _CalendarTwinklingStar(
@@ -1171,77 +1133,6 @@ class _CalendarTabState extends State<CalendarTab> {
                                     ),
                                   ],
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Interactive Notification Bell with real-time unread badge
-                        GestureDetector(
-                          onTap: () => NotificationCenterModal.show(
-                            context,
-                            isDarkMode: isDark,
-                          ),
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? AppColors.dustyBlueTeal.withValues(alpha: 0.18)
-                                      : Colors.white.withValues(alpha: 0.7),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isDark
-                                        ? AppColors.dustyBlueTeal.withValues(alpha: 0.4)
-                                        : AppColors.navyBlue.withValues(alpha: 0.12),
-                                    width: 1,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.navyBlue.withValues(alpha: 0.06),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  Icons.notifications_outlined,
-                                  color: _primaryTextColor(context),
-                                  size: 20,
-                                ),
-                              ),
-                              ValueListenableBuilder<int>(
-                                valueListenable:
-                                    NotificationService.instance.unreadCountNotifier,
-                                builder: (context, unreadCount, _) {
-                                  if (unreadCount == 0) return const SizedBox.shrink();
-                                  return Positioned(
-                                    right: -2,
-                                    top: -2,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFFE63946),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      constraints: const BoxConstraints(
-                                        minWidth: 16,
-                                        minHeight: 16,
-                                      ),
-                                      child: Text(
-                                        unreadCount > 9 ? '9+' : '$unreadCount',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  );
-                                },
                               ),
                             ],
                           ),
