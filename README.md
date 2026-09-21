@@ -1,49 +1,93 @@
-# deenmate_sdp2
+# DeenMate
 
-A new Flutter project.
+DeenMate is a Flutter-based Islamic companion app built as a Software Development Project (SDP2). It brings together a range of everyday Islamic tools into a single mobile and web experience.
+
+## Features
+
+- **Prayer Times** — Accurate daily salat times with location support and notification reminders
+- **Qibla Compass** — Real-time direction to the Kaaba
+- **Quran Reader** — Full Quran with translation and reading tracker
+- **Dhikr & Tasbih** — Digital counter for daily remembrance
+- **Islamic Calendar** — Hijri dates and upcoming Islamic events
+- **Zakat Calculator** — Calculate obligatory charity on savings, gold, silver, and trade goods
+- **Qurbani & Aqiqah Planner** — Group-based animal sacrifice planner with shared expense tracking, participant management, and settlement calculations
+- **Halal Scanner** — Scan product barcodes or images to check ingredient halal status using AI
+- **Islamic AI Assistant** — Multi-model AI chat (Gemini, Groq, OpenRouter, Cerebras) for Islamic Q&A
+- **Daily Guidance** — AI-generated morning Islamic reminder
+- **Emergency SOS** — Group location sharing and SOS alerts for trusted contacts
+- **Hajj & Umrah Guide** — Step-by-step ritual walkthroughs
+- **Inheritance Calculator** — Faraid distribution according to Islamic law
+
+## Tech Stack
+
+- **Framework:** Flutter (Dart)
+- **Backend:** Firebase (Auth, Firestore, Cloud Functions)
+- **AI:** Firebase AI Logic (Gemini), Groq, OpenRouter, Cerebras
+- **Platforms:** Android, iOS, Web
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+### Prerequisites
 
-A few resources to get you started if this is your first Flutter project:
+- Flutter SDK (latest stable)
+- Firebase CLI (`npm install -g firebase-tools`)
+- A Firebase project connected via `firebase_options.dart`
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+### Setup
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-# Emergency SOS production setup
+1. Clone the repo and install dependencies:
+   ```bash
+   flutter pub get
+   ```
 
-The SOS group tracker uses Firebase Authentication and Cloud Firestore. Before
-testing with more than one phone, deploy the included Firestore rules to the
-Firebase project configured in `firebase_options.dart`:
+2. Create a `.env` file in the project root with your API keys:
+   ```
+   GEMINI_API_KEY=your_key_here
+   GROQ_API_KEY=your_key_here
+   OPENROUTER_API_KEY=your_key_here
+   CEREBRAS_API_KEY=your_key_here
+   ```
+   > The `.env` file is gitignored. Never commit API keys to source control.
 
-```powershell
-firebase login
-firebase use deenmate-be588
-firebase deploy --only firestore:rules
+3. Deploy Firestore security rules:
+   ```bash
+   firebase login
+   firebase use deenmate-be588
+   firebase deploy --only firestore:rules
+   ```
+
+4. Run the app:
+   ```bash
+   flutter run
+   ```
+
+### Building for Release
+
+Use `--dart-define` to pass API keys at build time instead of bundling `.env`:
+
+```bash
+flutter build apk --release \
+  --dart-define=GEMINI_API_KEY=your_key \
+  --dart-define=GROQ_API_KEY=your_key \
+  --dart-define=OPENROUTER_API_KEY=your_key \
+  --dart-define=CEREBRAS_API_KEY=your_key
 ```
 
-Every member must sign in, grant precise location permission, create or join
-the same SOS group code, and keep the app open while testing live tracking.
-The phone's normal SMS and dialler apps are used for contacts and emergency
-calls; add real contact names and numbers in the Medical tab.
+## Project Structure
 
-## SOS incident database
-
-The SOS button now writes an owner-private document to `sosIncidents`, keeps
-its latest GPS point updated while the alert is active, and marks it resolved
-when the user selects **I'm Safe Now**. If the app's offline simulation is
-enabled, the alert is stored on-device and is synchronized once the simulation
-is disabled. Deploy the updated rules before testing:
-
-```powershell
-firebase deploy --only firestore:rules
+```
+lib/
+  screens/       # All UI screens
+  services/      # Business logic and API integrations
+  widgets/       # Reusable UI components
+  l10n/          # Localization files
+assets/
+  images/        # App images and icons
+  videos/        # Tutorial videos
+functions/       # Firebase Cloud Functions
+firestore.rules  # Firestore security rules
 ```
 
-The database deliberately contains no medical profile or emergency contact
-numbers. Those details remain on the device and are used only to compose the
-system SMS fallback.
+## Team
+
+Developed by the DeenMate team as part of SDP2 at United International University.
