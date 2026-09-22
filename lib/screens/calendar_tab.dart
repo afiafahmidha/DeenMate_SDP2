@@ -1381,7 +1381,8 @@ class _CalendarTabState extends State<CalendarTab> {
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,   // was _surfaceColor(context)
+                    // Match the pure-black main card surface used on Prayer.
+                    color: isDark ? Colors.black : Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: _borderColor(context)),
                     boxShadow: [
