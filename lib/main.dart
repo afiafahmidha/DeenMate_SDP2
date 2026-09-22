@@ -138,6 +138,22 @@ class _MyAppState extends State<MyApp> {
             progressIndicatorTheme: const ProgressIndicatorThemeData(
               color: Color(0xFF459490),
             ),
+            // Use the same navy-and-teal palette for all in-app toast messages.
+            snackBarTheme: const SnackBarThemeData(
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Color(0xFF1A2E40),
+              elevation: 12,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(16)),
+              ),
+              insetPadding: EdgeInsets.fromLTRB(20, 0, 20, 24),
+              contentTextStyle: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              actionTextColor: Color(0xFF86D3CF),
+            ),
           ),
           home: _splashDone
               ? const AuthScreen()

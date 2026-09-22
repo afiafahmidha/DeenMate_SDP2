@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
@@ -21,6 +22,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/auth_header.dart';
 import '../services/notification_service.dart';
+import 'calendar_tab.dart';
 import 'zakat_manager_screen.dart';
 
 // =============================================================================
@@ -1987,26 +1989,36 @@ const _sectionTitles = {
 
 class VerseEntry {
   final String reference;
-  final String text;
-  const VerseEntry(this.reference, this.text);
+  final String arabic;
+  final String translation;
+  final String relation;
+  const VerseEntry(this.reference, this.arabic, this.translation, this.relation);
 }
 
 const List<VerseEntry> kQuranVerses = [
   VerseEntry(
     'Surah Al-Kawthar — 108:1-2',
-    "Allah tells the Prophet ﷺ that He has granted him abundant good, and instructs him to turn to his Lord in prayer and offer sacrifice in gratitude.",
+    'إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ ۝ فَصَلِّ لِرَبِّكَ وَانْحَرْ',
+    'Indeed, We have granted you abundant goodness. So pray to your Lord and sacrifice ˹to Him alone˺.',
+    'This connects prayer and sacrifice as acts of worship and gratitude to Allah.',
   ),
   VerseEntry(
     'Surah Al-Hajj — 22:34',
-    "For every community Allah appointed a rite of sacrifice, so that His name is pronounced over the livestock He has provided for them, as an act of gratitude to one God.",
+    'وَلِكُلِّ أُمَّةٍ جَعَلْنَا مَنْسَكًا لِيَذْكُرُوا اسْمَ اللَّهِ عَلَىٰ مَا رَزَقَهُمْ مِنْ بَهِيمَةِ الْأَنْعَامِ ۗ فَإِلَٰهُكُمْ إِلَٰهٌ وَاحِدٌ فَلَهُ أَسْلِمُوا ۗ وَبَشِّرِ الْمُخْبِتِينَ',
+    'For every community We appointed a ritual ˹of sacrifice˺ so that they may pronounce Allah’s Name over the livestock He has provided for them. Your God is only One God, so submit to Him. And give good news to the humble.',
+    'Qurbani is a prescribed worship involving Allah’s name, gratitude for provision, and submission to the One God.',
   ),
   VerseEntry(
     'Surah Al-Hajj — 22:36-37',
-    "The sacrificial camels and cattle are described as symbols of Allah in which there is much good for believers; neither their meat nor their blood reaches Allah — what reaches Him is the God-consciousness (taqwa) behind the act.",
+    'وَالْبُدْنَ جَعَلْنَاهَا لَكُمْ مِنْ شَعَائِرِ اللَّهِ لَكُمْ فِيهَا خَيْرٌ ۖ فَاذْكُرُوا اسْمَ اللَّهِ عَلَيْهَا صَوَافَّ ۖ فَإِذَا وَجَبَتْ جُنُوبُهَا فَكُلُوا مِنْهَا وَأَطْعِمُوا الْقَانِعَ وَالْمُعْتَرَّ ۚ كَذَٰلِكَ سَخَّرْنَاهَا لَكُمْ لَعَلَّكُمْ تَشْكُرُونَ ۝ لَنْ يَنَالَ اللَّهَ لُحُومُهَا وَلَا دِمَاؤُهَا وَلَٰكِنْ يَنَالُهُ التَّقْوَىٰ مِنْكُمْ ۚ كَذَٰلِكَ سَخَّرَهَا لَكُمْ لِتُكَبِّرُوا اللَّهَ عَلَىٰ مَا هَدَاكُمْ ۗ وَبَشِّرِ الْمُحْسِنِينَ',
+    'The sacrificial animals are among the symbols of Allah. There is good in them for you, so mention Allah’s Name over them, eat from them, and feed the needy. Neither their meat nor blood reaches Allah; rather, it is your piety that reaches Him.',
+    'This is the basis for sharing Qurbani meat while remembering that sincere taqwa—not the physical meat—is the purpose of the sacrifice.',
   ),
   VerseEntry(
-    'Surah As-Saffat — 37:102-107',
-    "The story of Ibrahim (AS) being commanded in a vision to sacrifice his son, both submitting to Allah's command, and Allah ransoming the boy with a great sacrifice — understood by scholars as the historical origin of the Qurbani tradition.",
+    'Surah As-Saffat — 37:102, 107',
+    'فَلَمَّا بَلَغَ مَعَهُ السَّعْيَ قَالَ يَا بُنَيَّ إِنِّي أَرَىٰ فِي الْمَنَامِ أَنِّي أَذْبَحُكَ فَانْظُرْ مَاذَا تَرَىٰ ۚ قَالَ يَا أَبَتِ افْعَلْ مَا تُؤْمَرُ ۖ سَتَجِدُنِي إِنْ شَاءَ اللَّهُ مِنَ الصَّابِرِينَ ۝ وَفَدَيْنَاهُ بِذِبْحٍ عَظِيمٍ',
+    'When the boy reached the age to work with his father, Ibrahim said, “My son, I have seen in a dream that I must sacrifice you, so tell me what you think.” He replied, “Do what you are commanded; Allah willing, you will find me patient.” And We ransomed him with a great sacrifice.',
+    'The passage highlights Ibrahim and Ismail’s obedience, patience, and complete submission—the spiritual model remembered through Qurbani.',
   ),
 ];
 
@@ -2194,6 +2206,21 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     'Distribution': false,
     'Eligibility': false,
   };
+  final Map<String, DateTime> _customReminderDates = {};
+
+  /// Approximate Eid al-Adha dates (local moon-sighting can shift these by a
+  /// day). Keeping the dates here makes reminders calendar-based instead of
+  /// firing a few seconds after a switch is pressed.
+  static const _eidAlAdhaDates = <int, List<int>>{
+    2026: [5, 27],
+    2027: [5, 17],
+    2028: [5, 5],
+    2029: [4, 24],
+    2030: [4, 13],
+    2031: [4, 3],
+  };
+  DateTime? _apiNextEidDate;
+  bool _isLoadingEidDate = true;
 
   // Shares sub-tabs: 0 Participants, 1 Expenses, 2 Settlements, 3 Requests, 4 Chat
   int _sharesSubTab = 0;
@@ -2212,6 +2239,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   void initState() {
     super.initState();
     _loadTheme();
+    _loadReminderPreferences();
+    _loadNextEidDate();
     _loadCurrentAvatar();
     _calculateCosts();
     _calculateAqiqahCosts();
@@ -2535,7 +2564,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         padding: const EdgeInsets.only(top: 12),
         child: Text(
           '💡 Enter your wealth in Zakat Manager to get a customized budget recommendation.',
-          style: GoogleFonts.inter(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+          style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
         ),
       );
     }
@@ -2592,7 +2621,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           const SizedBox(height: 6),
           Text(
             'Based on your Zakat Net Wealth: ৳${fmt.format(_zakatNetWealth)}',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.poppins(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: _isDarkMode ? Colors.white70 : Colors.grey[750],
@@ -2601,7 +2630,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           const SizedBox(height: 4),
           Text(
             recommendationText,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.poppins(
               fontSize: 11.5,
               color: _isDarkMode ? Colors.white60 : Colors.grey[800],
               height: 1.3,
@@ -2613,7 +2642,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Expanded(
                 child: Text(
                   'Recommended Range:',
-                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.black87),
+                  style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.black87),
                 ),
               ),
               const SizedBox(width: 8),
@@ -2637,7 +2666,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         padding: const EdgeInsets.only(top: 12),
         child: Text(
           '💡 Enter your wealth in Zakat Manager to get a customized Aqiqah animal recommendation.',
-          style: GoogleFonts.inter(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+          style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
         ),
       );
     }
@@ -2697,7 +2726,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           const SizedBox(height: 6),
           Text(
             'Based on your Zakat Net Wealth: ৳${fmt.format(_zakatNetWealth)}',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.poppins(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: _isDarkMode ? Colors.white70 : Colors.grey[750],
@@ -2706,7 +2735,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           const SizedBox(height: 4),
           Text(
             recText,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.poppins(
               fontSize: 11.5,
               color: _isDarkMode ? Colors.white60 : Colors.grey[800],
               height: 1.3,
@@ -2718,7 +2747,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Expanded(
                 child: Text(
                   'Recommended Range (${_aqiqahQuantity} animal${_aqiqahQuantity > 1 ? 's' : ''}):',
-                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.black87),
+                  style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.black87),
                 ),
               ),
               const SizedBox(width: 8),
@@ -2772,9 +2801,170 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     );
   }
 
+  DateTime _nextEidAlAdha() {
+    final localOverride = _nextLocalEidOverride();
+    if (localOverride != null) return localOverride;
+    if (_apiNextEidDate != null) return _apiNextEidDate!;
+    final now = DateTime.now();
+    for (final year in [now.year, now.year + 1, now.year + 2, now.year + 3, now.year + 4, now.year + 5]) {
+      final parts = _eidAlAdhaDates[year];
+      if (parts == null) continue;
+      final eid = DateTime(year, parts[0], parts[1]);
+      if (!eid.isBefore(DateTime(now.year, now.month, now.day))) return eid;
+    }
+    // Fallback for years outside the table; the next known cycle is still
+    // preferable to an immediate alarm.
+    return DateTime(now.year + 1, 4, 1);
+  }
+
+  DateTime? _nextLocalEidOverride() {
+    final today = DateTime.now();
+    DateTime? result;
+    for (final entry in CalendarDatabase.gregorianOverrides.entries) {
+      if (entry.value != '12-10') continue;
+      final parts = entry.key.split('-');
+      if (parts.length != 3) continue;
+      final date = DateTime.tryParse(entry.key);
+      if (date == null || date.isBefore(DateTime(today.year, today.month, today.day))) continue;
+      if (result == null || date.isBefore(result)) result = date;
+    }
+    return result;
+  }
+
+  Future<void> _loadNextEidDate() async {
+    final now = DateTime.now();
+    DateTime? found;
+    try {
+      // AlAdhan provides a calculated Hijri calendar. We use it as the
+      // expected date and keep the local override table as a fallback.
+      final estimatedHijriYear = now.year - 579;
+      for (final hijriYear in [estimatedHijriYear, estimatedHijriYear + 1]) {
+        final uri = Uri.parse('https://api.aladhan.com/v1/hToGCalendar/12/$hijriYear?calendarMethod=UAQ');
+        final response = await http.get(uri).timeout(const Duration(seconds: 8));
+        if (response.statusCode != 200) continue;
+        final payload = jsonDecode(response.body) as Map<String, dynamic>;
+        final days = payload['data'] as List<dynamic>? ?? const [];
+        for (final item in days) {
+          final hijri = item['hijri'] as Map<String, dynamic>?;
+          final gregorian = item['gregorian'] as Map<String, dynamic>?;
+          if (hijri?['day']?.toString() != '10' || gregorian == null) continue;
+          final rawDate = gregorian['date']?.toString() ?? '';
+          final parts = rawDate.split('-');
+          if (parts.length != 3) continue;
+          final candidate = DateTime.tryParse('${parts[2]}-${parts[1]}-${parts[0]}');
+          if (candidate != null && !candidate.isBefore(DateTime(now.year, now.month, now.day))) {
+            if (found == null || candidate.isBefore(found!)) found = candidate;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Unable to load expected Eid al-Adha date: $e');
+    }
+    if (!mounted) return;
+    setState(() {
+      _apiNextEidDate = found;
+      _isLoadingEidDate = false;
+    });
+  }
+
+  Future<void> _loadReminderPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      for (final type in _activeReminders.keys) {
+        _activeReminders[type] = prefs.getBool('qurbani_reminder_$type') ?? false;
+        final storedDate = prefs.getString('qurbani_reminder_date_$type');
+        if (storedDate != null) {
+          final parsed = DateTime.tryParse(storedDate);
+          if (parsed != null) _customReminderDates[type] = parsed;
+        }
+      }
+    });
+  }
+
+  DateTime _reminderDate(String type) {
+    final customDate = _customReminderDates[type];
+    if (customDate != null) return customDate;
+    final eid = _nextEidAlAdha();
+    switch (type) {
+      case 'Eligibility':
+        return DateTime(eid.year, eid.month, eid.day - 30, 9);
+      case 'Payment':
+        return DateTime(eid.year, eid.month, eid.day - 7, 18);
+      case 'Collection':
+        return DateTime(eid.year, eid.month, eid.day - 1, 10);
+      case 'Distribution':
+        // Default to two hours after the Eid prayer window. Users can still
+        // adjust the exact local prayer time in their device alarm settings.
+        return DateTime(eid.year, eid.month, eid.day, 14);
+      case 'Eid':
+      default:
+        return DateTime(eid.year, eid.month, eid.day, 8);
+    }
+  }
+
+  String _reminderDateLabel(DateTime date) =>
+      DateFormat('EEE, d MMM yyyy • h:mm a').format(date);
+
+  Future<void> _chooseReminderDate(String type) async {
+    final current = _reminderDate(type);
+    final today = DateTime.now();
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: current.isBefore(today) ? today : current,
+      firstDate: DateTime(today.year, today.month, today.day),
+      lastDate: DateTime(today.year + 5, 12, 31),
+      helpText: 'Choose reminder date',
+    );
+    if (selectedDate == null || !mounted) return;
+
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(current),
+      helpText: 'Choose reminder time',
+    );
+    if (selectedTime == null || !mounted) return;
+
+    final chosen = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+      selectedTime.hour,
+      selectedTime.minute,
+    );
+    if (!chosen.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please choose a future date and time.')),
+      );
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('qurbani_reminder_date_$type', chosen.toIso8601String());
+    if (!mounted) return;
+    final wasActive = _activeReminders[type] ?? false;
+    if (wasActive) {
+      await NotificationService.instance.cancelCustomNotification(
+        2000 + type.hashCode % 1000,
+      );
+      await prefs.setBool('qurbani_reminder_$type', false);
+    }
+    setState(() {
+      _customReminderDates[type] = chosen;
+      if (wasActive) _activeReminders[type] = false;
+    });
+    if (wasActive && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Date changed. Turn the reminder on again to reschedule it.')),
+      );
+    }
+  }
+
   Future<void> _toggleReminder(String type, String title, String body, DateTime time) async {
     bool current = _activeReminders[type] ?? false;
     setState(() => _activeReminders[type] = !current);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('qurbani_reminder_$type', !current);
     if (!current) {
       int id = 2000 + type.hashCode % 1000;
       await NotificationService.instance.scheduleCustomNotification(
@@ -2785,18 +2975,50 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('🔔 Scheduled: "$title" for ${DateFormat('dd MMM hh:mm a').format(time)}')),
+          SnackBar(
+            duration: const Duration(seconds: 4),
+            content: Row(
+              children: [
+                const Icon(
+                  Icons.notifications_active_rounded,
+                  color: Color(0xFF86D3CF),
+                  size: 21,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Reminder scheduled for ${DateFormat('dd MMM, hh:mm a').format(time)}',
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       }
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🔕 Reminder disabled.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                Icons.notifications_off_rounded,
+                color: Color(0xFF86D3CF),
+                size: 21,
+              ),
+              SizedBox(width: 10),
+              Text('Reminder turned off.'),
+            ],
+          ),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat('#,##,###');
-    final containerBg = _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF8F9FA);
+    // Match the neutral surfaces used by the Zakat and other planner pages.
+    final containerBg = _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF5F7FA);
     final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
     final subtextColor = _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.55);
 
@@ -2841,13 +3063,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         Text(
                           'Qurbani & Aqiqah Planner',
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(color: textColor, fontSize: 15.5, fontWeight: FontWeight.bold),
+                          style: GoogleFonts.poppins(color: textColor, fontSize: 14.5, fontWeight: FontWeight.bold),
                         ),
                         Text(
                           'Rules, calculation, shares & distribution',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(color: subtextColor, fontSize: 11),
+                          style: GoogleFonts.poppins(color: subtextColor, fontSize: 11),
                         ),
                       ],
                     ),
@@ -2885,7 +3107,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.poppins(
                             color: _isDarkMode ? Colors.white : AppColors.navyBlue,
-                            fontSize: 15.5,
+                            fontSize: 14.5,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -2893,7 +3115,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           'Rules, calculation, shares & distribution',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.poppins(
                             color: _isDarkMode ? Colors.white60 : Colors.grey[600],
                             fontSize: 11,
                           ),
@@ -2945,7 +3167,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         Expanded(
                           child: Text(
                             'My Qurbani Groups',
-                            style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: textColor),
+                            style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: textColor),
                           ),
                         ),
                         IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
@@ -2954,13 +3176,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     const SizedBox(height: 4),
                     Text(
                       'Switch seamlessly between all Qurbani groups you own or have joined.',
-                      style: GoogleFonts.inter(fontSize: 11.5, color: _isDarkMode ? Colors.white60 : Colors.grey[600]),
+                      style: GoogleFonts.poppins(fontSize: 11.5, color: _isDarkMode ? Colors.white60 : Colors.grey[600]),
                     ),
                     const SizedBox(height: 14),
                     if (plans.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text('No active groups found.', style: GoogleFonts.inter(color: Colors.grey)),
+                        child: Text('No active groups found.', style: GoogleFonts.poppins(color: Colors.grey)),
                       )
                     else
                       ...plans.map((p) {
@@ -2985,11 +3207,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                             ),
                             title: Text(
                               '${p.ownerName}\'s Qurbani Plan',
-                              style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
+                              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
                             ),
                             subtitle: Text(
                               '${p.animalType.toUpperCase()} · ${p.totalShares} Shares · ${p.isOwner ? "Owner" : "Member"}',
-                              style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600]),
+                              style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600]),
                             ),
                             trailing: isCurrent
                                 ? const Icon(Icons.check_circle_rounded, color: AppColors.midTeal)
@@ -3092,20 +3314,20 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Share this plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 17)),
+                Text('Share this plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 6),
                 Text(
                   'Use one code to share the same member list, expenses, and settlements. Anyone with the code can join this plan.',
-                  style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600], height: 1.4),
+                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600], height: 1.4),
                 ),
                 const SizedBox(height: 20),
 
                 if (isOwner) ...[
-                  Text('Your group code', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text('Your group code', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 8),
                   Text(
                     'Keep this screen handy — this code stays the same and is shown here any time you need to give it to a new member.',
-                    style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[600], height: 1.3),
+                    style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[600], height: 1.3),
                   ),
                   const SizedBox(height: 8),
                   if (generatedCode != null)
@@ -3165,12 +3387,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     ),
                   if (error != null) ...[
                     const SizedBox(height: 8),
-                    Text(error!, style: GoogleFonts.inter(color: Colors.red, fontSize: 12)),
+                    Text(error!, style: GoogleFonts.poppins(color: Colors.red, fontSize: 12)),
                   ],
                   const SizedBox(height: 20),
                 ],
 
-                Text('My shares in this plan', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text('My shares in this plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 4),
                 Row(children: [
                   IconButton(onPressed: myShares > 1 ? () => setD(() => myShares--) : null, icon: const Icon(Icons.remove_circle_outline)),
@@ -3207,12 +3429,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 const Divider(),
                 const SizedBox(height: 12),
 
-                Text('Join a shared plan', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text('Join a shared plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 4),
                 Row(children: [
-                  Text('Shares to join with:', style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600])),
+                  Text('Shares to join with:', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
                   IconButton(onPressed: joinShares > 1 ? () => setD(() => joinShares--) : null, icon: const Icon(Icons.remove_circle_outline, size: 20)),
-                  Text('$joinShares', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold)),
+                  Text('$joinShares', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold)),
                   IconButton(onPressed: joinShares < 7 ? () => setD(() => joinShares++) : null, icon: const Icon(Icons.add_circle_outline, size: 20)),
                 ]),
                 const SizedBox(height: 8),
@@ -3264,7 +3486,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     const compactLabels = ['Eligib.', 'Calc.', 'Shares', 'Board', 'Distrib.', 'Tasks'];
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: cardBg,
@@ -3274,7 +3496,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       child: Row(
         children: List.generate(_tabLabels.length, (i) {
           final active = i == _tab;
-          final activeBg = _isDarkMode ? AppColors.midTeal : AppColors.navyBlue;
+          final activeBg = AppColors.navyBlue;
           final inactiveColor = _isDarkMode ? Colors.white60 : AppColors.navyBlue.withValues(alpha: 0.5);
           return Expanded(
             child: GestureDetector(
@@ -3296,7 +3518,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     Text(compactLabels[i],
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.poppins(
                             fontSize: 9,
                             fontWeight: FontWeight.w600,
                             color: active ? Colors.white : inactiveColor)),
@@ -3340,21 +3562,21 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Icon(icon, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue, size: 20),
-          const SizedBox(width: 12),
+          Icon(icon, color: _isDarkMode ? Colors.white70 : AppColors.navyBlue, size: 18),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               label,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.poppins(
                 color: _isDarkMode ? Colors.white70 : Colors.grey[750],
-                fontSize: 13,
+                fontSize: 11,
               ),
             ),
           ),
           Text(
             value,
             style: GoogleFonts.poppins(
-              fontSize: 13,
+              fontSize: 11,
               fontWeight: FontWeight.bold,
               color: _isDarkMode ? Colors.white : Colors.black87,
             ),
@@ -3367,14 +3589,31 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   Widget _buildEligibilityTab(NumberFormat fmt) {
     return ListView(
       controller: widget.scrollController,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
       children: [
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(18, 17, 18, 18),
           decoration: BoxDecoration(
-            color: _isDarkMode ? const Color(0xFF1E1E1E) : AppColors.dustyBlueTeal.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.dustyBlueTeal.withValues(alpha: 0.3)),
+            gradient: LinearGradient(
+              colors: _isDarkMode
+                  ? const [Color(0xFF16252C), Color(0xFF1D2C33)]
+                  : [const Color(0xFFE8F5F4), const Color(0xFFF3FAF9)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _isDarkMode
+                  ? AppColors.midTeal.withValues(alpha: 0.28)
+                  : AppColors.dustyBlueTeal.withValues(alpha: 0.28),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navyBlue.withValues(alpha: _isDarkMode ? 0.18 : 0.06),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3388,14 +3627,19 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               const SizedBox(height: 8),
               Text(
                 'Qurbani is WAJIB (compulsory) for every adult, sane Muslim who owns the Nisab threshold of wealth on the days of Eid. It requires sacrificing one goat/sheep per person, or 1 share in a larger animal (like cow/camel).',
-                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[800], fontSize: 13, height: 1.4),
+                style: GoogleFonts.poppins(
+                  color: _isDarkMode ? Colors.white70 : Colors.grey[800],
+                  fontSize: 11,
+                  height: 1.35,
+                ),
               ),
             ],
           ),
         ),
+        const SizedBox(height: 14),
+        _buildNextEidCard(),
         const SizedBox(height: 20),
-        Text('Check Your Eligibility',
-            style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15.5)),
+        _sectionTitle('Eligibility.png', 'Check Your Eligibility'),
         const SizedBox(height: 10),
         if (_hasZakatData) ...[
           Container(
@@ -3413,8 +3657,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 Expanded(
                   child: Text(
                     'Assets imported from Zakat Manager (Net: ৳${fmt.format(_zakatNetWealth)})',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: _isDarkMode ? Colors.white70 : AppColors.navyBlue,
                     ),
@@ -3429,8 +3673,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   ),
                   child: Text(
                     'Sync',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                       color: AppColors.midTeal,
                     ),
@@ -3440,11 +3684,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             ),
           ),
           Card(
-            color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            color: _isDarkMode ? const Color(0xFF181818) : Colors.white,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
                 side: _isDarkMode ? BorderSide(color: Colors.white.withValues(alpha: 0.12)) : BorderSide.none),
-            elevation: 0,
+            elevation: 2,
+            shadowColor: AppColors.navyBlue.withValues(alpha: 0.08),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -3462,11 +3707,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       ).then((_) => _loadZakatWealthData());
                     },
                     icon: const Icon(Icons.account_balance_wallet_outlined),
-                    label: Text('Edit Wealth in Zakat Manager', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                    label: Text('Edit Wealth in Zakat Manager', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11.5)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.navyBlue,
                       foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 45),
+                      minimumSize: const Size(double.infinity, 40),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -3476,11 +3721,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           ),
         ] else ...[
           Card(
-            color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            color: _isDarkMode ? const Color(0xFF181818) : Colors.white,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
                 side: _isDarkMode ? BorderSide(color: Colors.white.withValues(alpha: 0.12)) : BorderSide.none),
-            elevation: 0,
+            elevation: 2,
+            shadowColor: AppColors.navyBlue.withValues(alpha: 0.08),
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -3489,13 +3735,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   const SizedBox(height: 12),
                   Text(
                     'No Zakat Wealth Data Found',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'To calculate Qurbani eligibility, please set up your assets in the Zakat Manager first. Your eligibility will be automatically calculated based on your Zakat records.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[750], fontSize: 13, height: 1.4),
+                    style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white70 : Colors.grey[750], fontSize: 11, height: 1.35),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
@@ -3506,11 +3752,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       ).then((_) => _loadZakatWealthData());
                     },
                     icon: const Icon(Icons.add_rounded),
-                    label: Text('Set Up Wealth in Zakat Manager', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                    label: Text('Set Up Wealth in Zakat Manager', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11.5)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.navyBlue,
                       foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 45),
+                      minimumSize: const Size(double.infinity, 40),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -3538,12 +3784,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_isEligible ? '✔ Eligible for Qurbani' : '✖ Not Eligible / Optional',
+                      Text(_isEligible ? 'Eligible for Qurbani' : 'Not Eligible / Optional',
                           style: GoogleFonts.poppins(
-                              color: _isEligible ? AppColors.midTeal : AppColors.coralOrange, fontWeight: FontWeight.bold, fontSize: 15)),
+                              color: _isEligible ? AppColors.midTeal : AppColors.coralOrange, fontWeight: FontWeight.bold, fontSize: 13)),
                       const SizedBox(height: 6),
                       Text(_eligibilityReason,
-                          style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.grey[800], fontSize: 13, height: 1.4)),
+                          style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.grey[800], fontSize: 11, height: 1.35)),
                     ],
                   ),
                 ),
@@ -3552,15 +3798,21 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           ),
         ],
         const SizedBox(height: 24),
-        Text('General Rules & Guidelines',
-            style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15)),
+        _sectionTitle('Rules&Guidelines.png', 'General Rules & Guidelines'),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            color: _isDarkMode ? const Color(0xFF181818) : Colors.white,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: _isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.12)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navyBlue.withValues(alpha: 0.06),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3572,54 +3824,169 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               _labeledRuleBullet('Meat distribution:', 'Recommended to divide the meat into three parts: 1/3 for family, 1/3 for relatives/friends, 1/3 for poor/needy.', last: true),
               const SizedBox(height: 4),
               Align(
-                alignment: Alignment.centerRight,
+                alignment: Alignment.centerLeft,
                 child: TextButton.icon(
                   onPressed: () => setState(() {
                     _tab = 5; // Tasks tab (Rules & Verses)
                     _tasksSubTab = 1;
                   }),
                   icon: const Icon(Icons.menu_book_rounded, size: 16),
-                  label: const Text("Read full Qur'anic basis & detailed rulings"),
-                  style: TextButton.styleFrom(foregroundColor: AppColors.midTeal, padding: EdgeInsets.zero),
+                  label: Text(
+                    "Read full Qur'anic basis & detailed rulings",
+                    style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.midTeal,
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 24),
-        Text('🔔 Eligibility Reminder', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15)),
+        _buildQurbaniRemindersSection(),
+      ],
+    );
+  }
+
+  Widget _buildQurbaniRemindersSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.notifications_active_outlined,
+                size: 19, color: _isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue),
+            const SizedBox(width: 6),
+            Text('Qurbani Reminders',
+                style: GoogleFonts.poppins(
+                    color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text('Schedule helpful reminders for each step before and during Eid.',
+            style: GoogleFonts.poppins(
+                color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11)),
         const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white, borderRadius: BorderRadius.circular(14)),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Re-check Nisab before Dhul Hijjah',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : null)),
-                    const SizedBox(height: 4),
-                    Text('Get a nudge a few days before Eid to re-check your assets against the current Nisab value, since gold/silver prices change.',
-                        style: GoogleFonts.inter(color: _isDarkMode ? Colors.white54 : Colors.grey, fontSize: 11)),
-                  ],
-                ),
-              ),
-              Switch(
-                value: _activeReminders['Eligibility'] ?? false,
-                activeThumbColor: AppColors.navyBlue,
-                onChanged: (val) => _toggleReminder(
-                  'Eligibility',
-                  '\ud83d\udccb Nisab Re-check Reminder',
-                  'Eid al-Adha is approaching. Re-check your savings, gold/silver and cash against the current Nisab value to confirm Qurbani eligibility.',
-                  DateTime.now().add(const Duration(seconds: 20)),
-                ),
-              ),
-            ],
-          ),
+        _buildReminderTile(
+          type: 'Eligibility', title: 'Nisab Eligibility Check',
+          desc: 'Re-check your assets a few days before Eid because gold and silver prices can change.',
+          reminderTitle: 'Nisab Re-check Reminder',
+          reminderBody: 'Eid al-Adha is approaching. Re-check your savings, gold/silver and cash against the current Nisab value to confirm Qurbani eligibility.',
+        ),
+        _buildReminderTile(
+          type: 'Eid', title: 'Qurbani Day Reminder',
+          desc: 'One reminder on Eid morning at 8:00 AM to prepare for Qurbani.',
+          reminderTitle: 'Qurbani Eid Day Reminder',
+          reminderBody: 'Assalamu alaikum! Eid Mubarak. Today is Qurbani day. Ensure animal requirements and health conditions are verified.',
+        ),
+        _buildReminderTile(
+          type: 'Payment', title: 'Qurbani Share Payment Reminder',
+          desc: 'One reminder 7 days before Eid to complete your share payment.',
+          reminderTitle: 'Qurbani Payment Reminder',
+          reminderBody: 'Reminder: Make sure all Qurbani share payments are completed and participants have agreed on their shares.',
+        ),
+        _buildReminderTile(
+          type: 'Collection', title: 'Animal Collection / Haat Reminder',
+          desc: 'One reminder the day before Eid at 10:00 AM to collect the animal.',
+          reminderTitle: 'Animal Collection Reminder',
+          reminderBody: 'Time to collect your animal. Double check the age (2+ yrs for cow, 1+ for goat) and health status.',
+        ),
+        _buildReminderTile(
+          type: 'Distribution', title: 'Meat Distribution Reminder',
+          desc: 'One Eid-day reminder at 2:00 PM to begin meat distribution.',
+          reminderTitle: 'Meat Distribution Reminder',
+          reminderBody: 'Time to divide meat into three equal portions (Family, Relatives, and Needy) as per Sunnah.',
         ),
       ],
+    );
+  }
+
+  Widget _sectionTitle(String iconName, String title, {double iconSize = 19}) {
+    return Row(
+      children: [
+        _plannerAssetIcon(iconName, size: iconSize),
+        const SizedBox(width: 7),
+        Text(title,
+            style: GoogleFonts.poppins(
+                color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                fontWeight: FontWeight.bold,
+                fontSize: 14.5)),
+      ],
+    );
+  }
+
+  Widget _plannerAssetIcon(String name, {double size = 20}) {
+    return Image.asset(
+      'assets/icons/$name',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      color: _isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+
+  Widget _buildNextEidCard() {
+    final eid = _nextEidAlAdha();
+    final daysLeft = eid.difference(DateTime.now()).inDays;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _isDarkMode ? const Color(0xFF1B2933) : const Color(0xFFEAF5F4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.midTeal.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.event_available_rounded, color: AppColors.midTeal, size: 22),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Next Eid al-Adha',
+                    style: GoogleFonts.poppins(
+                        color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 3),
+                Text(
+                  _isLoadingEidDate ? 'Checking Islamic calendar…' : DateFormat('EEE, d MMM yyyy').format(eid),
+                  style: GoogleFonts.poppins(
+                      color: AppColors.midTeal, fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _isLoadingEidDate
+                      ? 'Expected date will update automatically.'
+                      : 'Expected date · $daysLeft day${daysLeft == 1 ? '' : 's'} remaining',
+                  style: GoogleFonts.poppins(
+                      color: _isDarkMode ? Colors.white60 : Colors.grey[700], fontSize: 10.5),
+                ),
+                const SizedBox(height: 2),
+                Text('Final date depends on local moon sighting.',
+                    style: GoogleFonts.poppins(
+                        color: _isDarkMode ? Colors.white54 : Colors.grey[600], fontSize: 9.5)),
+              ],
+            ),
+          ),
+          if (_isLoadingEidDate)
+            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+        ],
+      ),
     );
   }
 
@@ -3637,7 +4004,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           Expanded(
             child: RichText(
               text: TextSpan(
-                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[800], fontSize: 13, height: 1.4),
+                style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white70 : Colors.grey[800], fontSize: 11, height: 1.35),
                 children: [
                   TextSpan(text: '$boldText ', style: TextStyle(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : Colors.black87)),
                   TextSpan(text: text),
@@ -3657,7 +4024,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         children: [
           Icon(icon, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 20),
           const SizedBox(width: 12),
-          Expanded(child: Text(label, style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.grey[700], fontSize: 13))),
+          Expanded(child: Text(label, style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.grey[700], fontSize: 13))),
           SizedBox(
             width: 120,
             height: 38,
@@ -3668,7 +4035,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white : Colors.black87),
               decoration: InputDecoration(
                 prefixText: '৳ ',
-                prefixStyle: GoogleFonts.inter(color: _isDarkMode ? Colors.white54 : Colors.grey[600]),
+                prefixStyle: GoogleFonts.poppins(color: _isDarkMode ? Colors.white54 : Colors.grey[600]),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
                 filled: true,
@@ -3726,8 +4093,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       controller: widget.scrollController,
       padding: const EdgeInsets.all(20),
       children: [
-        Text('Qurbani Cost Planner',
-            style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15.5)),
+        _sectionTitle('Qurbani_Cost.png', 'Qurbani Cost Planner', iconSize: 26),
         const SizedBox(height: 12),
         Card(
           color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
@@ -3738,7 +4104,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Select Animal', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
+                Text('Select Animal', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
                 const SizedBox(height: 6),
                 Row(
                   children: ['Cow', 'Goat', 'Camel'].map((animal) {
@@ -3755,23 +4121,23 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(color: sel ? AppColors.navyBlue : Colors.grey[100], borderRadius: BorderRadius.circular(10)),
                           alignment: Alignment.center,
-                          child: Text(animal, style: GoogleFonts.inter(color: sel ? Colors.white : Colors.grey[800], fontWeight: FontWeight.bold, fontSize: 12)),
+                          child: Text(animal, style: GoogleFonts.poppins(color: sel ? Colors.white : Colors.grey[800], fontWeight: FontWeight.bold, fontSize: 12)),
                         ),
                       ),
                     );
                   }).toList(),
                 ),
                 const SizedBox(height: 16),
-                Text('Select Location', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
+                Text('Select Location', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String>(
                   initialValue: _selectedLocation,
                   dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : null,
-                  style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87),
+                  style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87),
                   items: [
-                    DropdownMenuItem(value: 'Dhaka', child: Text('Dhaka', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87))),
-                    DropdownMenuItem(value: 'Chittagong', child: Text('Chittagong', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87))),
-                    DropdownMenuItem(value: 'Other', child: Text('Other Divisions', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87))),
+                    DropdownMenuItem(value: 'Dhaka', child: Text('Dhaka', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87))),
+                    DropdownMenuItem(value: 'Chittagong', child: Text('Chittagong', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87))),
+                    DropdownMenuItem(value: 'Other', child: Text('Other Divisions', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87))),
                   ],
                   onChanged: (val) => setState(() {
                     _selectedLocation = val!;
@@ -3788,7 +4154,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 ),
                 const SizedBox(height: 16),
                 if (_selectedAnimal != 'Goat') ...[
-                  Text('Number of Shares (1 to 7)', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
+                  Text('Number of Shares (1 to 7)', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
                   const SizedBox(height: 6),
                   Row(
                     children: [
@@ -3797,7 +4163,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         icon: const Icon(Icons.remove_circle_outline),
                       ),
                       const SizedBox(width: 8),
-                      Text('$_selectedShares Share(s)', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : null)),
+                      Text('$_selectedShares Share(s)', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: _isDarkMode ? Colors.white : null)),
                       const SizedBox(width: 8),
                       IconButton(
                         onPressed: _selectedShares < 7 ? () => setState(() { _selectedShares++; _calculateCosts(); }) : null,
@@ -3821,7 +4187,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         children: [
                           Text(
                             _hasZakatData ? 'Estimated Cost (Based on Wealth):' : 'Estimated Cost:',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.poppins(
                               fontWeight: FontWeight.bold,
                               color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                               fontSize: 12,
@@ -3841,7 +4207,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                 style: GoogleFonts.poppins(
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.coralOrange,
-                                  fontSize: 15.5,
+                                  fontSize: 14.5,
                                 ),
                               ),
                             ),
@@ -3857,7 +4223,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                             Expanded(
                               child: Text(
                                 'Selected Animal Cost:',
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.poppins(
                                   fontSize: 11,
                                   color: _isDarkMode ? Colors.white70 : Colors.grey[750],
                                 ),
@@ -3886,7 +4252,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           ),
         ),
         const SizedBox(height: 24),
-        Text('🍼 Aqiqah Planner', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15.5)),
+        _sectionTitle('Aqiqa_Cost.png', 'Aqiqah Planner'),
         const SizedBox(height: 12),
         Card(
           color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
@@ -3901,7 +4267,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 const SizedBox(height: 6),
                 Text(
                   'Aqiqah is a sunnah practice of sacrificing animal(s) upon the birth of a child. It is recommended to perform it on the 7th, 14th, or 21st day after birth.',
-                  style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[700], fontSize: 13, height: 1.4),
+                  style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white70 : Colors.grey[700], fontSize: 13, height: 1.4),
                 ),
                 const SizedBox(height: 14),
                 Row(
@@ -3910,15 +4276,15 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("Baby's Gender", style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                          Text("Baby's Gender", style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
                           const SizedBox(height: 4),
                           DropdownButtonFormField<String>(
                             initialValue: _aqiqahBabyGender,
                             dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : null,
-                            style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87),
+                            style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87),
                             items: [
-                              DropdownMenuItem(value: 'Boy', child: Text('Boy', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87))),
-                              DropdownMenuItem(value: 'Girl', child: Text('Girl', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87))),
+                              DropdownMenuItem(value: 'Boy', child: Text('Boy', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87))),
+                              DropdownMenuItem(value: 'Girl', child: Text('Girl', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87))),
                             ],
                             onChanged: (val) => setState(() {
                               _aqiqahBabyGender = val!;
@@ -3941,7 +4307,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Animal Qty', style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                          Text('Animal Qty', style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
                           const SizedBox(height: 4),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -3951,7 +4317,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text('$_aqiqahQuantity Goat / Sheep',
-                                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : Colors.black87)),
+                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : Colors.black87)),
                           ),
                         ],
                       ),
@@ -3973,7 +4339,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         children: [
                           Text(
                             _hasZakatData ? 'Aqiqah Recommended Cost:' : 'Aqiqah Estimated Cost:',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.poppins(
                               fontWeight: FontWeight.bold,
                               color: AppColors.midTeal,
                               fontSize: 12,
@@ -3990,7 +4356,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                               style: GoogleFonts.poppins(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.midTeal,
-                                fontSize: 15,
+                                fontSize: 14,
                               ),
                             ),
                           ),
@@ -4005,7 +4371,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                             Expanded(
                               child: Text(
                                 'Standard Animal Cost:',
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.poppins(
                                   fontSize: 11,
                                   color: _isDarkMode ? Colors.white70 : Colors.grey[750],
                                 ),
@@ -4030,7 +4396,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 ),
                 _buildAqiqahWealthRecommendationCard(fmt),
                 _buildAqiqahRules(),
-                Text('Aqiqah Checklist', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontSize: 13)),
+                Text('Aqiqah Checklist', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontSize: 13)),
                 const SizedBox(height: 8),
         Column(
                   children: _aqiqahChecklist.map((item) {
@@ -4068,7 +4434,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           ),
                           title: Text(
                             item['title'],
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.poppins(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
                               color: done
@@ -4081,7 +4447,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           children: [
                             Text(
                               item['rule'] ?? '',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.poppins(
                                 fontSize: 12,
                                 color: _isDarkMode ? Colors.white60 : Colors.grey[700],
                                 height: 1.45,
@@ -4120,12 +4486,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           children: [
             const Icon(Icons.scale_rounded, color: AppColors.midTeal, size: 22),
             const SizedBox(width: 8),
-            Text('Meat Distribution Planner', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 15.5)),
+            Text('Meat Distribution Planner', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 14.5)),
           ],
         ),
         const SizedBox(height: 4),
         Text('Set your total meat quantity to plan the Sunnah-based 3-way distribution.',
-            style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12)),
+            style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12)),
         const SizedBox(height: 20),
 
         // --- DONUT CHART ---
@@ -4157,7 +4523,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       children: [
                         Text('${_totalMeatKg.toStringAsFixed(0)} kg',
                             style: GoogleFonts.poppins(fontSize: 19, fontWeight: FontWeight.bold, color: textColor)),
-                        Text('Total Meat', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white54 : Colors.grey[600])),
+                        Text('Total Meat', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white54 : Colors.grey[600])),
                       ],
                     ),
                   ],
@@ -4192,8 +4558,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Total Meat Amount (in kg)', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
-                      Text('Adjust slider or enter below', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white54 : Colors.grey[500], fontSize: 11)),
+                      Text('Total Meat Amount (in kg)', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                      Text('Adjust slider or enter below', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white54 : Colors.grey[500], fontSize: 11)),
                     ],
                   ),
                 ),
@@ -4205,7 +4571,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: textColor),
                     decoration: InputDecoration(
                       suffixText: ' kg',
-                      suffixStyle: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey),
+                      suffixStyle: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey),
                       filled: _isDarkMode,
                       fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : null,
                       border: const OutlineInputBorder(),
@@ -4231,7 +4597,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         ),
         const SizedBox(height: 16),
 
-        Text('Suggested Distribution Split', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+        Text('Suggested Distribution Split', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
         const SizedBox(height: 8),
         Container(
           height: 35,
@@ -4240,22 +4606,23 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             borderRadius: BorderRadius.circular(10),
             child: Row(
               children: [
-                Expanded(child: Container(color: familyColor, alignment: Alignment.center, child: Text('Family (1/3)', style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)))),
+                Expanded(child: Container(color: familyColor, alignment: Alignment.center, child: Text('Family (1/3)', style: GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)))),
                 Container(width: 1.5, color: Colors.white),
-                Expanded(child: Container(color: AppColors.midTeal, alignment: Alignment.center, child: Text('Relatives (1/3)', style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)))),
+                Expanded(child: Container(color: AppColors.midTeal, alignment: Alignment.center, child: Text('Relatives (1/3)', style: GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)))),
                 Container(width: 1.5, color: Colors.white),
-                Expanded(child: Container(color: AppColors.coralOrange, alignment: Alignment.center, child: Text('Poor (1/3)', style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)))),
+                Expanded(child: Container(color: AppColors.coralOrange, alignment: Alignment.center, child: Text('Poor (1/3)', style: GoogleFonts.poppins(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)))),
               ],
             ),
           ),
         ),
         const SizedBox(height: 14),
-        Row(children: [
-          _buildDistributionCard('Family Portion', familyQty, familyColor),
+        Row(
+          children: [
+          _buildDistributionCard('Family Portion', familyQty, familyColor, Icons.home_rounded),
           const SizedBox(width: 8),
-          _buildDistributionCard('Relatives Portion', relativesQty, AppColors.midTeal),
+          _buildDistributionCard('Relatives Portion', relativesQty, AppColors.midTeal, Icons.groups_rounded),
           const SizedBox(width: 8),
-          _buildDistributionCard('Poor / Needy', poorQty, AppColors.coralOrange),
+          _buildDistributionCard('Poor / Needy', poorQty, AppColors.coralOrange, Icons.volunteer_activism_rounded),
         ]),
         const SizedBox(height: 16),
 
@@ -4274,7 +4641,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Expanded(
                 child: Text(
                   'Note: The 1/3 meat distribution rule is a highly recommended (Mustahabb) Sunnah based on traditional Islamic practices to encourage sharing and charity, but it is not a binding compulsory requirement. You may distribute more to charity or retain more based on family size and needs.',
-                  style: GoogleFonts.inter(color: _isDarkMode ? Colors.amber[200] : Colors.amber[900], fontSize: 11, height: 1.4),
+                  style: GoogleFonts.poppins(color: _isDarkMode ? Colors.amber[200] : Colors.amber[900], fontSize: 11, height: 1.4),
                 ),
               ),
             ],
@@ -4284,20 +4651,36 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     );
   }
 
-  Widget _buildDistributionCard(String title, double qty, Color accentColor) {
+  Widget _buildDistributionCard(String title, double qty, Color accentColor, IconData icon) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(12),
+        height: 122,
+        padding: const EdgeInsets.fromLTRB(8, 10, 8, 9),
         decoration: BoxDecoration(
-          color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          color: _isDarkMode ? Colors.black : Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border(top: BorderSide(color: accentColor, width: 4)),
+          border: Border.all(color: _isDarkMode ? Colors.white24 : Colors.grey.shade200, width: 1),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: _isDarkMode ? 0.22 : 0.06), blurRadius: 8, offset: const Offset(0, 3))],
         ),
         child: Column(
           children: [
-            Text(title, style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600]), textAlign: TextAlign.center),
-            const SizedBox(height: 6),
-            Text('${qty.toStringAsFixed(1)} kg', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+            Container(
+              width: 29,
+              height: 29,
+              decoration: BoxDecoration(color: _isDarkMode ? Colors.white12 : Colors.grey.shade100, shape: BoxShape.circle),
+              child: Icon(icon, size: 16, color: accentColor),
+            ),
+            const SizedBox(height: 5),
+            SizedBox(
+              height: 29,
+              child: Text(title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
+                  textAlign: TextAlign.center),
+            ),
+            const SizedBox(height: 8),
+            Text('${qty.toStringAsFixed(1)} kg', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
           ],
         ),
       ),
@@ -4310,7 +4693,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 4),
-        Text(label, style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
+        Text(label, style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
       ],
     );
   }
@@ -4350,10 +4733,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text('Enter the invite code you received and choose your share count.',
-                    style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600], height: 1.4)),
+                    style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600], height: 1.4)),
                 const SizedBox(height: 12),
                 Row(children: [
-                  Text('Shares:', style: GoogleFonts.inter(fontSize: 12)),
+                  Text('Shares:', style: GoogleFonts.poppins(fontSize: 12)),
                   IconButton(onPressed: joinShares > 1 ? () => setD(() => joinShares--) : null, icon: const Icon(Icons.remove, size: 18)),
                   Text('$joinShares', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
                   IconButton(onPressed: joinShares < 7 ? () => setD(() => joinShares++) : null, icon: const Icon(Icons.add, size: 18)),
@@ -4409,11 +4792,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         backgroundColor: dialogBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-        content: Text(message, style: GoogleFonts.inter(fontSize: 13, height: 1.45, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
+        content: Text(message, style: GoogleFonts.poppins(fontSize: 13, height: 1.45, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: Text('Cancel', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+            child: Text('Cancel', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -4439,7 +4822,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not complete action: $error')));
               }
             },
-            child: Text(isOwner ? 'Delete Group' : 'Leave Group', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+            child: Text(isOwner ? 'Delete Group' : 'Leave Group', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -4475,7 +4858,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Text(
                 _repositoryError ?? 'Create a shared plan to become its owner, generate a group code, and invite others.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
+                style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
@@ -4546,7 +4929,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           Text(compact[i],
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.poppins(
                                   fontSize: 8,
                                   fontWeight: FontWeight.w600,
                                   color: active ? Colors.white : (_isDarkMode ? Colors.white54 : Colors.grey[500]))),
@@ -4594,10 +4977,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           children: [
             _buildDashboardOverviewCard(fmt, participants),
             const SizedBox(height: 16),
-            Text('Participants', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15.5)),
+            Text('Participants', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 14.5)),
             const SizedBox(height: 4),
             Text("Each member joins with the group code and chooses their own share count.",
-                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4)),
+                style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4)),
             const SizedBox(height: 12),
             _sharedGroupCard(),
             const SizedBox(height: 16),
@@ -4670,7 +5053,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       child: Text(
                         '$shortName ${p.shares}/$assignedShares ($pct%)',
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w600, color: textColor),
+                        style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w600, color: textColor),
                       ),
                     ),
                   ],
@@ -4699,7 +5082,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   Expanded(
                     child: Text(
                       'Full planning enabled! Reserve your animal, log costs & track assigned shares. Summary updates automatically as participants & expenses are added.',
-                      style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.amber[200] : Colors.amber[900], height: 1.35),
+                      style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.amber[200] : Colors.amber[900], height: 1.35),
                     ),
                   ),
                 ],
@@ -4758,7 +5141,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Text('No shares assigned yet. Add participants to build the share wheel automatically!',
-                            textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 11.5, color: Colors.grey)),
+                            textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 11.5, color: Colors.grey)),
                       ),
                     )
                   else
@@ -4814,7 +5197,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         children: [
           Text(
             title,
-            style: GoogleFonts.inter(fontSize: 8.5, fontWeight: FontWeight.bold, color: labelColor, letterSpacing: 0.5),
+            style: GoogleFonts.poppins(fontSize: 8.5, fontWeight: FontWeight.bold, color: labelColor, letterSpacing: 0.5),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -4827,7 +5210,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           const SizedBox(height: 2),
           Text(
             subtitle,
-            style: GoogleFonts.inter(fontSize: 9, color: _isDarkMode ? Colors.white54 : Colors.grey[600]),
+            style: GoogleFonts.poppins(fontSize: 9, color: _isDarkMode ? Colors.white54 : Colors.grey[600]),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -4861,7 +5244,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 6),
                 Text('The owner deleted this shared plan. You can create your own group or join a different one.',
-                    style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5, height: 1.35)),
+                    style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5, height: 1.35)),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -4906,14 +5289,14 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         children: [
                           Text('Shared Plan Group', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
                           Text(isOwner ? 'You are the Owner of this plan.' : 'You are a Member of this shared plan.',
-                              style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11)),
+                              style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11)),
                         ],
                       ),
                     ),
                   ]),
                   if (code != null) ...[
                     const SizedBox(height: 12),
-                    Text('INVITE GROUP CODE', style: GoogleFonts.inter(color: textColor, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.8)),
+                    Text('INVITE GROUP CODE', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.8)),
                     const SizedBox(height: 5),
                     Container(
                       width: double.infinity,
@@ -4951,10 +5334,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     ),
                   ],
                   const SizedBox(height: 12),
-                  Text('Group Members (${members.length})', style: GoogleFonts.inter(color: textColor, fontWeight: FontWeight.w700, fontSize: 12)),
+                  Text('Group Members (${members.length})', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.w700, fontSize: 12)),
                   const SizedBox(height: 8),
                   if (members.isEmpty)
-                    Text('No members yet.', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5))
+                    Text('No members yet.', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5))
                   else
                     Wrap(
                       spacing: 10,
@@ -4971,7 +5354,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                             DeenMateAvatar(name: member.name, photoUrl: member.photoUrl, avatarBase64: member.avatarBase64, radius: 12),
                             const SizedBox(width: 6),
                             Text('${member.name} (${member.shares} share${member.shares > 1 ? "s" : ""})',
-                                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: textColor)),
+                                style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: textColor)),
                           ],
                         ),
                       )).toList(),
@@ -5024,7 +5407,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           child: Text(
                             p.name.isNotEmpty ? p.name : (isParticipantGroupOwner ? 'Group Owner' : 'Member'),
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : null),
+                            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : null),
                           ),
                         ),
                         if (isParticipantGroupOwner) ...[
@@ -5032,13 +5415,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                            child: Text('Owner', style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                            child: Text('Owner', style: GoogleFonts.poppins(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
                           ),
                         ],
                       ],
                     ),
                     Text('${p.shares} Share(s) · added by ${recordOwnedByMe ? "you" : p.ownerName}',
-                        style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                        style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
                   ],
                 ),
               ),
@@ -5107,7 +5490,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('＋ Add Participant', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+              Text('＋ Add Participant', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
               InkWell(
                 onTap: () {
                   setState(() {
@@ -5125,7 +5508,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   ),
                   child: Text(
                     _isOfflineFamilyMember ? 'Offline Family Member' : 'DeenMate User Lookup',
-                    style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: _isOfflineFamilyMember ? Colors.orange[800] : AppColors.midTeal),
+                    style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: _isOfflineFamilyMember ? Colors.orange[800] : AppColors.midTeal),
                   ),
                 ),
               ),
@@ -5135,10 +5518,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           if (!_isOfflineFamilyMember) ...[
             TextField(
               onChanged: _searchDeenMateUsers,
-              style: GoogleFonts.inter(fontSize: 12, color: textColor),
+              style: GoogleFonts.poppins(fontSize: 12, color: textColor),
               decoration: InputDecoration(
                 hintText: 'Search DeenMate user by name, email, phone...',
-                hintStyle: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white54 : null),
+                hintStyle: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white54 : null),
                 prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.midTeal),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : null,
@@ -5168,7 +5551,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(_selectedDeenMateUser!['fullName'],
-                          style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded, size: 16),
@@ -5209,7 +5592,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                             Expanded(
                               child: Text(
                                 u['fullName'],
-                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
+                                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
                               ),
                             ),
                           ],
@@ -5223,10 +5606,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           ] else ...[
             TextField(
               controller: _participantNameCtrl,
-              style: GoogleFonts.inter(fontSize: 12, color: textColor),
+              style: GoogleFonts.poppins(fontSize: 12, color: textColor),
               decoration: InputDecoration(
                 hintText: 'Participant Name (Family / Offline member)',
-                hintStyle: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white54 : null),
+                hintStyle: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white54 : null),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : null,
                 filled: _isDarkMode,
@@ -5237,7 +5620,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Shares:', style: GoogleFonts.inter(fontSize: 13, color: textColor)),
+              Text('Shares:', style: GoogleFonts.poppins(fontSize: 13, color: textColor)),
               Row(
                 children: [
                   IconButton(onPressed: _newParticipantShares > 1 ? () => setState(() => _newParticipantShares--) : null, icon: const Icon(Icons.remove)),
@@ -5297,7 +5680,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               minimumSize: const Size(double.infinity, 40),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: Text('Add Participant', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+            child: Text('Add Participant', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -5346,10 +5729,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Group Discussion', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 15.5)),
+              Text('Group Discussion', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 14.5)),
               const SizedBox(height: 2),
               Text('Real-time chat for updates, photos, videos & receipts.',
-                  style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5)),
+                  style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5)),
             ],
           ),
         ),
@@ -5361,7 +5744,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               final messages = snap.data ?? [];
               if (messages.isEmpty) {
                 return Center(
-                  child: Text('No messages yet. Start the conversation!', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
+                  child: Text('No messages yet. Start the conversation!', style: GoogleFonts.poppins(color: Colors.grey, fontSize: 12)),
                 );
               }
               return StreamBuilder<List<QPlanMember>>(
@@ -5409,7 +5792,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                 ),
                                 child: Text(
                                   _formatMessageDateHeader(msg.createdAt),
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.poppins(
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w600,
                                     color: _isDarkMode ? Colors.white70 : Colors.grey[700],
@@ -5436,7 +5819,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                         if (!isMe)
                                           Padding(
                                             padding: const EdgeInsets.only(left: 4, bottom: 2),
-                                            child: Text(msg.senderName, style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                                            child: Text(msg.senderName, style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
                                           ),
                                         ClipRRect(
                                           borderRadius: BorderRadius.only(
@@ -5456,8 +5839,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               if (msg.edited == true)
-                                                Text('edited · ', style: GoogleFonts.inter(fontSize: 8, color: Colors.grey)),
-                                              Text(DateFormat('hh:mm a').format(msg.createdAt), style: GoogleFonts.inter(fontSize: 8.5, color: Colors.grey)),
+                                                Text('edited · ', style: GoogleFonts.poppins(fontSize: 8, color: Colors.grey)),
+                                              Text(DateFormat('hh:mm a').format(msg.createdAt), style: GoogleFonts.poppins(fontSize: 8.5, color: Colors.grey)),
                                             ],
                                           ),
                                         ),
@@ -5502,13 +5885,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   ),
                   child: TextField(
                     controller: _chatMsgCtrl,
-                    style: GoogleFonts.inter(fontSize: 13, color: textColor),
+                    style: GoogleFonts.poppins(fontSize: 13, color: textColor),
                     maxLines: null,
                     keyboardType: TextInputType.multiline,
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
                       hintText: 'Aa',
-                      hintStyle: GoogleFonts.inter(fontSize: 13, color: _isDarkMode ? Colors.white38 : Colors.grey[400]),
+                      hintStyle: GoogleFonts.poppins(fontSize: 13, color: _isDarkMode ? Colors.white38 : Colors.grey[400]),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
@@ -5553,7 +5936,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           if (isTextMsg)
             ListTile(
               leading: const Icon(Icons.edit_rounded, color: AppColors.midTeal),
-              title: Text('Edit Message', style: GoogleFonts.inter(color: textColor, fontWeight: FontWeight.w600)),
+              title: Text('Edit Message', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.w600)),
               onTap: () {
                 Navigator.pop(ctx);
                 setState(() {
@@ -5564,7 +5947,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             ),
           ListTile(
             leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-            title: Text('Delete Message', style: GoogleFonts.inter(color: Colors.red, fontWeight: FontWeight.w600)),
+            title: Text('Delete Message', style: GoogleFonts.poppins(color: Colors.red, fontWeight: FontWeight.w600)),
             onTap: () async {
               Navigator.pop(ctx);
               try {
@@ -5576,7 +5959,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           ),
           ListTile(
             leading: const Icon(Icons.close_rounded, color: Colors.grey),
-            title: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey)),
+            title: Text('Cancel', style: GoogleFonts.poppins(color: Colors.grey)),
             onTap: () => Navigator.pop(ctx),
           ),
           SizedBox(height: MediaQuery.of(context).padding.bottom),
@@ -5636,7 +6019,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       } catch (_) {
         return Padding(
           padding: const EdgeInsets.all(10),
-          child: Text('[Image]', style: GoogleFonts.inter(fontSize: 12, fontStyle: FontStyle.italic, color: contentColor.withValues(alpha: 0.7))),
+          child: Text('[Image]', style: GoogleFonts.poppins(fontSize: 12, fontStyle: FontStyle.italic, color: contentColor.withValues(alpha: 0.7))),
         );
       }
     }
@@ -5664,8 +6047,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(msg.fileName ?? 'Video', overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: contentColor)),
-                    Text('Tap to play', style: GoogleFonts.inter(fontSize: 10, color: contentColor.withValues(alpha: 0.6))),
+                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: contentColor)),
+                    Text('Tap to play', style: GoogleFonts.poppins(fontSize: 10, color: contentColor.withValues(alpha: 0.6))),
                   ],
                 ),
               ),
@@ -5698,8 +6081,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(msg.fileName ?? 'Document.pdf', overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: contentColor)),
-                    Text('Tap to open', style: GoogleFonts.inter(fontSize: 10, color: contentColor.withValues(alpha: 0.6))),
+                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: contentColor)),
+                    Text('Tap to open', style: GoogleFonts.poppins(fontSize: 10, color: contentColor.withValues(alpha: 0.6))),
                   ],
                 ),
               ),
@@ -5717,7 +6100,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (msg.text.isNotEmpty)
-            Text(msg.text, style: GoogleFonts.inter(fontSize: 14, color: contentColor, height: 1.35)),
+            Text(msg.text, style: GoogleFonts.poppins(fontSize: 14, color: contentColor, height: 1.35)),
         ],
       ),
     );
@@ -5741,7 +6124,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Text(
                 'Send Attachment',
                 style: GoogleFonts.poppins(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: textColor,
                 ),
@@ -5765,7 +6148,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         fontWeight: FontWeight.w600,
                         color: textColor)),
                 subtitle: Text('Use camera',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.poppins(
                         fontSize: 11,
                         color: textColor.withValues(alpha: .55))),
                 onTap: () async {
@@ -5801,7 +6184,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         fontWeight: FontWeight.w600,
                         color: textColor)),
                 subtitle: Text('JPG, PNG, GIF…',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.poppins(
                         fontSize: 11,
                         color: textColor.withValues(alpha: .55))),
                 onTap: () async {
@@ -5837,7 +6220,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         fontWeight: FontWeight.w600,
                         color: textColor)),
                 subtitle: Text('PDF, DOCX, TXT, XLSX…',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.poppins(
                         fontSize: 11,
                         color: textColor.withValues(alpha: .55))),
                 onTap: () async {
@@ -5928,8 +6311,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   children: [
                     const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 48),
                     const SizedBox(height: 8),
-                    Text('Video Player Preview', style: GoogleFonts.inter(color: Colors.white70, fontSize: 12)),
-                    Text('Uploaded by ${msg.senderName}', style: GoogleFonts.inter(color: Colors.white38, fontSize: 10)),
+                    Text('Video Player Preview', style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12)),
+                    Text('Uploaded by ${msg.senderName}', style: GoogleFonts.poppins(color: Colors.white38, fontSize: 10)),
                   ],
                 ),
               ),
@@ -6002,15 +6385,15 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     Expanded(
                       child: Text(
                         'Verified Qurbani Receipt / Document',
-                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                        style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal),
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 10),
-              Text('Sent by: ${msg.senderName}', style: GoogleFonts.inter(fontSize: 11.5, color: subtextColor)),
-              Text('Date: ${DateFormat('MMM dd, yyyy · hh:mm a').format(msg.createdAt)}', style: GoogleFonts.inter(fontSize: 10.5, color: subtextColor)),
+              Text('Sent by: ${msg.senderName}', style: GoogleFonts.poppins(fontSize: 11.5, color: subtextColor)),
+              Text('Date: ${DateFormat('MMM dd, yyyy · hh:mm a').format(msg.createdAt)}', style: GoogleFonts.poppins(fontSize: 10.5, color: subtextColor)),
               if (imageBytes != null) ...[
                 const SizedBox(height: 10),
                 ClipRRect(
@@ -6034,7 +6417,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           children: [
                             const Icon(Icons.picture_as_pdf_rounded, color: Colors.red, size: 32),
                             const SizedBox(height: 4),
-                            Text('PDF Document Attached', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.red[800])),
+                            Text('PDF Document Attached', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.red[800])),
                           ],
                         ),
                       );
@@ -6100,7 +6483,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         }
                       },
                       icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                      label: Text('Open File App', style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                      label: Text('Open File App', style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.midTeal,
                         foregroundColor: Colors.white,
@@ -6112,7 +6495,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   OutlinedButton(
                     onPressed: () => Navigator.pop(ctx),
                     style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
-                    child: Text('Close', style: GoogleFonts.inter(color: textColor, fontSize: 11.5)),
+                    child: Text('Close', style: GoogleFonts.poppins(color: textColor, fontSize: 11.5)),
                   ),
                 ],
               ),
@@ -6175,9 +6558,9 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Qurbani Share Board', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 15.5)),
+                      Text('Qurbani Share Board', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 14.5)),
                       Text('Connect with people nearby looking to share Qurbani animals.',
-                          style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5)),
+                          style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11.5)),
                     ],
                   ),
                 ),
@@ -6207,7 +6590,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           ),
                           content: Text(
                             'You need an active Qurbani planning group before posting a share offer. This allows interested users to receive your group code and join your group once you accept them.\n\nWould you like to create your Qurbani group now?',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.poppins(
                               fontSize: 13,
                               height: 1.45,
                               color: _isDarkMode ? Colors.white70 : Colors.grey[700],
@@ -6218,7 +6601,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                               onPressed: () => Navigator.pop(ctx, false),
                               child: Text(
                                 'Cancel',
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.poppins(
                                   color: _isDarkMode ? Colors.white60 : Colors.grey[600],
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -6259,7 +6642,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     }
                   },
                   icon: const Icon(Icons.add_rounded, size: 14),
-                  label: Text('Post', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold)),
+                  label: Text('Post', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.midTeal,
                     foregroundColor: Colors.white,
@@ -6288,7 +6671,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
                         child: Text(
                           _selectedMaxDistanceKm >= 9999 ? 'All Distance' : '< ${_selectedMaxDistanceKm.round()} km',
-                          style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                          style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal),
                         ),
                       ),
                     ],
@@ -6327,7 +6710,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   Widget _distanceChip(String label, double km) {
     final active = _selectedMaxDistanceKm == km;
     return ChoiceChip(
-      label: Text(label, style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.bold, color: active ? Colors.white : (_isDarkMode ? Colors.white70 : Colors.black87))),
+      label: Text(label, style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: active ? Colors.white : (_isDarkMode ? Colors.white70 : Colors.black87))),
       selected: active,
       selectedColor: AppColors.midTeal,
       backgroundColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[200],
@@ -6384,7 +6767,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                             '${post.locationName} · $distanceLabel',
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
-                            style: GoogleFonts.inter(fontSize: 10.5, color: _isDarkMode ? Colors.white60 : Colors.grey[600]),
+                            style: GoogleFonts.poppins(fontSize: 10.5, color: _isDarkMode ? Colors.white60 : Colors.grey[600]),
                           ),
                         ),
                       ],
@@ -6400,7 +6783,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 ),
                 child: Text(
                   post.animalType.toUpperCase(),
-                  style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: post.status == 'matched' || post.status == 'closed' ? Colors.grey : AppColors.midTeal),
+                  style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: post.status == 'matched' || post.status == 'closed' ? Colors.grey : AppColors.midTeal),
                 ),
               ),
               if (isMyPost) ...[
@@ -6415,12 +6798,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         title: Text('Delete Post?', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: textColor)),
                         content: Text(
                           'This will permanently remove your share post and all responses to it. This cannot be undone.',
-                          style: GoogleFonts.inter(fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
+                          style: GoogleFonts.poppins(fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
                         ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(ctx, false),
-                            child: Text('Cancel', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                            child: Text('Cancel', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
                           ),
                           ElevatedButton(
                             onPressed: () => Navigator.pop(ctx, true),
@@ -6466,13 +6849,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           ),
           const SizedBox(height: 10),
           Text(post.description.isNotEmpty ? post.description : 'Looking for Qurbani share partners.',
-              style: GoogleFonts.inter(fontSize: 12, color: textColor, height: 1.35)),
+              style: GoogleFonts.poppins(fontSize: 12, color: textColor, height: 1.35)),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Available: ${post.availableShares} / ${post.totalShares} Share(s)',
-                  style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
+                  style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white70 : Colors.grey[700])),
               Text('৳${fmt.format(post.costPerShare)} / share',
                   style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
             ],
@@ -6488,10 +6871,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   children: [
                     const Divider(),
                     Text('Interested Responses (${responses.length}):',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 11.5, color: textColor)),
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11.5, color: textColor)),
                     const SizedBox(height: 6),
                     if (responses.isEmpty)
-                      Text('No responses yet.', style: GoogleFonts.inter(fontSize: 11, color: Colors.grey))
+                      Text('No responses yet.', style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey))
                     else
                       ...responses.map((resp) => Container(
                         margin: const EdgeInsets.only(bottom: 8),
@@ -6514,10 +6897,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                     children: [
                                       Text(
                                         '${resp.responderName} (${resp.sharesRequested} share${resp.sharesRequested > 1 ? "s" : ""})',
-                                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: textColor),
+                                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: textColor),
                                       ),
                                       if (resp.note.isNotEmpty)
-                                        Text(resp.note, style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                                        Text(resp.note, style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
                                     ],
                                   ),
                                 ),
@@ -6525,19 +6908,19 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
-                                    child: Text('Accepted', style: GoogleFonts.inter(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: Text('Accepted', style: GoogleFonts.poppins(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
                                   )
                                 else if (resp.status == 'joined')
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                                    child: Text('Joined Group', style: GoogleFonts.inter(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: Text('Joined Group', style: GoogleFonts.poppins(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.bold)),
                                   )
                                 else if (resp.status == 'rejected')
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                                    child: Text('Declined', style: GoogleFonts.inter(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    child: Text('Declined', style: GoogleFonts.poppins(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
                                   )
                                 else if (resp.status == 'filled' || post.availableShares <= 0)
                                   Container(
@@ -6552,7 +6935,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                       children: [
                                         const Icon(Icons.block_rounded, color: Colors.orange, size: 11),
                                         const SizedBox(width: 3),
-                                        Text('Group Full', style: GoogleFonts.inter(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
+                                        Text('Group Full', style: GoogleFonts.poppins(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
                                       ],
                                     ),
                                   ),
@@ -6577,7 +6960,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                                             title: Text(
                                               'Decline Request?',
-                                              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+                                              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
                                             ),
                                             content: Column(
                                               mainAxisSize: MainAxisSize.min,
@@ -6585,14 +6968,14 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                               children: [
                                                 Text(
                                                   'Select a reason for declining ${resp.responderName}\'s request:',
-                                                  style: GoogleFonts.inter(fontSize: 12.5, color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
+                                                  style: GoogleFonts.poppins(fontSize: 12.5, color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
                                                 ),
                                                 const SizedBox(height: 12),
                                                 DropdownButtonFormField<String>(
                                                   value: selectedReason,
                                                   isExpanded: true,
                                                   dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-                                                  style: GoogleFonts.inter(color: textColor, fontSize: 12),
+                                                  style: GoogleFonts.poppins(color: textColor, fontSize: 12),
                                                   decoration: InputDecoration(
                                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                                                     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -6613,7 +6996,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                                   const SizedBox(height: 10),
                                                   TextField(
                                                     controller: customReasonCtrl,
-                                                    style: GoogleFonts.inter(color: textColor, fontSize: 12),
+                                                    style: GoogleFonts.poppins(color: textColor, fontSize: 12),
                                                     decoration: InputDecoration(
                                                       hintText: 'Type reason here...',
                                                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -6626,7 +7009,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                             actions: [
                                               TextButton(
                                                 onPressed: () => Navigator.pop(dialogCtx, false),
-                                                child: Text('Cancel', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                                                child: Text('Cancel', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
                                               ),
                                               ElevatedButton(
                                                 onPressed: () => Navigator.pop(dialogCtx, true),
@@ -6693,7 +7076,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                                           title: Text(
                                             'Add DeenMate User?',
-                                            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+                                            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
                                           ),
                                           content: Column(
                                             mainAxisSize: MainAxisSize.min,
@@ -6701,7 +7084,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                             children: [
                                               Text(
                                                 'Are you sure you want to add this DeenMate user in your Qurbani planning group?',
-                                                style: GoogleFonts.inter(fontSize: 13, height: 1.45, color: _isDarkMode ? Colors.white70 : Colors.grey[800]),
+                                                style: GoogleFonts.poppins(fontSize: 13, height: 1.45, color: _isDarkMode ? Colors.white70 : Colors.grey[800]),
                                               ),
                                               const SizedBox(height: 10),
                                               Container(
@@ -6719,8 +7102,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                                       child: Column(
                                                         crossAxisAlignment: CrossAxisAlignment.start,
                                                         children: [
-                                                          Text(resp.responderName, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: textColor)),
-                                                          Text('${resp.sharesRequested} share(s) requested', style: GoogleFonts.inter(fontSize: 11, color: AppColors.midTeal)),
+                                                          Text(resp.responderName, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: textColor)),
+                                                          Text('${resp.sharesRequested} share(s) requested', style: GoogleFonts.poppins(fontSize: 11, color: AppColors.midTeal)),
                                                         ],
                                                       ),
                                                     ),
@@ -6732,7 +7115,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                           actions: [
                                             TextButton(
                                               onPressed: () => Navigator.pop(ctx, false),
-                                              child: Text('Cancel', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                                              child: Text('Cancel', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
                                             ),
                                             ElevatedButton(
                                               onPressed: () => Navigator.pop(ctx, true),
@@ -6889,7 +7272,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                             Expanded(
                               child: Text(
                                 statusMessage,
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.poppins(
                                   fontSize: 11.5,
                                   fontWeight: isAccepted ? FontWeight.w600 : FontWeight.normal,
                                   color: isAccepted
@@ -6918,7 +7301,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Group Invite Code', style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
+                              Text('Group Invite Code', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.midTeal)),
                               const SizedBox(height: 6),
                               Row(
                                 children: [
@@ -6960,7 +7343,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                     }
                                   },
                                   icon: const Icon(Icons.group_add_rounded, size: 15),
-                                  label: Text('Join Group Now', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  label: Text('Join Group Now', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12)),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.midTeal,
                                     foregroundColor: Colors.white,
@@ -7020,16 +7403,16 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Post Qurbani Share Request / Offer', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+              Text('Post Qurbani Share Request / Offer', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Text('Animal Type: ', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.black87)),
+                  Text('Animal Type: ', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white70 : Colors.black87)),
                   const SizedBox(width: 8),
                   DropdownButton<String>(
                     value: animal,
                     dropdownColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-                    style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87, fontSize: 13),
+                    style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87, fontSize: 13),
                     items: const [
                       DropdownMenuItem(value: 'cow', child: Text('Cow (7 shares max)')),
                       DropdownMenuItem(value: 'camel', child: Text('Camel (7 shares max)')),
@@ -7052,7 +7435,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Available Shares to Fill:', style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white70 : Colors.black87)),
+                  Text('Available Shares to Fill:', style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white70 : Colors.black87)),
                   Row(
                     children: [
                       IconButton(onPressed: availShares > 1 ? () => setD(() => availShares--) : null, icon: const Icon(Icons.remove)),
@@ -7066,20 +7449,20 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               TextField(
                 controller: costCtrl,
                 keyboardType: TextInputType.number,
-                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87),
+                style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87),
                 decoration: const InputDecoration(labelText: 'Estimated Cost Per Share (BDT)'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: locCtrl,
-                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87),
+                style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87),
                 decoration: const InputDecoration(labelText: 'Location / Area Name (e.g. Dhanmondi, Dhaka)'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: descCtrl,
                 maxLines: 2,
-                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87),
+                style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87),
                 decoration: const InputDecoration(labelText: 'Description / Notes'),
               ),
               const SizedBox(height: 14),
@@ -7138,12 +7521,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Respond to ${post.posterName}\'s Post', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+              Text('Respond to ${post.posterName}\'s Post', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Shares Requested:', style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white70 : Colors.black87)),
+                  Text('Shares Requested:', style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white70 : Colors.black87)),
                   Row(
                     children: [
                       IconButton(onPressed: (!isSubmitting && requestedShares > 1) ? () => setD(() => requestedShares--) : null, icon: const Icon(Icons.remove)),
@@ -7158,7 +7541,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 controller: noteCtrl,
                 maxLines: 2,
                 enabled: !isSubmitting,
-                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : Colors.black87),
+                style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.black87),
                 decoration: const InputDecoration(labelText: 'Message to poster (optional)'),
               ),
               const SizedBox(height: 14),
@@ -7230,15 +7613,15 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       child: const Icon(Icons.person_outline_rounded, color: AppColors.midTeal, size: 22),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(child: Text('Edit Participant', style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: textColor))),
+                    Expanded(child: Text('Edit Participant', style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: textColor))),
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text('NAME', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+                Text('NAME', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
                 const SizedBox(height: 4),
                 TextField(
                   controller: nameCtrl,
-                  style: GoogleFonts.inter(color: textColor, fontSize: 13),
+                  style: GoogleFonts.poppins(color: textColor, fontSize: 13),
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: inputBg,
@@ -7249,7 +7632,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text('SHARES', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+                Text('SHARES', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -7261,7 +7644,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                       decoration: BoxDecoration(color: inputBg, borderRadius: BorderRadius.circular(8), border: Border.all(color: _isDarkMode ? Colors.white24 : Colors.grey[300]!)),
-                      child: Text('$shares share(s)', style: GoogleFonts.inter(color: textColor, fontWeight: FontWeight.bold, fontSize: 13)),
+                      child: Text('$shares share(s)', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 13)),
                     ),
                     IconButton(
                       onPressed: shares < 7 ? () => setD(() => shares++) : null,
@@ -7276,7 +7659,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     OutlinedButton(
                       onPressed: () => Navigator.pop(ctx),
                       style: OutlinedButton.styleFrom(side: borderSide, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      child: Text('Cancel', style: GoogleFonts.inter(color: textColor, fontSize: 12)),
+                      child: Text('Cancel', style: GoogleFonts.poppins(color: textColor, fontSize: 12)),
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton(
@@ -7296,7 +7679,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       ),
-                      child: Text('Save', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12)),
+                      child: Text('Save', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12)),
                     ),
                   ],
                 ),
@@ -7338,15 +7721,15 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     child: const Icon(Icons.receipt_long_rounded, color: AppColors.midTeal, size: 22),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(child: Text('Edit Expense', style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: textColor))),
+                  Expanded(child: Text('Edit Expense', style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: textColor))),
                 ],
               ),
               const SizedBox(height: 16),
-              Text('CATEGORY', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+              Text('CATEGORY', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
               const SizedBox(height: 4),
               TextField(
                 controller: categoryCtrl,
-                style: GoogleFonts.inter(color: textColor, fontSize: 13),
+                style: GoogleFonts.poppins(color: textColor, fontSize: 13),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: inputBg,
@@ -7357,12 +7740,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text('AMOUNT (BDT)', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+              Text('AMOUNT (BDT)', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
               const SizedBox(height: 4),
               TextField(
                 controller: amountCtrl,
                 keyboardType: TextInputType.number,
-                style: GoogleFonts.inter(color: textColor, fontSize: 13),
+                style: GoogleFonts.poppins(color: textColor, fontSize: 13),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: inputBg,
@@ -7373,12 +7756,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text('NOTES', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+              Text('NOTES', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
               const SizedBox(height: 4),
               TextField(
                 controller: notesCtrl,
                 maxLines: 2,
-                style: GoogleFonts.inter(color: textColor, fontSize: 13),
+                style: GoogleFonts.poppins(color: textColor, fontSize: 13),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: inputBg,
@@ -7395,7 +7778,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   OutlinedButton(
                     onPressed: () => Navigator.pop(ctx),
                     style: OutlinedButton.styleFrom(side: borderSide, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    child: Text('Cancel', style: GoogleFonts.inter(color: textColor, fontSize: 12)),
+                    child: Text('Cancel', style: GoogleFonts.poppins(color: textColor, fontSize: 12)),
                   ),
                   const SizedBox(width: 10),
                   ElevatedButton(
@@ -7421,7 +7804,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
-                    child: Text('Save', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12)),
+                    child: Text('Save', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12)),
                   ),
                 ],
               ),
@@ -7464,20 +7847,20 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       child: const Icon(Icons.edit_note_rounded, color: AppColors.midTeal, size: 22),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(child: Text('Request Edit', style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: textColor))),
+                    Expanded(child: Text('Request Edit', style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: textColor))),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Only ${p.ownerName} can edit this directly. Propose your changes below.',
-                  style: GoogleFonts.inter(fontSize: 11.5, color: subtextColor, height: 1.3),
+                  style: GoogleFonts.poppins(fontSize: 11.5, color: subtextColor, height: 1.3),
                 ),
                 const SizedBox(height: 16),
-                Text('PROPOSED NAME', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+                Text('PROPOSED NAME', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
                 const SizedBox(height: 4),
                 TextField(
                   controller: nameCtrl,
-                  style: GoogleFonts.inter(color: textColor, fontSize: 13),
+                  style: GoogleFonts.poppins(color: textColor, fontSize: 13),
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: inputBg,
@@ -7488,7 +7871,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text('PROPOSED SHARES', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+                Text('PROPOSED SHARES', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -7500,7 +7883,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                       decoration: BoxDecoration(color: inputBg, borderRadius: BorderRadius.circular(8), border: Border.all(color: _isDarkMode ? Colors.white24 : Colors.grey[300]!)),
-                      child: Text('$shares share(s)', style: GoogleFonts.inter(color: textColor, fontWeight: FontWeight.bold, fontSize: 13)),
+                      child: Text('$shares share(s)', style: GoogleFonts.poppins(color: textColor, fontWeight: FontWeight.bold, fontSize: 13)),
                     ),
                     IconButton(
                       onPressed: shares < 7 ? () => setD(() => shares++) : null,
@@ -7509,12 +7892,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text('REASON (REQUIRED)', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+                Text('REASON (REQUIRED)', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
                 const SizedBox(height: 4),
                 TextField(
                   controller: reasonCtrl,
                   maxLines: 2,
-                  style: GoogleFonts.inter(color: textColor, fontSize: 13),
+                  style: GoogleFonts.poppins(color: textColor, fontSize: 13),
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: inputBg,
@@ -7532,7 +7915,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     OutlinedButton(
                       onPressed: () => Navigator.pop(ctx),
                       style: OutlinedButton.styleFrom(side: borderSide, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      child: Text('Cancel', style: GoogleFonts.inter(color: textColor, fontSize: 12)),
+                      child: Text('Cancel', style: GoogleFonts.poppins(color: textColor, fontSize: 12)),
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton(
@@ -7557,7 +7940,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       ),
-                      child: Text('Send request', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12)),
+                      child: Text('Send request', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12)),
                     ),
                   ],
                 ),
@@ -7592,10 +7975,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Expenses', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15.5)),
+                          Text('Expenses', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 14.5)),
                           Text(
                             "Every contribution or cost is logged here. If more than one person paid for the same thing — even unequally — add each as a payer on one entry. The person who logs it owns it; others can request an edit.",
-                            style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4),
+                            style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4),
                           ),
                         ],
                       ),
@@ -7609,7 +7992,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Total logged', style: GoogleFonts.inter(color: Colors.white70, fontSize: 12)),
+                      Text('Total logged', style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12)),
                       Text('৳${fmt.format(total)}', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                     ],
                   ),
@@ -7657,7 +8040,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   color: (_isDarkMode ? Colors.white10 : Colors.grey[200]),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text('Owner only', style: GoogleFonts.inter(fontSize: 10, color: _isDarkMode ? Colors.white54 : Colors.grey[600])),
+                child: Text('Owner only', style: GoogleFonts.poppins(fontSize: 10, color: _isDarkMode ? Colors.white54 : Colors.grey[600])),
               ),
             if (isOwner)
             ElevatedButton.icon(
@@ -7699,7 +8082,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 }
               },
               icon: const Icon(Icons.bookmark_add_rounded, size: 14),
-              label: Text('Archive $currentYear', style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.bold)),
+              label: Text('Archive $currentYear', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.midTeal,
                 foregroundColor: Colors.white,
@@ -7725,7 +8108,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
                 ),
                 child: Text('No archived years yet. Tap "Archive $currentYear" above to save this year\'s expenses to history!',
-                    style: GoogleFonts.inter(fontSize: 11.5, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                    style: GoogleFonts.poppins(fontSize: 11.5, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
               );
             }
             return Column(
@@ -7756,11 +8139,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(color: AppColors.navyBlue, borderRadius: BorderRadius.circular(6)),
-                                child: Text('Qurbani $yr', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                                child: Text('Qurbani $yr', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                               ),
                               const SizedBox(width: 8),
                               Text('${animalType.toString().toUpperCase()} ($totalShares shares)',
-                                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 11.5, color: textColor)),
+                                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11.5, color: textColor)),
                             ],
                           ),
                           Text('৳${fmt.format(totalCost)}',
@@ -7769,7 +8152,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       ),
                       const SizedBox(height: 6),
                       Text('Cost per share: ৳${fmt.format(costPerShare)}',
-                          style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                          style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
                       if (expList.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         const Divider(height: 1),
@@ -7779,8 +8162,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('• ${item['category']}', style: GoogleFonts.inter(fontSize: 11, color: textColor)),
-                                  Text('৳${fmt.format(item['amount'])}', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.midTeal)),
+                                  Text('• ${item['category']}', style: GoogleFonts.poppins(fontSize: 11, color: textColor)),
+                                  Text('৳${fmt.format(item['amount'])}', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.midTeal)),
                                 ],
                               ),
                             )),
@@ -7816,10 +8199,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(e.category, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: _isDarkMode ? Colors.white : null)),
-                Text('Paid by: $payerNames', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white54 : Colors.grey[600], fontSize: 10)),
-                if (e.notes.isNotEmpty) Text(e.notes, style: GoogleFonts.inter(color: _isDarkMode ? Colors.white38 : Colors.grey[500], fontSize: 10)),
-                Text('logged by ${e.ownerId == _repo?.ownerUid ? "Owner" : (isOwner ? "you" : e.ownerName)}', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white38 : Colors.grey[400], fontSize: 9)),
+                Text(e.category, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: _isDarkMode ? Colors.white : null)),
+                Text('Paid by: $payerNames', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white54 : Colors.grey[600], fontSize: 10)),
+                if (e.notes.isNotEmpty) Text(e.notes, style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white38 : Colors.grey[500], fontSize: 10)),
+                Text('logged by ${e.ownerId == _repo?.ownerUid ? "Owner" : (isOwner ? "you" : e.ownerName)}', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white38 : Colors.grey[400], fontSize: 9)),
               ],
             ),
           ),
@@ -7876,17 +8259,17 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('＋ Add Expense', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: _isDarkMode ? Colors.white : null)),
+              Text('＋ Add Expense', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: _isDarkMode ? Colors.white : null)),
               const SizedBox(height: 6),
               Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _expCategoryCtrl,
-                      style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : null),
+                      style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white : null),
                       decoration: InputDecoration(
                         hintText: 'Category (e.g. Transport)',
-                        hintStyle: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white38 : null),
+                        hintStyle: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white38 : null),
                         contentPadding: const EdgeInsets.all(8),
                         fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : null,
                         filled: _isDarkMode,
@@ -7898,10 +8281,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     child: TextField(
                       controller: _expAmountCtrl,
                       keyboardType: TextInputType.number,
-                      style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : null),
+                      style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white : null),
                       decoration: InputDecoration(
                         hintText: 'Total Amount (BDT)',
-                        hintStyle: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white38 : null),
+                        hintStyle: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white38 : null),
                         contentPadding: const EdgeInsets.all(8),
                         fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : null,
                         filled: _isDarkMode,
@@ -7913,10 +8296,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               const SizedBox(height: 6),
               TextField(
                 controller: _expNotesCtrl,
-                style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : null),
+                style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white : null),
                 decoration: InputDecoration(
                   hintText: 'Notes',
-                  hintStyle: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white38 : null),
+                  hintStyle: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white38 : null),
                   contentPadding: const EdgeInsets.all(8),
                   fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : null,
                   filled: _isDarkMode,
@@ -7924,7 +8307,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               ),
               const SizedBox(height: 10),
               Text('Who paid? Select everyone who contributed to this cost.',
-                  style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                  style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
@@ -7947,7 +8330,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               if (selectedPayers.length > 1) ...[
                 const SizedBox(height: 8),
                 Text('Multiple payers — enter each person\'s share of the total:',
-                    style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+                    style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
                 const SizedBox(height: 6),
                 ...selectedPayers.map((id) {
                   final name = participants.firstWhere((p) => p.id == id).name;
@@ -7955,12 +8338,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Row(
                       children: [
-                        SizedBox(width: 90, child: Text(name, style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : null))),
+                        SizedBox(width: 90, child: Text(name, style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white : null))),
                         Expanded(
                           child: TextField(
                             controller: payerAmountCtrls[id],
                             keyboardType: TextInputType.number,
-                            style: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white : null),
+                            style: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white : null),
                             decoration: InputDecoration(
                               hintText: '৳ amount',
                               contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -8012,7 +8395,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   minimumSize: const Size(double.infinity, 36),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: Text('Add Expense', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: Text('Add Expense', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -8052,20 +8435,20 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     child: const Icon(Icons.edit_note_rounded, color: AppColors.midTeal, size: 22),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(child: Text('Request Edit', style: GoogleFonts.poppins(fontSize: 15.5, fontWeight: FontWeight.bold, color: textColor))),
+                  Expanded(child: Text('Request Edit', style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: textColor))),
                 ],
               ),
               const SizedBox(height: 6),
               Text(
                 'Only ${e.ownerName} can edit this directly. Propose your changes below.',
-                style: GoogleFonts.inter(fontSize: 11.5, color: subtextColor, height: 1.3),
+                style: GoogleFonts.poppins(fontSize: 11.5, color: subtextColor, height: 1.3),
               ),
               const SizedBox(height: 16),
-              Text('PROPOSED CATEGORY', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+              Text('PROPOSED CATEGORY', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
               const SizedBox(height: 4),
               TextField(
                 controller: categoryCtrl,
-                style: GoogleFonts.inter(color: textColor, fontSize: 13),
+                style: GoogleFonts.poppins(color: textColor, fontSize: 13),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: inputBg,
@@ -8076,12 +8459,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text('PROPOSED AMOUNT (BDT)', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+              Text('PROPOSED AMOUNT (BDT)', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
               const SizedBox(height: 4),
               TextField(
                 controller: amountCtrl,
                 keyboardType: TextInputType.number,
-                style: GoogleFonts.inter(color: textColor, fontSize: 13),
+                style: GoogleFonts.poppins(color: textColor, fontSize: 13),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: inputBg,
@@ -8092,17 +8475,17 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text('REASON (REQUIRED)', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
+              Text('REASON (REQUIRED)', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal, letterSpacing: 0.5)),
               const SizedBox(height: 4),
               TextField(
                 controller: reasonCtrl,
                 maxLines: 2,
-                style: GoogleFonts.inter(color: textColor, fontSize: 13),
+                style: GoogleFonts.poppins(color: textColor, fontSize: 13),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: inputBg,
                   hintText: 'Explain why this edit is needed...',
-                  hintStyle: GoogleFonts.inter(fontSize: 12, color: _isDarkMode ? Colors.white38 : Colors.grey[400]),
+                  hintStyle: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white38 : Colors.grey[400]),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: borderSide),
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: borderSide),
@@ -8116,7 +8499,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   OutlinedButton(
                     onPressed: () => Navigator.pop(ctx),
                     style: OutlinedButton.styleFrom(side: borderSide, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    child: Text('Cancel', style: GoogleFonts.inter(color: textColor, fontSize: 12)),
+                    child: Text('Cancel', style: GoogleFonts.poppins(color: textColor, fontSize: 12)),
                   ),
                   const SizedBox(width: 10),
                   ElevatedButton(
@@ -8140,7 +8523,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
-                    child: Text('Send request', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12)),
+                    child: Text('Send request', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12)),
                   ),
                 ],
               ),
@@ -8174,16 +8557,16 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   controller: widget.scrollController,
                   padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
                   children: [
-                    Text('Settlements & Reminders', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15.5)),
+                    Text('Settlements & Reminders', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 14.5)),
                     const SizedBox(height: 4),
                     Text(
                       "The simplest set of payments that would settle every remaining balance — recalculated automatically after any confirmed payment, however people actually chose to pay each other.",
-                      style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4),
+                      style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4),
                     ),
                     const SizedBox(height: 16),
 
                     Text('Balances (after confirmed settlements)',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                     const SizedBox(height: 8),
                     if (participants.isEmpty)
                       _emptyState('Add participants and log expenses to see balances.')
@@ -8192,7 +8575,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
 
                     const SizedBox(height: 20),
                     Text('Suggested — who pays whom',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                     const SizedBox(height: 8),
                     if (participants.isNotEmpty && suggestions.isEmpty)
                       Container(
@@ -8201,7 +8584,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                         child: Row(children: [
                           const Icon(Icons.check_circle, color: AppColors.midTeal),
                           const SizedBox(width: 10),
-                          Text('Everyone is settled.', style: GoogleFonts.inter(color: AppColors.midTeal, fontWeight: FontWeight.bold)),
+                          Text('Everyone is settled.', style: GoogleFonts.poppins(color: AppColors.midTeal, fontWeight: FontWeight.bold)),
                         ]),
                       )
                     else
@@ -8217,60 +8600,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                     if (pendingSettlements.isNotEmpty) ...[
                       const SizedBox(height: 20),
                       Text('⏳ Pending confirmations',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
                       const SizedBox(height: 8),
                       ...pendingSettlements.map((s) => _pendingSettlementTile(s, myUid, fmt)),
                     ],
 
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Image.asset(
-                          'assets/icons/bell.png',
-                          width: 18,
-                          height: 18,
-                          filterQuality: FilterQuality.medium,
-                          color: _isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue,
-                          colorBlendMode: BlendMode.srcIn,
-                          fit: BoxFit.contain,
-                        ),
-                        const SizedBox(width: 6),
-                        Text('Reminders', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    _buildReminderTile(
-                      type: 'Eid',
-                      title: 'Qurbani Day Reminder',
-                      desc: 'Get notified on Eid Al-Adha morning (10th Dhul Hijjah) to prepare for Qurbani.',
-                      reminderTitle: '🐏 Qurbani Eid Day Reminder',
-                      reminderBody: 'Assalamu alaikum! Eid Mubarak. Today is Qurbani day. Ensure animal requirements and health conditions are verified.',
-                      timeOffset: const Duration(seconds: 15),
-                    ),
-                    _buildReminderTile(
-                      type: 'Payment',
-                      title: 'Qurbani Share Payment Reminder',
-                      desc: 'Reminder to pay the share cost to the primary host before buying the animal.',
-                      reminderTitle: '💰 Qurbani Payment Reminder',
-                      reminderBody: 'Reminder: Make sure all Qurbani share payments are completed and participants have agreed on their shares.',
-                      timeOffset: const Duration(seconds: 30),
-                    ),
-                    _buildReminderTile(
-                      type: 'Collection',
-                      title: 'Animal Collection / Haat Reminder',
-                      desc: 'Get notified to visit the animal market (Haat) or collect your pre-booked animal.',
-                      reminderTitle: '🐄 Animal Collection Reminder',
-                      reminderBody: 'Time to collect your animal. Double check the age (2+ yrs for cow, 1+ for goat) and health status.',
-                      timeOffset: const Duration(seconds: 45),
-                    ),
-                    _buildReminderTile(
-                      type: 'Distribution',
-                      title: 'Meat Distribution Reminder',
-                      desc: 'Get notified 2 hours after Eid Prayer to begin packaging and distribution of meat.',
-                      reminderTitle: '⚖ Meat Distribution Reminder',
-                      reminderBody: 'Time to divide meat into three equal portions (Family, Relatives, and Needy) as per Sunnah.',
-                      timeOffset: const Duration(seconds: 60),
-                    ),
                   ],
                 );
               },
@@ -8290,11 +8624,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(
               children: [
-                Expanded(flex: 32, child: Text('Member', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white60 : Colors.grey[600]))),
-                Expanded(flex: 18, child: Text('Shares', textAlign: TextAlign.center, maxLines: 1, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white60 : Colors.grey[600]))),
-                Expanded(flex: 25, child: Text('Owes', textAlign: TextAlign.end, maxLines: 1, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white60 : Colors.grey[600]))),
-                Expanded(flex: 25, child: Text('Paid', textAlign: TextAlign.end, maxLines: 1, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white60 : Colors.grey[600]))),
-                Expanded(flex: 28, child: Text('Balance', textAlign: TextAlign.end, maxLines: 1, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white60 : Colors.grey[600]))),
+                Expanded(flex: 32, child: Text('Member', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white60 : Colors.grey[600]))),
+                Expanded(flex: 18, child: Text('Shares', textAlign: TextAlign.center, maxLines: 1, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white60 : Colors.grey[600]))),
+                Expanded(flex: 25, child: Text('Owes', textAlign: TextAlign.end, maxLines: 1, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white60 : Colors.grey[600]))),
+                Expanded(flex: 25, child: Text('Paid', textAlign: TextAlign.end, maxLines: 1, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white60 : Colors.grey[600]))),
+                Expanded(flex: 28, child: Text('Balance', textAlign: TextAlign.end, maxLines: 1, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: _isDarkMode ? Colors.white60 : Colors.grey[600]))),
               ],
             ),
           ),
@@ -8307,10 +8641,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Row(
                 children: [
-                  Expanded(flex: 32, child: Text(b.participant.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 11.5, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white : Colors.black87))),
-                  Expanded(flex: 18, child: Text('${b.participant.shares}', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 11.5, color: _isDarkMode ? Colors.white70 : Colors.grey[700]))),
-                  Expanded(flex: 25, child: Text('৳${fmt.format(b.shareOfCost)}', textAlign: TextAlign.end, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white70 : Colors.grey[700]))),
-                  Expanded(flex: 25, child: Text('৳${fmt.format(b.totalPaid)}', textAlign: TextAlign.end, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white70 : Colors.grey[700]))),
+                  Expanded(flex: 32, child: Text(b.participant.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 11.5, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white : Colors.black87))),
+                  Expanded(flex: 18, child: Text('${b.participant.shares}', textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 11.5, color: _isDarkMode ? Colors.white70 : Colors.grey[700]))),
+                  Expanded(flex: 25, child: Text('৳${fmt.format(b.shareOfCost)}', textAlign: TextAlign.end, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white70 : Colors.grey[700]))),
+                  Expanded(flex: 25, child: Text('৳${fmt.format(b.totalPaid)}', textAlign: TextAlign.end, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white70 : Colors.grey[700]))),
                   Expanded(
                     flex: 28,
                     child: Text(
@@ -8354,7 +8688,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           Expanded(
             child: RichText(
               text: TextSpan(
-                style: GoogleFonts.inter(fontSize: 13, color: _isDarkMode ? Colors.white : Colors.black87),
+                style: GoogleFonts.poppins(fontSize: 13, color: _isDarkMode ? Colors.white : Colors.black87),
                 children: [
                   TextSpan(text: s.from.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                   const TextSpan(text: ' pays '),
@@ -8367,15 +8701,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           if (isCreditor) ...[
             const SizedBox(width: 4),
             IconButton(
-              icon: Image.asset(
-                'assets/icons/bell.png',
-                width: 22,
-                height: 22,
-                filterQuality: FilterQuality.medium,
-                color: AppColors.coralOrange,
-                colorBlendMode: BlendMode.srcIn,
-                fit: BoxFit.contain,
-              ),
+              icon: const Icon(Icons.notifications_outlined, size: 22, color: AppColors.coralOrange),
               tooltip: 'Send payment reminder',
               onPressed: () => _notifySettlement(s),
             ),
@@ -8385,7 +8711,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               decoration: BoxDecoration(color: AppColors.coralOrange.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
-              child: Text('⏳ In Progress', style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
+              child: Text('⏳ In Progress', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
             ),
           ] else if (isPartyInvolved) ...[
             const SizedBox(width: 4),
@@ -8413,7 +8739,14 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       id: 4000 + s.from.id.hashCode % 1000,
       title: 'Qurbani Payment Reminder',
       body: '${s.from.name}, please pay ৳${s.amount.toStringAsFixed(0)} to ${s.to.name} to settle your Qurbani shares.',
-      scheduledTime: DateTime.now().add(const Duration(seconds: 5)),
+      // A payment reminder is a follow-up for the next working morning, not
+      // an immediate test alarm.
+      scheduledTime: DateTime(
+        DateTime.now().year,
+        DateTime.now().month,
+        DateTime.now().day + 1,
+        9,
+      ),
     );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -8447,7 +8780,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Expanded(
                 child: RichText(
                   text: TextSpan(
-                    style: GoogleFonts.inter(fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[800]),
+                    style: GoogleFonts.poppins(fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[800]),
                     children: [
                       TextSpan(text: s.fromName, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.coralOrange)),
                       const TextSpan(text: ' → '),
@@ -8456,11 +8789,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                   ),
                 ),
               ),
-              Text('৳${fmt.format(s.amount)}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.coralOrange)),
+              Text('৳${fmt.format(s.amount)}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.coralOrange)),
             ],
           ),
           const SizedBox(height: 6),
-          Text(statusText, style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
+          Text(statusText, style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600])),
           if (isReceiver) ...[
             const SizedBox(height: 12),
             Row(
@@ -8480,7 +8813,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       }
                     },
                     icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
-                    label: Text('Confirm', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    label: Text('Confirm', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.midTeal,
                       foregroundColor: Colors.white,
@@ -8507,7 +8840,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       }
                     },
                     icon: const Icon(Icons.cancel_rounded, color: Colors.white, size: 16),
-                    label: Text('Dispute', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    label: Text('Dispute', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFE53935),
                       foregroundColor: Colors.white,
@@ -8580,41 +8913,54 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     required String desc,
     required String reminderTitle,
     required String reminderBody,
-    required Duration timeOffset,
   }) {
     bool active = _activeReminders[type] ?? false;
+    final scheduledTime = _reminderDate(type);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: Image.asset(
-              'assets/icons/bell.png',
-              width: 22,
-              height: 22,
-              filterQuality: FilterQuality.medium,
-              color: _isDarkMode ? AppColors.dustyBlueTeal : AppColors.navyBlue,
-              colorBlendMode: BlendMode.srcIn,
-              fit: BoxFit.contain,
-            ),
-          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12, color: _isDarkMode ? Colors.white : null)),
+                Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12, color: _isDarkMode ? Colors.white : null)),
                 const SizedBox(height: 4),
-                Text(desc, style: GoogleFonts.inter(color: _isDarkMode ? Colors.white54 : Colors.grey, fontSize: 10)),
+                Text(desc, style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white54 : Colors.grey, fontSize: 10)),
+                const SizedBox(height: 4),
+                Text(
+                  'Next: ${_reminderDateLabel(scheduledTime)}',
+                  style: GoogleFonts.poppins(
+                    color: _isDarkMode ? AppColors.midTeal : AppColors.navyBlue,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => _chooseReminderDate(type),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 24),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Change date & time',
+                    style: GoogleFonts.poppins(
+                      color: _isDarkMode ? AppColors.midTeal : AppColors.navyBlue,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
           Switch(
             value: active,
             activeThumbColor: AppColors.navyBlue,
-            onChanged: (val) => _toggleReminder(type, reminderTitle, reminderBody, DateTime.now().add(timeOffset)),
+            onChanged: (val) => _toggleReminder(type, reminderTitle, reminderBody, scheduledTime),
           ),
         ],
       ),
@@ -8636,12 +8982,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               children: [
                 const Icon(Icons.edit_note_rounded, color: AppColors.midTeal, size: 22),
                 const SizedBox(width: 8),
-                Text('Edit Requests', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15.5)),
+                Text('Edit Requests', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 14.5)),
               ],
             ),
             const SizedBox(height: 4),
             Text("Edit requests are sent to the creator of the expense/participant. The requester can cancel a request anytime, and the creator can accept or reject it.",
-                style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4)),
+                style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 12, height: 1.4)),
             const SizedBox(height: 14),
             if (requests.isEmpty)
               _emptyState('No edit requests submitted yet.')
@@ -8690,25 +9036,25 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               Expanded(
                 child: Text(
                   '${r.targetType == QEditTargetType.participant ? "Participant" : "Expense"}: ${r.targetLabel}',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                child: Text(statusText, style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.bold, color: statusColor)),
+                child: Text(statusText, style: GoogleFonts.poppins(fontSize: 9.5, fontWeight: FontWeight.bold, color: statusColor)),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
             isRequester ? 'Requested by you' : 'Requested by ${r.requestedByName}',
-            style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white54 : Colors.grey[600]),
+            style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white54 : Colors.grey[600]),
           ),
           const SizedBox(height: 4),
-          Text('Proposed: $changeText', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: _isDarkMode ? Colors.white70 : Colors.black87)),
+          Text('Proposed: $changeText', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: _isDarkMode ? Colors.white70 : Colors.black87)),
           const SizedBox(height: 4),
-          Text('Reason: "${r.reason}"', style: GoogleFonts.inter(fontSize: 12, fontStyle: FontStyle.italic, color: _isDarkMode ? Colors.white60 : Colors.grey[700])),
+          Text('Reason: "${r.reason}"', style: GoogleFonts.poppins(fontSize: 12, fontStyle: FontStyle.italic, color: _isDarkMode ? Colors.white60 : Colors.grey[700])),
           const SizedBox(height: 10),
 
           if (r.status == 'pending') ...[
@@ -8746,7 +9092,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       side: BorderSide(color: _isDarkMode ? Colors.white24 : Colors.grey[400]!),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     ),
-                    child: Text('Reject', style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[800], fontSize: 12)),
+                    child: Text('Reject', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white70 : Colors.grey[800], fontSize: 12)),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
@@ -8763,12 +9109,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     ),
-                    child: Text('Accept Change', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12)),
+                    child: Text('Accept Change', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12)),
                   ),
                 ],
               )
             else
-              Text('Waiting for item owner to review.', style: GoogleFonts.inter(fontSize: 11, color: _isDarkMode ? Colors.white54 : Colors.grey[600])),
+              Text('Waiting for item owner to review.', style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white54 : Colors.grey[600])),
           ],
         ],
       ),
@@ -8780,7 +9126,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       padding: const EdgeInsets.all(20),
       alignment: Alignment.center,
       decoration: BoxDecoration(color: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white, borderRadius: BorderRadius.circular(14)),
-      child: Text(text, style: GoogleFonts.inter(color: _isDarkMode ? Colors.white54 : Colors.grey[500], fontSize: 12)),
+      child: Text(text, style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white54 : Colors.grey[500], fontSize: 12)),
     );
   }
 
@@ -8818,8 +9164,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           border: Border.all(color: isActive ? AppColors.navyBlue : Colors.grey.withValues(alpha: 0.3)),
         ),
         child: Text(label,
-            style: GoogleFonts.inter(
-                fontSize: 12,
+            style: GoogleFonts.poppins(
+                fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: isActive ? Colors.white : (_isDarkMode ? Colors.white70 : Colors.grey[700]))),
       ),
@@ -8864,17 +9210,13 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       controller: widget.scrollController,
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
       children: [
-        Text('Activities Checklist',
-            style: GoogleFonts.poppins(
-                color: _isDarkMode ? Colors.white : AppColors.navyBlue,
-                fontWeight: FontWeight.bold,
-                fontSize: 15.5)),
+        _sectionTitle('Checklist.png', 'Activities Checklist'),
         const SizedBox(height: 4),
         Text(
           'A step-by-step guide from preparation through distribution. Check items off as your household completes them.',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.poppins(
               color: _isDarkMode ? Colors.white60 : Colors.grey[600],
-              fontSize: 12,
+              fontSize: 10.5,
               height: 1.4),
         ),
         if (isLocal) ...[
@@ -8893,7 +9235,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                 Expanded(
                   child: Text(
                     'Saved locally on this device. Join or create a group to sync across members.',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.poppins(
                         fontSize: 11,
                         color: _isDarkMode ? Colors.white70 : Colors.grey[700]),
                   ),
@@ -8907,14 +9249,14 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('$doneCount of $total complete',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.poppins(
                     fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                    fontSize: 11,
                     color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
             Text('${(pct * 100).round()}%',
                 style: GoogleFonts.poppins(
                     fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                    fontSize: 11,
                     color: AppColors.midTeal)),
           ],
         ),
@@ -8932,9 +9274,9 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         for (final section in ['before', 'day', 'after']) ...[
           Text(
             _sectionTitles[section]!,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.poppins(
                 fontWeight: FontWeight.bold,
-                fontSize: 13,
+                fontSize: 11.5,
                 color: _isDarkMode ? Colors.white : AppColors.navyBlue),
           ),
           const SizedBox(height: 4),
@@ -8944,8 +9286,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
               value: done,
               title: Text(
                 item.title,
-                style: GoogleFonts.inter(
-                    fontSize: 13,
+                style: GoogleFonts.poppins(
+                    fontSize: 11.5,
                     color: done
                         ? (_isDarkMode ? Colors.white38 : Colors.grey[500])
                         : (_isDarkMode ? Colors.white : Colors.black87),
@@ -8969,27 +9311,27 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       controller: widget.scrollController,
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
       children: [
-        Text('Rules & Verses', style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontWeight: FontWeight.bold, fontSize: 15.5)),
+        _sectionTitle('Rules&Guidelines.png', 'Rules & Verses'),
         const SizedBox(height: 4),
         Text("The Qur'anic basis and general fiqh guidelines for Qurbani.",
-            style: GoogleFonts.inter(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 13, height: 1.4)),
+            style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white60 : Colors.grey[600], fontSize: 11, height: 1.35)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber[200]!)),
           child: Text(
             "Details of fiqh vary between schools of thought (madhabs) and local fatwa councils. This is a general, non-sectarian summary for planning purposes — please confirm specific rulings with a qualified local scholar.",
-            style: GoogleFonts.inter(color: Colors.amber[900], fontSize: 11, height: 1.4),
+            style: GoogleFonts.poppins(color: Colors.amber[900], fontSize: 11, height: 1.4),
           ),
         ),
         const SizedBox(height: 20),
 
-        Text("From the Qur'an", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+        Text('Quranic evidence', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
         const SizedBox(height: 8),
         ...kQuranVerses.map((v) => _verseCard(v)),
 
         const SizedBox(height: 20),
-        Text('Conditions on the animal', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+        Text('Conditions on the animal', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
         const SizedBox(height: 8),
         _ruleBullet('Must be from grazing livestock: goat/sheep, cow/buffalo, or camel — no other animals qualify.'),
         _ruleBullet('Must have reached the minimum age: sheep/goat ≈ 1 lunar year (a young sheep of ~6 months may qualify if it looks like a 1-year-old per some scholars), cow/buffalo ≈ 2 lunar years, camel ≈ 5 lunar years.'),
@@ -8997,14 +9339,14 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
         _ruleBullet('One goat or sheep counts as one full sacrifice for one person/household. One cow, buffalo, or camel can be shared between up to 7 people, each owning one share.'),
 
         const SizedBox(height: 20),
-        Text('Timing', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+        Text('Timing', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
         const SizedBox(height: 8),
         _ruleBullet('The valid window is from after Eid al-Adha prayer on 10 Dhul Hijjah until sunset on 13 Dhul Hijjah (three days after Eid, by the majority view).'),
         _ruleBullet('Sacrificing before the Eid prayer (where applicable) is not counted as Qurbani — it is treated as ordinary charity, and the animal should be replaced.'),
         _ruleBullet('If a person genuinely intends to sacrifice and it is within the first ten days of Dhul Hijjah, many scholars recommend they avoid cutting their hair and nails until after the sacrifice, based on hadith guidance — this is recommended, not obligatory, and applies to the person sacrificing, not to those merely giving them money.'),
 
         const SizedBox(height: 20),
-        Text('Distribution of meat', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+        Text('Distribution of meat', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12.5, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
         const SizedBox(height: 8),
         _ruleBullet('A commonly followed guideline (not a strict Qur\'anic obligation) is to divide the meat roughly into three: one third for the household, one third for relatives/friends, and one third for those in need.'),
         _ruleBullet("Distributing at least some portion to those less fortunate is strongly encouraged, in the same spirit as the general command to feed 'the needy and the poor' mentioned in Surah Al-Hajj 22:28 and 22:36."),
@@ -9021,9 +9363,24 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(v.reference, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.midTeal)),
+          Text(v.reference, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11.5, color: AppColors.midTeal)),
           const SizedBox(height: 6),
-          Text(v.text, style: GoogleFonts.inter(fontSize: 13, color: _isDarkMode ? Colors.white70 : Colors.grey[800], height: 1.5)),
+          Text(v.arabic,
+              textDirection: ui.TextDirection.rtl,
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 17, height: 1.8, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+          const SizedBox(height: 7),
+          Text('English translation',
+              style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.midTeal)),
+          const SizedBox(height: 2),
+          Text(v.translation,
+              style: GoogleFonts.poppins(fontSize: 11.5, color: _isDarkMode ? Colors.white70 : Colors.grey[800], height: 1.4)),
+          const SizedBox(height: 7),
+          Text('How it relates to Qurbani',
+              style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.midTeal)),
+          const SizedBox(height: 2),
+          Text(v.relation,
+              style: GoogleFonts.poppins(fontSize: 11.5, color: _isDarkMode ? Colors.white70 : Colors.grey[800], height: 1.4)),
         ],
       ),
     );
@@ -9041,7 +9398,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(text, style: GoogleFonts.inter(color: _isDarkMode ? Colors.white70 : Colors.grey[800], fontSize: 13, height: 1.45)),
+            child: Text(text, style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white70 : Colors.grey[800], fontSize: 11.5, height: 1.35)),
           ),
         ],
       ),
@@ -9080,12 +9437,17 @@ class _QurbaniPlannerPageState extends State<QurbaniPlannerPage> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
-          child: Scaffold(
-            backgroundColor: _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF8F9FA),
-            body: SafeArea(
-              top: false,
-              bottom: false,
-              child: QurbaniPlannerSheet(scrollController: ScrollController(), isPage: true),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
+            ),
+            child: Scaffold(
+            backgroundColor: _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF5F7FA),
+              body: SafeArea(
+                top: false,
+                bottom: false,
+                child: QurbaniPlannerSheet(scrollController: ScrollController(), isPage: true),
+              ),
             ),
           ),
         ),
