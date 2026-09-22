@@ -83,7 +83,6 @@ flutter:
 
   assets:
     - .env
-    - assets/.env
     - assets/icons/
     - assets/images/header_art.svg
     - assets/images/islamic_events/islamic_new_year/
