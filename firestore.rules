@@ -251,7 +251,8 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
             'barcode', 'productName', 'ingredients', 'additives',
             'halalStatus', 'resultDetails', 'imageUrl', 'scannedAt',
-            'analysisResults'
+            'analysisResults', 'certificationImageUrl', 'source',
+            'moderationStatus'
           ])
           && request.resource.data.keys().hasAll([
             'productName', 'halalStatus', 'scannedAt'
@@ -368,6 +369,26 @@ service cloud.firestore {
     // Collection group read access for Qurbani plans discovery
     match /{path=**}/qurbaniPlans/{planId} {
       allow read: if signedIn();
+    }
+
+    // Shared halal product catalogue. A barcode is the stable document key,
+    // so every user can reuse a verified community contribution.
+    match /halalProducts/{barcode} {
+      // Product facts are intentionally public so another user can scan the
+      // same barcode without needing access to the contributor's account.
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.barcode == barcode
+        && request.resource.data.submittedBy == request.auth.uid
+        && request.resource.data.productName is string
+        && request.resource.data.ingredients is list
+        && request.resource.data.additives is list
+        && request.resource.data.halalStatus in ['HALAL', 'HARAM', 'MUSHBOOH', 'UNKNOWN'];
+      allow update: if signedIn()
+        && resource.data.submittedBy == request.auth.uid
+        && request.resource.data.barcode == barcode
+        && request.resource.data.submittedBy == resource.data.submittedBy;
+      allow delete: if signedIn() && resource.data.submittedBy == request.auth.uid;
     }
 
     match /qurbaniSharePosts/{postId} {

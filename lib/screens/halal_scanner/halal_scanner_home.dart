@@ -15,6 +15,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;   // <-- add this line
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -23,6 +24,8 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:tesseract_ocr/ocr_engine_config.dart';
+import 'package:tesseract_ocr/tesseract_ocr.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/gemini_halal_service.dart';
 import '../../services/halal_analyzer_service.dart';
@@ -44,7 +47,10 @@ class ScannedProduct {
   final List<String> ingredients;
   final List<String> additives;
   final String imageUrl;
+  final String certificationImageUrl;
   final List<IngredientAnalysisResult>? analysisResults;
+  final String source;
+  final String moderationStatus;
 
   ScannedProduct({
     required this.name,
@@ -56,8 +62,29 @@ class ScannedProduct {
     this.ingredients = const [],
     this.additives = const [],
     this.imageUrl = '',
+    this.certificationImageUrl = '',
     this.analysisResults,
+    this.source = 'unknown',
+    this.moderationStatus = 'unverified',
   });
+
+  ScannedProduct copyWith({String? source, String? moderationStatus, String? imageUrl, String? certificationImageUrl, String? risk, String? status, String? origin}) {
+    return ScannedProduct(
+      name: name,
+      barcode: barcode,
+      scanDate: scanDate,
+      status: status ?? this.status,
+      origin: origin ?? this.origin,
+      risk: risk ?? this.risk,
+      ingredients: ingredients,
+      additives: additives,
+      imageUrl: imageUrl ?? this.imageUrl,
+      certificationImageUrl: certificationImageUrl ?? this.certificationImageUrl,
+      analysisResults: analysisResults,
+      source: source ?? this.source,
+      moderationStatus: moderationStatus ?? this.moderationStatus,
+    );
+  }
 }
 
 class HalalScannerState {
@@ -69,12 +96,18 @@ class HalalScannerState {
   static bool isLoaded = false;
 
   static Future<void> addProduct(ScannedProduct product) async {
+    final normalizedProduct = product.ingredients.isEmpty && product.additives.isEmpty
+        ? product.copyWith(
+            status: 'UNKNOWN',
+            risk: 'No ingredients available for analysis',
+          )
+        : product;
     // Remove existing duplicate if present
     final existingIndex = history.indexWhere((h) {
-      if (product.barcode.isNotEmpty && h.barcode.isNotEmpty) {
-        return h.barcode == product.barcode;
+      if (normalizedProduct.barcode.isNotEmpty && h.barcode.isNotEmpty) {
+        return h.barcode == normalizedProduct.barcode;
       }
-      return h.name.trim().toLowerCase() == product.name.trim().toLowerCase();
+      return h.name.trim().toLowerCase() == normalizedProduct.name.trim().toLowerCase();
     });
 
     if (existingIndex != -1) {
@@ -82,13 +115,13 @@ class HalalScannerState {
       _decrementCount(oldProduct.status);
     }
 
-    history.insert(0, product);
-    _incrementCount(product.status);
+    history.insert(0, normalizedProduct);
+    _incrementCount(normalizedProduct.status);
 
     if (remainingScans > 0) remainingScans--;
 
     // Save to Firestore
-    await HalalScannerService.instance.saveScan(product);
+    await HalalScannerService.instance.saveScan(normalizedProduct);
   }
 
   static void _incrementCount(String status) {
@@ -96,7 +129,7 @@ class HalalScannerState {
       halalCount++;
     } else if (status == 'HARAM') {
       haramCount++;
-    } else {
+    } else if (status == 'MUSHBOOH') {
       mushboohCount++;
     }
   }
@@ -106,14 +139,30 @@ class HalalScannerState {
       halalCount--;
     } else if (status == 'HARAM' && haramCount > 0) {
       haramCount--;
-    } else if (mushboohCount > 0) {
+    } else if (status == 'MUSHBOOH' && mushboohCount > 0) {
       mushboohCount--;
     }
   }
 
   static Future<void> loadHistory() async {
     final remoteHistory = await HalalScannerService.instance.getScanHistory();
-    history = remoteHistory;
+    // Refresh persisted statuses with the current blacklist rules so older
+    // scans do not keep stale classifications after an analyzer fix.
+    history = remoteHistory.map((product) {
+      if (product.ingredients.isEmpty && product.additives.isEmpty) return product;
+      final fresh = HalalAnalyzerService.analyzeIngredients(
+        ingredients: product.ingredients,
+        additives: product.additives,
+        productName: product.name,
+        barcode: product.barcode,
+        imageUrl: product.imageUrl,
+        overrides: HalalScannerService.instance.additiveOverrides,
+      );
+      return product.copyWith(
+        status: fresh.overallStatus,
+        risk: fresh.riskLevel,
+      );
+    }).toList();
 
     halalCount = 0;
     haramCount = 0;
@@ -190,12 +239,20 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
   Future<void> _loadHistory() async {
     if (HalalScannerState.isLoaded) return;
     setState(() => _isLoadingHistory = true);
-    await HalalScannerState.loadHistory();
     await HalalScannerService.instance.getAdditiveOverrides();
+    await HalalScannerState.loadHistory();
     if (mounted) setState(() => _isLoadingHistory = false);
   }
 
   void _showScanIngredientsSheet() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AnalyzeProductScreen(isDarkMode: widget.isDarkMode),
+      ),
+    ).then((_) => setState(() {}));
+    return;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
@@ -547,28 +604,13 @@ class _HalalScannerHomeScreenState extends State<HalalScannerHomeScreen> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: widget.isDarkMode ? Colors.black.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
           IconButton(
             onPressed: () => Navigator.pop(context),
             icon: Icon(Icons.arrow_back_ios_new_rounded, color: widget.isDarkMode ? Colors.white : AppColors.navyBlue, size: 20),
-            style: IconButton.styleFrom(
-              backgroundColor: widget.isDarkMode ? Colors.white.withValues(alpha: 0.12) : AppColors.navyBlue.withValues(alpha: 0.08),
-              shape: const CircleBorder(),
-            ),
           ),
           const SizedBox(width: 12),
           Container(
@@ -4259,9 +4301,11 @@ class AnalyzeProductScreen extends StatefulWidget {
 }
 
 class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
+  final TextEditingController _productNameController = TextEditingController();
   final TextEditingController _barcodeController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _explainController = TextEditingController();
+  final TextEditingController _ingredientsEditController = TextEditingController();
+  final TextEditingController _manualIngredientsController = TextEditingController();
 
   File? _selectedImage;
   String? _recognizedText;
@@ -4280,10 +4324,17 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
 
   @override
   void dispose() {
+    _productNameController.dispose();
     _barcodeController.dispose();
-    _emailController.dispose();
     _explainController.dispose();
+    _ingredientsEditController.dispose();
+    _manualIngredientsController.dispose();
     super.dispose();
+  }
+
+  String get _enteredProductName {
+    final name = _productNameController.text.trim();
+    return name.isEmpty ? 'Scanned Ingredients' : name;
   }
 
   bool _isPicking = false;
@@ -4357,7 +4408,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       // 1. Try Gemini Vision AI analysis first (if key set)
       final aiResult = await GeminiHalalService.analyzeImageWithGemini(
         imageFile: imageFile,
-        productName: 'Scanned Ingredients',
+        productName: _enteredProductName,
         barcode: barcode,
       );
 
@@ -4366,8 +4417,10 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         setState(() {
           _analysisResult = finalAiResult;
           _cleanIngredientsList = finalAiResult.ingredients;
+          _ingredientsEditController.text = finalAiResult.ingredients.join(', ');
           _isAnalyzing = false;
         });
+        await _saveCurrentAnalysis();
         return;
       }
 
@@ -4377,6 +4430,13 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
       String rawText = recognizedText.text;
       await textRecognizer.close();
+
+      // ML Kit's bundled recognizer may miss Bengali/Arabic packaging text.
+      // On mobile, use free on-device Tesseract models as a multilingual
+      // fallback before asking the user to type the ingredients manually.
+      if (rawText.trim().isEmpty) {
+        rawText = await _runMultilingualTesseract(imagePath);
+      }
 
       if (!mounted) return;
 
@@ -4407,7 +4467,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       // 4. Try Gemini Text AI analysis
       final textAiResult = await GeminiHalalService.analyzeTextWithGemini(
         rawText: cleanedIngredients.join(', '),
-        productName: 'Scanned Ingredients',
+        productName: _enteredProductName,
         barcode: barcode,
         imageUrl: imagePath,
       );
@@ -4416,8 +4476,10 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         final finalAiResult = textAiResult.copyWithOverrides(HalalScannerService.instance.additiveOverrides);
         setState(() {
           _analysisResult = finalAiResult;
+          _ingredientsEditController.text = finalAiResult.ingredients.join(', ');
           _isAnalyzing = false;
         });
+        await _saveCurrentAnalysis();
         return;
       }
 
@@ -4425,7 +4487,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       ProductAnalysisResult result = HalalAnalyzerService.analyzeIngredients(
         ingredients: cleanedIngredients,
         additives: const [],
-        productName: 'Scanned Ingredients',
+        productName: _enteredProductName,
         barcode: barcode,
         imageUrl: imagePath,
         overrides: HalalScannerService.instance.additiveOverrides,
@@ -4435,8 +4497,10 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
 
       setState(() {
         _analysisResult = result;
+        _ingredientsEditController.text = result.ingredients.join(', ');
         _isAnalyzing = false;
       });
+      await _saveCurrentAnalysis();
     } catch (e) {
       print('OCR Analysis error: $e');
       if (mounted) {
@@ -4448,18 +4512,114 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
     }
   }
 
-  void _submitAnalysis() {
-    if (_barcodeController.text.trim().isEmpty && _analysisResult == null) {
+  Future<void> _reanalyzeEditedIngredients() async {
+    final edited = _ingredientsEditController.text
+        .split(RegExp(r'[,\n;]'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+    final current = _analysisResult;
+    if (edited.isEmpty || current == null) return;
+
+    final result = HalalAnalyzerService.analyzeIngredients(
+      ingredients: edited,
+      additives: const [],
+      productName: _enteredProductName,
+      barcode: current.barcode,
+      imageUrl: current.imageUrl,
+      overrides: HalalScannerService.instance.additiveOverrides,
+    );
+    setState(() {
+      _analysisResult = result;
+      _cleanIngredientsList = edited;
+    });
+    await _saveCurrentAnalysis(showMessage: false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Ingredients updated and re-analyzed.')),
+    );
+  }
+
+  Future<String> _runMultilingualTesseract(String imagePath) async {
+    if (kIsWeb) return '';
+    try {
+      return await TesseractOcr.extractText(
+        imagePath,
+        config: OCRConfig(
+          language: 'ben+eng+ara+hin+fra+deu+spa+tur',
+          engine: OCREngine.tesseract,
+          options: const {
+            TesseractConfig.pageSegMode: PageSegmentationMode.auto,
+            TesseractConfig.preserveInterwordSpaces: '1',
+          },
+        ),
+      );
+    } catch (e) {
+      debugPrint('Multilingual Tesseract OCR failed: $e');
+      return '';
+    }
+  }
+
+  Future<void> _saveCurrentAnalysis({bool showMessage = true}) async {
+    final analysis = _analysisResult;
+    final barcode = _barcodeController.text.trim();
+    if (analysis == null || barcode.isEmpty) return;
+    var product = analysis.toScannedProduct();
+    product = product.copyWith(
+      source: 'community',
+      moderationStatus: 'community',
+      risk: _explainController.text.trim().isEmpty
+          ? product.risk
+          : '${product.risk}\nNote: ${_explainController.text.trim()}',
+    );
+    await HalalScannerState.addProduct(product);
+    if (showMessage && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.tr('scan_or_enter'))),
+        const SnackBar(content: Text('Scan saved to history and community database.')),
+      );
+    }
+  }
+
+  Future<void> _analyzeManualIngredients() async {
+    final ingredients = _manualIngredientsController.text
+        .split(RegExp(r'[,\n;]'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+    if (ingredients.isEmpty) return;
+
+    final barcode = _barcodeController.text.trim();
+    if (barcode.isEmpty) {
+      setState(() => _errorMessage = 'Enter the barcode number first.');
+      return;
+    }
+    final result = HalalAnalyzerService.analyzeIngredients(
+      ingredients: ingredients,
+      additives: const [],
+      productName: _enteredProductName,
+      barcode: barcode,
+      imageUrl: _selectedImage?.path ?? '',
+      overrides: HalalScannerService.instance.additiveOverrides,
+    );
+    setState(() {
+      _analysisResult = result;
+      _cleanIngredientsList = ingredients;
+      _ingredientsEditController.text = result.ingredients.join(', ');
+      _errorMessage = null;
+    });
+    await _saveCurrentAnalysis();
+  }
+
+  void _submitAnalysis() {
+    if (_barcodeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Barcode number is required so other users can find this product.')),
       );
       return;
     }
 
-    final email = _emailController.text.trim();
-    if (email.isNotEmpty && !email.contains('@')) {
+    if (_analysisResult == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.tr('valid_email_entry'))),
+        const SnackBar(content: Text('Scan the ingredient list before saving.')),
       );
       return;
     }
@@ -4492,12 +4652,10 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
             children: [
               const Icon(Icons.check_circle_rounded, color: Colors.green),
               const SizedBox(width: 8),
-              Text(AppLocalizations.of(context)!.tr('request_submitted')),
+              const Text('Scan saved'),
             ],
           ),
-          content: Text(
-            AppLocalizations.of(context)!.tr('thank_you'),
-          ),
+          content: const Text('This scan was added to your history and shared community catalogue.'),
           actions: [
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -4515,7 +4673,17 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       );
 
       if (_analysisResult != null) {
-        await HalalScannerState.addProduct(_analysisResult!.toScannedProduct());
+        var product = _analysisResult!.toScannedProduct();
+        // Spark-plan friendly: images remain local to this scan. Shared
+        // product data is still saved without requiring paid Storage.
+        product = product.copyWith(
+          source: 'community',
+          moderationStatus: 'community',
+          risk: _explainController.text.trim().isEmpty
+              ? product.risk
+              : '${product.risk}\nNote: ${_explainController.text.trim()}',
+        );
+        await HalalScannerState.addProduct(product);
       }
     });
   }
@@ -4547,12 +4715,6 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
             fontSize: 19,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.send_rounded, color: Colors.white),
-            onPressed: _submitAnalysis,
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -4583,10 +4745,121 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                 ),
               if (_errorMessage != null) const SizedBox(height: 16),
 
+              if (_errorMessage != null && _analysisResult == null) ...[
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.35)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Enter ingredients manually',
+                        style: GoogleFonts.poppins(color: primaryTextColor, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'This helps when the label uses Bangla or the photo is too blurry for OCR.',
+                        style: GoogleFonts.poppins(color: Colors.grey, fontSize: 11.5),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _manualIngredientsController,
+                        maxLines: 4,
+                        style: GoogleFonts.poppins(color: primaryTextColor, fontSize: 12.5),
+                        decoration: InputDecoration(
+                          hintText: 'e.g. flour, sugar, vegetable oil',
+                          hintStyle: GoogleFonts.poppins(color: Colors.grey, fontSize: 12),
+                          filled: true,
+                          fillColor: textFieldBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.icon(
+                          onPressed: _analyzeManualIngredients,
+                          icon: const Icon(Icons.fact_check_outlined, size: 17),
+                          label: Text('Analyze ingredients', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
+                          style: FilledButton.styleFrom(backgroundColor: AppColors.midTeal),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
               if (_analysisResult != null) ...[
                 _buildResultsCard(_analysisResult!, primaryTextColor, cardColor),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.35)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Check and correct ingredients', style: GoogleFonts.poppins(
+                        color: primaryTextColor, fontSize: 13, fontWeight: FontWeight.bold,
+                      )),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _ingredientsEditController,
+                        maxLines: 4,
+                        style: GoogleFonts.poppins(color: primaryTextColor, fontSize: 12.5),
+                        decoration: InputDecoration(
+                          hintText: 'Separate ingredients with commas',
+                          hintStyle: GoogleFonts.poppins(color: Colors.grey, fontSize: 12),
+                          filled: true,
+                          fillColor: textFieldBg,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.icon(
+                          onPressed: _reanalyzeEditedIngredients,
+                          icon: const Icon(Icons.refresh_rounded, size: 17),
+                          label: Text('Re-analyze', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
+                          style: FilledButton.styleFrom(backgroundColor: AppColors.midTeal),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 24),
               ] else ...[
+                Container(
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.3)),
+                  ),
+                  child: TextField(
+                    controller: _productNameController,
+                    textCapitalization: TextCapitalization.words,
+                    style: GoogleFonts.poppins(color: primaryTextColor, fontSize: 13),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.inventory_2_outlined, color: AppColors.midTeal),
+                      hintText: 'Product name (optional — defaults to Scanned Ingredients)',
+                      hintStyle: GoogleFonts.poppins(color: Colors.grey, fontSize: 13),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      filled: true,
+                      fillColor: textFieldBg,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Container(
                   decoration: BoxDecoration(
                     color: cardColor,
@@ -4599,7 +4872,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                     style: GoogleFonts.poppins(color: primaryTextColor),
                     decoration: InputDecoration(
                       prefixIcon: const Icon(Icons.qr_code_2_rounded, color: AppColors.midTeal),
-                      hintText: AppLocalizations.of(context)!.tr('barcode_optional'),
+                      hintText: 'Barcode number (required)',
                       hintStyle: GoogleFonts.poppins(color: Colors.grey),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -4755,27 +5028,9 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  style: GoogleFonts.poppins(color: primaryTextColor),
-                  decoration: InputDecoration(
-                    hintText: AppLocalizations.of(context)!.tr('email'),
-                    hintStyle: GoogleFonts.poppins(color: Colors.grey),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    filled: true,
-                    fillColor: textFieldBg,
-                    enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    focusedBorder: const UnderlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.midTeal),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
                   controller: _explainController,
                   maxLines: 3,
+                  onEditingComplete: () => _saveCurrentAnalysis(),
                   style: GoogleFonts.poppins(color: primaryTextColor),
                   decoration: InputDecoration(
                     hintText: AppLocalizations.of(context)!.tr('explain_here'),
@@ -4907,7 +5162,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                 ],
               ),
             ),
-          if (analysis.halalIngredients.isNotEmpty && analysis.overallStatus == 'HALAL')
+          if (analysis.halalIngredients.isNotEmpty)
             Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -4921,7 +5176,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'All ${analysis.halalIngredients.length} Ingredient(s) Verified Halal',
+                      'Halal ingredients (${analysis.halalIngredients.length}): ${analysis.halalIngredients.join(', ')}',
                       style: GoogleFonts.poppins(color: Colors.green.shade800, fontSize: 12.5, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -4930,7 +5185,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
             ),
           const SizedBox(height: 14),
           Text(
-            AppLocalizations.of(context)!.tr('all_ingredients'),
+            'All ingredients',
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.bold,
               fontSize: 14.5,
@@ -5099,19 +5354,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   List<ProductIngredient> _buildIngredients() {
-    if (widget.analysisResults != null && widget.analysisResults!.isNotEmpty) {
-      return widget.analysisResults!.map((result) {
-        return ProductIngredient(
-          code: HalalAnalyzerService.extractCode(result.ingredient),
-          name: result.ingredient,
-          status: result.status,
-          riskText: _getRiskText(result.status),
-          riskScore: _getRiskScore(result.status),
-          origin: _getOriginFromIngredient(result.ingredient, result.status),
-        );
-      }).toList();
-    }
-
+    // Re-run the current local rules instead of trusting stale saved analysis
+    // results. This ensures corrected classifications (e.g. cocoa liquor)
+    // are reflected when an older history item is opened.
     final analysis = HalalAnalyzerService.analyzeIngredients(
       ingredients: widget.product.ingredients,
       additives: widget.product.additives,
@@ -5136,7 +5381,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final ingredientsList = _ingredients ??= _buildIngredients();
-    final statusColor = _statusColor(widget.product.status);
+    // A product with no parsed ingredients has insufficient evidence for a
+    // halal verdict. Never present the scanner's default status as confirmed.
+    final displayStatus = ingredientsList.isEmpty
+        ? 'UNKNOWN'
+        : ingredientsList.any((i) => i.status == 'HARAM')
+            ? 'HARAM'
+            : ingredientsList.any((i) => i.status == 'MUSHBOOH')
+                ? 'MUSHBOOH'
+                : 'HALAL';
+    final statusColor = _statusColor(displayStatus);
     final bgColor = widget.isDarkMode ? const Color(0xFF101923) : const Color(0xFFF8FAF9);
     final cardColor = widget.isDarkMode ? const Color(0xFF1A2633) : Colors.white;
     final textColor = widget.isDarkMode ? Colors.white : AppColors.navyBlue;
@@ -5215,7 +5469,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   _buildProductImage(statusColor),
                   const SizedBox(height: 14),
                   Text(
-                    widget.product.status,
+                    displayStatus,
                     style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontSize: 28,
@@ -5248,10 +5502,47 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                     ),
                   ),
+                  if (widget.product.source == 'community') ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Community contribution • needs review',
+                        style: GoogleFonts.poppins(color: Colors.white, fontSize: 10.5),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
             const SizedBox(height: 20),
+
+            if (widget.product.certificationImageUrl.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_rounded, color: Colors.green, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Certification logo', style: GoogleFonts.poppins(color: textColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Image.network(widget.product.certificationImageUrl, width: 48, height: 32, fit: BoxFit.contain),
+                    ],
+                  ),
+                ),
+              ),
+            if (widget.product.certificationImageUrl.isNotEmpty) const SizedBox(height: 12),
 
             // Summary stats cards
             Padding(
@@ -5297,7 +5588,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   const Icon(Icons.list_alt_rounded, color: AppColors.midTeal, size: 22),
                   const SizedBox(width: 8),
                   Text(
-                    '${AppLocalizations.of(context)!.tr("ingredients")} (${ingredientsList.length})',
+                    'Ingredients (${ingredientsList.length})',
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -5308,6 +5599,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
             ),
             const SizedBox(height: 12),
+            if (ingredientsList.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: widget.isDarkMode ? Colors.white10 : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: widget.isDarkMode ? Colors.white24 : Colors.grey[300]!),
+                  ),
+                  child: Text(
+                    'No ingredients were found, so this product\'s halal status cannot be confirmed.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: widget.isDarkMode ? Colors.white70 : Colors.grey[700],
+                    ),
+                  ),
+                ),
+              ),
 
             ListView.builder(
               shrinkWrap: true,
@@ -5567,10 +5877,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         return l10n.tr('insect');
       }
       if (lower.contains('alcohol') || lower.contains('ethanol') || lower.contains('beer') ||
-          lower.contains('wine') || lower.contains('vodka')) {
+          lower.contains('wine') || lower.contains('vodka') || lower.contains('whiskey') ||
+          lower.contains('whisky') || lower.contains('rum') || lower.contains('gin') ||
+          (lower.contains('liquor') && !lower.contains('cocoa liquor') &&
+              !lower.contains('cacao liquor') && !lower.contains('chocolate liquor'))) {
         return l10n.tr('alcohol');
       }
-      return l10n.tr('animal');
+      return 'Source-dependent';
     }
     if (status == 'MUSHBOOH') {
       return l10n.tr('unknown');
@@ -5655,6 +5968,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Color _statusColor(String status) {
     if (status == 'HALAL') return Colors.green;
     if (status == 'HARAM') return Colors.redAccent;
+    if (status == 'UNKNOWN') return Colors.blueGrey;
     return AppColors.coralOrange;
   }
 
@@ -5728,6 +6042,35 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
     _controller.stop();
 
     try {
+      // Check the shared catalogue first. This lets a community contribution
+      // win even when Open Food Facts has no record (or a stale one).
+      final communityProduct = await HalalScannerService.instance
+          .getCommunityProduct(code)
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
+      if (communityProduct != null) {
+        await widget.onScanComplete(communityProduct);
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailScreen(
+              isDarkMode: widget.isDarkMode,
+              product: communityProduct,
+              analysisResults: communityProduct.analysisResults,
+            ),
+          ),
+        ).then((_) {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              _isScanning = true;
+            });
+            _controller.start();
+          }
+        });
+        return;
+      }
+
       final service = OpenFoodFactsService();
       final productData = await service.fetchProduct(code).timeout(
         const Duration(seconds: 10),
@@ -5737,7 +6080,10 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
 
       if (productData != null) {
         final analysisResult = await _analyzeProduct(productData, code);
-        final product = analysisResult.toScannedProduct();
+        final product = analysisResult.toScannedProduct().copyWith(
+          source: 'open_food_facts',
+          moderationStatus: 'external',
+        );
         await widget.onScanComplete(product);
 
         if (!mounted) return;
@@ -5763,6 +6109,36 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
         });
 
       } else {
+        // Open Food Facts may not know a local product yet. Check the
+        // community catalogue before showing the not-found state.
+        final communityProduct = await HalalScannerService.instance
+            .getCommunityProduct(code)
+            .timeout(const Duration(seconds: 5), onTimeout: () => null);
+
+        if (communityProduct != null) {
+          await widget.onScanComplete(communityProduct);
+          if (!mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProductDetailScreen(
+                isDarkMode: widget.isDarkMode,
+                product: communityProduct,
+                analysisResults: communityProduct.analysisResults,
+              ),
+            ),
+          ).then((_) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _isScanning = true;
+              });
+              _controller.start();
+            }
+          });
+          return;
+        }
+
         if (mounted) {
           setState(() {
             _productNotFound = true;

@@ -23,6 +23,8 @@ class IngredientAnalysisResult {
         return Colors.red;
       case 'MUSHBOOH':
         return Colors.orange;
+      case 'UNKNOWN':
+        return Colors.blueGrey;
       default:
         return Colors.green;
     }
@@ -34,6 +36,8 @@ class IngredientAnalysisResult {
         return Icons.cancel;
       case 'MUSHBOOH':
         return Icons.warning;
+      case 'UNKNOWN':
+        return Icons.help_outline_rounded;
       default:
         return Icons.check_circle;
     }
@@ -120,6 +124,23 @@ class ProductAnalysisResult {
         else if (res.status == 'MUSHBOOH') newMushbooh.add(res.ingredient);
         else newHalal.add(res.ingredient);
       }
+    }
+
+    if (newResults.isEmpty) {
+      return ProductAnalysisResult(
+        overallStatus: 'UNKNOWN',
+        riskLevel: 'No ingredients available for analysis',
+        results: newResults,
+        haramIngredients: newHaram,
+        mushboohIngredients: newMushbooh,
+        halalIngredients: newHalal,
+        apiResponse: apiResponse,
+        productName: productName,
+        barcode: barcode,
+        imageUrl: imageUrl,
+        ingredients: ingredients,
+        additives: additives,
+      );
     }
 
     String newOverallStatus = 'HALAL';
@@ -415,10 +436,56 @@ class HalalAnalyzerService {
       }
     }
 
+    // Common food ingredients whose ordinary food-grade form is permissible.
+    // Do not require a separate animal-source certificate for basic dairy,
+    // plant oils, sugars, or mineral salts; only explicit haram qualifiers
+    // should override these rules.
+    final clearlyPermissible = <String, String>{
+      'skimmed milk': 'Dairy milk - Halal',
+      'whole milk': 'Dairy milk - Halal',
+      'milk powder': 'Dairy milk powder - Halal',
+      'buttermilk': 'Dairy buttermilk - Halal',
+      'butter': 'Dairy butter - Halal',
+      'vegetable oil': 'Plant-derived oil - Halal',
+      'vegetable oils': 'Plant-derived oil - Halal',
+      'sugar': 'Plant-derived sugar - Halal',
+      'sucrose': 'Plant-derived sugar - Halal',
+      'calcium carbonate': 'Mineral calcium carbonate - Halal',
+      'vitamin a': 'Nutritional vitamin A - Halal',
+      'vitamin d': 'Nutritional vitamin D - Halal',
+      'vitamin d3': 'Nutritional vitamin D3 - Halal',
+      'water': 'Water - Halal',
+      'purified water': 'Purified water - Halal',
+      'spring water': 'Spring water - Halal',
+      'carbonated water': 'Carbonated water - Halal',
+      'cocoa liquor': 'Cocoa mass/liquor (non-alcoholic) - Halal',
+      'cacao liquor': 'Cocoa mass/liquor (non-alcoholic) - Halal',
+      'chocolate liquor': 'Cocoa mass/liquor (non-alcoholic) - Halal',
+      'cocoa mass': 'Cocoa mass - Halal',
+      'cacao mass': 'Cocoa mass - Halal',
+    };
+    for (final entry in clearlyPermissible.entries) {
+      final hasExplicitHaramMarker = lower.contains('pork') ||
+          lower.contains('porcine') || lower.contains('lard') ||
+          lower.contains('gelatin') || lower.contains('alcohol') ||
+          lower.contains('carmine') || lower.contains('cochineal') ||
+          lower.contains('shellac');
+      if (!hasExplicitHaramMarker &&
+          (lower == entry.key || lower.startsWith('${entry.key} ') ||
+              lower.contains('${entry.key} (') || lower.contains(entry.key))) {
+        return IngredientAnalysisResult(
+          ingredient: ingredient,
+          status: 'HALAL',
+          reason: entry.value,
+          source: entry.value.contains('Plant') ? 'Plant' : 'Dairy/Mineral',
+        );
+      }
+    }
+
     // 2. Porcine / Pork derivatives (HARAM)
     final porkKeywords = [
       'pork', 'pig', 'porcine', 'bacon', 'ham', 'prosciutto', 'pancetta',
-      'lard', 'strutto', 'swine', 'pork fat', 'pork belly', 'tallow', 'suet'
+      'lard', 'strutto', 'swine', 'pork fat', 'pork belly', 'tallow', 'suet', 'pepsin'
     ];
 
     if (_containsWord(lower, porkKeywords)) {
@@ -438,7 +505,10 @@ class HalalAnalyzerService {
     if (_containsWord(lower, alcoholKeywords) &&
         !lower.contains('cetyl alcohol') &&
         !lower.contains('stearyl alcohol') &&
-        !lower.contains('fatty alcohol')) {
+        !lower.contains('fatty alcohol') &&
+        !lower.contains('cocoa liquor') &&
+        !lower.contains('cacao liquor') &&
+        !lower.contains('chocolate liquor')) {
       return IngredientAnalysisResult(
         ingredient: ingredient,
         status: 'HARAM',
@@ -447,14 +517,24 @@ class HalalAnalyzerService {
       );
     }
 
-    // 4. Insects & Carmine E120 / Shellac (HARAM)
-    if (_containsWord(lower, ['cochineal', 'carmine', 'crimson', 'shellac']) ||
-        _containsENumber(lower, ['e120', 'e904'])) {
+    // Blood products and shellac are prohibited.
+    if (_containsWord(lower, ['blood', 'blood meal', 'hemoglobin', 'shellac']) ||
+        _containsENumber(lower, ['e904'])) {
       return IngredientAnalysisResult(
         ingredient: ingredient,
         status: 'HARAM',
-        reason: 'Contains insect derivative (Carmine E120 / Shellac E904) - Haram',
-        source: 'Insect',
+        reason: 'Contains blood or shellac derivative - Haram',
+        source: 'Animal/Insect',
+      );
+    }
+
+    if (_containsWord(lower, ['cochineal', 'carmine', 'crimson']) ||
+        _containsENumber(lower, ['e120'])) {
+      return IngredientAnalysisResult(
+        ingredient: ingredient,
+        status: 'MUSHBOOH',
+        reason: 'Carmine/cochineal (E120) is insect-derived; verify your scholarly view',
+        source: 'Insect-derived color',
       );
     }
 
@@ -478,8 +558,8 @@ class HalalAnalyzerService {
       }
       return IngredientAnalysisResult(
         ingredient: ingredient,
-        status: 'HARAM',
-        reason: 'Gelatin source unstated (Usually porcine/non-dhabiha animal) - Haram/Mushbooh',
+        status: 'MUSHBOOH',
+        reason: 'Gelatin source is not stated; verify fish or halal-slaughtered source',
         source: 'Animal (Unstated)',
       );
     }
@@ -492,6 +572,14 @@ class HalalAnalyzerService {
           status: 'HALAL',
           reason: 'Plant-derived Lecithin (Soy/Sunflower/Vegetable) - Halal',
           source: 'Plant',
+        );
+      }
+      if (_containsWord(lower, ['animal', 'beef', 'pork', 'porcine', 'lard', 'fat'])) {
+        return IngredientAnalysisResult(
+          ingredient: ingredient,
+          status: 'HARAM',
+          reason: 'Lecithin is from an animal/haram fat source - Haram',
+          source: 'Animal fat',
         );
       }
       return IngredientAnalysisResult(
@@ -512,6 +600,14 @@ class HalalAnalyzerService {
           source: 'Plant',
         );
       }
+      if (_containsWord(lower, ['animal', 'beef', 'pork', 'porcine', 'lard', 'tallow', 'fat'])) {
+        return IngredientAnalysisResult(
+          ingredient: ingredient,
+          status: 'HARAM',
+          reason: 'Glycerin/glycerol is from an animal or haram fat source - Haram',
+          source: 'Animal fat',
+        );
+      }
       return IngredientAnalysisResult(
         ingredient: ingredient,
         status: 'MUSHBOOH',
@@ -530,12 +626,57 @@ class HalalAnalyzerService {
       );
     }
 
+    if (lower.contains('natural flavor') || lower.contains('natural flavour') ||
+        lower.contains('rennet') || lower.contains('rennin') ||
+        lower == 'whey' || lower.contains('whey ')) {
+      return IngredientAnalysisResult(
+        ingredient: ingredient,
+        status: 'MUSHBOOH',
+        reason: 'Source/carrier may be animal-derived or alcohol-based; verify with manufacturer',
+        source: 'Source-dependent',
+      );
+    }
+
+    if (lower.contains('mono and diglyceride') ||
+        lower.contains('mono- and diglyceride') || _containsENumber(lower, ['e471'])) {
+      if (hasPlantQualifier) {
+        return IngredientAnalysisResult(
+          ingredient: ingredient,
+          status: 'HALAL',
+          reason: 'E471 is explicitly plant-derived - Halal',
+          source: 'Plant oil',
+        );
+      }
+      if (_containsWord(lower, ['animal', 'beef', 'pork', 'porcine', 'lard', 'tallow', 'fat'])) {
+        return IngredientAnalysisResult(
+          ingredient: ingredient,
+          status: 'HARAM',
+          reason: 'E471 is explicitly animal/haram-fat derived - Haram',
+          source: 'Animal fat',
+        );
+      }
+      return IngredientAnalysisResult(
+        ingredient: ingredient,
+        status: 'MUSHBOOH',
+        reason: 'E471 source is not stated; verify plant or halal source',
+        source: 'Source-dependent',
+      );
+    }
+
     // 9. Halal Meat / Poultry (Animal origin)
     final halalMeatKeywords = [
       'chicken', 'beef', 'mutton', 'lamb', 'sheep', 'goat', 'turkey', 'duck',
       'poultry', 'meat', 'veal'
     ];
     if (_containsWord(lower, halalMeatKeywords)) {
+      if (!(lower.contains('halal') || lower.contains('zabiha') || lower.contains('zabihah'))) {
+        return IngredientAnalysisResult(
+          ingredient: ingredient,
+          status: 'MUSHBOOH',
+          reason: 'Meat source and slaughter method are not stated',
+          source: 'Animal (Source unstated)',
+        );
+      }
       return IngredientAnalysisResult(
         ingredient: ingredient,
         status: 'HALAL',
@@ -544,12 +685,14 @@ class HalalAnalyzerService {
       );
     }
 
-    // Default Permissible
+    // Use a blacklist model: ordinary ingredients are permissible unless a
+    // known Haram/Mushbooh pattern above matches them. This avoids flagging
+    // every harmless food ingredient simply because its source is not printed.
     return IngredientAnalysisResult(
       ingredient: ingredient,
       status: 'HALAL',
-      reason: 'No haram concerns detected',
-      source: 'Plant/General',
+      reason: 'No prohibited ingredient detected',
+      source: 'Ordinary food ingredient',
     );
   }
 
@@ -558,11 +701,8 @@ class HalalAnalyzerService {
     String lower = additive.toLowerCase().trim();
 
     final haramAdditives = {
-      'E120': 'Cochineal/Carmine (Insect derivative - Haram)',
-      'E441': 'Gelatin (Animal derivative - Usually Haram)',
-      'E542': 'Bone phosphate (Animal derivative - Haram)',
       'E904': 'Shellac (Insect resin - Haram)',
-      'E920': 'L-cysteine (May be derived from human hair/feathers - Haram)',
+      'E542': 'Bone phosphate (Animal derivative - Haram)',
     };
 
     if (haramAdditives.containsKey(upper)) {
@@ -576,10 +716,13 @@ class HalalAnalyzerService {
     }
 
     final mushboohAdditives = {
+      'E120': 'Cochineal/Carmine (Insect-derived color; scholarly opinion differs)',
+      'E441': 'Gelatin (Verify fish/beef halal source)',
       'E322': 'Lecithin (Verify if soy/plant derived)',
       'E422': 'Glycerol (Verify if vegetable derived)',
       'E471': 'Mono- & Diglycerides (Verify if plant derived)',
       'E433': 'Polysorbate 80 (Source unstated)',
+      'E920': 'L-Cysteine (Verify synthetic, feather, or human-hair source)',
     };
 
     if (mushboohAdditives.containsKey(upper)) {
@@ -590,6 +733,17 @@ class HalalAnalyzerService {
           reason: '${mushboohAdditives[upper]} - Plant source specified (Halal)',
           isAdditive: true,
           source: 'Plant Additive',
+        );
+      }
+      if (lower.contains('animal') || lower.contains('beef') || lower.contains('pork') ||
+          lower.contains('porcine') || lower.contains('lard') || lower.contains('tallow') ||
+          lower.contains('fat')) {
+        return IngredientAnalysisResult(
+          ingredient: additive,
+          status: 'HARAM',
+          reason: '${mushboohAdditives[upper]} - Explicit animal/haram-fat source',
+          isAdditive: true,
+          source: 'Animal fat',
         );
       }
       return IngredientAnalysisResult(
@@ -604,9 +758,9 @@ class HalalAnalyzerService {
     return IngredientAnalysisResult(
       ingredient: additive,
       status: 'HALAL',
-      reason: 'Safe additive',
+      reason: 'No prohibited additive detected',
       isAdditive: true,
-      source: 'Additive (Halal)',
+      source: 'Permissible unless flagged',
     );
   }
 
@@ -780,6 +934,23 @@ class HalalAnalyzerService {
       } else {
         halalIngredients.add(original);
       }
+    }
+
+    if (ingredients.isEmpty && additives.isEmpty) {
+      return ProductAnalysisResult(
+        overallStatus: 'UNKNOWN',
+        riskLevel: 'No ingredients available for analysis',
+        results: const [],
+        haramIngredients: const [],
+        mushboohIngredients: const [],
+        halalIngredients: const [],
+        apiResponse: null,
+        productName: productName,
+        barcode: barcode,
+        imageUrl: imageUrl,
+        ingredients: const [],
+        additives: const [],
+      );
     }
 
     String overallStatus;

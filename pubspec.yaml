@@ -61,10 +61,15 @@ dependencies:
   mobile_scanner: ^5.0.0
   permission_handler: ^11.3.1
   google_mlkit_text_recognition: ^0.11.0
+  tesseract_ocr: ^0.5.0
   file_picker: ^8.1.4
   open_filex: ^4.5.0
   path_provider: ^2.1.4
   firebase_ai: ^2.3.0
+
+dependency_overrides:
+  tesseract_ocr:
+    path: packages/tesseract_ocr
 
 dev_dependencies:
   flutter_test:
@@ -83,6 +88,9 @@ flutter:
 
   assets:
     - .env
+    - assets/.env
+    - assets/tessdata_config.json
+    - assets/tessdata/
     - assets/icons/
     - assets/images/header_art.svg
     - assets/images/islamic_events/islamic_new_year/
