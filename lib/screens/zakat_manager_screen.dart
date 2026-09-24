@@ -1687,6 +1687,10 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           .set({
         'zakat': zakatData,
       }, SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('users').doc(user.uid)
+          .collection('zakatProfiles').doc('current')
+          .set(zakatData, SetOptions(merge: true));
     } catch (e) {
       debugPrint("Error syncing Zakat to Firestore: $e");
     }

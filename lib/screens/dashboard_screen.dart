@@ -10,6 +10,7 @@ import 'package:adhan/adhan.dart';
 import 'package:intl/intl.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
+import '../services/firestore_structure_migration_service.dart';
 import '../widgets/notification_center_modal.dart';
 import 'calendar_tab.dart';
 import 'hajj_umrah_screen.dart';
@@ -469,6 +470,9 @@ Future<void> _loadUserProfile() async {
     super.initState();
     _loadAppTheme();
     _loadUserProfile();
+    FirestoreStructureMigrationService.instance.migrateCurrentUser().catchError((e) {
+      debugPrint('Firestore structure migration skipped: $e');
+    });
     _loadFeatureUsage();
 
     _staggerController = AnimationController(

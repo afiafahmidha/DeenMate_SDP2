@@ -423,6 +423,8 @@ class HalalAnalyzerService {
     final plantQualifiers = [
       'soy', 'soya', 'sunflower', 'rapeseed', 'canola', 'vegetable', 'plant',
       'plant-based', 'vegan', 'microbial', 'fungal', 'synthetic', 'fruit',
+      // Bengali OCR commonly returns these spellings for soy/soybean.
+      'সয়', 'সয়া', 'সয়াবিন', 'সয়', 'সয়া', 'সয়াবিন',
       'cottonseed', 'corn', 'coconut', 'halal certified', 'halal', 'palm',
       'tapioca', 'peas', 'nuts', 'rice', 'salt', 'bicarbonate', 'citric', 'cardamom',
       'cinnamon', 'cumin', 'clove', 'turmeric', 'pepper', 'wheat', 'flour'

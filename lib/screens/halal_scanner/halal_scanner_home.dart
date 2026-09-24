@@ -4402,40 +4402,24 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
     });
 
     try {
-      final imageFile = File(imagePath);
       final barcode = _barcodeController.text.trim().isEmpty ? 'N/A' : _barcodeController.text.trim();
 
-      // 1. Try Gemini Vision AI analysis first (if key set)
-      final aiResult = await GeminiHalalService.analyzeImageWithGemini(
-        imageFile: imageFile,
-        productName: _enteredProductName,
-        barcode: barcode,
-      );
-
-      if (aiResult != null && mounted) {
-        final finalAiResult = aiResult.copyWithOverrides(HalalScannerService.instance.additiveOverrides);
-        setState(() {
-          _analysisResult = finalAiResult;
-          _cleanIngredientsList = finalAiResult.ingredients;
-          _ingredientsEditController.text = finalAiResult.ingredients.join(', ');
-          _isAnalyzing = false;
-        });
-        await _saveCurrentAnalysis();
-        return;
-      }
-
-      // 2. Perform ML Kit Text Recognition
+      // Perform local OCR first. Sending the image directly to an AI model
+      // before OCR made Bengali labels get guessed as unrelated English text.
       final inputImage = InputImage.fromFilePath(imagePath);
       final textRecognizer = TextRecognizer();
       final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
       String rawText = recognizedText.text;
       await textRecognizer.close();
 
-      // ML Kit's bundled recognizer may miss Bengali/Arabic packaging text.
-      // On mobile, use free on-device Tesseract models as a multilingual
-      // fallback before asking the user to type the ingredients manually.
-      if (rawText.trim().isEmpty) {
-        rawText = await _runMultilingualTesseract(imagePath);
+      // ML Kit can return a small amount of incorrect Latin text even when
+      // the actual label is Bengali. Always run our Bengali-capable Tesseract
+      // pass and prefer it whenever Bengali characters are present.
+      final tesseractText = await _runMultilingualTesseract(imagePath);
+      if (_containsBengali(tesseractText)) {
+        rawText = tesseractText;
+      } else if (rawText.trim().isEmpty) {
+        rawText = tesseractText;
       }
 
       if (!mounted) return;
@@ -4452,7 +4436,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         return;
       }
 
-      // 3. Clean OCR text with IngredientOcrCleaner
+      // Clean OCR text with IngredientOcrCleaner
       List<String> cleanedIngredients = IngredientOcrCleaner.cleanAndExtract(rawText);
       _cleanIngredientsList = cleanedIngredients;
 
@@ -4464,7 +4448,7 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
         return;
       }
 
-      // 4. Try Gemini Text AI analysis
+      // Try Gemini Text AI analysis only after the local OCR text is known.
       final textAiResult = await GeminiHalalService.analyzeTextWithGemini(
         rawText: cleanedIngredients.join(', '),
         productName: _enteredProductName,
@@ -4542,10 +4526,27 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
   Future<String> _runMultilingualTesseract(String imagePath) async {
     if (kIsWeb) return '';
     try {
+      // A smaller language set is substantially more accurate for Bengali
+      // labels than running eight unrelated models in one pass.
+      final bengaliText = await TesseractOcr.extractText(
+        imagePath,
+        config: OCRConfig(
+          language: 'ben+eng',
+          engine: OCREngine.tesseract,
+          options: const {
+            TesseractConfig.pageSegMode: PageSegmentationMode.auto,
+            TesseractConfig.preserveInterwordSpaces: '1',
+          },
+        ),
+      );
+      if (_containsBengali(bengaliText)) return bengaliText;
+
+      // Keep English-only labels working when the Bengali model finds
+      // nothing. This second pass also avoids the noisy all-language model.
       return await TesseractOcr.extractText(
         imagePath,
         config: OCRConfig(
-          language: 'ben+eng+ara+hin+fra+deu+spa+tur',
+          language: 'eng',
           engine: OCREngine.tesseract,
           options: const {
             TesseractConfig.pageSegMode: PageSegmentationMode.auto,
@@ -4557,6 +4558,10 @@ class _AnalyzeProductScreenState extends State<AnalyzeProductScreen> {
       debugPrint('Multilingual Tesseract OCR failed: $e');
       return '';
     }
+  }
+
+  bool _containsBengali(String text) {
+    return RegExp(r'[\u0980-\u09FF]').hasMatch(text);
   }
 
   Future<void> _saveCurrentAnalysis({bool showMessage = true}) async {
@@ -6042,35 +6047,6 @@ class _RealBarcodeScannerScreenState extends State<RealBarcodeScannerScreen> {
     _controller.stop();
 
     try {
-      // Check the shared catalogue first. This lets a community contribution
-      // win even when Open Food Facts has no record (or a stale one).
-      final communityProduct = await HalalScannerService.instance
-          .getCommunityProduct(code)
-          .timeout(const Duration(seconds: 5), onTimeout: () => null);
-      if (communityProduct != null) {
-        await widget.onScanComplete(communityProduct);
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProductDetailScreen(
-              isDarkMode: widget.isDarkMode,
-              product: communityProduct,
-              analysisResults: communityProduct.analysisResults,
-            ),
-          ),
-        ).then((_) {
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-              _isScanning = true;
-            });
-            _controller.start();
-          }
-        });
-        return;
-      }
-
       final service = OpenFoodFactsService();
       final productData = await service.fetchProduct(code).timeout(
         const Duration(seconds: 10),

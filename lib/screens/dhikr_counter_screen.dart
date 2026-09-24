@@ -475,18 +475,21 @@ class _DhikrCounterScreenState extends State<DhikrCounterScreen> with TickerProv
     }
 
     try {
+      final dhikrData = {
+        'lifetimeTotal': lifetimeTotal,
+        'dailyHistory': dailyHistory,
+        'presetsDaily': presetsDaily,
+        'presetsLifetime': presetsLifetime,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      };
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .set({
-        'dhikr': {
-          'lifetimeTotal': lifetimeTotal,
-          'dailyHistory': dailyHistory,
-          'presetsDaily': presetsDaily,
-          'presetsLifetime': presetsLifetime,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        }
-      }, SetOptions(merge: true));
+          .set({'dhikr': dhikrData}, SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('users').doc(user.uid)
+          .collection('dhikrStats').doc('summary')
+          .set(dhikrData, SetOptions(merge: true));
     } catch (e) {
       debugPrint("Error syncing Dhikr counts to Firestore: $e");
     }
