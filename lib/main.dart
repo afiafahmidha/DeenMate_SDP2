@@ -13,6 +13,7 @@ import 'services/theme_service.dart';
 import 'services/language_service.dart';
 import 'services/notification_service.dart';
 import 'services/push_notification_service.dart';
+import 'services/account_scoped_storage_service.dart';
 import 'l10n/app_localizations.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -73,8 +74,17 @@ class _MyAppState extends State<MyApp> {
     // group, etc.) are delivered via each user's own notifications inbox in
     // Firestore. Start/stop watching it as the sign-in state changes.
     try {
-      _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      _authSub = FirebaseAuth.instance.authStateChanges().listen((user) async {
         if (user != null) {
+          // Switch the device-local cache before any feature screen reads it.
+          // This is intentionally handled at the app root as well as the
+          // dashboard because auth transitions can happen without rebuilding
+          // the dashboard first.
+          try {
+            await AccountScopedStorageService.instance.switchTo(user.uid);
+          } catch (e) {
+            debugPrint('Could not switch account-local storage: $e');
+          }
           NotificationService.instance.startQurbaniNotificationsListener();
           // Register every signed-in device for SOS push alerts. Previously
           // this happened only after visiting the SOS page.
