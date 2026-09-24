@@ -2548,29 +2548,32 @@ class _HajjUmrahPlannerScreenState extends State<HajjUmrahPlannerScreen>
     if (user == null) return;
 
     try {
+      final hajjData = {
+        'hajjType': _hajjType,
+        'hajjRitualDone': _hajjRitualDone,
+        'umrahRitualDone': _umrahRitualDone,
+        'packingDone': {
+          for (final e in _packingDone.entries) _packKey(e.key): e.value,
+        },
+        'documentsDone': {
+          for (final e in _documentsDone.entries) _docKey(e.key): e.value,
+        },
+        'selectedHajjYear': _selectedHajjYear,
+        'tripStartDate': _tripStartDate?.toIso8601String(),
+        'tripEndDate': _tripEndDate?.toIso8601String(),
+        'history': _history.map((e) => e.toJson()).toList(),
+        'loggedMistakes': _loggedMistakes.map((e) => e.toJson()).toList(),
+        'bookmarkedMistakes': _bookmarkedMistakeIds.toList(),
+        'lastUpdated': FieldValue.serverTimestamp(),
+      };
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .set({
-        'hajjUmrah': {
-          'hajjType': _hajjType,
-          'hajjRitualDone': _hajjRitualDone,
-          'umrahRitualDone': _umrahRitualDone,
-          'packingDone': {
-            for (final e in _packingDone.entries) _packKey(e.key): e.value,
-          },
-          'documentsDone': {
-            for (final e in _documentsDone.entries) _docKey(e.key): e.value,
-          },
-          'selectedHajjYear': _selectedHajjYear,
-          'tripStartDate': _tripStartDate?.toIso8601String(),
-          'tripEndDate': _tripEndDate?.toIso8601String(),
-          'history': _history.map((e) => e.toJson()).toList(),
-          'loggedMistakes': _loggedMistakes.map((e) => e.toJson()).toList(),
-          'bookmarkedMistakes': _bookmarkedMistakeIds.toList(),
-          'lastUpdated': FieldValue.serverTimestamp(),
-        }
-      }, SetOptions(merge: true));
+          .set({'hajjUmrah': hajjData}, SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('users').doc(user.uid)
+          .collection('hajjProgress').doc('current')
+          .set(hajjData, SetOptions(merge: true));
     } catch (e) {
       debugPrint("Error updating Hajj/Umrah state in Firestore: $e");
     }

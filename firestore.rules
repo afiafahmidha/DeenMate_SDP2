@@ -230,6 +230,22 @@ service cloud.firestore {
         allow read, write, delete: if signedIn() && request.auth.uid == userId;
       }
 
+      // Feature-specific document branches. These are populated by the
+      // backwards-compatible migration from the legacy embedded user maps.
+      // The legacy fields remain in users/{userId}; nothing is deleted.
+      match /dhikrStats/{docId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+      match /zakatProfiles/{profileId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+      match /inheritanceScenarios/{scenarioId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+      match /hajjProgress/{journeyId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+
       // Assumed model: a private Qurbani plan is stored below its owner's
       // user document. memberIds is the access-control list and may be
       // changed only by that owner.

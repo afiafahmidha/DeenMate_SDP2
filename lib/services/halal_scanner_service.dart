@@ -38,12 +38,41 @@ class HalalScannerService {
   CollectionReference<Map<String, dynamic>> get _communityProducts =>
       _db.collection('halalProducts');
 
+  String _normalizeBarcode(String value) {
+    // Retail barcodes are numeric; normalize spaces/dashes while preserving
+    // leading zeroes so manual entry and camera scans resolve the same doc.
+    final trimmed = value.trim();
+    final digits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.isNotEmpty ? digits : trimmed;
+  }
+
   /// Looks up a product contributed by another scanner user.
   Future<ScannedProduct?> getCommunityProduct(String barcode) async {
-    if (uid == null || barcode.trim().isEmpty) return null;
+    final rawBarcode = barcode.trim();
+    final normalizedBarcode = _normalizeBarcode(barcode);
+    if (normalizedBarcode.isEmpty) return null;
     try {
-      final snapshot = await _communityProducts.doc(barcode.trim()).get();
-      if (!snapshot.exists) return null;
+      // Prefer the canonical numeric document id, then support products
+      // created by older builds with a raw/trimmed barcode id or field.
+      DocumentSnapshot<Map<String, dynamic>>? snapshot =
+          await _communityProducts.doc(normalizedBarcode).get();
+      if (!(snapshot.exists) && rawBarcode.isNotEmpty && rawBarcode != normalizedBarcode) {
+        snapshot = await _communityProducts.doc(rawBarcode).get();
+      }
+      if (!(snapshot.exists)) {
+        for (final value in <String>{normalizedBarcode, rawBarcode}) {
+          if (value.isEmpty) continue;
+          final matches = await _communityProducts
+              .where('barcode', isEqualTo: value)
+              .limit(1)
+              .get();
+          if (matches.docs.isNotEmpty) {
+            snapshot = matches.docs.first;
+            break;
+          }
+        }
+      }
+      if (snapshot == null || !snapshot.exists) return null;
       final data = snapshot.data();
       if (data == null) return null;
 
@@ -67,7 +96,7 @@ class HalalScannerService {
         name: (data['productName'] as String?)?.trim().isNotEmpty == true
             ? data['productName'] as String
             : 'Community product',
-        barcode: (data['barcode'] as String?) ?? barcode,
+        barcode: (data['barcode'] as String?) ?? normalizedBarcode,
         scanDate: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
         status: normalizedStatus,
         origin: _inferOrigin(normalizedStatus),
@@ -91,10 +120,12 @@ class HalalScannerService {
   /// Publishes the current scan as a reusable community product.
   /// The barcode document makes later scans resolve without Open Food Facts.
   Future<void> upsertCommunityProduct(ScannedProduct product) async {
-    if (uid == null || product.barcode.trim().isEmpty) return;
+    final normalizedBarcode = _normalizeBarcode(product.barcode);
+    final readyUserId = await _readyUid();
+    if (readyUserId == null || normalizedBarcode.isEmpty) return;
     try {
-      await _communityProducts.doc(product.barcode.trim()).set({
-        'barcode': product.barcode.trim(),
+      await _communityProducts.doc(normalizedBarcode).set({
+        'barcode': normalizedBarcode,
         'productName': product.name,
         'ingredients': product.ingredients,
         'additives': product.additives,
@@ -104,7 +135,7 @@ class HalalScannerService {
         'certificationImageUrl': product.certificationImageUrl,
         'analysisResults': product.analysisResults?.map((e) => e.toJson()).toList(),
         'source': product.source == 'unknown' ? 'community' : product.source,
-        'submittedBy': uid,
+        'submittedBy': readyUserId,
         'moderationStatus': 'community',
         'updatedAt': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
@@ -129,11 +160,11 @@ class HalalScannerService {
     }
     final col = _db.collection('users').doc(readyUserId).collection('halalScans');
 
+    final normalizedBarcode = _normalizeBarcode(product.barcode);
+    final docId = normalizedBarcode.isNotEmpty ? normalizedBarcode : DateTime.now().millisecondsSinceEpoch.toString();
     try {
-      final docId = product.barcode.isNotEmpty ? product.barcode : DateTime.now().millisecondsSinceEpoch.toString();
-
       await col.doc(docId).set({
-        'barcode': product.barcode,
+        'barcode': normalizedBarcode,
         'productName': product.name,
         'ingredients': product.ingredients.join(', '),
         'additives': product.additives.join(', '),
@@ -148,10 +179,18 @@ class HalalScannerService {
         'source': product.source,
         'moderationStatus': product.moderationStatus,
       }, SetOptions(merge: true));
-      await upsertCommunityProduct(product);
       print('Halal scan saved successfully: ${product.name}');
     } catch (e) {
-      print('Error saving halal scan: $e');
+      print('Error saving personal halal scan: $e');
+    }
+
+    // Keep this independent from the private-history write. A stale rules
+    // deployment or a private-write failure must not prevent a new product
+    // from reaching the shared catalogue.
+    // Any locally analysed/manual product is publishable. Only products that
+    // came directly from Open Food Facts should stay external-only.
+    if (product.source != 'open_food_facts') {
+      await upsertCommunityProduct(product);
     }
   }
 

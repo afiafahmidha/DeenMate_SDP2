@@ -1224,20 +1224,23 @@ class _InheritanceScreenState extends State<InheritanceScreen>
         } catch (_) {}
       }
 
+      final inheritanceData = {
+        'familyTree': familyTree,
+        'myGender': myGenderStr,
+        'nodeOffsets': offsets,
+        'savedScenarios': _savedScenarios,
+        'boardLocked': boardLocked,
+        'lockedMatrix': matrix,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      };
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .set({
-        'inheritance': {
-          'familyTree': familyTree,
-          'myGender': myGenderStr,
-          'nodeOffsets': offsets,
-          'savedScenarios': _savedScenarios,
-          'boardLocked': boardLocked,
-          'lockedMatrix': matrix,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        }
-      }, SetOptions(merge: true));
+          .set({'inheritance': inheritanceData}, SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('users').doc(user.uid)
+          .collection('inheritanceScenarios').doc('current')
+          .set(inheritanceData, SetOptions(merge: true));
     } catch (e) {
       debugPrint("Error syncing inheritance to Firestore: $e");
     }
