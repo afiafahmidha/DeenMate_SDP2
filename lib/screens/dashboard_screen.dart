@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:adhan/adhan.dart';
 import 'package:intl/intl.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
 import '../services/firestore_structure_migration_service.dart';
@@ -84,6 +85,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   String _countdownStr = "1h 12m"; // Safe countdown string for the home page card (prevents splitting errors!)
   String _liveCountdownStr = "00:00:00"; // Exact ticking countdown formatted as HH:mm:ss for prayer tab
   Timer? _realTimeTimer;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  bool _isOffline = false;
+  bool _showOnlineIndicator = false;
+  Timer? _onlineStatusTimer;
   StreamSubscription<Position>? _positionStreamSub;
   // Tracks which calendar day alarms were last scheduled for, so
   // _syncAlarms() automatically re-runs after midnight even if the app
@@ -470,6 +475,14 @@ Future<void> _loadUserProfile() async {
   void initState() {
     super.initState();
 
+    _checkConnectivity();
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      if (!mounted) return;
+      final offline = results.isEmpty ||
+          results.every((result) => result == ConnectivityResult.none);
+      _setConnectivityStatus(offline);
+    });
+
     _staggerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -490,6 +503,11 @@ Future<void> _loadUserProfile() async {
       duration: const Duration(milliseconds: 30000), // slow drift
     )..repeat();
 
+    // Calculate the prayer card immediately with the default location. The
+    // account/profile and AI guidance loads asynchronously; waiting for those
+    // requests made the card briefly show the old hard-coded Asr value before
+    // switching to the actual next prayer (often Fajr).
+    _updatePrayerTimes(persistQaza: false);
     _initializeAccountData();
   }
 
@@ -521,6 +539,37 @@ Future<void> _loadUserProfile() async {
     _setupNotificationListener();
   }
 
+  Future<void> _checkConnectivity() async {
+    try {
+      final results = await Connectivity().checkConnectivity();
+      if (!mounted) return;
+      final offline = results.isEmpty ||
+          results.every((result) => result == ConnectivityResult.none);
+      _setConnectivityStatus(offline);
+    } catch (e) {
+      debugPrint('Connectivity check failed: $e');
+    }
+  }
+
+  void _setConnectivityStatus(bool offline) {
+    _onlineStatusTimer?.cancel();
+    if (!mounted) return;
+    if (offline) {
+      setState(() {
+        _isOffline = true;
+        _showOnlineIndicator = false;
+      });
+      return;
+    }
+    setState(() {
+      _isOffline = false;
+      _showOnlineIndicator = true;
+    });
+    _onlineStatusTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _showOnlineIndicator = false);
+    });
+  }
+
   @override
 void dispose() {
   _staggerController.dispose();
@@ -528,6 +577,8 @@ void dispose() {
   _floatController.dispose();
   _cloudsController.dispose();
   _realTimeTimer?.cancel();
+  _onlineStatusTimer?.cancel();
+  _connectivitySub?.cancel();
   _positionStreamSub?.cancel(); // NEW — cancel live location stream
   super.dispose();
 }
@@ -643,7 +694,7 @@ Future<void> _onPositionUpdate(Position position) async {
   
 
   // Calculate actual prayer times based on current date, coordinates & timezone
-  void _updatePrayerTimes() {
+  void _updatePrayerTimes({bool persistQaza = true}) {
     final coordinates = Coordinates(_latitude, _longitude);
     final params = CalculationMethod.karachi.getParameters();
     params.madhab = Madhab.hanafi;
@@ -708,7 +759,7 @@ Future<void> _onPositionUpdate(Position position) async {
       if (windowEnd == null) continue;
       final bool hasWindowEnded = now.isAfter(windowEnd);
       final bool isDone = _salatCompleted[sName] ?? false;
-      if (hasWindowEnded && !isDone) {
+      if (persistQaza && hasWindowEnded && !isDone) {
         final logKey = 'auto_qaza_logged_${ymd}_$sName';
         if (!_triggeredAlarms.contains(logKey)) {
           _triggeredAlarms.add(logKey);
@@ -1318,6 +1369,35 @@ Widget _buildActiveTabContent() {
     }
   }
   // ===== HOME TAB (Main Dashboard) =====
+  Widget _buildConnectivityStatus() {
+    final offline = _isOffline;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: offline ? const Color(0xFFD64545) : const Color(0xFF39A96B),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            offline ? 'Offline' : 'Online',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: offline ? const Color(0xFFB33131) : const Color(0xFF278353),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHomeTab() {
     return SingleChildScrollView(
       key: const ValueKey('HomeTab'),
@@ -1329,6 +1409,10 @@ Widget _buildActiveTabContent() {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (_isOffline || _showOnlineIndicator) ...[
+            _buildConnectivityStatus(),
+            const SizedBox(height: 12),
+          ],
           // Greeting Header
           _buildAnimatedEntry(
             delay: 0.0,
@@ -1454,15 +1538,17 @@ _buildAnimatedEntry(
                   ],
                 ),
                 const SizedBox(height: 2),
-               Text(
-  _userName,
-  style: GoogleFonts.poppins(
-    fontSize: 30,
-    fontWeight: FontWeight.bold,
-    color: _isDarkMode ? Colors.white : AppColors.navyBlue,
-    letterSpacing: 0.5,
-  ),
-),
+                Text(
+                  _userName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    color: _isDarkMode ? Colors.white : AppColors.navyBlue,
+                    letterSpacing: 0.2,
+                  ),
+                ),
               ],
             ),
           ),

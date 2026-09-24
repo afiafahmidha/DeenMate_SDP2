@@ -62,9 +62,7 @@ class IslamicAIService {
     'gemini-3.6-flash',
     'gemini-3.7-flash',
     'gemini-3.5-flash-lite',
-    'gemini-3.1-pro-preview',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
+    'gemini-3.1-flash-lite',
   ];
 
   static const String _greetingPrefsKey = 'islamic_ai_last_greeted_date';
@@ -111,21 +109,22 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     if (_model == null) {
       final googleAI = FirebaseAI.googleAI();
 
-      for (final modelName in _supportedModels) {
-        try {
-          _model = googleAI.generativeModel(
-            model: modelName,
-            systemInstruction: Content.system(_systemInstructionText),
-            generationConfig: GenerationConfig(
-              temperature: 0.3,
-              maxOutputTokens: 8192,
-            ),
-          );
-          debugPrint('Successfully initialized Firebase AI with model: $modelName');
-          break;
-        } catch (e) {
-          debugPrint('Failed initializing model $modelName: $e');
-        }
+      // Creating a Firebase model is lazy; quota/model errors are reported when
+      // the request is sent. Keep one current model here and let the HTTP/local
+      // fallbacks handle a failed request instead of retrying retired models.
+      try {
+        final modelName = _supportedModels.first;
+        _model = googleAI.generativeModel(
+          model: modelName,
+          systemInstruction: Content.system(_systemInstructionText),
+          generationConfig: GenerationConfig(
+            temperature: 0.3,
+            maxOutputTokens: 8192,
+          ),
+        );
+        debugPrint('Successfully initialized Firebase AI with model: $modelName');
+      } catch (e) {
+        debugPrint('Failed initializing Firebase AI model: $e');
       }
     }
 
@@ -471,10 +470,9 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     if (cleanKey.isEmpty) return;
 
     final uri = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
-    final groqModels = [
-      'llama-3.3-70b-versatile',
-      'llama-3.1-8b-instant',
-    ];
+    // These are the current Groq production IDs. The old Llama IDs were
+    // retired and return 404 even when the API key is valid.
+    final groqModels = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
 
     for (final modelName in groqModels) {
       try {
@@ -520,10 +518,12 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     if (cleanKey.isEmpty) return;
 
     final uri = Uri.parse('https://api.cerebras.ai/v1/chat/completions');
+    // Cerebras public production/preview IDs (the former 70B/Qwen 2.5 IDs
+    // were removed from the public endpoint).
     final supportedModels = [
-      'llama-3.3-70b',
+      'gpt-oss-120b',
       'llama3.1-8b',
-      'qwen-2.5-72b',
+      'qwen-3-235b-a22b-instruct-2507',
     ];
 
     for (final model in supportedModels) {
@@ -570,12 +570,9 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     if (cleanKey.isEmpty) return;
 
     final uri = Uri.parse('https://openrouter.ai/api/v1/chat/completions');
-    final models = [
-      'meta-llama/llama-3.3-70b-instruct:free',
-      'qwen/qwen-2.5-72b-instruct:free',
-      'google/gemini-2.0-flash-exp:free',
-      'mistralai/mistral-7b-instruct:free',
-    ];
+    // OpenRouter maintains this alias and routes it to an available free
+    // endpoint. Hardcoded :free slugs frequently disappear or change.
+    final models = ['openrouter/free'];
 
     for (final model in models) {
       try {
@@ -625,7 +622,7 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
 
     // 1. Try OpenRouter
     if (orKey.isNotEmpty) {
-      for (final model in ['openrouter/free', 'google/gemma-4-31b-it:free']) {
+      for (final model in ['openrouter/free']) {
         try {
           final res = await http.post(
             Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
@@ -655,7 +652,7 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
 
     // 2. Try Cerebras
     if (cerKey.isNotEmpty) {
-      for (final model in ['llama3.1-8b', 'llama-3.3-70b', 'gpt-oss-120b', 'gemma-4-31b']) {
+      for (final model in ['gpt-oss-120b', 'llama3.1-8b']) {
         try {
           final res = await http.post(
             Uri.parse('https://api.cerebras.ai/v1/chat/completions'),
@@ -683,7 +680,7 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
 
     // 3. Try Groq
     if (gqKey.isNotEmpty) {
-      for (final modelName in ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']) {
+      for (final modelName in ['openai/gpt-oss-120b', 'openai/gpt-oss-20b']) {
         try {
           final res = await http.post(
             Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
@@ -845,6 +842,11 @@ $prompt
         }
       } catch (primaryErr) {
         debugPrint('Primary Firebase AI Engine notice: $primaryErr');
+        // Firebase AI reports quota/model failures lazily. Clear the session
+        // so a later request can re-create it, while this request immediately
+        // continues through the external and offline fallbacks below.
+        _chatSession = null;
+        _model = null;
       }
 
       if (primarySucceeded) return;

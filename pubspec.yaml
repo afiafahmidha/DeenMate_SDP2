@@ -46,6 +46,7 @@ dependencies:
 
   # Networking
   http: ^1.6.0
+  connectivity_plus: ^6.1.4
 
   # Utilities
   flutter_dotenv: ^5.2.1

@@ -1354,10 +1354,19 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   void _applyCloudState(Map<String, dynamic> data) async {
     if (!mounted) return;
 
+    // `readAyahsToday` is a daily set, not an all-time set. Older cloud
+    // documents were restored without checking their saved date, which made
+    // a reading from weeks ago appear as today's reading.
+    final todayDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final cloudDate = data['lastSavedDate']?.toString();
+    final cloudStateIsForToday = cloudDate == todayDate;
+
     setState(() {
       _currentStreak = (data['streak'] as num?)?.toInt() ?? _currentStreak;
       _longestStreak = (data['longestStreak'] as num?)?.toInt() ?? _longestStreak;
-      _completedAyahsToday = (data['completedAyahsToday'] as num?)?.toInt() ?? _completedAyahsToday;
+      _completedAyahsToday = cloudStateIsForToday
+          ? (data['completedAyahsToday'] as num?)?.toInt() ?? _completedAyahsToday
+          : 0;
       _targetDailyAyahs = (data['targetDailyAyahs'] as num?)?.toInt() ?? _targetDailyAyahs;
       _khatmTotalJuzCompleted = (data['khatmTotalJuzCompleted'] as num?)?.toInt() ?? _khatmTotalJuzCompleted;
 
@@ -1378,8 +1387,10 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       _continuePage = (data['continuePage'] as num?)?.toInt() ?? _continuePage;
       _continueAyah = (data['continueAyah'] as num?)?.toInt() ?? _continueAyah;
 
-      if (data['readAyahsToday'] is List) {
+      if (cloudStateIsForToday && data['readAyahsToday'] is List) {
         _readAyahsToday = (data['readAyahsToday'] as List).map((e) => e.toString()).toSet();
+      } else if (!cloudStateIsForToday) {
+        _readAyahsToday = {};
       }
       if (data['readAyahsAllTime'] is List) {
         _readAyahsAllTime = (data['readAyahsAllTime'] as List).map((e) => e.toString()).toSet();
@@ -1473,6 +1484,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       await prefs.setInt('quran_continue_page', _continuePage);
       await prefs.setInt('quran_continue_ayah', _continueAyah);
       await prefs.setString('quran_read_ayahs_today', jsonEncode(_readAyahsToday.toList()));
+      await prefs.setString('quran_last_saved_date', todayDate);
       await prefs.setString('quran_read_ayahs_all_time', jsonEncode(_readAyahsAllTime.toList()));
 
       for (final cat in _wazifaSupplications.keys) {
@@ -1487,6 +1499,11 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
       await prefs.setString('quran_reflections_json', jsonEncode(_reflections));
       await prefs.setString('quran_hifz_memorized_ids', jsonEncode(_memorizedSurahIds.toList()));
       await prefs.setString('quran_weekly_ayahs_history', jsonEncode(_weeklyAyahsHistory));
+      if (!cloudStateIsForToday) {
+        // Replace the stale cloud daily snapshot with an empty current-day set
+        // while preserving all-time reading history.
+        await _pushStateToCloud();
+      }
     } catch (e) {
       debugPrint('Error updating SharedPreferences from cloud: $e');
     }
