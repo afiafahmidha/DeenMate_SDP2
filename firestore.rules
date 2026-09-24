@@ -190,7 +190,9 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if signedIn();
+      // A signed-in user must never be able to read another user's root
+      // document. Feature subcollections below define their own scoped rules.
+      allow read: if isOwner(userId);
       allow write: if request.auth != null && request.auth.uid == userId;
 
       match /joinedQurbaniPlans/{planId} {

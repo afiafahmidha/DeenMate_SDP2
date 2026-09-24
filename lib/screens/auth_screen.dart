@@ -9,6 +9,7 @@ import 'email_verification_screen.dart';
 import 'dashboard_screen.dart';
 import 'halal_scanner/halal_scanner_home.dart';
 import '../widgets/deen_minimal_loader.dart';
+import '../services/account_scoped_storage_service.dart';
 
 enum AppScreenState {
   loading,
@@ -60,6 +61,7 @@ class _AuthScreenState extends State<AuthScreen> {
           if (mounted) setState(() => _screenState = AppScreenState.verifyEmail);
         } else {
           // Email verified → grant dashboard access
+          await AccountScopedStorageService.instance.switchTo(fresh.uid);
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('is_logged_in', true);
           if (mounted) setState(() => _screenState = AppScreenState.dashboard);
@@ -96,6 +98,7 @@ class _AuthScreenState extends State<AuthScreen> {
             await prefs.setBool('is_logged_in', false);
             setState(() => _screenState = AppScreenState.verifyEmail);
           } else {
+            await AccountScopedStorageService.instance.switchTo(fresh.uid);
             final prefs = await SharedPreferences.getInstance();
             await prefs.setBool('is_logged_in', true);
             setState(() => _screenState = AppScreenState.dashboard);
@@ -162,6 +165,10 @@ class _AuthScreenState extends State<AuthScreen> {
           key: const ValueKey('EmailVerificationScreen'),
           onVerified: () async {
             await _updateLoginSession(true);
+            final uid = FirebaseAuth.instance.currentUser?.uid;
+            if (uid != null) {
+              await AccountScopedStorageService.instance.switchTo(uid);
+            }
             if (mounted) {
               setState(() => _screenState = AppScreenState.dashboard);
             }
@@ -205,21 +212,10 @@ class _AuthScreenState extends State<AuthScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_logged_in', isLoggedIn);
       if (!isLoggedIn) {
-        // Clear all user-specific cached preferences
-        final keys = prefs.getKeys();
-        final List<String> keysToRemove = [];
-        for (final key in keys) {
-          if (key.startsWith('profile_') ||
-              key.startsWith('qaza_') ||
-              key.startsWith('completed_') ||
-              key.startsWith('alarm_')) {
-            keysToRemove.add(key);
-          }
-        }
-        for (final key in keysToRemove) {
-          await prefs.remove(key);
-        }
-
+        // AccountScopedStorageService preserves the current account snapshot
+        // and swaps it when the next account signs in. Do not delete keys here
+        // or the outgoing account would lose its local cache before it can be
+        // snapshotted.
         HalalScannerState.reset();
 
         await FirebaseAuth.instance.signOut();

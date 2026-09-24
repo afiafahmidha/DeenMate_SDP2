@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../widgets/auth_header.dart'; // To access AppColors and AppLogo
 import '../services/notification_service.dart'; // Real prayer alarm notifications
 import '../services/firestore_structure_migration_service.dart';
+import '../services/account_scoped_storage_service.dart';
 import '../widgets/notification_center_modal.dart';
 import 'calendar_tab.dart';
 import 'hajj_umrah_screen.dart';
@@ -468,12 +469,6 @@ Future<void> _loadUserProfile() async {
   @override
   void initState() {
     super.initState();
-    _loadAppTheme();
-    _loadUserProfile();
-    FirestoreStructureMigrationService.instance.migrateCurrentUser().catchError((e) {
-      debugPrint('Firestore structure migration skipped: $e');
-    });
-    _loadFeatureUsage();
 
     _staggerController = AnimationController(
       vsync: this,
@@ -495,19 +490,34 @@ Future<void> _loadUserProfile() async {
       duration: const Duration(milliseconds: 30000), // slow drift
     )..repeat();
 
+    _initializeAccountData();
+  }
 
-    // Load saved Qaza counts
-    _loadQazaCounts();
-    // Load daily checklist status
-    _loadSalatCompleted();
-    // Load user alarm preferences
-    _loadAlarmStates();
-    _loadTodaysGuidance();
+  Future<void> _initializeAccountData() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
 
-    // Start location services & prayer time updates
-    _initLocationAndTracking();
+    // Swap the entire local cache before any feature reads SharedPreferences.
+    // Without this, a second account on the same device inherits the first
+    // account's Zakat, Dhikr, prayer, calendar, and guidance cache.
+    await AccountScopedStorageService.instance.switchTo(uid);
+    // Refresh process-wide preference notifiers after the account snapshot
+    // changes; otherwise language/theme widgets could retain the prior user.
+    await LanguageService.loadLanguagePreference();
+    await loadPrayerCardThemePreference();
 
-    // Hook up real notification actions & cold start replay
+    if (!mounted) return;
+    await _loadAppTheme();
+    await _loadUserProfile();
+    await FirestoreStructureMigrationService.instance.migrateCurrentUser().catchError((e) {
+      debugPrint('Firestore structure migration skipped: $e');
+    });
+    await _loadFeatureUsage();
+    await _loadQazaCounts();
+    await _loadSalatCompleted();
+    await _loadAlarmStates();
+    await _loadTodaysGuidance();
+    await _initLocationAndTracking();
     _setupNotificationListener();
   }
 
