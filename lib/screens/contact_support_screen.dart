@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/auth_header.dart'; // AppColors
 
 // ---------------------------------------------------------------------------
@@ -47,6 +48,34 @@ class _ContactSupportScreenState extends State<ContactSupportScreen>
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
+    _prefillAccountDetails();
+  }
+
+  Future<void> _prefillAccountDetails() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    var name = user.displayName ?? '';
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final profile = snapshot.data()?['profile'];
+      if (profile is Map && profile['fullName'] is String) {
+        name = (profile['fullName'] as String).trim();
+      }
+    } catch (e) {
+      debugPrint('Could not load support form profile: $e');
+    }
+
+    if (!mounted) return;
+    if (_nameController.text.trim().isEmpty && name.trim().isNotEmpty) {
+      _nameController.text = name.trim();
+    }
+    if (_emailController.text.trim().isEmpty && (user.email ?? '').trim().isNotEmpty) {
+      _emailController.text = user.email!.trim();
+    }
   }
 
   @override
