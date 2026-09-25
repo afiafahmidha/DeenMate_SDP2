@@ -818,6 +818,28 @@ class QurbaniRepository {
     final uid = currentUid();
     if (uid == 'local_device') return null;
 
+    // Cached active/joined values are navigation hints only. Always verify
+    // owner/memberIds before returning a repository.
+    Future<bool> authorized(String ownerUid, String planId) async {
+      try {
+        final snap = await FirebaseFirestore.instance.collection('users').doc(ownerUid)
+            .collection('qurbaniPlans').doc(planId).get();
+        if (!snap.exists) return false;
+        final data = snap.data() ?? <String, dynamic>{};
+        final memberIds = (data['memberIds'] as List?)?.whereType<String>().toSet() ?? <String>{};
+        return ownerUid == uid || memberIds.contains(uid);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    Future<void> removeJoinedMarker(String planId) async {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(uid)
+            .collection('joinedQurbaniPlans').doc(planId).delete();
+      } catch (_) {}
+    }
+
     // ── Step 1: Check Cloud User Document for activeQurbaniPlan (100% Cross-Device & Web Synced)
     try {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -833,10 +855,15 @@ class QurbaniRepository {
                 .collection('qurbaniPlans')
                 .doc(plan)
                 .get();
-            if (planDoc.exists) {
+            if (planDoc.exists && await authorized(owner, plan)) {
               await _persist(owner, plan);
               return QurbaniRepository._(owner, plan);
             }
+            await removeJoinedMarker(plan);
+            try {
+              await FirebaseFirestore.instance.collection('users').doc(uid)
+                  .update({'activeQurbaniPlan': FieldValue.delete()});
+            } catch (_) {}
           }
         }
       }
@@ -850,22 +877,26 @@ class QurbaniRepository {
           .collection('users')
           .doc(uid)
           .collection('joinedQurbaniPlans')
-          .limit(1)
           .get();
-      if (joinedSnap.docs.isNotEmpty) {
-        final jData = joinedSnap.docs.first.data();
-        final owner = (jData['ownerUid'] as String?) ?? joinedSnap.docs.first.id;
-        final plan = (jData['planId'] as String?) ?? joinedSnap.docs.first.id;
+      for (final joinedDoc in joinedSnap.docs) {
+        final jData = joinedDoc.data();
+        final owner = jData['ownerUid'] as String?;
+        final plan = (jData['planId'] as String?) ?? joinedDoc.id;
+        if (owner == null || owner.isEmpty) {
+          await joinedDoc.reference.delete();
+          continue;
+        }
         final planDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(owner)
             .collection('qurbaniPlans')
             .doc(plan)
             .get();
-        if (planDoc.exists) {
+        if (planDoc.exists && await authorized(owner, plan)) {
           await _persist(owner, plan);
           return QurbaniRepository._(owner, plan);
         }
+        await joinedDoc.reference.delete();
       }
     } catch (e) {
       debugPrint("Error checking joinedQurbaniPlans subcollection: $e");
@@ -900,7 +931,7 @@ class QurbaniRepository {
             .collection('qurbaniPlans')
             .doc(savedPlan)
             .get();
-        if (doc.exists) {
+        if (doc.exists && await authorized(savedOwner, savedPlan)) {
           await _persist(savedOwner, savedPlan);
           return QurbaniRepository._(savedOwner, savedPlan);
         }
@@ -917,41 +948,16 @@ class QurbaniRepository {
       if (memberSnap.docs.isNotEmpty) {
         final planDoc = memberSnap.docs.first;
         final ownerUid = planDoc.reference.parent.parent!.id;
-        await _persist(ownerUid, planDoc.id);
-        return QurbaniRepository._(ownerUid, planDoc.id);
+        if (await authorized(ownerUid, planDoc.id)) {
+          await _persist(ownerUid, planDoc.id);
+          return QurbaniRepository._(ownerUid, planDoc.id);
+        }
       }
     } catch (e) {
       debugPrint("Error in collectionGroup memberIds query: $e");
     }
 
     // ── Step 6: Global collectionGroup participants / members ──────────────
-    try {
-      final participantSubSnap = await FirebaseFirestore.instance
-          .collectionGroup('participants')
-          .where(FieldPath.documentId, isEqualTo: uid)
-          .limit(1)
-          .get();
-      if (participantSubSnap.docs.isNotEmpty) {
-        final partRef = participantSubSnap.docs.first.reference;
-        final planRef = partRef.parent.parent!;
-        final ownerUid = planRef.parent.parent!.id;
-        final planId = planRef.id;
-
-        // Self heal memberIds
-        try {
-          await planRef.update({
-            'memberIds': FieldValue.arrayUnion([uid]),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        } catch (_) {}
-
-        await _persist(ownerUid, planId);
-        return QurbaniRepository._(ownerUid, planId);
-      }
-    } catch (e) {
-      debugPrint("Error in collectionGroup participants query: $e");
-    }
-
     return null;
   }
 
@@ -971,12 +977,17 @@ class QurbaniRepository {
       // Deduplicate by planId using a Map
       final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>> allDocs = {};
       for (final d in snap.docs) {
-        allDocs[d.id] = d;
+        allDocs['${d.reference.parent.parent!.id}/${d.id}'] = d;
       }
       for (final d in ownedSnap.docs) {
-        allDocs[d.id] = d;
+        allDocs['${d.reference.parent.parent!.id}/${d.id}'] = d;
       }
-      return allDocs.values.map((doc) {
+      return allDocs.values.where((doc) {
+        final data = doc.data();
+        final ownerUid = doc.reference.parent.parent!.id;
+        final memberIds = (data['memberIds'] as List?)?.whereType<String>() ?? const <String>[];
+        return ownerUid == uid || memberIds.contains(uid);
+      }).map((doc) {
         final ownerUid = doc.reference.parent.parent!.id;
         final data = doc.data();
         return QPlanSummary(
@@ -992,6 +1003,14 @@ class QurbaniRepository {
   }
 
   static Future<void> switchGroup(String ownerUid, String planId) async {
+    final uid = currentUid();
+    final snap = await FirebaseFirestore.instance.collection('users').doc(ownerUid)
+        .collection('qurbaniPlans').doc(planId).get();
+    final data = snap.data() ?? <String, dynamic>{};
+    final memberIds = (data['memberIds'] as List?)?.whereType<String>() ?? const <String>[];
+    if (!snap.exists || (ownerUid != uid && !memberIds.contains(uid))) {
+      throw StateError('You are not a member of this Qurbani group.');
+    }
     await _persist(ownerUid, planId);
   }
 
@@ -1104,6 +1123,11 @@ class QurbaniRepository {
 
   static Future<void> _clearPersistedPlan() async {
     final uid = currentUid();
+    String? savedPlan;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      savedPlan = prefs.getString(_prefsPlanKey());
+    } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_prefsOwnerKey());
@@ -1116,6 +1140,12 @@ class QurbaniRepository {
           'activeQurbaniPlan': FieldValue.delete(),
         });
       } catch (_) {}
+      if (savedPlan != null) {
+        try {
+          await FirebaseFirestore.instance.collection('users').doc(uid)
+              .collection('joinedQurbaniPlans').doc(savedPlan).delete();
+        } catch (_) {}
+      }
     }
   }
 
@@ -1315,34 +1345,35 @@ class QurbaniRepository {
     final repository = QurbaniRepository._(targetOwner, targetPlan);
     final uid = currentUid();
 
-    final planDoc = await repository.planRef.get();
-    if (!planDoc.exists) {
-      throw Exception('The requested Qurbani group no longer exists.');
+    // This app keeps one active Qurbani group per account. If the user is
+    // already in another valid group, they must leave it before joining this
+    // one; otherwise the planner would silently switch between unrelated
+    // groups and make the active data ambiguous.
+    final existing = await QurbaniRepository.load();
+    if (existing != null && (existing.ownerUid != targetOwner || existing.planId != targetPlan)) {
+      throw Exception('You are already in another Qurbani group. Leave that group before joining a new one.');
     }
 
-    // Firestore rules only let a plan MEMBER read the participants
-    // subcollection. A user who just entered an invite code is not a member
-    // yet, so reading participantsRef here (to check the share cap) used to
-    // fail with a permission-denied error before the join could ever happen.
-    // Fix: grant provisional membership first (the rules explicitly allow a
-    // signed-in, not-yet-member user to add only themselves to memberIds),
-    // then validate the share cap now that participants can be read, and
-    // roll the membership back if the cap check fails.
-    final existingMemberIds = ((planDoc.data()?['memberIds'] as List?) ?? []).cast<String>();
-    final alreadyMember = existingMemberIds.contains(uid);
-
-    if (!alreadyMember) {
+    // Use the invite code as a one-time proof in the membership update. The
+    // rules verify that this code points to this exact owner/plan.
+    var provisionalMembership = false;
+    try {
       await repository.planRef.update({
         'memberIds': FieldValue.arrayUnion([uid]),
+        'joinCode': trimmed,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      provisionalMembership = true;
+    } catch (_) {
+      throw Exception('Could not join this group. The invite may be invalid or expired.');
     }
 
     Future<void> revertProvisionalMembership() async {
-      if (alreadyMember) return;
+      if (!provisionalMembership) return;
       try {
         await repository.planRef.update({
           'memberIds': FieldValue.arrayRemove([uid]),
+          'joinCode': FieldValue.delete(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
       } catch (_) {}
@@ -1356,7 +1387,8 @@ class QurbaniRepository {
         return sum + ((d.data()['shares'] as num?)?.toInt() ?? 0);
       });
 
-      final animalType = (planDoc.data()?['animalType'] as String?) ?? 'cow';
+      final planSnap = await repository.planRef.get();
+      final animalType = (planSnap.data()?['animalType'] as String?) ?? 'cow';
       final cap = _animalShareCaps[animalType] ?? 7;
       final remaining = cap - otherTotal;
 
@@ -1368,6 +1400,10 @@ class QurbaniRepository {
       }
 
       await repository.joinCurrentUserWithShares(shares);
+      await repository.planRef.update({
+        'joinCode': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
       await revertProvisionalMembership();
       rethrow;
@@ -2299,43 +2335,9 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   }
 
   Future<void> _searchDeenMateUsers(String query) async {
-    if (query.trim().length < 2) {
-      setState(() => _userSearchResults = []);
-      return;
-    }
-    setState(() => _isSearchingUsers = true);
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('users')
-          .limit(20)
-          .get();
-
-      final results = <Map<String, dynamic>>[];
-      final q = query.trim().toLowerCase();
-      for (final doc in snap.docs) {
-        final profile = doc.data()['profile'] as Map<String, dynamic>?;
-        if (profile != null) {
-          final name = (profile['fullName'] as String? ?? '').trim();
-          final email = (profile['email'] as String? ?? '').trim();
-          final phone = (profile['phone'] as String? ?? '').trim();
-          if (name.toLowerCase().contains(q) || email.toLowerCase().contains(q) || phone.toLowerCase().contains(q)) {
-            results.add({
-              'uid': doc.id,
-              'fullName': name,
-              'email': email,
-              'phone': phone,
-              'photoUrl': profile['avatarPath'] ?? profile['photoUrl'],
-              'avatarBase64': profile['avatarBase64'],
-            });
-          }
-        }
-      }
-      if (mounted) setState(() => _userSearchResults = results);
-    } catch (e) {
-      debugPrint("Error searching users: $e");
-    } finally {
-      if (mounted) setState(() => _isSearchingUsers = false);
-    }
+    // Direct participant lookup is intentionally disabled. Members must join
+    // through the group's invite code so membership has one auditable flow.
+    if (mounted) setState(() => _userSearchResults = []);
   }
 
   Future<void> _loadRepository() async {
@@ -4985,14 +4987,40 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             _sharedGroupCard(),
             const SizedBox(height: 16),
             if (participants.isEmpty)
-              _emptyState('No participants yet. Add the first one below.')
+              _emptyState('No participants yet. Share the invite code so members can join.')
             else
               ...participants.map((p) => _participantCard(p, myUid)),
             const SizedBox(height: 16),
-            _addParticipantCard(),
+            _inviteOnlyInfoCard(),
           ],
         );
       },
+    );
+  }
+
+  Widget _inviteOnlyInfoCard() {
+    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lock_outline_rounded, color: AppColors.midTeal, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Participants can join this group only with the invite code. Share the code from the group sharing section.',
+              style: GoogleFonts.poppins(fontSize: 12, height: 1.4, color: textColor),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -7075,7 +7103,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                           backgroundColor: _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                                           title: Text(
-                                            'Add DeenMate User?',
+                                            'Share invite code?',
                                             style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
                                           ),
                                           content: Column(
@@ -7083,7 +7111,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                'Are you sure you want to add this DeenMate user in your Qurbani planning group?',
+                                                'Accept this request and send the group invite code. The user will join only after entering the code.',
                                                 style: GoogleFonts.poppins(fontSize: 13, height: 1.45, color: _isDarkMode ? Colors.white70 : Colors.grey[800]),
                                               ),
                                               const SizedBox(height: 10),
@@ -7124,7 +7152,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                                 foregroundColor: Colors.white,
                                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                               ),
-                                              child: const Text('Yes, Add & Share Code'),
+                                              child: const Text('Accept & Share Code'),
                                             ),
                                           ],
                                         ),
@@ -7147,17 +7175,8 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                           // Get or generate invite code
                                           final code = await _repo!.getInviteCode() ?? await _repo!.createInviteCode();
 
-                                          // Automatically add responder as a participant in the owner's group
-                                          await _repo!.addParticipantUser(
-                                            name: resp.responderName,
-                                            shares: resp.sharesRequested,
-                                            isDeenMateUser: true,
-                                            uid: resp.responderUid,
-                                            photoUrl: resp.photoUrl,
-                                            avatarBase64: resp.avatarBase64,
-                                          );
-
-                                          // Send code to responder and update post remaining shares
+                                          // Send the code to the responder. They become a
+                                          // participant only after joining with that code.
                                           await QShareBoardRepository.acceptAndSendCode(
                                             post: post,
                                             response: resp,
@@ -7166,7 +7185,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
 
                                           if (mounted) {
                                             ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('🎉 Accepted! ${resp.responderName} added to your group and invite code shared.')),
+                                              SnackBar(content: Text('Accepted! Invite code sent to ${resp.responderName}. They must join with the code.')),
                                             );
                                           }
                                         } catch (err) {
@@ -7179,7 +7198,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
                                       }
                                     },
                                     icon: const Icon(Icons.check_circle_rounded, size: 14),
-                                    label: const Text('Accept & Add', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    label: const Text('Accept & Send Code', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: AppColors.midTeal,
                                       foregroundColor: Colors.white,

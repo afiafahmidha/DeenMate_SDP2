@@ -169,7 +169,12 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
     // Strip quotation marks
     cleaned = cleaned.replaceAll(RegExp(r'^["“]+|["”]+$'), '').trim();
 
-    if (cleaned.length < 20 || cleaned.endsWith(':') || cleaned.toLowerCase().startsWith('refining') || cleaned.toLowerCase().contains('attempt 1')) {
+    final endsAsSentence = RegExp(r'[.!?\u0964\u0965؟]$').hasMatch(cleaned);
+    if (cleaned.length < 20 ||
+        !endsAsSentence ||
+        cleaned.endsWith(':') ||
+        cleaned.toLowerCase().startsWith('refining') ||
+        cleaned.toLowerCase().contains('attempt 1')) {
       return null;
     }
     return cleaned;
@@ -181,7 +186,7 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
         'Start your day with Bismillah and keep your tongue moist with the remembrance of Allah. Perform your prayers on time and spread peace to those around you.';
 
     const String guidancePrompt =
-        'You are an authentic Islamic wisdom generator. Output Two beautiful, inspirational Islamic sentence for today (focused on gratitude, Salah, patience, good character, charity, or remembrance of Allah). Do NOT include any thinking process, draft notes, headers, or markdown. Output ONLY the quote sentence itself.Try to maintain a warm, uplifting, and concise tone. Avoid generic or vague statements.and ';
+        'You are an authentic Islamic wisdom generator. Write exactly two complete, beautiful and inspirational Islamic sentences for today, focused on gratitude, Salah, patience, good character, charity, or remembrance of Allah. Use a warm, uplifting and concise tone. Do not include headings, markdown, explanations, drafts or thinking. Return one complete paragraph and end with proper punctuation.';
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -224,8 +229,8 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
                   }
                 ],
                 "generationConfig": {
-                  "temperature": 0.7,
-                  "maxOutputTokens": 256
+                  "temperature": 0.3,
+                  "maxOutputTokens": 512
                 }
               }),
             ).timeout(const Duration(seconds: 8));
@@ -637,7 +642,7 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
               'messages': [
                 {'role': 'user', 'content': prompt}
               ],
-              'temperature': 0.4,
+              'temperature': 0.3,
               'max_tokens': 256,
             }),
           ).timeout(const Duration(seconds: 10));
@@ -665,7 +670,7 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
               'messages': [
                 {'role': 'user', 'content': prompt}
               ],
-              'temperature': 0.4,
+              'temperature': 0.3,
               'max_tokens': 256,
             }),
           ).timeout(const Duration(seconds: 8));
@@ -693,7 +698,7 @@ WRITING STYLE & ADAPTIVE FORMATTING RULES (VERY IMPORTANT):
               'messages': [
                 {'role': 'user', 'content': prompt}
               ],
-              'temperature': 0.4,
+              'temperature': 0.3,
               'max_tokens': 256,
             }),
           ).timeout(const Duration(seconds: 8));
