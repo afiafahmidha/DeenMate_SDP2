@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -16,9 +16,7 @@ import '../widgets/auth_header.dart';
 import '../services/notification_service.dart';
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MODELS
-// ─────────────────────────────────────────────────────────────────────────────
+
 
   class ZakatPayment {
   final String id;
@@ -360,9 +358,9 @@ class ImmediateHarvestRecord {
       );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // HIJRI HELPER (algorithmic conversion for Haul tracking)
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 class _Hijri {
   final int year, month, day;
@@ -415,9 +413,9 @@ class _Hijri {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // CONFIG & CONSTANTS
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 class _Currency {
   final String code;
@@ -537,7 +535,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   bool _isLoading = false;
   Timer? _dbWriteTimer;
   bool? _userPaymentsExpanded;
-  bool get _isPaymentsExpanded => _userPaymentsExpanded ?? (_stillOwed > 0);
+  bool get _isPaymentsExpanded => _userPaymentsExpanded ?? false;
 
 
   // ── Live prices & overrides ──────────────────────────────────
@@ -1458,6 +1456,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
 
     _checkAutoRollover();
     _repairCurrentYearSnapshotLivestock();
+    _repairHistoryAnimalPayments();
     setState(() {
       _isLoading = false;
     });
@@ -1482,8 +1481,58 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
       zakatDue: snapshot.zakatDue,
       zakatPaid: snapshot.zakatPaid,
       livestockZakat:
-          livestockSummary.isEmpty ? null : livestockSummary,
+        livestockSummary.isEmpty ? null : livestockSummary,
+      fitraDue: snapshot.fitraDue,
+      fitraPaid: snapshot.fitraPaid,
+      cropsDue: snapshot.cropsDue,
+      cropsPaid: snapshot.cropsPaid,
+      mineralsDue: snapshot.mineralsDue,
+      mineralsPaid: snapshot.mineralsPaid,
+      rikazDue: snapshot.rikazDue,
+      rikazPaid: snapshot.rikazPaid,
+      payments: snapshot.payments,
     );
+  }
+
+  /// Animal fulfilment is a separate livestock obligation. Its market value
+  /// must never be counted as cash paid toward monetary Haul Zakat.
+  void _repairHistoryAnimalPayments() {
+    var changed = false;
+    _history = _history.map((snapshot) {
+      final haulPayments = snapshot.payments
+          .where((p) => p.obligationType == 'haul')
+          .toList();
+      if (haulPayments.isEmpty) return snapshot;
+
+      final cashPaid = haulPayments
+          .where((p) => p.animalDescription == null || p.animalDescription!.isEmpty)
+          .fold(0.0, (sum, p) => sum + p.amount * _currencyRate(p.currency));
+      if ((snapshot.zakatPaid - cashPaid).abs() < 0.01) return snapshot;
+
+      changed = true;
+      return ZakatYearSnapshot(
+        year: snapshot.year,
+        wealth: snapshot.wealth,
+        zakatDue: snapshot.zakatDue,
+        zakatPaid: cashPaid,
+        livestockZakat: snapshot.livestockZakat,
+        fitraDue: snapshot.fitraDue,
+        fitraPaid: snapshot.fitraPaid,
+        cropsDue: snapshot.cropsDue,
+        cropsPaid: snapshot.cropsPaid,
+        mineralsDue: snapshot.mineralsDue,
+        mineralsPaid: snapshot.mineralsPaid,
+        rikazDue: snapshot.rikazDue,
+        rikazPaid: snapshot.rikazPaid,
+        payments: snapshot.payments,
+      );
+    }).toList();
+
+    if (changed) {
+      // Persist the corrected snapshot so the old animal-inclusive value does
+      // not return after the next app restart.
+      _savePrefs();
+    }
   }
 
   Future<void> _savePrefsToLocalOnly() async {
@@ -1736,9 +1785,9 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
+  
   // METAL PRICES FETCH
-  // ─────────────────────────────────────────────────────────────
+  
 
   Future<void> _fetchLivePrices() async {
     if (mounted) {
@@ -1751,8 +1800,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     var priceProvider = 'Saved rate';
     String? primaryError;
 
-    // Gold API is the primary source: it is free, requires no API key, and
-    // returns USD per troy ounce for both XAU and XAG.
+    
     try {
       final prices = await Future.wait([
         _fetchGoldApiSpotPrice('XAU'),
@@ -1783,8 +1831,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
           final goldValue = _positiveNumber(gold);
           final silverValue = _positiveNumber(silver);
           if (goldValue != null) {
-            // metals.live returns spot prices in cents per troy ounce. Accept
-            // dollar responses too so a provider format change remains safe.
+           
             _goldSpotUSD = goldValue > 10000 ? goldValue / 100 : goldValue;
             metalPriceUpdated = true;
             priceProvider = 'Metals.live';
@@ -2090,9 +2137,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // NAVIGATION & ACTIONS
-  // ─────────────────────────────────────────────────────────────
+
 
   Future<bool> _confirmDeletion(String message) async {
     return await showDialog<bool>(
@@ -2128,9 +2173,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         false;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // BUILD METHOD (Handles PIN lock validation overlay)
-  // ─────────────────────────────────────────────────────────────
+
 
   @override
   Widget build(BuildContext context) {
@@ -2314,9 +2357,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // TAB 0 — CALCULATOR
-  // ═══════════════════════════════════════════════════════════════
+
 
   Widget _buildCalculatorTab() {
     return SingleChildScrollView(
@@ -2394,9 +2435,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
     final hasActiveAssessment = haulComplete || _haulCycles.isNotEmpty;
     final activeDue = _activeZakatDue;
 
-    // ── LEFT PANEL: "This Year" ───────────────────────────────────────────────
-    // If haul is complete OR we have a completed cycle in history → show active zakat
-    // Otherwise → show 0 with a Pending badge
     double thisYearAmount;
     String thisYearStatus;
     String thisYearNote;
@@ -2421,14 +2459,14 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         thisYearAccent = AppColors.coralOrange;
       }
     } else {
-      // Haul is in progress — show Pending (no fixed amount yet)
+      // Haul is in progress show Pending (no fixed amount yet)
       thisYearAmount = 0.0;
       thisYearStatus = 'Pending';
       thisYearNote = 'Haul in progress ($_haulElapsedDays / 354 days)';
       thisYearAccent = Colors.amber[200]!;
     }
 
-    // ── RIGHT PANEL: "Next Haul" (live estimate) ─────────────────────────────
+    // RIGHT PANEL: "Next Haul" (live estimate)
     final nextAmount = _zakatEstimate;
     final nextDueDate = _haulStartDate != null
         ? _haulStartDate!.add(const Duration(days: 354))
@@ -2437,7 +2475,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         ? 'Due ${nextDueDate.day} ${_monthName(nextDueDate.month)} ${nextDueDate.year}'
         : '';
 
-    // ── TOP BADGE ─────────────────────────────────────────────────────────────
+    
     final topBadgeText = !hasActiveAssessment
         ? 'Haul In Progress'
         : (thisYearStatus == 'Fully Paid' ? 'Fully Paid' : 'Payment Due');
@@ -5826,6 +5864,12 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
   // ═══════════════════════════════════════════════════════════════
 
   Widget _buildPaymentsTab() {
+    final paymentLog = [..._payments]
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final visiblePayments = _isPaymentsExpanded
+        ? paymentLog
+        : paymentLog.take(3).toList();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
       child: Column(
@@ -6072,7 +6116,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      _isPaymentsExpanded ? 'Hide Logs' : 'Show Logs',
+                      _isPaymentsExpanded ? 'Show recent' : 'Show all',
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -6084,22 +6128,7 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
               ],
             ),
             const SizedBox(height: 10),
-            if (_isPaymentsExpanded) ...[
-              ..._payments.map((p) => _buildPaymentCard(p, isFitra: false)),
-            ] else
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'Zakat obligation cleared. Log is collapsed.',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: _isDarkMode ? Colors.white.withValues(alpha: 0.45) : AppColors.navyBlue.withValues(alpha: 0.45),
-                    ),
-                  ),
-                ),
-              ),
+            ...visiblePayments.map((p) => _buildPaymentCard(p, isFitra: false)),
           ],
           const SizedBox(height: 8),
           GestureDetector(
@@ -6327,22 +6356,34 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         children: [
           Row(
             children: [
-              Container(
+              Flexible(
+                child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(p.category,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
                         fontSize: 9.5, fontWeight: FontWeight.bold, color: color)),
+                ),
               ),
-              const Spacer(),
-              Text("Paid on ${DateFormat('dd MMMM yyyy').format(p.date)}",
-                  style: GoogleFonts.inter(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                      color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text("Paid on ${DateFormat('dd MMMM yy').format(p.date)}",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -6382,12 +6423,16 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                           children: [
                             const Icon(Icons.pets_rounded, size: 12, color: Color(0xFF2E7D32)),
                             const SizedBox(width: 4),
-                            Text(
+                            Flexible(
+                              child: Text(
                               'Paid via Animal: ${p.animalDescription}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                                 color: const Color(0xFF2E7D32),
+                              ),
                               ),
                             ),
                           ],
@@ -6397,10 +6442,20 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
                   ],
                 ),
               ),
-              Text(
-                  _formatMoney(p.amount * _currencyRate(p.currency)),
-                  style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue)),
+              SizedBox(
+                width: 120,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _formatMoney(p.amount * _currencyRate(p.currency)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.bold, fontSize: 15, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -7565,7 +7620,8 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
         .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
     double paidFor(String obligationType) => yearPayments
-        .where((p) => p.obligationType == obligationType)
+        .where((p) => p.obligationType == obligationType &&
+            (obligationType != 'haul' || p.animalDescription == null || p.animalDescription!.isEmpty))
         .fold(0.0, (sum, p) => sum + p.amount * _currencyRate(p.currency));
     final snap = ZakatYearSnapshot(
       year: year,
@@ -7842,7 +7898,6 @@ class _ZakatManagerScreenState extends State<ZakatManagerScreen> {
             Expanded(
               flex: 2,
               child: hasLivestock
-                  // When livestock summary is present, show label + livestock on same line
                   ? Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
                       spacing: 4,
