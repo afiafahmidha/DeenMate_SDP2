@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart';
 import '../l10n/app_localizations.dart';
 import 'about_screen.dart';
@@ -37,7 +38,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
   bool agreedToTerms = false;
   bool _isLoading = false;
 
-  String selectedLanguage = 'English';
+  bool _isDarkMode = false;
 
   final List<StarConfig> _headerStars = [
     StarConfig(top: 60, left: 50, size: 8, delayMs: 200),
@@ -106,7 +107,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
           'address': null,
           'avatarPath': null,
           'language': 'en',
-          'darkMode': false,
+          'darkMode': _isDarkMode,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         },
@@ -117,6 +118,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
       // 5. Go to email verification screen
       if (mounted) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_dark_mode', _isDarkMode);
         widget.onRegisterSuccess();
       }
     } on FirebaseAuthException catch (e) {
@@ -216,7 +219,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             'address': null,
             'avatarPath': user.photoURL,
             'language': 'en',
-            'darkMode': false,
+            'darkMode': _isDarkMode,
             'createdAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           },
@@ -224,6 +227,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
       }
 
       if (mounted) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_dark_mode', _isDarkMode);
         widget.onRegisterSuccess();
       }
     } on FirebaseAuthException catch (e) {
@@ -271,8 +276,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
         Positioned.fill(
           top: 247,
           child: Container(
-            decoration: const BoxDecoration(
-              color: AppColors.white,
+            decoration: BoxDecoration(
+              color: _isDarkMode ? const Color(0xFF121212) : AppColors.white,
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(36),
                 topRight: Radius.circular(36),
@@ -296,7 +301,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.navyBlue,
+                          color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                         ),
                       ),
                     ),
@@ -307,7 +312,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 12.5,
-                          color: AppColors.navyBlue.withValues(alpha: 0.75),
+                          color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.75),
                           height: 1.4,
                         ),
                       ),
@@ -438,7 +443,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _buildLanguageSelector(),
+                    _buildThemeSelector(),
                     const SizedBox(height: 20),
                     _buildTermsCheckbox(),
                     const SizedBox(height: 24),
@@ -459,7 +464,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
 
     return Scaffold(
-      backgroundColor: isWideScreen ? const Color(0xFFEFEFF4) : AppColors.white,
+      backgroundColor: isWideScreen ? (_isDarkMode ? const Color(0xFF080808) : const Color(0xFFEFEFF4)) : (_isDarkMode ? const Color(0xFF121212) : AppColors.white),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
@@ -467,7 +472,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             clipBehavior: Clip.antiAlias,
             decoration: isWideScreen
                 ? BoxDecoration(
-                    color: AppColors.white,
+                    color: _isDarkMode ? const Color(0xFF121212) : AppColors.white,
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.12),
@@ -476,7 +481,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                       ),
                     ],
                   )
-                : const BoxDecoration(color: AppColors.white),
+                : BoxDecoration(color: _isDarkMode ? const Color(0xFF121212) : AppColors.white),
             child: contentStack,
           ),
         ),
@@ -553,19 +558,19 @@ class _RegistrationPageState extends State<RegistrationPage> {
       validator: validator,
       enabled: !_isLoading,
       style: GoogleFonts.inter(
-        color: AppColors.navyBlue,
+        color: _isDarkMode ? Colors.white : AppColors.navyBlue,
         fontSize: 14,
         fontWeight: FontWeight.w500,
       ),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: GoogleFonts.poppins(
-          color: AppColors.placeholder,
+          color: _isDarkMode ? Colors.white60 : AppColors.placeholder,
           fontSize: 13.5,
           fontWeight: FontWeight.w500,
         ),
         floatingLabelStyle: GoogleFonts.poppins(
-          color: AppColors.navyBlue,
+          color: _isDarkMode ? Colors.white : AppColors.navyBlue,
           fontSize: 13,
           fontWeight: FontWeight.w600,
         ),
@@ -577,12 +582,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
               color: AppColors.dustyBlueTeal.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: AppColors.navyBlue, size: 16),
+            child: Icon(icon, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 16),
           ),
         ),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: Colors.white,
+        fillColor: _isDarkMode ? const Color(0xFF202020) : Colors.white,
         contentPadding: const EdgeInsets.symmetric(
           vertical: 14,
           horizontal: 16,
@@ -605,7 +610,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.navyBlue, width: 1.5),
+          borderSide: BorderSide(color: _isDarkMode ? Colors.white : AppColors.navyBlue, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -619,7 +624,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
-  Widget _buildLanguageSelector() {
+  Widget _buildThemeSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -628,11 +633,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
             const Icon(Icons.language, color: AppColors.midTeal, size: 18),
             const SizedBox(width: 8),
             Text(
-              AppLocalizations.of(context)!.tr('app_language'),
+              'App Theme',
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: AppColors.navyBlue,
+                color: _isDarkMode ? Colors.white : AppColors.navyBlue,
               ),
             ),
           ],
@@ -641,23 +646,27 @@ class _RegistrationPageState extends State<RegistrationPage> {
         Row(
           children: [
             const SizedBox(width: 26),
-            _buildLanguageOption('English'),
+            _buildThemeOption('Bright', false),
           ],
         ),
         Row(
-          children: [const SizedBox(width: 26), _buildLanguageOption('বাংলা')],
+          children: [const SizedBox(width: 26), _buildThemeOption('Dark', true)],
         ),
       ],
     );
   }
-  Widget _buildLanguageOption(String lang) {
-    final bool isSelected = selectedLanguage == lang;
+  Widget _buildThemeOption(String label, bool darkMode) {
+    final bool isSelected = _isDarkMode == darkMode;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: GestureDetector(
         onTap: _isLoading
             ? null
-            : () => setState(() => selectedLanguage = lang),
+            : () async {
+                setState(() => _isDarkMode = darkMode);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('is_dark_mode', darkMode);
+              },
         child: Row(
           children: [
             Container(
@@ -665,15 +674,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
               height: 18,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.navyBlue, width: 1.5),
+                border: Border.all(color: _isDarkMode ? Colors.white70 : AppColors.navyBlue, width: 1.5),
               ),
               child: isSelected
                   ? Center(
                       child: Container(
                         width: 9,
                         height: 9,
-                        decoration: const BoxDecoration(
-                          color: AppColors.navyBlue,
+                        decoration: BoxDecoration(
+                          color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -682,8 +691,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
             ),
             const SizedBox(width: 8),
             Text(
-              lang,
-              style: GoogleFonts.inter(color: AppColors.navyBlue, fontSize: 13),
+              label,
+              style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontSize: 13),
             ),
           ],
         ),
@@ -711,7 +720,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
         Expanded(
           child: RichText(
             text: TextSpan(
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.navyBlue),
+              style: GoogleFonts.inter(fontSize: 13, color: _isDarkMode ? Colors.white : AppColors.navyBlue),
               children: [
                 const TextSpan(text: 'I agree to the '),
                 TextSpan(

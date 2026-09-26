@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -11,9 +11,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/auth_header.dart'; // AppColors
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DATA MODELS & STRUCTS
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 class SurahInfo {
   final int id;
@@ -2199,12 +2197,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
 
 
 
-  // ─────────────────────────────────────────────────────────────────────────────
-
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BASE STRUCTURE
-  // ─────────────────────────────────────────────────────────────────────────────
+  
   @override
   Widget build(BuildContext context) {
     final themeBg = _isDarkMode ? const Color(0xFF121212) : const Color(0xFFF7F7F5);
@@ -2436,16 +2429,16 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             'Assalamu Alaikum, $_userName',
             style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: themeText),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
 
           if (_completedAyahsToday >= _targetDailyAyahs) ...[
             Container(
@@ -2473,7 +2466,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
 
           // Continue Reading Banner
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [AppColors.navyBlue, Color(0xFF1D3557)],
@@ -2489,7 +2482,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Continue Reading', style: GoogleFonts.inter(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(continueSurahName, style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                     Text('Ayah $_continueAyah', style: GoogleFonts.inter(color: Colors.white60, fontSize: 11)),
                   ],
@@ -2512,7 +2505,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
 
           // Streak & Goals Row
           Row(
@@ -3219,13 +3212,13 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
+                        ],
                       ],
-                    ],
+                      ),
                   ),
                 ),
               ),
             ),
-          ),
           const SizedBox(height: 10),
 
           // Bottom Navigation Row with distinct Manual "Mark as Read" action
@@ -3238,7 +3231,8 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   // 1. Prev Button (Uniform 36px pill)
-                  InkWell(
+                  Flexible(
+                    child: InkWell(
                     onTap: _activeReaderAyahIndex > 1
                         ? () => setState(() {
                             _activeReaderAyahIndex--;
@@ -3250,7 +3244,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
                       height: 36,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
                       decoration: BoxDecoration(
                         color: _activeReaderAyahIndex > 1
                             ? (_isDarkMode ? const Color(0xFF282828) : Colors.grey[200])
@@ -3261,16 +3255,18 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                       child: Text(
                         '← Prev',
                         style: GoogleFonts.poppins(
-                          fontSize: 11.5,
+                          fontSize: 10,
                           fontWeight: FontWeight.bold,
                           color: _activeReaderAyahIndex > 1 ? themeText : AppColors.placeholder.withValues(alpha: 0.4),
                         ),
                       ),
                     ),
+                    ),
                   ),
 
                   // 2. Explicit "Mark as Read" toggle button (Uniform 36px pill)
-                  InkWell(
+                  Flexible(
+                    child: InkWell(
                     onTap: () {
                       setState(() {
                         if (isCurrentAyahRead) {
@@ -3291,7 +3287,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
                       height: 36,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
                       decoration: BoxDecoration(
                         color: isCurrentAyahRead
                             ? Colors.green.withValues(alpha: 0.15)
@@ -3303,35 +3299,40 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                         ),
                       ),
                       alignment: Alignment.center,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isCurrentAyahRead ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                            size: 13,
-                            color: isCurrentAyahRead ? Colors.green : AppColors.placeholder,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            isCurrentAyahRead ? 'Read Today' : 'Mark as Read',
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: isCurrentAyahRead ? Colors.green : themeText,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isCurrentAyahRead ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                              size: 13,
+                              color: isCurrentAyahRead ? Colors.green : AppColors.placeholder,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              isCurrentAyahRead ? 'Read Today' : 'Mark as Read',
+                              style: GoogleFonts.poppins(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w600,
+                                color: isCurrentAyahRead ? Colors.green : themeText,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                    ),
                     ),
                   ),
 
                   // 3. Ayah Picker (Uniform 36px pill)
-                  InkWell(
+                  Flexible(
+                    child: InkWell(
                     onTap: () => _showWheelPagePickerModal(context, cardBg, themeText),
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
                       height: 36,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
                       decoration: BoxDecoration(
                         color: AppColors.midTeal.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
@@ -3345,15 +3346,17 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                           const SizedBox(width: 2),
                           Text(
                             '$_activeReaderAyahIndex / ${_loadedAyahs.length}',
-                            style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.midTeal),
+                            style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.midTeal),
                           ),
                         ],
                       ),
                     ),
+                    ),
                   ),
 
                   // 4. Next Button (Uniform 36px pill)
-                  InkWell(
+                  Flexible(
+                    child: InkWell(
                     onTap: () {
                       setState(() {
                         if (_activeReaderAyahIndex < _loadedAyahs.length) {
@@ -3381,7 +3384,7 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
                       height: 36,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
                       decoration: BoxDecoration(
                         color: AppColors.navyBlue,
                         borderRadius: BorderRadius.circular(12),
@@ -3389,8 +3392,9 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
                       alignment: Alignment.center,
                       child: Text(
                         _activeReaderAyahIndex == _loadedAyahs.length ? 'Finish' : 'Next →',
-                        style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
+                        style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
                       ),
+                    ),
                     ),
                   ),
                 ],
@@ -5585,9 +5589,6 @@ class _QuranTrackerScreenState extends State<QuranTrackerScreen> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// REAL OFFLINE VERSES DICTIONARY
-// ─────────────────────────────────────────────────────────────────────────────
 final Map<int, List<AyahContent>> _realQuranText = {
   1: [
     const AyahContent(

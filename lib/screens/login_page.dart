@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/auth_header.dart';
 import '../l10n/app_localizations.dart';
 
@@ -30,6 +31,7 @@ class _LoginPageState extends State<LoginPage> {
 
   bool obscurePassword = true;
   bool _isLoading = false;
+  bool _isDarkMode = false;
 
   // Sparkling Stars placement for Login Header
   final List<StarConfig> _headerStars = [
@@ -39,6 +41,17 @@ class _LoginPageState extends State<LoginPage> {
     StarConfig(top: 140, left: 300, size: 7, delayMs: 800),
     StarConfig(top: 90, left: 190, size: 11, delayMs: 300),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedTheme();
+  }
+
+  Future<void> _loadSavedTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) setState(() => _isDarkMode = prefs.getBool('is_dark_mode') ?? false);
+  }
 
   @override
   void dispose() {
@@ -235,8 +248,8 @@ class _LoginPageState extends State<LoginPage> {
         Positioned.fill(
           top: 247,
           child: Container(
-            decoration: const BoxDecoration(
-              color: AppColors.white,
+            decoration: BoxDecoration(
+              color: _isDarkMode ? const Color(0xFF121212) : AppColors.white,
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(36),
                 topRight: Radius.circular(36),
@@ -267,7 +280,7 @@ class _LoginPageState extends State<LoginPage> {
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.navyBlue,
+                          color: _isDarkMode ? Colors.white : AppColors.navyBlue,
                         ),
                       ),
                     ),
@@ -278,7 +291,7 @@ class _LoginPageState extends State<LoginPage> {
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 12.5,
-                          color: AppColors.navyBlue.withValues(alpha: 0.75),
+                          color: _isDarkMode ? Colors.white70 : AppColors.navyBlue.withValues(alpha: 0.75),
                           height: 1.4,
                         ),
                       ),
@@ -365,7 +378,7 @@ class _LoginPageState extends State<LoginPage> {
     );
 
     return Scaffold(
-      backgroundColor: isWideScreen ? const Color(0xFFEFEFF4) : AppColors.white,
+      backgroundColor: isWideScreen ? (_isDarkMode ? const Color(0xFF080808) : const Color(0xFFEFEFF4)) : (_isDarkMode ? const Color(0xFF121212) : AppColors.white),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
@@ -373,7 +386,7 @@ class _LoginPageState extends State<LoginPage> {
             clipBehavior: Clip.antiAlias,
             decoration: isWideScreen
                 ? BoxDecoration(
-                    color: AppColors.white,
+                    color: _isDarkMode ? const Color(0xFF121212) : AppColors.white,
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.12),
@@ -382,7 +395,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ],
                   )
-                : const BoxDecoration(color: AppColors.white),
+                : BoxDecoration(color: _isDarkMode ? const Color(0xFF121212) : AppColors.white),
             child: contentStack,
           ),
         ),
@@ -627,16 +640,16 @@ class _LoginPageState extends State<LoginPage> {
       keyboardType: keyboardType,
       validator: validator,
       enabled: !_isLoading,
-      style: GoogleFonts.inter(color: AppColors.navyBlue, fontSize: 14, fontWeight: FontWeight.w500),
+      style: GoogleFonts.inter(color: _isDarkMode ? Colors.white : AppColors.navyBlue, fontSize: 14, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: GoogleFonts.poppins(
-          color: AppColors.placeholder,
+          color: _isDarkMode ? Colors.white60 : AppColors.placeholder,
           fontSize: 13.5,
           fontWeight: FontWeight.w500,
         ),
         floatingLabelStyle: GoogleFonts.poppins(
-          color: AppColors.navyBlue,
+          color: _isDarkMode ? Colors.white : AppColors.navyBlue,
           fontSize: 13,
           fontWeight: FontWeight.w600,
         ),
@@ -648,12 +661,12 @@ class _LoginPageState extends State<LoginPage> {
               color: AppColors.dustyBlueTeal.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: AppColors.navyBlue, size: 16),
+            child: Icon(icon, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 16),
           ),
         ),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: Colors.white,
+        fillColor: _isDarkMode ? const Color(0xFF202020) : Colors.white,
         contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         alignLabelWithHint: true,
         floatingLabelBehavior: FloatingLabelBehavior.auto,
@@ -667,7 +680,7 @@ class _LoginPageState extends State<LoginPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.navyBlue, width: 1.5),
+          borderSide: BorderSide(color: _isDarkMode ? Colors.white : AppColors.navyBlue, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
