@@ -2170,16 +2170,11 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   bool _isLoadingRepo = false;
 
   // Registered User Search
-  List<Map<String, dynamic>> _userSearchResults = [];
-  bool _isSearchingUsers = false;
-  Map<String, dynamic>? _selectedDeenMateUser;
-  bool _isOfflineFamilyMember = false;
 
   // Real-time Chat & Media Playback
   final TextEditingController _chatMsgCtrl = TextEditingController();
   String? _editingMessageId;
   String? _myCurrentAvatarBase64;
-  Map<String, String> _membersAvatarCache = {};
 
   // Location Share Board
   Position? _currentUserPosition;
@@ -2265,8 +2260,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
   // Local checklist state used when no group/repo is active
   final Map<String, bool> _localChecklistState = {};
 
-  final TextEditingController _participantNameCtrl = TextEditingController();
-  int _newParticipantShares = 1;
   final TextEditingController _expCategoryCtrl = TextEditingController();
   final TextEditingController _expAmountCtrl = TextEditingController();
   final TextEditingController _expNotesCtrl = TextEditingController();
@@ -2334,12 +2327,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     return '';
   }
 
-  Future<void> _searchDeenMateUsers(String query) async {
-    // Direct participant lookup is intentionally disabled. Members must join
-    // through the group's invite code so membership has one auditable flow.
-    if (mounted) setState(() => _userSearchResults = []);
-  }
-
   Future<void> _loadRepository() async {
     setState(() {
       _isLoadingRepo = true;
@@ -2401,7 +2388,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     _metalsCtrl.dispose();
     _cashCtrl.dispose();
     _debtsCtrl.dispose();
-    _participantNameCtrl.dispose();
     _expCategoryCtrl.dispose();
     _expAmountCtrl.dispose();
     _expNotesCtrl.dispose();
@@ -2426,26 +2412,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     double pricePerGoat =
         _selectedLocation == 'Dhaka' ? 25000.0 : (_selectedLocation == 'Chittagong' ? 27000.0 : 20000.0);
     _aqiqahEstimatedCost = pricePerGoat * _aqiqahQuantity;
-  }
-
-  void _checkEligibility() {
-    if (_hasZakatData) {
-      _loadZakatWealthData();
-      return;
-    }
-    double savings = double.tryParse(_savingsCtrl.text) ?? 0.0;
-    double metals = double.tryParse(_metalsCtrl.text) ?? 0.0;
-    double cash = double.tryParse(_cashCtrl.text) ?? 0.0;
-    double debts = double.tryParse(_debtsCtrl.text) ?? 0.0;
-    _netAssets = savings + metals + cash - debts;
-    const double nisabLimit = 115000.0;
-    setState(() {
-      _hasCheckedEligibility = true;
-      _isEligible = _netAssets >= nisabLimit;
-      _eligibilityReason = _isEligible
-          ? 'Qurbani is WAJIB (mandatory) for you. Your net assets (৳${NumberFormat('#,##,###').format(_netAssets)}) exceed the Silver Nisab threshold of ৳${NumberFormat('#,##,###').format(nisabLimit)}.'
-          : 'Qurbani is not mandatory for you. Your net assets (৳${NumberFormat('#,##,###').format(_netAssets)}) are below the Silver Nisab threshold of ৳${NumberFormat('#,##,###').format(nisabLimit)}. You can still perform it voluntarily.';
-    });
   }
 
   Future<void> _loadZakatWealthData() async {
@@ -2855,7 +2821,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
           if (parts.length != 3) continue;
           final candidate = DateTime.tryParse('${parts[2]}-${parts[1]}-${parts[0]}');
           if (candidate != null && !candidate.isBefore(DateTime(now.year, now.month, now.day))) {
-            if (found == null || candidate.isBefore(found!)) found = candidate;
+            if (found == null || candidate.isBefore(found)) found = candidate;
           }
         }
       }
@@ -3142,348 +3108,10 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     );
   }
 
-  Future<void> _showGroupSwitcherSheet() async {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) {
-        final dialogBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-        final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
-        return StreamBuilder<List<QPlanSummary>>(
-          stream: QurbaniRepository.watchUserPlans(),
-          builder: (context, snapshot) {
-            final plans = snapshot.data ?? [];
-            return Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: dialogBg, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.groups_rounded, color: AppColors.midTeal, size: 22),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'My Qurbani Groups',
-                            style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.bold, color: textColor),
-                          ),
-                        ),
-                        IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Switch seamlessly between all Qurbani groups you own or have joined.',
-                      style: GoogleFonts.poppins(fontSize: 11.5, color: _isDarkMode ? Colors.white60 : Colors.grey[600]),
-                    ),
-                    const SizedBox(height: 14),
-                    if (plans.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text('No active groups found.', style: GoogleFonts.poppins(color: Colors.grey)),
-                      )
-                    else
-                      ...plans.map((p) {
-                        final isCurrent = _repo != null && _repo!.ownerUid == p.ownerUid && _repo!.planId == p.planId;
-                        final animalIcon = p.animalType.toLowerCase() == 'goat' ? '🐐' : '🐄';
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: isCurrent
-                                ? AppColors.midTeal.withValues(alpha: 0.12)
-                                : (_isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100]),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isCurrent ? AppColors.midTeal : Colors.transparent,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: AppColors.midTeal.withValues(alpha: 0.2),
-                              child: Text(animalIcon, style: const TextStyle(fontSize: 18)),
-                            ),
-                            title: Text(
-                              '${p.ownerName}\'s Qurbani Plan',
-                              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
-                            ),
-                            subtitle: Text(
-                              '${p.animalType.toUpperCase()} · ${p.totalShares} Shares · ${p.isOwner ? "Owner" : "Member"}',
-                              style: GoogleFonts.poppins(fontSize: 11, color: _isDarkMode ? Colors.white60 : Colors.grey[600]),
-                            ),
-                            trailing: isCurrent
-                                ? const Icon(Icons.check_circle_rounded, color: AppColors.midTeal)
-                                : OutlinedButton(
-                                    onPressed: () async {
-                                      Navigator.pop(ctx);
-                                      // Directly set the repo from the known ownerUid + planId
-                                      // This avoids re-validation through load() which might fail
-                                      // if memberIds array hasn't yet propagated
-                                      await QurbaniRepository.switchGroup(p.ownerUid, p.planId);
-                                      final newRepo = QurbaniRepository._(p.ownerUid, p.planId);
-                                      if (mounted) setState(() => _repo = newRepo);
-                                    },
-                                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4)),
-                                    child: const Text('Switch', style: TextStyle(fontSize: 11)),
-                                  ),
-                          ),
-                        );
-                      }),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              Navigator.pop(ctx);
-                              final newRepo = await QurbaniRepository.createGroup();
-                              if (mounted) setState(() => _repo = newRepo);
-                            },
-                            icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
-                            label: const Text('New Group', style: TextStyle(fontSize: 11.5)),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.pop(ctx);
-                              _showHouseholdSharingSheet();
-                            },
-                            icon: const Icon(Icons.qr_code_scanner_rounded, size: 16),
-                            label: const Text('Join Group', style: TextStyle(fontSize: 11.5)),
-                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-
-
   // Lets the plan owner see/generate their invite code (persistent, like the
   // Emergency SOS group code), or lets any user enter someone else's code to
   // join their plan instead (switching this device to point at that shared
   // Firestore path).
-  Future<void> _showHouseholdSharingSheet() async {
-    final repo = _repo;
-    final isOwner = repo?.ownerUid == QurbaniRepository.currentUid();
-    final joinCtrl = TextEditingController();
-
-    // Fetch whatever code already exists BEFORE opening the sheet, so the
-    // owner always lands on "here is your code", never on a stale
-    // "Generate" button for a code that was already created (e.g. at
-    // group-creation time).
-    String? generatedCode;
-    String? loadError;
-    if (isOwner && repo != null) {
-      try {
-        generatedCode = await repo.getInviteCode();
-      } catch (error) {
-        loadError = 'Could not load your existing code: $error';
-      }
-    }
-
-    bool generating = false;
-    bool updatingShares = false;
-    bool joining = false;
-    String? error = loadError;
-    int myShares = 1;
-    int joinShares = 1;
-
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setD) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Share this plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 6),
-                Text(
-                  'Use one code to share the same member list, expenses, and settlements. Anyone with the code can join this plan.',
-                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600], height: 1.4),
-                ),
-                const SizedBox(height: 20),
-
-                if (isOwner) ...[
-                  Text('Your group code', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Keep this screen handy — this code stays the same and is shown here any time you need to give it to a new member.',
-                    style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[600], height: 1.3),
-                  ),
-                  const SizedBox(height: 8),
-                  if (generatedCode != null)
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(color: AppColors.midTeal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(generatedCode!,
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 2, color: AppColors.midTeal)),
-                          ),
-                          IconButton(
-                            tooltip: 'Copy code',
-                            icon: const Icon(Icons.copy_rounded, color: AppColors.midTeal),
-                            onPressed: () {
-                              Clipboard.setData(ClipboardData(text: generatedCode!));
-                              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Code copied')));
-                            },
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    ElevatedButton.icon(
-                      onPressed: generating
-                          ? null
-                          : () async {
-                              setD(() {
-                                generating = true;
-                                error = null;
-                              });
-                              try {
-                                final code = await repo!.createInviteCode();
-                                setD(() {
-                                  generatedCode = code;
-                                  generating = false;
-                                });
-                              } catch (e) {
-                                setD(() {
-                                  error = e is FirebaseException
-                                      ? (e.code == 'permission-denied'
-                                          ? 'Could not generate a code: Firestore rules for this plan are not deployed yet.'
-                                          : 'Could not generate a code: ${e.message ?? e.code}')
-                                      : 'Could not generate a code: $e';
-                                  generating = false;
-                                });
-                              }
-                            },
-                      icon: generating
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.qr_code_rounded, size: 18),
-                      label: const Text('Generate group code'),
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.midTeal, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 44)),
-                    ),
-                  if (error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(error!, style: GoogleFonts.poppins(color: Colors.red, fontSize: 12)),
-                  ],
-                  const SizedBox(height: 20),
-                ],
-
-                Text('My shares in this plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 4),
-                Row(children: [
-                  IconButton(onPressed: myShares > 1 ? () => setD(() => myShares--) : null, icon: const Icon(Icons.remove_circle_outline)),
-                  Text('$myShares', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
-                  IconButton(onPressed: myShares < 7 ? () => setD(() => myShares++) : null, icon: const Icon(Icons.add_circle_outline)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: (repo == null || updatingShares)
-                          ? null
-                          : () async {
-                              setD(() => updatingShares = true);
-                              try {
-                                await repo.updateOwnShares(myShares);
-                                setD(() => updatingShares = false);
-                                if (ctx.mounted) {
-                                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Your shares were updated')));
-                                }
-                              } catch (e) {
-                                setD(() {
-                                  updatingShares = false;
-                                  error = 'Could not update your shares: $e';
-                                });
-                              }
-                            },
-                      child: updatingShares
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Update my shares'),
-                    ),
-                  ),
-                ]),
-
-                const SizedBox(height: 24),
-                const Divider(),
-                const SizedBox(height: 12),
-
-                Text('Join a shared plan', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 4),
-                Row(children: [
-                  Text('Shares to join with:', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600])),
-                  IconButton(onPressed: joinShares > 1 ? () => setD(() => joinShares--) : null, icon: const Icon(Icons.remove_circle_outline, size: 20)),
-                  Text('$joinShares', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold)),
-                  IconButton(onPressed: joinShares < 7 ? () => setD(() => joinShares++) : null, icon: const Icon(Icons.add_circle_outline, size: 20)),
-                ]),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: joinCtrl,
-                  textCapitalization: TextCapitalization.characters,
-                  decoration: InputDecoration(
-                    hintText: 'Enter invite code (e.g. QRB-AB12CD)',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton(
-                  onPressed: joining
-                      ? null
-                      : () async {
-                          if (joinCtrl.text.trim().isEmpty) return;
-                          setD(() {
-                            joining = true;
-                            error = null;
-                          });
-                          try {
-                            final r = await QurbaniRepository.joinByCode(joinCtrl.text, joinShares);
-                            if (mounted) {
-                              setState(() => _repo = r);
-                            }
-                            if (ctx.mounted) Navigator.pop(ctx);
-                          } catch (e) {
-                            setD(() {
-                              joining = false;
-                              error = e is FirebaseException
-                                  ? 'Could not join: ${e.message ?? e.code}'
-                                  : 'Could not join: $e';
-                            });
-                          }
-                        },
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 44)),
-                  child: joining ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Join with this code'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildTabBar() {
     final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     const compactLabels = ['Eligib.', 'Calc.', 'Shares', 'Board', 'Distrib.', 'Tasks'];
@@ -4019,43 +3647,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     );
   }
 
-  Widget _buildInputRow({required IconData icon, required String label, required TextEditingController controller}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Icon(icon, color: _isDarkMode ? Colors.white : AppColors.navyBlue, size: 20),
-          const SizedBox(width: 12),
-          Expanded(child: Text(label, style: GoogleFonts.poppins(color: _isDarkMode ? Colors.white : Colors.grey[700], fontSize: 13))),
-          SizedBox(
-            width: 120,
-            height: 38,
-            child: TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.end,
-              style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: _isDarkMode ? Colors.white : Colors.black87),
-              decoration: InputDecoration(
-                prefixText: '৳ ',
-                prefixStyle: GoogleFonts.poppins(color: _isDarkMode ? Colors.white54 : Colors.grey[600]),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-                filled: true,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: _isDarkMode ? BorderSide.none : const BorderSide(color: Colors.grey)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ===========================================================================
-  // CALCULATORS TAB (unchanged logic from previous version)
-  // ===========================================================================
-  // ===========================================================================
-  // CALCULATORS TAB (unchanged logic from previous version)
-  // ===========================================================================
   Widget _buildCalculatorsTab(NumberFormat fmt) {
     double minRec = 0.0;
     double maxRec = 0.0;
@@ -5505,216 +5096,6 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
     );
   }
 
-  Widget _addParticipantCard() {
-    final cardBg = _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = _isDarkMode ? Colors.white : AppColors.navyBlue;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(18)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('＋ Add Participant', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
-              InkWell(
-                onTap: () {
-                  setState(() {
-                    _isOfflineFamilyMember = !_isOfflineFamilyMember;
-                    _selectedDeenMateUser = null;
-                    _userSearchResults.clear();
-                    _participantNameCtrl.clear();
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _isOfflineFamilyMember ? Colors.orange.withValues(alpha: 0.15) : AppColors.midTeal.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _isOfflineFamilyMember ? 'Offline Family Member' : 'DeenMate User Lookup',
-                    style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: _isOfflineFamilyMember ? Colors.orange[800] : AppColors.midTeal),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (!_isOfflineFamilyMember) ...[
-            TextField(
-              onChanged: _searchDeenMateUsers,
-              style: GoogleFonts.poppins(fontSize: 12, color: textColor),
-              decoration: InputDecoration(
-                hintText: 'Search DeenMate user by name, email, phone...',
-                hintStyle: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white54 : null),
-                prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.midTeal),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : null,
-                filled: _isDarkMode,
-              ),
-            ),
-            if (_isSearchingUsers) ...[
-              const SizedBox(height: 8),
-              const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
-            ] else if (_selectedDeenMateUser != null) ...[
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.midTeal.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.midTeal),
-                ),
-                child: Row(
-                  children: [
-                    DeenMateAvatar(
-                      name: _selectedDeenMateUser!['fullName'],
-                      photoUrl: _selectedDeenMateUser!['photoUrl'],
-                      avatarBase64: _selectedDeenMateUser!['avatarBase64'],
-                      radius: 14,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(_selectedDeenMateUser!['fullName'],
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 16),
-                      onPressed: () => setState(() => _selectedDeenMateUser = null),
-                    ),
-                  ],
-                ),
-              ),
-            ] else if (_userSearchResults.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Container(
-                decoration: BoxDecoration(
-                  color: _isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[50],
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.midTeal.withValues(alpha: 0.3)),
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: EdgeInsets.zero,
-                  itemCount: _userSearchResults.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (ctx, i) {
-                    final u = _userSearchResults[i];
-                    return InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedDeenMateUser = u;
-                          _userSearchResults.clear();
-                        });
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        child: Row(
-                          children: [
-                            DeenMateAvatar(name: u['fullName'], photoUrl: u['photoUrl'], avatarBase64: u['avatarBase64'], radius: 14),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                u['fullName'],
-                                style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.bold, color: textColor),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ] else ...[
-            TextField(
-              controller: _participantNameCtrl,
-              style: GoogleFonts.poppins(fontSize: 12, color: textColor),
-              decoration: InputDecoration(
-                hintText: 'Participant Name (Family / Offline member)',
-                hintStyle: GoogleFonts.poppins(fontSize: 12, color: _isDarkMode ? Colors.white54 : null),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                fillColor: _isDarkMode ? const Color(0xFF2C2C2C) : null,
-                filled: _isDarkMode,
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Shares:', style: GoogleFonts.poppins(fontSize: 13, color: textColor)),
-              Row(
-                children: [
-                  IconButton(onPressed: _newParticipantShares > 1 ? () => setState(() => _newParticipantShares--) : null, icon: const Icon(Icons.remove)),
-                  Text('$_newParticipantShares', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: textColor)),
-                  IconButton(onPressed: _newParticipantShares < 7 ? () => setState(() => _newParticipantShares++) : null, icon: const Icon(Icons.add)),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: () async {
-              String name = '';
-              String? photoUrl;
-              String? avatarBase64;
-              bool isDeenMateUser = false;
-              String? uid;
-
-              if (_selectedDeenMateUser != null) {
-                name = _selectedDeenMateUser!['fullName'];
-                photoUrl = _selectedDeenMateUser!['photoUrl'];
-                avatarBase64 = _selectedDeenMateUser!['avatarBase64'];
-                isDeenMateUser = true;
-                uid = _selectedDeenMateUser!['uid'];
-              } else {
-                name = _participantNameCtrl.text.trim();
-              }
-
-              if (name.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select or type a participant name')));
-                return;
-              }
-              try {
-                await _repo!.addParticipantUser(
-                  name: name,
-                  shares: _newParticipantShares,
-                  photoUrl: photoUrl,
-                  avatarBase64: avatarBase64,
-                  isDeenMateUser: isDeenMateUser,
-                  uid: uid,
-                );
-                _participantNameCtrl.clear();
-                setState(() {
-                  _newParticipantShares = 1;
-                  _selectedDeenMateUser = null;
-                  _userSearchResults.clear();
-                });
-              } catch (error) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not add participant: $error')));
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.midTeal,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 40),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: Text('Add Participant', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _loadCurrentAvatar() async {
     final b64 = await QurbaniRepository.currentAvatarBase64();
     if (mounted && b64 != null) {
@@ -6553,26 +5934,12 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             return false;
           }
 
-          // 2. For non-poster viewers: hide posts that are closed/matched/filled
-          if (!isOwnerOfPost) {
-            if (post.status == 'closed' ||
-                post.status == 'matched' ||
-                post.availableShares <= 0) {
-              return false;
-            }
-          }
+          // 2. Keep completed posts in the candidate list so an accepted
+          // responder can still open their response card and retrieve the
+          // invite code. _sharePostCardForFeed hides completed posts from
+          // everyone else.
 
-          // 3. Real-Time Proximity Filter (Nearby Discovery)
-          if (isOwnerOfPost) return true;
-          if (_selectedMaxDistanceKm >= 9990) return true;
-          if (_currentUserPosition == null) return true;
-          final distMeters = Geolocator.distanceBetween(
-            _currentUserPosition!.latitude,
-            _currentUserPosition!.longitude,
-            post.latitude,
-            post.longitude,
-          );
-          return (distMeters / 1000.0) <= _selectedMaxDistanceKm;
+          return true;
         }).toList();
 
         return ListView(
@@ -6728,9 +6095,51 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
             if (filteredPosts.isEmpty)
               _emptyState('No share posts found nearby for the selected range. Be the first to post a share request!')
             else
-              ...filteredPosts.map((post) => _sharePostCard(post, myUid, fmt)),
+              ...filteredPosts.map((post) => _sharePostCardForFeed(post, myUid, fmt)),
           ],
         );
+      },
+    );
+  }
+
+  Widget _sharePostCardForFeed(QurbaniSharePost post, String myUid, NumberFormat fmt) {
+    final isMyPost = post.posterUid == myUid;
+    final isCompleted = post.status == 'closed' ||
+        post.status == 'matched' ||
+        post.availableShares <= 0;
+
+    if (isMyPost) {
+      return _sharePostCard(post, myUid, fmt);
+    }
+
+    bool isWithinSelectedDistance() {
+      if (_selectedMaxDistanceKm >= 9990 || _currentUserPosition == null) {
+        return true;
+      }
+      final distanceMeters = Geolocator.distanceBetween(
+        _currentUserPosition!.latitude,
+        _currentUserPosition!.longitude,
+        post.latitude,
+        post.longitude,
+      );
+      return distanceMeters / 1000.0 <= _selectedMaxDistanceKm;
+    }
+
+    if (!isCompleted && isWithinSelectedDistance()) {
+      return _sharePostCard(post, myUid, fmt);
+    }
+
+    return StreamBuilder<List<QShareResponse>>(
+      stream: QShareBoardRepository.watchResponses(post.id),
+      builder: (context, snapshot) {
+        final acceptedByMe = (snapshot.data ?? const <QShareResponse>[]).any(
+          (response) =>
+              response.responderUid == myUid && response.status == 'accepted',
+        );
+        if (!acceptedByMe) return const SizedBox.shrink();
+        // An accepted responder must still be able to retrieve their code even
+        // after moving outside the feed's selected proximity range.
+        return _sharePostCard(post, myUid, fmt);
       },
     );
   }
@@ -7185,7 +6594,7 @@ class _QurbaniPlannerSheetState extends State<QurbaniPlannerSheet> {
 
                                           if (mounted) {
                                             ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Accepted! Invite code sent to ${resp.responderName}. They must join with the code.')),
+                                              SnackBar(content: Text('Accepted! ${resp.responderName} can now see the invite code on this accepted request in the Qurbani Share Board.')),
                                             );
                                           }
                                         } catch (err) {

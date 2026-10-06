@@ -120,6 +120,27 @@ class NotificationService {
     'Isha': 1006,
   };
 
+  // Keep a rolling two-week window scheduled so alarms continue to fire when
+  // Android suspends the app overnight. IDs include the local calendar date,
+  // allowing the same prayer to be scheduled on multiple days at once.
+  static const int prayerScheduleDays = 14;
+
+  static int? _scheduledPrayerId(String prayerName, DateTime date) {
+    const slots = {
+      'Fajr': 1,
+      'Sunrise': 2,
+      'Dhuhr': 3,
+      'Asr': 4,
+      'Maghrib': 5,
+      'Isha': 6,
+    };
+    final slot = slots[prayerName];
+    if (slot == null) return null;
+    final local = date.toLocal();
+    final ymd = local.year * 10000 + local.month * 100 + local.day;
+    return ymd * 10 + slot;
+  }
+
   static const int _nudgeIdOffset = 500;
   static const _channelId = 'deenmate_prayer_alarms';
   static const _channelName = 'Prayer Alarms';
@@ -416,9 +437,9 @@ class NotificationService {
       snoozePrayerAlarm(prayerName: prayerName, windowEndTime: windowEnd);
     } else if (actionId == PrayerNotificationAction.prayed) {
       _markPrayerCompleted(prayerName, windowEnd);
-      cancelPrayerAlarm(prayerName);
+      cancelPrayerSnooze(prayerName);
     } else if (actionId == PrayerNotificationAction.cancel) {
-      cancelPrayerAlarm(prayerName);
+      cancelPrayerSnooze(prayerName);
     }
 
     onPrayerAction?.call(prayerName, actionId, kind);
@@ -649,7 +670,9 @@ class NotificationService {
 
     if (scheduledTime.isBefore(DateTime.now())) return;
 
-    final id = _prayerIds[prayerName];
+    final id = isSnoozed
+        ? _prayerIds[prayerName]
+        : _scheduledPrayerId(prayerName, scheduledTime);
     if (id == null) return;
 
     final tz.TZDateTime tzTime = _toTzDateTime(scheduledTime);
@@ -745,6 +768,26 @@ class NotificationService {
   }
 
   Future<void> cancelPrayerAlarm(String prayerName) async {
+    if (!_initialized) await init();
+    final legacyId = _prayerIds[prayerName];
+    if (legacyId == null) return;
+    final today = DateTime.now();
+    for (var day = 0; day < prayerScheduleDays; day++) {
+      final id = _scheduledPrayerId(
+        prayerName,
+        DateTime(today.year, today.month, today.day + day),
+      );
+      if (id != null) await _plugin.cancel(id);
+    }
+    // Also remove alarms scheduled by earlier app versions and snoozes.
+    await _plugin.cancel(legacyId);
+    await cancelEndOfWindowNudge(prayerName);
+  }
+
+  /// Clears only the one-off snooze for this prayer. The recurring scheduled
+  /// alarms for upcoming dates must survive notification actions such as
+  /// Prayed or Dismiss.
+  Future<void> cancelPrayerSnooze(String prayerName) async {
     if (!_initialized) await init();
     final id = _prayerIds[prayerName];
     if (id == null) return;

@@ -849,40 +849,65 @@ Future<void> _onPositionUpdate(Position position) async {
 
   // Schedule or cancel system notifications for all prayers based on toggle states
   Future<void> _syncAlarms() async {
-    final Map<String, DateTime?> allTimes = {
-      'Fajr': _fajrTime,
-      'Sunrise': _sunriseTime,
-      'Dhuhr': _dhuhrTime,
-      'Asr': _asrTime,
-      'Maghrib': _maghribTime,
-      'Isha': _ishaTime,
-    };
-    final tomorrow = DateTime.now().add(const Duration(days: 1));
-    final tomorrowPrayerTimes = PrayerTimes(
-      Coordinates(_latitude, _longitude),
-      DateComponents.from(tomorrow),
-      CalculationMethod.karachi.getParameters()..madhab = Madhab.hanafi,
-    );
-    final windowEnds = <String, DateTime?>{
-      'Fajr': _sunriseTime,
-      'Sunrise': null,
-      'Dhuhr': _asrTime,
-      'Asr': _maghribTime,
-      'Maghrib': _ishaTime,
-      'Isha': tomorrowPrayerTimes.fajr,
-    };
-    for (final entry in allTimes.entries) {
-      final pName = entry.key;
-      final pTime = entry.value;
-      final isEnabled = _prayerAlarms[pName] ?? false;
-      if (isEnabled && pTime != null) {
-        await NotificationService.instance.schedulePrayerAlarm(
-          prayerName: pName,
-          scheduledTime: pTime,
-          windowEndTime: windowEnds[pName],
+    final enabledNames = _prayerAlarms.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toSet();
+    final service = NotificationService.instance;
+
+    // Schedule a rolling window in advance. Android may suspend this screen's
+    // timer overnight, so relying on a midnight callback loses tomorrow's
+    // alarms when the app is not running.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final coordinates = Coordinates(_latitude, _longitude);
+    final params = CalculationMethod.karachi.getParameters()
+      ..madhab = Madhab.hanafi;
+
+    for (var offset = 0; offset < NotificationService.prayerScheduleDays; offset++) {
+      final date = DateTime(today.year, today.month, today.day + offset);
+      final prayerTimes = PrayerTimes(
+        coordinates,
+        DateComponents.from(date),
+        params,
+      );
+      final nextDate = DateTime(date.year, date.month, date.day + 1);
+      final nextPrayerTimes = PrayerTimes(
+        coordinates,
+        DateComponents.from(nextDate),
+        params,
+      );
+      final times = <String, DateTime?>{
+        'Fajr': prayerTimes.fajr,
+        'Sunrise': prayerTimes.sunrise,
+        'Dhuhr': prayerTimes.dhuhr,
+        'Asr': prayerTimes.asr,
+        'Maghrib': prayerTimes.maghrib,
+        'Isha': prayerTimes.isha,
+      };
+      final windowEnds = <String, DateTime?>{
+        'Fajr': prayerTimes.sunrise,
+        'Sunrise': null,
+        'Dhuhr': prayerTimes.asr,
+        'Asr': prayerTimes.maghrib,
+        'Maghrib': prayerTimes.isha,
+        'Isha': nextPrayerTimes.fajr,
+      };
+
+      for (final prayer in enabledNames) {
+        final scheduledTime = times[prayer];
+        if (scheduledTime == null) continue;
+        await service.schedulePrayerAlarm(
+          prayerName: prayer,
+          scheduledTime: scheduledTime,
+          windowEndTime: windowEnds[prayer],
         );
-      } else {
-        await NotificationService.instance.cancelPrayerAlarm(pName);
+      }
+    }
+
+    for (final prayer in _prayerAlarms.keys) {
+      if (!enabledNames.contains(prayer)) {
+        await service.cancelPrayerAlarm(prayer);
       }
     }
   }
